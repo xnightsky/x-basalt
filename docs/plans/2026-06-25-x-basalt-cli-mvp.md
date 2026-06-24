@@ -13,11 +13,12 @@
 - agent 规则（CLAUDE.md/AGENTS.md）、根配置、docs、目录骨架、skills-def、产品内置 skill、样例 vault。
 - 验收：`pnpm install && pnpm run build && pnpm run typecheck` 通过；骨架可编译。
 
-### 阶段 1 · parser
+### 阶段 1 · parser（✅ 完成）
 - 实现 `frontmatter.ts`（gray-matter）→ `wikilink.ts`（wikilink/embed/锚点/别名 + 去重）→ `index.ts`（tag/callout/task/highlight/blockRef 提取）。
 - 召回 `biz-obsidian-spec` 确认文法边界。
 - 标注 `// === Obsidian 规范来源 ===` / `// === 自建实现 ===`。
 - 验收：`tests/parser.test.ts` 对 fixtures 断言全绿；`pnpm run cli -- parse <fixture>` 输出正确 AST。
+- 决策：tag 节点只含**行内**标签，frontmatter tags 经 `ParsedFile.frontmatter` 交 indexer；wikilink 去重键含 embed 标记（保留 link/embed 区分）；tag 边界由「行首或空白」细化为「`#` 前非 word 字符」（更贴近 Obsidian，已同步调研 §2.3 与 skill）。
 
 ### 阶段 2 · indexer
 - `schema.ts` 建 5 表；`index.ts` 实现 `rebuild/update/remove`（事务）；`watcher.ts` chokidar 增量，跳过 `.obsidian/` 与隐藏文件。
@@ -52,3 +53,8 @@
   - `pnpm run lint`（oxlint）exit 0 零告警；`oxfmt` 格式化 24 文件通过。
   - `pnpm run skills:install` → 安装 biz-obsidian-spec / biz-dql-subset 到 `.claude/skills/`。
   - `node dist/cli.js --help` 正常列出五命令；未实现命令给出阶段指引。
+- 阶段 1（2026-06-25 验证通过，TDD red→green）：
+  - 实现 `parseFrontmatter` / `extractWikilinks` / `VaultParser.parse` 及 tag/callout/task/highlight/blockRef 提取。
+  - `pnpm test` → 26 项：pass 24 / todo 2（indexer/query）/ fail 0；含对 sample-vault 五文件的端到端断言。
+  - `pnpm run typecheck` exit 0；`pnpm run lint` exit 0；`pnpm run format:check` 全通过。
+  - 已知近似：代码块内 `#tag`/`==..==` 暂不剔除（调研 §3.3#4）；链接按 basename 解析去重（§3.3#1）。
