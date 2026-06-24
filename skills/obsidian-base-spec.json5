@@ -1,0 +1,74 @@
+{
+  // 内置兜底 skill：即使外部 skill 目录为空，也能召回 Obsidian 基础规范。
+  // 由 src/skill（SkillRecall）在运行时加载；triggers 用于模糊召回。
+  name: "obsidian-base-spec",
+  triggers: [
+    "wikilink", "link", "embed", "alias", "heading", "block", "blockref",
+    "frontmatter", "yaml", "metadata",
+    "tag", "tags", "nested",
+    "callout", "admonition",
+    "task", "todo", "checkbox",
+    "highlight",
+    "dataview", "dql", "query", "list", "table", "from", "where", "sort",
+  ],
+  patterns: ["[[...]]", "![[...]]", "#tag", "> [!type]", "- [ ]", "==text==", "^block-id"],
+  rules: [
+    {
+      pattern: "\\[\\[([^\\]|#^]+)(#([^\\]|^]+))?(\\^([^\\]|]+))?(\\|([^\\]]+))?\\]\\]",
+      description: "Wikilink：[[Note]] / [[Note|Alias]] / [[Folder/Note]] / [[Note#Heading]] / [[Note#^block-id]]。解析顺序 target →（#heading 或 #^blockId）→ |alias。",
+      examples: ["[[Note]]", "[[Note|Alias]]", "[[Folder/Note#Heading|别名]]", "[[Note#^abc123]]"],
+    },
+    {
+      pattern: "!\\[\\[([^\\]]+)\\]\\]",
+      description: "Embed：![[...]]。target 带媒体扩展名（png/jpg/mp4/pdf 等）为资源嵌入，否则为笔记嵌入。embed 同时计入 outlinks。",
+      examples: ["![[Note]]", "![[image.png]]", "![[video.mp4]]"],
+    },
+    {
+      pattern: "^---\\n([\\s\\S]*?)\\n---",
+      description: "Frontmatter：文件顶部 --- 之间的 YAML，仅首行为 --- 时生效。tags 可为数组或单值，整体提取为键值对。",
+      examples: ["---\\ntitle: A\\ntags: [x, y]\\nstatus: active\\n---"],
+    },
+    {
+      pattern: "(^|\\s)#([A-Za-z0-9_\\-/]+)",
+      description: "Tag：行内 #tag 与嵌套 #parent/child；frontmatter tags 也并入。归一化存不带 # 的文本，FROM #a 命中嵌套子标签 #a/b（前缀匹配）。纯数字 #123 不算标签。",
+      examples: ["#project", "#area/work", "#status/active"],
+    },
+    {
+      pattern: "^>\\s*\\[!([a-zA-Z]+)\\]([+-]?)\\s*(.*)$",
+      description: "Callout：> [!type] Title。type 含 note/tip/warning/danger/info/success/question/quote 等；+ 默认展开、- 默认折叠（foldable）。",
+      examples: ["> [!note] 标题", "> [!warning]- 折叠的警告", "> [!tip]+ 默认展开"],
+    },
+    {
+      pattern: "^\\s*[-*]\\s*\\[(.)\\]\\s+(.*)$",
+      description: "Task：- [ ] 未完成 / - [x] 完成 / - [-] 取消 / - [?] 等自定义单字符状态。status 取方括号内字符。due_date 从文本正则提取 YYYY-MM-DD。",
+      examples: ["- [ ] 待办", "- [x] 已完成 2026-06-25", "- [-] 取消", "- [?] 待定"],
+    },
+    {
+      pattern: "==([^=]+)==",
+      description: "Highlight：==text== 高亮。",
+      examples: ["==重点=="],
+    },
+    {
+      pattern: "\\s\\^([A-Za-z0-9\\-]+)\\s*$",
+      description: "Block Reference：行尾 ^block-id 定义块锚点；[[Note#^block-id]] 为其引用。",
+      examples: ["这是一个段落 ^para-1"],
+    },
+    {
+      pattern: "(LIST|TABLE)\\s+.*?(FROM\\s+.+?)?(WHERE\\s+.+?)?(SORT\\s+.+?)?(LIMIT\\s+\\d+)?",
+      description: "Dataview DQL 子集：LIST|TABLE <fields> FROM <\"folder\"|#tag|[[link]]> WHERE <cond> SORT <field> ASC|DESC LIMIT <n>。操作符 = != < > <= >= / contains/icontains/startswith/endswith / AND OR NOT / regexmatch。隐式字段 file.name/path/folder/extension/size/mtime/ctime/tags/inlinks/outlinks/tasks。",
+      examples: [
+        "LIST FROM #project WHERE status = 'active' SORT file.mtime DESC LIMIT 10",
+        "TABLE file.name, status FROM \"Projects\" WHERE contains(file.tags, \"#work\")",
+      ],
+    },
+  ],
+  metadata: {
+    spec_source: "Obsidian Help（wikilink/callout/frontmatter）+ Dataview 文档（DQL 子集）",
+    supports_alias: true,
+    supports_heading_anchor: true,
+    supports_block_ref: true,
+    embed_distinguishes_asset: true,
+    case_sensitive: false,
+    dql_subset: ["LIST", "TABLE", "FROM", "WHERE", "SORT", "LIMIT"],
+  },
+}
