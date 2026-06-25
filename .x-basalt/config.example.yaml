@@ -1,0 +1,25 @@
+# x-basalt 项目配置示例 / template
+#
+# 用法：复制为同目录的 config.yaml（即 .x-basalt/config.yaml，已 gitignore），按需取消注释。
+#   cp .x-basalt/config.example.yaml .x-basalt/config.yaml
+#
+# 默认放仓库内隐藏目录 .x-basalt/（类比 .obsidian/）；也支持扁平 .x-basalt.yaml。
+# 格式默认 YAML，也支持 .json5 / .json；同目录多份时优先级 yaml > yml > json5 > json。
+# CLI 从当前目录逐级向上查找；全局回退 ~/.x-basalt/config.yaml。
+# 取值优先级：命令行 flag > 项目配置 > 全局配置 > 内置默认。
+# 所有键均可选、值为字符串；未知键与非字符串值会被忽略。
+
+# 默认 SQLite 索引路径（对应 --db）。内置默认已是 .x-basalt/index.db，可在此覆盖。
+# db: .x-basalt/index.db
+
+# 默认 Vault 根（index/watch 可省略 <vault> 位置参数）。
+vault: ./my-vault
+
+# 默认 skill 目录（等价环境变量 OBSIDIAN_SKILL_PATH）。
+# skillPath: ./team-skills
+
+# parse 默认输出格式：json | yaml。
+# format: json
+
+# watch 默认 on-change 命令模板（{file} 占位替换为变更文件路径）。
+# onChange: "echo changed {file}"

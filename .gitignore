@@ -84,6 +84,15 @@ temp/
 *.db-shm
 index.db*
 
+# ============ 本地项目配置 / 产物：默认放仓库内隐藏目录 .x-basalt/（不入仓，仅保留示例）============
+.x-basalt/*
+!.x-basalt/config.example.yaml
+# 扁平式配置（也支持，但非默认）
+.x-basalt.yaml
+.x-basalt.yml
+.x-basalt.json5
+.x-basalt.json
+
 # =========== AI ============
 AGENTS.local.md
 .claude/settings.json
