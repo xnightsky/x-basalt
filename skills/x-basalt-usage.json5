@@ -1,0 +1,86 @@
+{
+  // 本 CLI 的「自我说明书」skill：让 `x-basalt skill recall usage` 经核心 SkillRecall
+  // 召回自身用法，方便 AI / 使用者无需外部文档即可学会驱动本工具。
+  // 与 obsidian-base-spec 一样由 loader 列为「始终可召回」内置兜底。完整版见 docs/guides/usage.md。
+  name: "x-basalt-usage",
+  triggers: [
+    "usage", "help", "howto", "how-to", "manual", "guide", "readme",
+    "说明书", "用法", "怎么用", "帮助", "命令", "指令",
+    "cli", "x-basalt", "getting-started", "quickstart",
+    "parse", "index", "query", "skill", "watch", "recall",
+    "example", "示例", "用例",
+  ],
+  patterns: [
+    "x-basalt parse <file>",
+    "x-basalt index <vault> --db <path>",
+    "x-basalt query <dql> --db <path>",
+    "x-basalt skill recall <keyword>",
+    "x-basalt watch <vault> --on-change <cmd>",
+  ],
+  rules: [
+    {
+      pattern: "x-basalt <parse|index|query|skill|watch>",
+      description: "零依赖 Obsidian 运行时的 Vault 工具。典型流程：index 建库 → query 查询；parse 看单文件 AST；skill 召回规范；watch 监听增量。开发态 `pnpm run cli -- <command>`，构建后 `node dist/cli.js <command>`。出错统一打印 ✗ 并退出码 1。",
+      examples: [
+        "pnpm install && pnpm run build",
+        "pnpm run cli -- index ./vault --db ./index.db",
+        "node dist/cli.js query \"LIST FROM #project\" --db ./index.db",
+      ],
+    },
+    {
+      pattern: "parse <file> [--format json|yaml]",
+      description: "解析单个 .md → { frontmatter, nodes }；nodes 含 wikilink/tag/callout/task/highlight/blockRef。--format 默认 json，可选 yaml。纯函数，不碰 DB。",
+      examples: ["x-basalt parse note.md", "x-basalt parse note.md --format yaml"],
+    },
+    {
+      pattern: "index <vault> [--db ./index.db] [--watch]",
+      description: "全量扫描 Vault 下所有 .md 写入 SQLite，跳过 .obsidian/ 与隐藏文件；事务内先清空再写、失败回滚。--watch 建库后继续监听增量。",
+      examples: ["x-basalt index ./vault --db ./index.db"],
+    },
+    {
+      pattern: "query <dql> --db <path> [--vault <path>]",
+      description: "执行 DQL 子集 → 参数化 SQL → JSON { type, columns, rows }；聚合字段已解析为数组。--db 必填且只读打开；--vault 接受但不使用。文法：LIST|TABLE <fields> FROM (#tag|[[link]]|\"folder\") WHERE <cond> SORT <field> ASC|DESC LIMIT <n>。",
+      examples: [
+        "x-basalt query \"LIST FROM #project WHERE status = 'active' SORT file.mtime DESC LIMIT 10\" --db ./index.db",
+        "x-basalt query 'TABLE status, due FROM \"Projects\" SORT file.name ASC' --db ./index.db",
+      ],
+    },
+    {
+      pattern: "skill (recall <keyword> | list)",
+      description: "recall 按关键字模糊召回规范（匹配 name 与 triggers，大小写不敏感、双向子串）；list 列出全部 skill。本说明书自身即一个可召回 skill —— `skill recall usage` 即可读到本 CLI 用法。",
+      examples: ["x-basalt skill recall usage", "x-basalt skill recall wikilink", "x-basalt skill list"],
+    },
+    {
+      pattern: "watch <vault> [--db ./index.db] [--on-change <cmd>]",
+      description: "先全量 rebuild 再监听；add/change 先增量更新索引再触发回调，unlink 删记录。--on-change 命令模板用 {file} 占位替换变更文件路径。前台运行，Ctrl+C 退出。",
+      examples: ["x-basalt watch ./vault --db ./index.db --on-change \"echo changed {file}\""],
+    },
+    {
+      pattern: "DQL 操作符与隐式字段",
+      description: "操作符：= != < > <= >= / contains icontains startswith endswith / AND OR NOT / regexmatch(field,\"pattern\")。隐式字段：file.name/path/folder/extension/size/mtime/ctime/tags/inlinks/outlinks/tasks 与任意 frontmatter 标量。FROM #a 前缀命中 #a/b；FROM \"F\" 含子文件夹；FROM [[N]] 取指向 N 的反向链接。",
+      examples: [
+        "LIST WHERE contains(file.tags, \"area\")",
+        "LIST WHERE regexmatch(file.name, \"^20[0-9]{2}-\")",
+        "TABLE file.inlinks FROM [[Index]]",
+      ],
+    },
+    {
+      pattern: "项目配置 .x-basalt/config.yaml",
+      description: "项目本地配置默认放隐藏目录 .x-basalt/（不入 git，类比 .obsidian/），免去重复传参。默认 YAML，也支持 JSON5/JSON；扁平 .x-basalt.yaml 亦可。键：db / vault / skillPath / format / onChange。索引默认落 .x-basalt/index.db（目录自动建）。CLI 从 cwd 向上查找，全局回退 ~/.x-basalt/config.yaml。优先级：flag > 项目配置 > 全局配置 > 内置默认。",
+      examples: [
+        "cp .x-basalt/config.example.yaml .x-basalt/config.yaml",
+        "# .x-basalt/config.yaml 内写 vault: ./my-vault 后，x-basalt index / query 可零参数运行",
+      ],
+    },
+    {
+      pattern: "限制与非目标",
+      description: "frontmatter 日期以 ISO 存储（精确等值不命中，用范围/前缀）；代码块内 #tag/==..== 不剔除；链接按 basename 解析；file.tasks 仅显示不可过滤；file.day 等、多字段 SORT、length() 数值比较为非目标，遇到明确报错。完整说明见 docs/guides/usage.md。",
+      examples: ["x-basalt query \"LIST WHERE due >= '2026-06-01'\" --db ./index.db"],
+    },
+  ],
+  metadata: {
+    doc: "docs/guides/usage.md",
+    commands: ["parse", "index", "query", "skill", "watch"],
+    self_recall: true,
+  },
+}
