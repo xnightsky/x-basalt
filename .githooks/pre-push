@@ -1,0 +1,19 @@
+#!/bin/sh
+# 本地门禁（不依赖云端 CI）：push 前跑质量门，任一失败即阻断 push。
+# 接线方式：git config core.hooksPath .githooks（由 pnpm install 的 prepare 自动完成）。
+# 谨慎绕过：git push --no-verify。
+#
+# 不含 oxfmt --check：仓库存在既有 markdown/prose 格式基线漂移，纳入会误阻断；
+# 格式化按改动文件单独跑 pnpm run format。
+set -e
+
+echo "[pre-push] typecheck…"
+pnpm run typecheck
+
+echo "[pre-push] test…"
+pnpm test
+
+echo "[pre-push] lint…"
+pnpm run lint
+
+echo "[pre-push] ✓ 全部通过"

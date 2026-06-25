@@ -9,7 +9,9 @@
   "files": [
     "dist",
     "skills",
-    "README.md"
+    "README.md",
+    "CHANGELOG.md",
+    "LICENSE"
   ],
   "engines": {
     "node": ">=18"
@@ -25,7 +27,9 @@
     "lint:fix": "oxlint --fix",
     "format": "oxfmt .",
     "format:check": "oxfmt --check .",
-    "skills:install": "node scripts/install-skills.mjs"
+    "skills:install": "node scripts/install-skills.mjs",
+    "prepare": "node scripts/setup-hooks.mjs",
+    "prepublishOnly": "pnpm run typecheck && pnpm test && pnpm run build"
   },
   "keywords": [
     "obsidian",
@@ -36,6 +40,7 @@
     "wikilink"
   ],
   "license": "MIT",
+  "author": "xnightsky",
   "pnpm": {
     "onlyBuiltDependencies": [
       "better-sqlite3"

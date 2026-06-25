@@ -114,6 +114,10 @@ pnpm run format       # oxfmt
 pnpm run skills:install   # 安装 skills-def/ 业务 skill 到 .claude/skills/
 ```
 
+### 本地门禁（不依赖云端 CI）
+
+`pnpm install` 会经 `prepare`（`scripts/setup-hooks.mjs`）自动把 `git config core.hooksPath` 指向受版本控制的 `.githooks/`。此后 **push 前**自动跑 `typecheck + test + lint`（`.githooks/pre-push`），任一失败即阻断。零新依赖、不依赖云端。谨慎绕过：`git push --no-verify`。
+
 ## 约束
 
 零 Obsidian 运行时依赖；执行层（DQL → SQL）完全自建；隐式字段一律 SQLite JOIN 实时计算。完整禁止项见 `AGENTS.md`「项目硬约束」。
