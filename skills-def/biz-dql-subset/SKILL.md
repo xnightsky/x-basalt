@@ -1,13 +1,13 @@
 ---
 name: biz-dql-subset
-description: Use when implementing or reviewing the query engine or indexer schema of x-basalt-cli (DQL tokenizer/ast/sql-generator, implicit fields, SQLite JOIN) - defines the supported DQL subset, the AST→SQL mapping, and implicit-field semantics
+description: Use when implementing or reviewing the query engine or indexer schema of x-basalt (DQL tokenizer/ast/sql-generator, implicit fields, SQLite JOIN) - defines the supported DQL subset, the AST→SQL mapping, and implicit-field semantics
 ---
 
 # Dataview DQL 子集 → SQL 规范（query/indexer 真相源）
 
 ## 简介
 
-x-basalt-cli 自建 DQL 执行层，**禁止依赖 obsidian-dataview 的 Evaluator/Executor**。本 skill 定义支持的 DQL 子集、AST→参数化 SQL 的映射、隐式字段语义。完整分析见 `docs/research/2026-06-25-obsidian-spec-and-deps.md` §3。
+x-basalt 自建 DQL 执行层，**禁止依赖 obsidian-dataview 的 Evaluator/Executor**。本 skill 定义支持的 DQL 子集、AST→参数化 SQL 的映射、隐式字段语义。完整分析见 `docs/research/2026-06-25-obsidian-spec-and-deps.md` §3。
 
 ## 触发场景
 

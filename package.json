@@ -1,10 +1,10 @@
 {
-  "name": "x-basalt-cli",
+  "name": "x-basalt",
   "version": "0.1.0",
   "description": "纯 Node.js CLI：零依赖 Obsidian 运行时，解析 / 索引 / 查询（Dataview 子集）/ Skill 召回 Obsidian Vault",
   "type": "module",
   "bin": {
-    "x-basalt-cli": "dist/cli.js"
+    "x-basalt": "dist/cli.js"
   },
   "files": [
     "dist",
@@ -18,7 +18,7 @@
   "scripts": {
     "build": "tsc",
     "typecheck": "tsc --noEmit",
-    "test": "node --import tsx --test tests/parser.test.ts tests/indexer.test.ts tests/query.test.ts",
+    "test": "node --import tsx --test tests/parser.test.ts tests/indexer.test.ts tests/query.test.ts tests/skill.test.ts tests/config.test.ts",
     "cli": "tsx src/cli.ts",
     "dev": "tsx src/cli.ts",
     "lint": "oxlint",

@@ -1,13 +1,13 @@
 ---
 name: biz-obsidian-spec
-description: Use when implementing or reviewing the parser of x-basalt-cli (wikilink/embed/frontmatter/tag/callout/task/highlight/blockRef extraction) - encodes the exact Obsidian Markdown grammar and edge cases the parser must reproduce
+description: Use when implementing or reviewing the parser of x-basalt (wikilink/embed/frontmatter/tag/callout/task/highlight/blockRef extraction) - encodes the exact Obsidian Markdown grammar and edge cases the parser must reproduce
 ---
 
 # Obsidian Markdown 解析规范（parser 真相源）
 
 ## 简介
 
-x-basalt-cli 的 parser 必须**精确复现** Obsidian 专有语法，且**零依赖 Obsidian 运行时**。本 skill 给出每类语法的文法与边界 case；完整论证见 `docs/research/2026-06-25-obsidian-spec-and-deps.md` §2。代码中以 `// === Obsidian 规范来源 ===` / `// === 自建实现 ===` 标注分界。
+x-basalt 的 parser 必须**精确复现** Obsidian 专有语法，且**零依赖 Obsidian 运行时**。本 skill 给出每类语法的文法与边界 case；完整论证见 `docs/research/2026-06-25-obsidian-spec-and-deps.md` §2。代码中以 `// === Obsidian 规范来源 ===` / `// === 自建实现 ===` 标注分界。
 
 ## 触发场景
 
