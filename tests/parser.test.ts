@@ -173,6 +173,36 @@ test("VaultParser.parse：highlight 提取 == 内文本", () => {
   );
 });
 
+test("VaultParser.parse：围栏代码块内的 #tag 与 ==高亮== 不被提取", () => {
+  const { nodes } = new VaultParser().parse(
+    ["#realtag 与 ==realhl==", "```python", "# 注释 #faketag", "s = '==fakehl=='", "```"].join(
+      "\n",
+    ),
+  );
+  assert.deepEqual(
+    nodesOfType(nodes, "tag").map((t) => t.value),
+    ["realtag"],
+  );
+  assert.deepEqual(
+    nodesOfType(nodes, "highlight").map((h) => h.content),
+    ["realhl"],
+  );
+});
+
+test("VaultParser.parse：行内代码内的 #tag 与 ==高亮== 不被提取", () => {
+  const { nodes } = new VaultParser().parse(
+    "真实 #realtag，代码 `#faketag` 和 `==fakehl==`，真实 ==realhl==",
+  );
+  assert.deepEqual(
+    nodesOfType(nodes, "tag").map((t) => t.value),
+    ["realtag"],
+  );
+  assert.deepEqual(
+    nodesOfType(nodes, "highlight").map((h) => h.content),
+    ["realhl"],
+  );
+});
+
 test("VaultParser.parse：blockRef 取行尾 ^id 定义，不误判 [[#^id]] 引用", () => {
   const { nodes } = new VaultParser().parse(
     "可被块引用。 ^decision-1\n引用 [[Note#^decision-1]] 不是定义",

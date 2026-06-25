@@ -20,6 +20,96 @@ const HIGHLIGHT_RE = /==(.+?)==/g;
 // BlockRef 定义：行尾 ^id（id 为字母数字与连字符）；^ 前需行首或空白，排除 [[#^id]] 这类引用。
 const BLOCKREF_RE = /(?:^|\s)\^([A-Za-z0-9-]+)\s*$/;
 
+// === Obsidian 规范来源: 代码块/行内代码内不解析行内语法 ===
+// Obsidian（同 CommonMark）不在围栏代码块（``` / ~~~）与行内代码（成对反引号）内识别
+// #tag、==高亮== 等行内语法。提取前先把代码区域「掩码」掉，避免代码里的 `# 注释`、字符串中的
+// `==x==` 被误当标签/高亮（调研 §3.3#4 列为已知偏差，本次收口）。
+//
+// === 自建实现: 等长掩码（保留换行与字符偏移）===
+// 把代码区域内的非换行字符替换为等长空白：总长度、行数、列位均不变，故仍按原始 lines 计算
+// 行号的 task/blockRef 提取完全不受影响；tag/highlight 改在掩码后的正文上提取。
+
+/** 把字符串中每个非换行字符替换为空格（等长掩码，保留 \n）。 */
+function blankNonNewline(s: string): string {
+  return s.replace(/[^\n]/g, " ");
+}
+
+/** 掩码单行内的行内代码：成对反引号（开合等长）之间内容置空，保留反引号本身。无闭合则按普通文本。 */
+function maskInlineCode(line: string): string {
+  let result = "";
+  let i = 0;
+  const n = line.length;
+  while (i < n) {
+    if (line.charAt(i) !== "`") {
+      result += line.charAt(i);
+      i++;
+      continue;
+    }
+    // 数出开标记反引号串长度（CommonMark：开合反引号数量需相等）。
+    let open = i;
+    while (open < n && line.charAt(open) === "`") open++;
+    const fenceLen = open - i;
+    // 向后找等长的闭合反引号串。
+    let cursor = open;
+    let closeStart = -1;
+    while (cursor < n) {
+      if (line.charAt(cursor) !== "`") {
+        cursor++;
+        continue;
+      }
+      let run = cursor;
+      while (run < n && line.charAt(run) === "`") run++;
+      if (run - cursor === fenceLen) {
+        closeStart = cursor;
+        break;
+      }
+      cursor = run;
+    }
+    if (closeStart === -1) {
+      result += line.slice(i, open); // 无闭合：反引号当普通字符，后续不掩码
+      i = open;
+      continue;
+    }
+    result += line.slice(i, open); // 开反引号原样保留
+    result += blankNonNewline(line.slice(open, closeStart)); // 中间内容置空
+    result += line.slice(closeStart, closeStart + fenceLen); // 闭反引号原样保留
+    i = closeStart + fenceLen;
+  }
+  return result;
+}
+
+/**
+ * 掩码整段正文的代码区域：先逐行识别围栏代码块（整块置空），围栏外的行再处理行内代码。
+ * 返回与输入等长、行结构一致的字符串，仅代码区域被空白化。未闭合的围栏掩码至文末（贴近渲染行为）。
+ */
+function maskCode(body: string): string {
+  const lines = body.split("\n");
+  const out: string[] = [];
+  let fenceChar = ""; // 当前围栏标记字符（` 或 ~）；空串表示不在围栏内
+  let fenceLen = 0;
+  for (const line of lines) {
+    if (fenceChar) {
+      out.push(blankNonNewline(line));
+      // 闭合围栏：整行仅由围栏标记构成，且同字符、长度不小于开围栏。
+      const closeMark = /^\s*(`{3,}|~{3,})\s*$/.exec(line)?.[1];
+      if (closeMark && closeMark.charAt(0) === fenceChar && closeMark.length >= fenceLen) {
+        fenceChar = "";
+        fenceLen = 0;
+      }
+      continue;
+    }
+    const openMark = /^\s*(`{3,}|~{3,})/.exec(line)?.[1];
+    if (openMark) {
+      fenceChar = openMark.charAt(0);
+      fenceLen = openMark.length;
+      out.push(blankNonNewline(line)); // 开围栏行（含 info string）一并置空
+      continue;
+    }
+    out.push(maskInlineCode(line));
+  }
+  return out.join("\n");
+}
+
 /** 提取行内 tag 节点：保留嵌套全名，排除纯数字，按 value 去重。 */
 function extractTags(text: string): ObsidianNode[] {
   const seen = new Set<string>();
@@ -119,13 +209,16 @@ export class VaultParser {
   parse(content: string): ParsedFile {
     const { frontmatter, body } = parseFrontmatter(content);
     const lines = body.split(/\r?\n/);
+    // 代码区域掩码：tag/highlight 在掩码后的正文上提取，避免围栏代码块/行内代码内的 #、== 被误识。
+    // task/blockRef/callout 仍用原始 lines（行号需对应原文；代码块内的任务行较罕见，列为后续）。
+    const masked = maskCode(body);
 
     const nodes: ObsidianNode[] = [
       ...extractWikilinks(body),
-      ...extractTags(body),
+      ...extractTags(masked),
       ...extractCallouts(lines),
       ...extractTasks(lines),
-      ...extractHighlights(body),
+      ...extractHighlights(masked),
       ...extractBlockRefs(lines),
     ];
 
