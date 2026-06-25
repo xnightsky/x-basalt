@@ -1,7 +1,7 @@
-# 计划：x-basalt-cli MVP 分阶段实现
+# 计划：x-basalt MVP 分阶段实现
 
 > 日期：2026-06-25 · 类型：大型任务（跨 5 个一级模块）
-> 设计：[`../specs/2026-06-25-x-basalt-cli-design.md`](../specs/2026-06-25-x-basalt-cli-design.md)
+> 设计：[`../specs/2026-06-25-x-basalt-design.md`](../specs/2026-06-25-x-basalt-design.md)
 > 执行真相源：根 [`TODO.md`](../../TODO.md)
 
 ## 目标
@@ -20,19 +20,19 @@
 - 验收：`tests/parser.test.ts` 对 fixtures 断言全绿；`pnpm run cli -- parse <fixture>` 输出正确 AST。
 - 决策：tag 节点只含**行内**标签，frontmatter tags 经 `ParsedFile.frontmatter` 交 indexer；wikilink 去重键含 embed 标记（保留 link/embed 区分）；tag 边界由「行首或空白」细化为「`#` 前非 word 字符」（更贴近 Obsidian，已同步调研 §2.3 与 skill）。
 
-### 阶段 2 · indexer
+### 阶段 2 · indexer（✅ 完成）
 - `schema.ts` 建 5 表；`index.ts` 实现 `rebuild/update/remove`（事务）；`watcher.ts` chokidar 增量，跳过 `.obsidian/` 与隐藏文件。
 - 验收：`tests/indexer.test.ts` 断言行数与反向链接；`pnpm run cli -- index <vault> --db ./index.db` 建库成功。
 
-### 阶段 3 · query
+### 阶段 3 · query（✅ 完成）
 - 召回 `biz-dql-subset`；手写 `tokenizer → ast → sql-generator`，编译为参数化 SQL；隐式字段 JOIN 计算。
 - 验收：`tests/query.test.ts` 端到端主路径全绿；`pnpm run cli -- query "LIST FROM #project WHERE status = 'active' SORT file.mtime DESC LIMIT 10" --db ./index.db` 返回 JSON。
 
-### 阶段 4 · skill + cli
+### 阶段 4 · skill + cli（✅ 完成）
 - `skill/loader.ts` + `index.ts`（json5 + 模糊匹配 + 内置兜底）；`cli.ts` 用 commander 接线全部子命令 + `--format`、`--watch`、`--on-change`。
 - 验收：`skill recall wikilink` / `skill list` 召回；`watch --on-change` 触发命令模板替换 `{file}`。
 
-### 阶段 5 · 收口
+### 阶段 5 · 收口（✅ 完成）
 - 补全 README 示例校验、注释收口、self-review；最小充分验证（typecheck/build/test）。
 - 验收：全链路 parse→index→query 在样例 vault 上跑通；MVP 验收标准（设计 §7）全部满足。
 
@@ -58,3 +58,20 @@
   - `pnpm test` → 26 项：pass 24 / todo 2（indexer/query）/ fail 0；含对 sample-vault 五文件的端到端断言。
   - `pnpm run typecheck` exit 0；`pnpm run lint` exit 0；`pnpm run format:check` 全通过。
   - 已知近似：代码块内 `#tag`/`==..==` 暂不剔除（调研 §3.3#4）；链接按 basename 解析去重（§3.3#1）。
+- 阶段 2（2026-06-25 验证通过）：
+  - `schema.ts` 建 files/links/tags/tasks/blocks 五表（IF NOT EXISTS + 索引）；`index.ts` 实现 `rebuild/update/remove`（事务，先删后插）；`watcher.ts` chokidar 跳过隐藏/`.obsidian`，仅 `.md`。
+  - 列扩展（已注释说明）：`files.name_key`/`files.folder`、`links.target_key`、`blocks.line_number`，支撑 basename 解析与查询期 JOIN。
+  - 为诚实填充 `tasks.line_number`/`blocks.content`，给 parser 的 `task`/`blockRef` 节点加 `line`（位置信息归 parser；现有 parser 测试不受影响）。
+  - `tests/indexer.test.ts` 3 例：files 5 / links 17 / tags 17 / tasks 9 / blocks 4；inlinks JOIN（指向 Alpha 的源文件 = 4）；remove→update 幂等。
+- 阶段 3（2026-06-25 验证通过）：
+  - 手写 `tokenizer → parseQuery(ast) → generateSql`，全参数化绑定；`DataviewEngine` 只读打开库并注册 `REGEXP` 自定义函数。
+  - 隐式字段经相关子查询 JOIN（tags/inlinks/outlinks/tasks），inlinks/outlinks 用 `DISTINCT`；frontmatter 标量经 `json_extract` 且字段名白名单校验防注入。
+  - `tests/query.test.ts` 11 例：README 示例（→ Alpha）、TABLE+FROM"folder"、FROM [[link]] 反链、contains(file.tags) 前缀、聚合数组、inlinks 去重、regexmatch、AND/OR/NOT、非子集字段报错、DqlSyntaxError。
+- 阶段 4（2026-06-25 验证通过）：
+  - `skill/loader.ts`（JSON5 + 目录解析 env>~/.obsidian-core>内置 + 兜底）、`skill/index.ts`（name/triggers 双向子串模糊召回）；`tests/skill.test.ts` 5 例（含空目录兜底）。
+  - `cli.ts` commander 接线五子命令 + `--format json|yaml`（YAML 极简块序列化，Date→ISO）、`--watch`、`--on-change {file}`。
+  - CLI 冒烟（tsx + dist 双跑）：parse(json/yaml)、index、query(LIST/TABLE/inlinks)、skill list/recall、watch（初始 rebuild + add/change 增量 + on-change 触发 + `FROM #fresh` 命中新笔记）。
+  - 附带：按用户要求从邻居 y-bot 抄入 `biz-code-comments` skill 并本地化（真相源指向本仓库 `AGENTS.md`、示例改本项目域、补「规范来源/自建实现」分界），同步 `skills-def/README.md`、`AGENTS.md` 清单并 `skills:install`。
+- 阶段 5（2026-06-25 收口验证通过）：
+  - 全量门：`pnpm run typecheck` exit 0；`pnpm run build` exit 0（dist 产出，`node dist/cli.js` 五命令可用、dist→`skills/` 兜底解析正常）；`pnpm test` → 41 项全绿（todo 0）；`pnpm run lint` 0 告警；改动的源码/测试文件 `oxfmt --check` 全通过。
+  - **[已知风险]** 仓库级 `oxfmt --check .` 在 docs/markdown/json 等**未被本次改动触及**的文件上仍报格式不符（如 `README.md`、`docs/*`、`skills-def/INSTALL.md`、`.oxlintrc.json`），为既有基线漂移（oxfmt 默认会重排中文 prose）。本次只格式化自身改动文件，未对用户手写文档做大规模重排；是否全仓 `pnpm format` 留待单独决策。

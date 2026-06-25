@@ -1,4 +1,4 @@
-# x-basalt-cli
+# x-basalt
 
 > 纯 Node.js CLI 工具：**零依赖 Obsidian GUI / 运行时**，直接通过文件系统 API 操作 Vault 目录，实现 Obsidian 规范的解析、索引、Dataview 子集查询与 Skill 召回。
 
@@ -6,7 +6,7 @@
 
 ## 状态
 
-🚧 初始化完成，按 `docs/plans/2026-06-25-x-basalt-cli-mvp.md` 分阶段实现中。当前 `src/` 为可编译骨架（接口已定，主体待填）。
+✅ MVP 完成（解析 / 索引 / Dataview 子集查询 / Skill 召回 + CLI 五子命令），见 `docs/plans/2026-06-25-x-basalt-mvp.md` 的 Evidence。`pnpm test` 全绿、`pnpm run build` 产出可用 `dist/cli.js`。
 
 ## 安装
 
@@ -23,10 +23,12 @@ pnpm run cli -- <command> [args]
 
 ## 使用
 
+> 📖 **完整用法见 [`docs/guides/usage.md`](docs/guides/usage.md)**：五条命令逐项参考、DQL 子集文法、索引数据模型、Skill 召回机制、限制与排查、配方。下面是速览。
+
 ### 1. 解析单文件 → AST JSON
 
 ```bash
-x-basalt-cli parse <file.md> [--format json|yaml]
+x-basalt parse <file.md> [--format json|yaml]
 # 开发态：
 pnpm run cli -- parse tests/fixtures/sample-vault/Index.md
 ```
@@ -36,7 +38,7 @@ pnpm run cli -- parse tests/fixtures/sample-vault/Index.md
 ### 2. 构建 / 更新 Vault 索引
 
 ```bash
-x-basalt-cli index <vault-path> [--watch] [--db ./index.db]
+x-basalt index <vault-path> [--watch] [--db ./index.db]
 pnpm run cli -- index ./tests/fixtures/sample-vault --db ./index.db
 ```
 
@@ -45,7 +47,7 @@ pnpm run cli -- index ./tests/fixtures/sample-vault --db ./index.db
 ### 3. 执行 Dataview 子集查询
 
 ```bash
-x-basalt-cli query "LIST FROM #project WHERE status = 'active' SORT file.mtime DESC LIMIT 10" \
+x-basalt query "LIST FROM #project WHERE status = 'active' SORT file.mtime DESC LIMIT 10" \
   --vault ./tests/fixtures/sample-vault \
   --db ./index.db
 ```
@@ -69,18 +71,36 @@ LIMIT <number>
 ### 4. 召回 Skill 规范
 
 ```bash
-x-basalt-cli skill recall wikilink
-x-basalt-cli skill recall dataview
-x-basalt-cli skill list
+x-basalt skill recall usage      # 召回本 CLI 自己的说明书（自我文档）
+x-basalt skill recall wikilink
+x-basalt skill recall dataview
+x-basalt skill list
 ```
 
-模糊匹配 skill 的 `triggers` 与 `name`，返回规范详情。内置 `obsidian-base-spec`，外部目录为空也能召回基础规范。Skill 目录：环境变量 `OBSIDIAN_SKILL_PATH` > `~/.obsidian-core/skills/` > 内置 `skills/`。
+模糊匹配 skill 的 `triggers` 与 `name`，返回规范详情。内置 `obsidian-base-spec`（Obsidian 规范）与 `x-basalt-usage`（**CLI 自我说明书**）始终兜底可召回——外部目录为空也不影响，方便 AI 直接 `skill recall usage` 学会用法。Skill 目录：环境变量 `OBSIDIAN_SKILL_PATH` > `~/.obsidian-core/skills/` > 内置 `skills/`。
 
 ### 5. 监听模式
 
 ```bash
-x-basalt-cli watch <vault-path> --on-change "echo 'File changed: {file}'"
+x-basalt watch <vault-path> --on-change "echo 'File changed: {file}'"
 ```
+
+### 6. 项目配置（可选，免去重复传参）
+
+项目本地配置默认放仓库内隐藏目录 **`.x-basalt/`**（类比 `.obsidian/`，**不入 git**）。复制自带模板即可：
+
+```bash
+cp .x-basalt/config.example.yaml .x-basalt/config.yaml
+```
+
+`.x-basalt/config.yaml`（**默认 YAML**，也支持 JSON5/JSON；扁平 `.x-basalt.yaml` 亦可）：
+
+```yaml
+vault: ./my-vault
+# db 省略即用默认 .x-basalt/index.db
+```
+
+之后 `x-basalt index`、`x-basalt query "LIST FROM #project"` 都能零参数运行（索引默认落在 `.x-basalt/index.db`，目录自动创建）。键：`db`/`vault`/`skillPath`/`format`/`onChange`。优先级：命令行 flag > 项目配置 > 全局配置 `~/.x-basalt/config.yaml` > 内置默认。详见 [`docs/guides/usage.md` §12](docs/guides/usage.md#12-配置文件免去重复传参)。
 
 ## 开发
 

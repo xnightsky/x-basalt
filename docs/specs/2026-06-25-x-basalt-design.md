@@ -1,7 +1,7 @@
-# 设计：x-basalt-cli
+# 设计：x-basalt
 
 > 日期：2026-06-25 · 状态：已确认架构，分阶段实现中
-> 事实依据见 [`../research/2026-06-25-obsidian-spec-and-deps.md`](../research/2026-06-25-obsidian-spec-and-deps.md)；执行计划见 [`../plans/2026-06-25-x-basalt-cli-mvp.md`](../plans/2026-06-25-x-basalt-cli-mvp.md)。
+> 事实依据见 [`../research/2026-06-25-obsidian-spec-and-deps.md`](../research/2026-06-25-obsidian-spec-and-deps.md)；执行计划见 [`../plans/2026-06-25-x-basalt-mvp.md`](../plans/2026-06-25-x-basalt-mvp.md)。
 
 ## 1. 目标与硬约束
 
@@ -11,14 +11,14 @@
 
 | 项 | 决策 |
 |---|---|
-| 包名 / CLI bin | `x-basalt-cli` |
+| 包名 / CLI bin | `x-basalt` |
 | 模块格式 | ESM（`"type": "module"`，NodeNext，相对 import 带 `.js`） |
 | 包管理 | pnpm（`pnpm@10.33.0`；spec 未限定 PM，按邻居 y-bot 约定。better-sqlite3 经 `pnpm.onlyBuiltDependencies` 放行原生构建） |
 | 测试 | Node 原生 `node:test` + `assert`（spec 限定） |
 | TypeScript | 5.x（spec 限定，未跟随邻居 y-bot 的 TS6） |
 | Lint/Format | oxlint + oxfmt（oxc 工具链；spec 未限定，经评估选定，未照搬邻居 Biome） |
 | 交付 | 分阶段带检查点（见计划） |
-| 项目根 | 直接在 `x-basalt-cli/` 根，不嵌套 `obsidian-core/` |
+| 项目根 | 直接在 `x-basalt/` 根，不嵌套 `obsidian-core/` |
 
 **选型判据**：spec「严格限定」清单覆盖的项（TS 5.x、`node:test`、commander、unified/remark、gray-matter、chokidar、better-sqlite3、zod、json5）**以 spec 为准、覆盖邻居**（故未跟 y-bot 的 TS6/vitest）；spec 未覆盖的项中，包管理器**按邻居 y-bot 约定**选 pnpm；Lint/Format **经评估选 oxc 工具链（oxlint + oxfmt）**，未照搬邻居的 Biome（理由：纯 Rust 工具链、单生态、快，且为本项目刻意选型而非沿用）。
 
@@ -87,6 +87,7 @@ class SkillRecall {
 
 ### 3.5 cli（`src/cli.ts`）
 commander 五子命令：`parse / index / query / skill / watch`，签名见 README。
+选项默认值可由项目/全局配置文件提供（`src/config.ts`）。项目配置默认放隐藏目录 `.x-basalt/config.{yaml,yml,json5,json}`（回退扁平 `.x-basalt.{...}`），cwd 向上查找；全局回退 `~/.x-basalt/config.{...}`。默认 YAML（复用 gray-matter 引擎解析，不新增依赖）；键 `db/vault/skillPath/format/onChange`。索引默认落 `.x-basalt/index.db`（indexer 自动建父目录）。优先级：命令行 flag > 项目配置 > 全局配置 > 内置默认。`.x-basalt/` 整体不入 git（仅保留 `config.example.yaml` 模板）。详见 `docs/guides/usage.md` §12。
 
 ## 4. 数据流
 

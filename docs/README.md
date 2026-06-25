@@ -1,6 +1,6 @@
 # docs · 文档入口与路由
 
-本目录是 x-basalt-cli 的文档真相源。改动前先按下表定位「该读哪些 / 结论往哪写」。
+本目录是 x-basalt 的文档真相源。改动前先按下表定位「该读哪些 / 结论往哪写」。
 
 ## 目录路由
 
@@ -21,10 +21,11 @@
 
 ## 当前活跃文档
 
-- 设计：[`specs/2026-06-25-x-basalt-cli-design.md`](specs/2026-06-25-x-basalt-cli-design.md)
+- 使用指南（面向使用者，怎么用）：[`guides/usage.md`](guides/usage.md)
+- 设计：[`specs/2026-06-25-x-basalt-design.md`](specs/2026-06-25-x-basalt-design.md)
 - 调研：[`research/2026-06-25-obsidian-spec-and-deps.md`](research/2026-06-25-obsidian-spec-and-deps.md)
-- 计划：[`plans/2026-06-25-x-basalt-cli-mvp.md`](plans/2026-06-25-x-basalt-cli-mvp.md)
-- 执行真相源：根 [`TODO.md`](../TODO.md)
+- 计划：[`plans/2026-06-25-x-basalt-mvp.md`](plans/2026-06-25-x-basalt-mvp.md)
+- 执行真相源：MVP 已完成，根 `TODO.md` 已随之删除
 
 ## 维护规则
 

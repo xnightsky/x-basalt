@@ -1,4 +1,4 @@
-# AGENTS.md · x-basalt-cli
+# AGENTS.md · x-basalt
 
 > 纯 Node.js CLI 工具：零依赖 Obsidian GUI / 运行时，直接通过文件系统操作 Vault，实现 Obsidian 规范的解析、索引、Dataview 子集查询与 Skill 召回。
 > 本文件是项目「全局提示词」主体；`CLAUDE.md` 仅指向本文件。
@@ -6,7 +6,7 @@
 ## 响应与沟通
 
 - 始终使用简体中文回答。
-- 每次回复末尾附带单独一行 `[by=x-basalt-cli]`。
+- 每次回复末尾附带单独一行 `[by=x-basalt]`。
 - 探索、编码、验证前，先用 1-2 句说明当前目标和下一步动作。
 - 完成任务时，必须分别说明：已验证项、未验证项、剩余风险。
 - 若发现边界冲突、设计冲突、阶段切口冲突或隐藏的全局一致性风险，第一时间用 `**[冲突提示]**` 单独高亮：写明冲突点、影响范围、建议停点、是否需要先更新计划/文档。不得拖到实现后或验收时集中暴露。
@@ -114,6 +114,7 @@ docs/         research / specs / plans / guides / architecture / testing（见 d
 - 现有业务 skill：
   - `biz-obsidian-spec`：Obsidian Markdown 精确文法，开发/维护 parser 时召回。
   - `biz-dql-subset`：DQL 子集文法 + SQL 编译映射 + 隐式字段语义，开发 query/indexer 时召回。
+  - `biz-code-comments`：中文注释 / JSDoc / 模块头 / 跨模块不变量 / 规范来源分界规范，写或审查注释时召回。
 - 新增/修改 skill 后跑 `pnpm run skills:install` 重新安装。
 - 注意区分：`skills-def/` 是**开发侧** AI 召回；`skills/` 是**产品运行时** SkillRecall 数据，两者不互相替代。
 
@@ -135,4 +136,4 @@ docs/         research / specs / plans / guides / architecture / testing（见 d
 - 只有触及跨模块公共契约、根级脚本/配置、测试基础设施或用户明确要求时，才升级到全量 lint/typecheck/build/test。
 - 声称「完成 / 通过 / 可用」前，必须运行与改动风险匹配的验证命令，并依据实际输出说明结果；跳过的全量项要列出原因与剩余风险。
 
-[by=x-basalt-cli]
+[by=x-basalt]
