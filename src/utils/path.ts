@@ -2,6 +2,18 @@ import { basename, extname } from "node:path";
 
 // === 自建实现: 链接解析与 embed 判定的路径工具 ===
 
+/**
+ * 把任意平台的路径分隔符归一化为 POSIX 正斜杠。
+ *
+ * 索引内的 `files.path` / `links.source` 等一律以 POSIX 形式存储，
+ * 使 Windows（反斜杠）与 *nix 产出的索引可移植、且 DQL `FROM "folder"` 的前缀匹配跨平台一致。
+ *
+ * @param p - 原始路径（可能含反斜杠）
+ */
+export function toPosix(p: string): string {
+  return p.replaceAll("\\", "/");
+}
+
 /** Obsidian 资源型 embed 的扩展名（非笔记，按资源处理）。 */
 const ASSET_EXTENSIONS = new Set([
   ".png",

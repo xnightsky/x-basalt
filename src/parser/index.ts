@@ -44,22 +44,28 @@ function extractHighlights(text: string): ObsidianNode[] {
   return out;
 }
 
-/** 提取 task 节点：逐行匹配，status 取方括号内单字符。 */
+/** 提取 task 节点：逐行匹配，status 取方括号内单字符，line 为 1-based 正文行号。 */
 function extractTasks(lines: string[]): ObsidianNode[] {
   const out: ObsidianNode[] = [];
-  for (const line of lines) {
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i];
+    if (line === undefined) continue;
     const m = TASK_RE.exec(line);
-    if (m) out.push({ type: "task", status: m[1] ?? " ", text: (m[2] ?? "").trim() });
+    // line = i + 1：1-based 行号，供 indexer 回填 tasks.line_number（见 types.ts 注释）。
+    if (m) out.push({ type: "task", status: m[1] ?? " ", text: (m[2] ?? "").trim(), line: i + 1 });
   }
   return out;
 }
 
-/** 提取 blockRef 定义节点：逐行匹配行尾 ^id。 */
+/** 提取 blockRef 定义节点：逐行匹配行尾 ^id，line 为 1-based 正文行号。 */
 function extractBlockRefs(lines: string[]): ObsidianNode[] {
   const out: ObsidianNode[] = [];
-  for (const line of lines) {
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i];
+    if (line === undefined) continue;
     const m = BLOCKREF_RE.exec(line);
-    if (m?.[1]) out.push({ type: "blockRef", id: m[1] });
+    // line = i + 1：indexer 据此定位块所在正文行，截取去 ^id 后的文本作为 blocks.content。
+    if (m?.[1]) out.push({ type: "blockRef", id: m[1], line: i + 1 });
   }
   return out;
 }
