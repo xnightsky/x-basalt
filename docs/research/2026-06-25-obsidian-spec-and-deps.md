@@ -65,15 +65,21 @@
 
 ## 3. Dataview DQL 子集与隐式字段
 
-### 3.1 语法子集（严格边界）
+### 3.1 语法子集（2026-06-27 扩展后冻结）
+
+> 早期「严格边界」为无调研临时口径，已按官方 Dataview + 用户拍板扩展。完整裁决表见 `docs/specs/2026-06-27-dql-subset-frozen.md`；真相源摘要见 `skills-def/biz-dql-subset/SKILL.md`。
+
 ```
-LIST | TABLE <field, ...>
-FROM <"folder"> | <#tag> | <[[link]]>     # 单一来源；多来源 and/or 组合不在 MVP
-WHERE <condition>
-SORT <field> ASC | DESC                    # 单字段
+LIST | TABLE <field, ...> | TASK
+FROM <"folder"> | <#tag> | <[[link]]>           # 单一来源；多来源 and/or 不做
+WHERE <condition>                                # +null 判断、日期比较、内置函数
+GROUP BY <expr>  ·  FLATTEN <arrayField>  ·  WITHOUT ID
+SORT <field> [ASC|DESC] (, <field> [ASC|DESC])* # 多键
 LIMIT <number>
 ```
-- 操作符：`= != < > <= >=`、`contains/icontains/startswith/endswith`、`AND/OR/NOT`、`regexmatch(field, "pattern")`。
+- 操作符：`= != < > <= >=`、`AND/OR/NOT`、括号。
+- 函数：`contains/icontains/startswith/endswith`、`regexmatch(field,"pat")`；内置标量 `date(today)/date(now)`、`lower/upper`、`length`、`round`。
+- **仍非目标（报错不静默）**：FROM and/or 多源、CALENDAR、DataviewJS、未知字段/函数、聚合列排序、负 LIMIT、`length()` 外的数值表达式运算。
 
 ### 3.2 隐式字段完整性分析（含假设）
 Dataview 官方隐式字段很多，本项目只保证下列子集，其余**显式列为非目标**：
@@ -85,7 +91,7 @@ Dataview 官方隐式字段很多，本项目只保证下列子集，其余**显
 | `file.tags` | `tags` 表聚合数组 | ✅ `contains(file.tags, "#x")` |
 | `file.inlinks` | `links` 表反向 JOIN | ⚠️ 数组用于显示 + `contains`；数值比较为 stretch |
 | `file.outlinks` | `links` 表正向 JOIN（含 embed） | ⚠️ 同上 |
-| `file.tasks` | `tasks` 表关联 | ⚠️ 显示 + `length`；按 task 字段过滤为非目标 |
+| `file.tasks` | `tasks` 表关联 | ✅ `TASK` 查询返回任务行 + `length(file.tasks)` 计数；task 字段级过滤为后续 |
 | frontmatter 标量字段（如 `status`） | `json_extract(files.frontmatter, …)` | ✅ 标量比较 + 数组 `contains` |
 | `file.day/cday/mday/link/etags/aliases/...` | — | ❌ 非目标（MVP 不实现） |
 

@@ -25,21 +25,21 @@ DQL 子集真相源把当前子集定义为**严格边界**，明确 `TASK/CALEN
   - **结论**：选 **chevrotain@12.0.0**（已落 `dependencies`，待 S2.3 接入）；peggy 已移除。关键依据：端到端类型安全（peggy `parse()` 返回 `any`）、LL 错误定位贴近真实错误点、内建多错误恢复。
   - 前置：阶段 0。
 
-- [ ] **S2.2a 决定"扩展后的目标子集"（卡点·决策）**
+- [x] **S2.2a 决定"扩展后的目标子集"（卡点·决策）** ✅ 2026-06-27 → 冻结表 `../specs/2026-06-27-dql-subset-frozen.md`（TASK+GROUP BY+FLATTEN 全纳入；函数集=日期+字符串+数值；CALENDAR/DataviewJS/FROM and-or 仍不做）
   - 目标：明确扩展边界，消解前置冲突。
   - 动作：在现 MVP 子集上逐项裁决纳不纳入：多键 SORT、GROUP BY、FLATTEN、WITHOUT ID、WHERE null、日期比较、函数集（contains 家族完整 + 最小内置函数）、**TASK 查询类型（候选，需定）**；明确 **CALENDAR / DataviewJS / FROM and-or 仍不做**（或定为后续）。
   - 验收：specs 有一张"扩展后子集"裁决表，每项标 纳入/不纳入/后续。
   - 证据：裁决表评审（自检：每个"纳入"项都能对到 SQL 策略）。
   - 前置：S2.1。
 
-- [ ] **S2.2b 同步更新真相源（卡点·防分叉）**
+- [x] **S2.2b 同步更新真相源（卡点·防分叉）** ✅ 2026-06-27 → SKILL.md + research §3.1/§3.2 已同步扩展子集 + skills:install 重装；现有 query 测试无"应报错"冲突断言（52 绿）；新能力测试随 S2.3+ TDD 新增
   - 目标：真相源先于代码更新。
   - 动作：按 S2.2a 改写 `skills-def/biz-dql-subset/SKILL.md` 的"支持的子集/非目标"段 + research §3；`pnpm run skills:install` 重装；调整 `tests/query.test.ts` 中"非子集报错"断言到新边界。
   - 验收：skill、research、测试三者对新子集一致；`pnpm test tests/query.test.ts` 仍绿（断言已对齐）。
   - 证据：`pnpm run skills:install`；`pnpm test tests/query.test.ts`。
   - 前置：S2.2a。
 
-- [ ] **S2.2c 定义扩展后的 AST 类型**
+- [x] **S2.2c 定义扩展后的 AST 类型** ✅ 2026-06-27 → `src/query/ast.ts`：`QueryType`+TASK、`sort` 单键→多键数组、新增 `groupBy/flatten/withoutId`；`sql-generator` 适配多键 ORDER BY；typecheck=0、测试 52 绿不回归。WhereExpr 细粒度（null/日期/内置函数）随 S2.15/S2.16/S2.17 各实现步增量加类型，避免半成品占位。
   - 目标：`src/query/ast.ts` 反映新子集。
   - 动作：扩展 `DqlQuery` 类型：sort 改多键数组、加 groupBy/flatten/withoutId 字段、WHERE 表达式补 null/日期/函数节点。
   - 验收：`typecheck` 通过；类型覆盖 S2.2a 全部"纳入"项。
@@ -50,11 +50,12 @@ DQL 子集真相源把当前子集定义为**严格边界**，明确 `TASK/CALEN
 
 ## Part B · 用选定工具重写 tokenizer→parser（red→green）
 
-- [ ] **S2.3 tokenizer 全 token 覆盖**
+- [x] **S2.3 tokenizer 全 token 覆盖** ✅ 2026-06-27
   - 目标：词法层覆盖所有记号。
   - 动作：先写 `tests/query-parser.test.ts` 词法用例；实现关键字(LIST/TABLE/FROM/WHERE/SORT/LIMIT/AND/OR/NOT/ASC/DESC/GROUP BY/FLATTEN…)、标识符、字符串、数字、操作符、`[[..]]`、`#tag`、`(`/`)`/`,`、函数名。
   - 验收：词法用例全绿；非法字符报带位置错误。
-  - 证据：`pnpm test tests/query-parser.test.ts`。
+  - 证据：`src/query/tokens.ts`（chevrotain lexer）+ `tests/query-parser.test.ts` 19 词法用例全绿（含大小写不敏感、longer_alt 回退、GROUP BY/WITHOUT ID 多词关键字、unicode 标签、字符串/数字边界、错误定位）；71 测试全绿、typecheck=0。
+  - 关键点：chevrotain 对 `\p{}` unicode pattern 首字符优化失配 → Tag 改自定义 matcher 函数（sticky 正则）。
   - 前置：S2.2c。
 
 - [ ] **S2.4 parser：查询头 LIST / TABLE(+fields)**
