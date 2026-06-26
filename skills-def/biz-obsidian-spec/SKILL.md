@@ -9,6 +9,8 @@ description: Use when implementing or reviewing the parser of x-basalt (wikilink
 
 x-basalt 的 parser 必须**精确复现** Obsidian 专有语法，且**零依赖 Obsidian 运行时**。本 skill 给出每类语法的文法与边界 case；完整论证见 `docs/research/2026-06-25-obsidian-spec-and-deps.md` §2。代码中以 `// === Obsidian 规范来源 ===` / `// === 自建实现 ===` 标注分界。
 
+> **规范对标原则（2026-06-26）**：严格对标 Obsidian 官方语法行为实现。本 skill 的自定义口径若与官方**无冲突**，一律以**官方规范为准**；仅在官方未定义、或本项目刻意收窄（如纯 headless 不渲染）处才用自定义口径，并须显式注明理由。
+
 ## 触发场景
 
 - 实现 / 修改 `src/parser/**`（wikilink、frontmatter、tag、callout、task、highlight、blockRef 提取）

@@ -9,6 +9,8 @@ description: Use when implementing or reviewing the query engine or indexer sche
 
 x-basalt 自建 DQL 执行层，**禁止依赖 obsidian-dataview 的 Evaluator/Executor**。本 skill 定义支持的 DQL 子集、AST→参数化 SQL 的映射、隐式字段语义。完整分析见 `docs/research/2026-06-25-obsidian-spec-and-deps.md` §3。
 
+> **规范对标原则（2026-06-26）**：查询语义严格对标官方 Dataview 行为（以官方 `src/query/parse.ts` 与官方文档为参考）。本 skill 的子集口径若与官方**无冲突**，一律以**官方 Dataview 为准**；子集只做"少而正确"的取舍（暂不实现 = 报错，而非语义偏离），不得在已实现的子句上偏离官方语义。
+
 ## 触发场景
 
 - 实现 / 修改 `src/query/**`（tokenizer、ast、sql-generator、执行）

@@ -16,6 +16,7 @@
 | 解析层 | **组装**（remark 生态）+ 自建收敛 tag/task/blockRef/due_date | 停止手撸全量解析 |
 | DQL 引擎 | **纯自研做深**（文法工具重写 + 补全子集 + 覆盖矩阵 + 测试） | 代表作核心 |
 | 许可证 | 只用宽松证；GPL/AGPL/未声明禁用 | 见许可证政策指南 |
+| **规范对标** | **严格对标官方 Obsidian/Dataview；自定义口径与官方无冲突时以官方为准** | 落到 `biz-obsidian-spec`/`biz-dql-subset` 真相源 |
 | **范围外（不做）** | **DataviewJS（`dataviewjs` 代码块执行任意 JS）** | 需运行时执行任意 JS 访问 dv API，超范围且有安全问题；明确不做 |
 
 ## 全局执行约定
@@ -65,6 +66,8 @@
 
 ## 阶段 1 · 解析层改为组装（解决 parser 类缺陷）
 
+> **已下钻为原子子步**，详见 [`2026-06-26-modules-steps.md`](2026-06-26-modules-steps.md) 阶段 1。下面为总览，执行以细化清单为准。
+
 - [ ] **S1.1 复核 remark-obsidian-md 许可证与能力（卡点）**
   - 动作：查其 repo `LICENSE` 文件确认是否宽松证（manifest license 字段缺失）；跑最小 spike 解析样例，确认 wikilink/embed/callout(`+/-`)/highlight 的 AST 字段。
   - 验收：许可证为宽松证 **且** 四类节点字段满足映射需求；否则改用单点插件组合（@r4ai/remark-callout + remark-flexible-markers + wiki-link 插件）或保留自建。
@@ -92,6 +95,8 @@
 ---
 
 ## 阶段 2 · DQL 内核做深（代表作核心 · 重头戏）
+
+> **本阶段已下钻为 24 个原子子步**，详见 [`2026-06-26-dql-kernel-steps.md`](2026-06-26-dql-kernel-steps.md)（含真相源冲突卡点）。下面 7 步为总览，执行以细化清单为准。
 
 - [ ] **S2.1 文法工具选型 spike：chevrotain vs peggy（卡点）**
   - 动作：各写一个最小 spike 解析 `LIST FROM #x WHERE a = 1 SORT b DESC LIMIT 5`，验证 ESM/NodeNext 接入、错误位置、TS 类型体验。
@@ -139,6 +144,8 @@
 
 ## 阶段 3 · 索引层健壮性 + 现成库收编
 
+> **已下钻为原子子步**，详见 [`2026-06-26-modules-steps.md`](2026-06-26-modules-steps.md) 阶段 3。
+
 - [ ] **S3.1 监听健壮性（red→green）**
   - 动作：补 `watcher.on("error")`（I1）；onUnlink 加 `.catch`（I2）；加 watch 增量测试（add/change/unlink）。
   - 验收：watcher error 不崩进程；增量测试通过。
@@ -172,6 +179,8 @@
 ---
 
 ## 阶段 4 · skill 召回 + CLI/config 收编
+
+> **已下钻为原子子步**，详见 [`2026-06-26-modules-steps.md`](2026-06-26-modules-steps.md) 阶段 4。
 
 - [ ] **S4.1 skill 召回换 Fuse.js（red→green）**
   - 动作：先写召回质量测试（同义/前缀/模糊命中）；用 Fuse.js 对 `[{name,triggers}]` 建索引替代手写匹配；保留内置兜底。
