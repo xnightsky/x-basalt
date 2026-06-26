@@ -32,31 +32,31 @@
 
 ## 阶段 0 · 基线与前置（解锁后续一切）
 
-- [ ] **S0.1 升 Node 基线到 22**
+- [x] **S0.1 升 Node 基线到 22**
   - 动作：`package.json` 改 `"engines": { "node": ">=22" }`；`tsconfig` 的 `lib`/`target` 视需要校到对应 ES 版本；README/AGENTS 技术栈表同步。
   - 验收：`node -v` ≥ 22；`pnpm install` 成功；`engines` 与实际依赖(better-sqlite3 12 / chokidar 5)不再冲突。
   - 证据：`node -v`；`pnpm install`（exit 0）；`pnpm run typecheck`（exit 0）。
   - 前置：无。
 
-- [ ] **S0.2 测试脚本改 glob，新增测试自动纳入**
+- [x] **S0.2 测试脚本改 glob，新增测试自动纳入**
   - 动作：`package.json` 的 `test` 改为 `node --import tsx --test "tests/**/*.test.ts"`（Node 22 原生支持 glob）。
   - 验收：新建一个空 `tests/_smoke.test.ts` 能被发现并运行；删除后恢复。
   - 证据：`pnpm test` 输出包含新文件；运行后删除占位。
   - 前置：S0.1。
 
-- [ ] **S0.3 死依赖清理（按依赖决策）**
+- [x] **S0.3 死依赖清理（按依赖决策）**
   - 动作：移除 `src/**` 零 import 的 `zod`；`unified`/`remark-parse`/`@flowershow/remark-wiki-link` 暂留（阶段 1 决定去留）。
   - 验收：`zod` 从 `package.json` 移除后 `typecheck`/`test` 全绿。
   - 证据：`pnpm run typecheck`；`pnpm test`（均 exit 0）。
   - 前置：S0.1。
 
-- [ ] **S0.4 许可证基线扫描**
+- [x] **S0.4 许可证基线扫描**
   - 动作：按 [`许可证政策`](../guides/dependency-license-policy.md) 检查现有依赖；引入 `license-checker`/`pnpm licenses list` 跑一次，记录结果到依赖决策文档。
   - 验收：无 GPL/AGPL/未声明依赖；有清单为证。
   - 证据：`pnpm licenses list`（或 `npx license-checker --summary`）输出无 GPL/AGPL。
   - 前置：S0.1。
 
-- [ ] **S0.5 门禁基线快照**
+- [x] **S0.5 门禁基线快照**
   - 动作：记录当前 `typecheck`/`test`/`lint`/`build` 结果作为回归基线（写入本文件 Evidence）。
   - 验收：四项命令均有明确 exit code 记录。
   - 证据：依次跑 `pnpm run typecheck`/`pnpm test`/`pnpm run lint`/`pnpm run build`。
@@ -98,10 +98,10 @@
 
 > **本阶段已下钻为 24 个原子子步**，详见 [`2026-06-26-dql-kernel-steps.md`](2026-06-26-dql-kernel-steps.md)（含真相源冲突卡点）。下面 7 步为总览，执行以细化清单为准。
 
-- [ ] **S2.1 文法工具选型 spike：chevrotain vs peggy（卡点）**
+- [x] **S2.1 文法工具选型 spike：chevrotain vs peggy（卡点）** ✅ 2026-06-27 → 选 **chevrotain**
   - 动作：各写一个最小 spike 解析 `LIST FROM #x WHERE a = 1 SORT b DESC LIMIT 5`，验证 ESM/NodeNext 接入、错误位置、TS 类型体验。
   - 验收：选定其一（推荐 **chevrotain**：纯 TS、无生成步骤、Node22 已满足、错误恢复 + IDE 友好）；记录决策到 specs。
-  - 证据：两个 spike 均能解析样例并打印 AST；决策写入 specs。
+  - 证据：两 spike 均产出一致 AST；决策 + 评估矩阵见 [`../specs/2026-06-27-dql-grammar-tool-decision.md`](../specs/2026-06-27-dql-grammar-tool-decision.md)。chevrotain 已落 `dependencies`、peggy 已移除。
   - 前置：S0.1。
 
 - [ ] **S2.2 冻结目标 DQL 子集 + AST 契约**
@@ -248,4 +248,20 @@ S0 → {S1, S2, S3, S4 可并行起步}；S2（DQL）是关键路径与最大投
 
 ## Evidence
 
-> 正式开工后每阶段在此追加：运行命令、关键输出、失败复现。（当前为计划态，未开工。）
+> 正式开工后每阶段在此追加：运行命令、关键输出、失败复现。
+
+### 阶段 0 · 基线与前置（2026-06-27 完成）
+
+环境：`node -v` = v24.14.1（满足 `engines.node >=22`）；`pnpm -v` = 10.33.0。
+
+| 子步 | 命令 | 结果 |
+|---|---|---|
+| S0.1 | `package.json` engines `>=18`→`>=22`；`AGENTS.md` 技术栈 Node 18+→22+；tsconfig 维持 `target ES2022 / lib ES2023`（Node22+ 适配，无需改） | ✅ |
+| S0.1/S0.3 | `pnpm install` | exit 0，移除 `zod 4.4.3`；锁文件 `grep -c zod`=0 |
+| S0.2 | `package.json` test → `node --import tsx --test "tests/**/*.test.ts"`；建临时 `tests/_smoke.test.ts` 验证 | glob 自动发现，测试数 52→53；删除后恢复 |
+| S0.3 | 移除 `src/**` 零 import 的 `zod`（package.json + AGENTS 技术栈表） | typecheck/test 全绿 |
+| S0.4 | `pnpm licenses list` | 全量宽松证：MIT 103 / ISC 7 / BSD 4 / Apache-2.0 4；**零 GPL/AGPL/MPL/未声明** |
+| S0.5 | `pnpm run typecheck` / `pnpm test` / `pnpm run lint` / `pnpm run build` | 四项均 exit 0；测试 52 pass / 0 fail |
+
+门禁基线快照（回归基准）：typecheck=0，test=52 pass/0 fail，lint=0，build=0。
+保留依赖中 `unified`/`remark-parse`/`@flowershow/remark-wiki-link` 仍零 import，按 S0.3 决策留到阶段 1 决定去留。

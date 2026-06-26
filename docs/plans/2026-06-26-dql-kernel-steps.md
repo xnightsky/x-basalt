@@ -17,11 +17,12 @@ DQL 子集真相源把当前子集定义为**严格边界**，明确 `TASK/CALEN
 
 ## Part A · 选型与契约（地基）
 
-- [ ] **S2.1 文法工具 spike：chevrotain vs peggy**
+- [x] **S2.1 文法工具 spike：chevrotain vs peggy** ✅ 2026-06-27
   - 目标：选定 DQL 文法实现工具。
   - 动作：各写最小 spike 解析 `LIST FROM #x WHERE a = 1 AND contains(file.tags,"y") SORT b DESC LIMIT 5`；验证 ESM/NodeNext 接入、错误位置、TS 类型。
   - 验收：选定其一（推荐 **chevrotain**：纯 TS、无生成步骤、Node22 已满足、错误恢复+IDE 友好；备选 peggy）。决策写入 specs。
-  - 证据：两 spike 均打印正确 AST；specs 记录决策。
+  - 证据：两 spike 均打印**一致**的正确 AST；决策 + 实证评估矩阵见 [`../specs/2026-06-27-dql-grammar-tool-decision.md`](../specs/2026-06-27-dql-grammar-tool-decision.md)。
+  - **结论**：选 **chevrotain@12.0.0**（已落 `dependencies`，待 S2.3 接入）；peggy 已移除。关键依据：端到端类型安全（peggy `parse()` 返回 `any`）、LL 错误定位贴近真实错误点、内建多错误恢复。
   - 前置：阶段 0。
 
 - [ ] **S2.2a 决定"扩展后的目标子集"（卡点·决策）**

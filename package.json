@@ -14,13 +14,13 @@
     "LICENSE"
   ],
   "engines": {
-    "node": ">=18"
+    "node": ">=22"
   },
   "packageManager": "pnpm@10.33.0",
   "scripts": {
     "build": "tsc",
     "typecheck": "tsc --noEmit",
-    "test": "node --import tsx --test tests/parser.test.ts tests/indexer.test.ts tests/query.test.ts tests/skill.test.ts tests/config.test.ts",
+    "test": "node --import tsx --test \"tests/**/*.test.ts\"",
     "cli": "tsx src/cli.ts",
     "dev": "tsx src/cli.ts",
     "lint": "oxlint",
@@ -49,13 +49,13 @@
   "dependencies": {
     "@flowershow/remark-wiki-link": "^4.0.0",
     "better-sqlite3": "^12.11.1",
+    "chevrotain": "^12.0.0",
     "chokidar": "^5.0.0",
     "commander": "^15.0.0",
     "gray-matter": "^4.0.3",
     "json5": "^2.2.3",
     "remark-parse": "^11.0.0",
-    "unified": "^11.0.5",
-    "zod": "^4.4.3"
+    "unified": "^11.0.5"
   },
   "devDependencies": {
     "@types/better-sqlite3": "^7.6.13",

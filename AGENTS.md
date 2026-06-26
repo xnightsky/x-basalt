@@ -37,14 +37,13 @@
 
 | 用途 | 选型 |
 |---|---|
-| Runtime / 语言 | Node.js 18+（开发用 24.x）+ TypeScript 5.x（ESM / NodeNext） |
+| Runtime / 语言 | Node.js 22+（开发用 24.x）+ TypeScript 5.x（ESM / NodeNext） |
 | CLI | commander |
 | Markdown 基础 AST | unified + remark-parse |
 | Obsidian 专有语法 | **自建提取**（wikilink/embed/callout/highlight/task/blockRef），`@flowershow/remark-wiki-link` 仅作语法参考 |
 | Frontmatter | gray-matter |
 | 文件监听 | chokidar |
 | 索引存储 | better-sqlite3（单文件 SQLite，同步 API） |
-| Schema 校验 | zod |
 | Skill 文件格式 | json5 |
 | 测试 | Node 原生 Test Runner（`node:test`）+ `assert` |
 | Lint / Format | oxlint + oxfmt（oxc 工具链） |

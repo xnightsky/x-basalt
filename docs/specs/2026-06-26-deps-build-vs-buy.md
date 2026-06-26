@@ -91,6 +91,8 @@
 - **B. DQL 执行层：基于社区子集起步 vs 纯自研做深。**
   - 建议：纯自研做深（当前已有 tokenizer→ast→sql 骨架），把它从 70% 子集补成「完整可信子集 + 覆盖矩阵」，作为代表作技术亮点；社区实现仅作对照。
 - **C. 死依赖处理：** 从 `package.json` 移除 `unified`/`remark-parse`/`@flowershow/remark-wiki-link`/`zod`，或在选 A 后让它们真正被用上。
+  - **[2026-06-27 进展 · 路线图 S0.3]** `zod` 已移除（package.json + AGENTS 技术栈表）；typecheck/test 全绿。`unified`/`remark-parse`/`@flowershow/remark-wiki-link` 暂留，待阶段 1 解析层选型（A 项）决定去留。
+  - **[2026-06-27 · 路线图 S0.4 许可证基线]** `pnpm licenses list` 全量为宽松证：MIT 103 / ISC 7 / BSD 4 / Apache-2.0 4，**零 GPL/AGPL/MPL/未声明**，符合 `guides/dependency-license-policy.md`。
 
 ## 7. 一句话总结
 
