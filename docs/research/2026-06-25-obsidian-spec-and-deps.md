@@ -17,6 +17,8 @@
 | json5 | 2.2.3 | 可用（skill 文件格式）。 |
 | node:sqlite（内置） | Node 24 可用 | 作为零安装兜底参考；当前**仍按 spec 用 better-sqlite3**。 |
 
+> **[2026-06-26 偏差标注]** 本表所列 `unified` / `remark-parse` / `@flowershow/remark-wiki-link` / `zod` 在 `src/**` 实测 import 次数 = 0（已成死依赖，解析全为手写字符串）。「该买该建」的重新评估见 [`../specs/2026-06-26-deps-build-vs-buy.md`](../specs/2026-06-26-deps-build-vs-buy.md)；另核实到 `@portaljs/remark-wiki-link@1.2.0`、`remark-obsidian-md@1.1.0`（含 callout/highlight）可作解析层备选。
+
 **构建/运行决策**：ESM + `moduleResolution: NodeNext` → tsc 编译到 `dist/`，相对 import 必须带 `.js` 扩展名；开发态用 `tsx` 跑 `.ts`（自动解析 `.js`→`.ts`）；测试用 `node --import tsx --test`。
 
 ## 2. Obsidian 必解析语法（parser 真相源）

@@ -22,10 +22,20 @@
 ## 当前活跃文档
 
 - 使用指南（面向使用者，怎么用）：[`guides/usage.md`](guides/usage.md)
+- 选库与许可证避坑（选第三方库前必读）：[`guides/dependency-license-policy.md`](guides/dependency-license-policy.md)
 - 设计：[`specs/2026-06-25-x-basalt-design.md`](specs/2026-06-25-x-basalt-design.md)
 - 调研：[`research/2026-06-25-obsidian-spec-and-deps.md`](research/2026-06-25-obsidian-spec-and-deps.md)
-- 计划：[`plans/2026-06-25-x-basalt-mvp.md`](plans/2026-06-25-x-basalt-mvp.md)
-- 执行真相源：MVP 已完成，根 `TODO.md` 已随之删除
+- 计划（MVP）：[`plans/2026-06-25-x-basalt-mvp.md`](plans/2026-06-25-x-basalt-mvp.md)
+
+### 复盘真相源（2026-06-26）
+
+> 复盘结论：自建未违规，但「零依赖运行时」被执行成「全部手撸」，规范未完全落地、缺集中真相源。
+
+- 依赖与「自建 vs 用库」决策：[`specs/2026-06-26-deps-build-vs-buy.md`](specs/2026-06-26-deps-build-vs-buy.md)
+- 现状体检报告（分模块发现）：[`testing/2026-06-26-audit.md`](testing/2026-06-26-audit.md)
+- 规范覆盖矩阵（黑盒消除）：[`specs/2026-06-26-coverage-matrix.md`](specs/2026-06-26-coverage-matrix.md)
+- 文档落地计划：[`plans/2026-06-26-docs-grounding.md`](plans/2026-06-26-docs-grounding.md)
+- **▶ 可执行路线图（全模块收口 + 做深内核，逐步带验收标准）**：[`plans/2026-06-26-execution-roadmap.md`](plans/2026-06-26-execution-roadmap.md)
 
 ## 维护规则
 
