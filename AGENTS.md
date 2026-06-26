@@ -105,6 +105,7 @@ docs/         research / specs / plans / guides / architecture / testing（见 d
 - 用 Node 原生 `node:test` + `assert`，测试就近放 `tests/`。
 - 测试文件命名 `*.test.ts`；fixtures 放 `tests/fixtures/sample-vault/`（符合 Obsidian 规范的样例 `.md`）。
 - parser/index/query 必须有端到端主路径测试。
+- **复杂模块重测试（硬要求）**：DQL 内核（query）、索引隐式字段（indexer）、Obsidian 专有语法（parser）是高复杂度核心，测试必须「重」——不止主成功路径，每个**子集特性 / 文法分支 / 隐式字段**逐项独立用例，并覆盖**边界值、异常输入、错误定位、安全对抗（注入 / ReDoS）**。新增/扩展一个特性时，缺这些维度的用例视为该步未完成。每个声称「支持」的能力须有可追溯的测试编号（对齐覆盖矩阵）。
 - 声称「通过」前必须实际运行并依据输出说明结果。
 
 ## Skills 真相源（skills-def）
