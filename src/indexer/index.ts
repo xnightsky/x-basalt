@@ -23,6 +23,24 @@ export interface IndexerOptions {
   dbPath: string;
 }
 
+/** scan 增量重索引的差异报告（路径均为相对 Vault 的 POSIX 路径）。 */
+export interface ScanReport {
+  /** 新增文件（在 FS 不在库） */
+  added: string[];
+  /** 改动文件（mtime/size 或内容变化） */
+  modified: string[];
+  /** 删除文件（在库不在 FS） */
+  deleted: string[];
+  /** 未变文件数（跳过，未重读） */
+  unchanged: number;
+}
+
+/** scanIter 每批 yield 的累计进度。 */
+export interface ScanProgress extends ScanReport {
+  /** 还有多少「新增+改动」文件待处理（调用方据此决定是否续跑）。 */
+  remaining: number;
+}
+
 /** 单文件落库前的完整负载（一次解析的全部行，供事务内批量写入）。 */
 interface FilePayload {
   path: string;
@@ -135,6 +153,7 @@ export class VaultIndexer {
     delTags: Statement;
     delTasks: Statement;
     delBlocks: Statement;
+    getContent: Statement;
   };
 
   constructor(opts: IndexerOptions) {
@@ -171,6 +190,7 @@ export class VaultIndexer {
       delTags: this.db.prepare(`DELETE FROM tags WHERE file_path = ?`),
       delTasks: this.db.prepare(`DELETE FROM tasks WHERE file_path = ?`),
       delBlocks: this.db.prepare(`DELETE FROM blocks WHERE file_path = ?`),
+      getContent: this.db.prepare(`SELECT content FROM files WHERE path = ?`),
     };
   }
 
@@ -222,6 +242,161 @@ export class VaultIndexer {
       this.db.exec("ROLLBACK");
       throw err;
     }
+  }
+
+  /**
+   * 计算文件系统当前态与库内快照的差异（不写库，便宜）。
+   *
+   * @param rehash - true 按内容对比（读盘 + 比库内 content）；否则按 mtime+size（floored-ms 快判）
+   * @returns 新增/改动/删除相对路径（已排序）+ 未变文件数
+   */
+  private async computeDiff(
+    rehash: boolean,
+  ): Promise<{ added: string[]; modified: string[]; deleted: string[]; unchanged: number }> {
+    const absFiles = await collectMarkdownFiles(this.vaultPath);
+    const fsMap = new Map<string, { mtime: number; size: number }>();
+    for (const abs of absFiles) {
+      const st = await stat(abs);
+      fsMap.set(toPosix(relative(this.vaultPath, abs)), {
+        mtime: Math.floor(st.mtimeMs),
+        size: st.size,
+      });
+    }
+    const dbRows = this.db.prepare("SELECT path, mtime, size FROM files").all() as {
+      path: string;
+      mtime: number;
+      size: number;
+    }[];
+    const dbMap = new Map(dbRows.map((r) => [r.path, { mtime: r.mtime, size: r.size }]));
+
+    const added: string[] = [];
+    const modified: string[] = [];
+    const deleted: string[] = [];
+    let unchanged = 0;
+    // 删除 = 在库不在 FS。
+    for (const path of dbMap.keys()) if (!fsMap.has(path)) deleted.push(path);
+    for (const [rel, fs] of fsMap) {
+      const db = dbMap.get(rel);
+      if (db === undefined) {
+        added.push(rel);
+        continue;
+      }
+      let changed: boolean;
+      if (rehash) {
+        // 内容对比：绕开 mtime+size 的「同尺寸+同 mtime 改动 / 保留 mtime 复制」漏判窗口（git racy 同款）。
+        const current = await readFile(this.toAbsolute(rel), "utf8");
+        const stored = this.stmts.getContent.get(rel) as { content: string } | undefined;
+        changed = stored === undefined || stored.content !== current;
+      } else {
+        changed = fs.mtime !== db.mtime || fs.size !== db.size;
+      }
+      if (changed) modified.push(rel);
+      else unchanged++;
+    }
+    added.sort();
+    modified.sort();
+    deleted.sort();
+    return { added, modified, deleted, unchanged };
+  }
+
+  /**
+   * 按需增量重索引迭代器（scan 内核）：diff 文件系统 vs 库，按批 (re)build 落库，每批 yield 进度。
+   *
+   * 无常驻 watcher 的核心入口——被人/AI 定期触发、丢来目录，自行算变更只重扫变化的。
+   * 调用方可中途 `break` 只处理一部分；未写入的文件下次扫描仍被检出，天然断点续扫（无游标）。
+   *
+   * @param opts.rehash - 内容对比检测（慢但稳），默认 mtime+size
+   * @param opts.dryRun - 只算差异不写库，yield 一次完整计划
+   * @param opts.batchSize - 每批文件数（默认 REBUILD_BATCH），兼作内存上界与读盘并发上限
+   *
+   * @behavior
+   * Given 变更文件远多于单批
+   * When scanIter
+   * Then 分批 (re)build 落库、每批 yield，内存占用 O(批) 而非 O(变更总数)
+   *
+   * @behavior
+   * Given 调用方在某批后 break
+   * When 下次 scan
+   * Then 已写批保留、未写文件仍判为改动 → 续扫剩余（断点续）
+   */
+  async *scanIter(
+    opts: { rehash?: boolean; dryRun?: boolean; batchSize?: number } = {},
+  ): AsyncGenerator<ScanProgress> {
+    const batchSize = opts.batchSize ?? REBUILD_BATCH;
+    const { added, modified, deleted, unchanged } = await this.computeDiff(opts.rehash ?? false);
+
+    if (opts.dryRun) {
+      yield { added, modified, deleted, unchanged, remaining: 0 };
+      return;
+    }
+
+    // 删除便宜，一次性清（即便无新增/改动也执行）。
+    if (deleted.length > 0) {
+      const delTx = this.db.transaction(() => {
+        for (const rel of deleted) this.deleteByPath(rel);
+      });
+      delTx();
+    }
+
+    const work = [...added, ...modified]; // 待 (re)build 的相对路径
+    if (work.length === 0) {
+      yield { added: [], modified: [], deleted, unchanged, remaining: 0 };
+      return;
+    }
+
+    const addedSet = new Set(added);
+    const doneAdded: string[] = [];
+    const doneModified: string[] = [];
+    for (let i = 0; i < work.length; i += batchSize) {
+      const batch = work.slice(i, i + batchSize);
+      // 批内并发读盘 + 解析；单文件失败降级跳过，不拖垮整批（同 rebuild）。
+      const payloads = (
+        await Promise.all(
+          batch.map((rel) =>
+            this.buildPayload(this.toAbsolute(rel)).catch((err) => {
+              console.warn(`⚠ 跳过无法索引的文件 ${rel}：${(err as Error).message}`);
+              return null;
+            }),
+          ),
+        )
+      ).filter((p): p is FilePayload => p !== null);
+      // 一个事务内先删后插（改动幂等）。
+      const tx = this.db.transaction(() => {
+        for (const p of payloads) {
+          this.deleteByPath(p.path);
+          this.insertPayload(p);
+        }
+      });
+      tx();
+      for (const p of payloads) (addedSet.has(p.path) ? doneAdded : doneModified).push(p.path);
+      yield {
+        added: [...doneAdded],
+        modified: [...doneModified],
+        deleted,
+        unchanged,
+        remaining: work.length - (i + batch.length),
+      };
+    }
+  }
+
+  /**
+   * 增量重索引并全跑到底（drain {@link scanIter}），返回累计差异报告。
+   *
+   * @param opts - 同 scanIter（rehash / dryRun / batchSize）
+   */
+  async scan(
+    opts: { rehash?: boolean; dryRun?: boolean; batchSize?: number } = {},
+  ): Promise<ScanReport> {
+    let last: ScanProgress | undefined;
+    for await (const p of this.scanIter(opts)) last = p;
+    return last
+      ? {
+          added: last.added,
+          modified: last.modified,
+          deleted: last.deleted,
+          unchanged: last.unchanged,
+        }
+      : { added: [], modified: [], deleted: [], unchanged: 0 };
   }
 
   /**

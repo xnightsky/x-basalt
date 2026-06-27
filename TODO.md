@@ -14,7 +14,7 @@
 
 ### 观察记录（实际使用中发现的问题 → 下一轮迭代输入）
 
-- _（待填）_
+- **[已迭代] 无常驻 watcher 的按需重扫**：真实流程是人/AI 定期触发、丢来任意目录，需自行 diff 出新增/改动/删除、只重扫变化的。已新增 `scan` 命令 + `VaultIndexer.scanIter()`（迭代器内核，按批落库、可中途 break 断点续扫）+ `scan()` 便捷全跑；默认 mtime+size、`--rehash` 内容兜底、`--dry-run`/`--json`。设计 [`docs/specs/2026-06-28-scan-incremental-reindex-design.md`](docs/specs/2026-06-28-scan-incremental-reindex-design.md)。
 
 ---
 

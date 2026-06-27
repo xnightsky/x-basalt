@@ -65,6 +65,38 @@ program
   });
 
 program
+  .command("scan")
+  .description("按需增量重索引：diff 文件系统 vs 索引，只重扫新增/改动/删除的文件（无需常驻 watch）")
+  .argument("[vault]", "Vault 目录（可省略，回退配置 vault）")
+  .option("--db <path>", "SQLite 索引文件路径（默认 .x-basalt/index.db，可由配置 db 覆盖）")
+  .option("--rehash", "按内容对比检测变化（慢但稳），默认 mtime+size", false)
+  .option("--dry-run", "只报告差异，不写库（供触发前预览）", false)
+  .option("--json", "输出结构化差异报告（默认人读摘要）", false)
+  .action(
+    async (
+      vault: string | undefined,
+      opts: { db?: string; rehash: boolean; dryRun: boolean; json: boolean },
+    ) => {
+      const vaultPath = required(vault ?? config.vault, "需要 <vault> 参数或在配置文件中设置 vault");
+      const dbPath = opts.db ?? config.db ?? DEFAULT_DB;
+      const indexer = new VaultIndexer({ vaultPath, dbPath });
+      try {
+        const report = await indexer.scan({ rehash: opts.rehash, dryRun: opts.dryRun });
+        if (opts.json) {
+          emit(report);
+        } else {
+          const tag = opts.dryRun ? "（dry-run 未写入）" : "";
+          console.log(
+            `✓ scan ${vaultPath}${tag}：+${report.added.length} 新增 ~${report.modified.length} 改动 -${report.deleted.length} 删除（${report.unchanged} 未变跳过）`,
+          );
+        }
+      } finally {
+        indexer.close();
+      }
+    },
+  );
+
+program
   .command("query")
   .description("执行 Dataview 子集查询")
   .argument("<dql>", "DQL 查询语句")

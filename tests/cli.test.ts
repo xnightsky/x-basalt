@@ -93,6 +93,40 @@ test("index 主路径：建库并打印 ✓，退出 0", () => {
   assert.match(r.stdout, /✓ 已索引/);
 });
 
+test("scan 主路径：新增文件后增量重索引报告 +1", () => {
+  const vault = makeVault();
+  const db = join(freshDir(), "scan.db");
+  assert.equal(run(["index", vault, "--db", db]).status, 0);
+  writeFileSync(join(vault, "New.md"), "# New\n#x\n");
+  const r = run(["scan", vault, "--db", db]);
+  assert.equal(r.status, 0, r.stderr);
+  assert.match(r.stdout, /\+1 新增/);
+});
+
+test("scan --json：输出结构化差异报告", () => {
+  const vault = makeVault();
+  const db = join(freshDir(), "scan.db");
+  run(["index", vault, "--db", db]);
+  writeFileSync(join(vault, "New.md"), "# New\n");
+  const r = run(["scan", vault, "--db", db, "--json"]);
+  assert.equal(r.status, 0);
+  assert.deepEqual(JSON.parse(r.stdout).added, ["New.md"]);
+});
+
+test("scan --dry-run：报告差异但不写库（再扫仍报 +1）", () => {
+  const vault = makeVault();
+  const db = join(freshDir(), "scan.db");
+  run(["index", vault, "--db", db]);
+  writeFileSync(join(vault, "New.md"), "# New\n");
+  assert.deepEqual(JSON.parse(run(["scan", vault, "--db", db, "--dry-run", "--json"]).stdout).added, [
+    "New.md",
+  ]);
+  // dry-run 没写库，第二次仍报 New.md 为新增。
+  assert.deepEqual(JSON.parse(run(["scan", vault, "--db", db, "--dry-run", "--json"]).stdout).added, [
+    "New.md",
+  ]);
+});
+
 test("query 主路径：经 --db 查共享索引返回命中行", () => {
   const r = run(["query", "LIST WHERE status = 'active'", "--db", sharedDb]);
   assert.equal(r.status, 0, `stderr=${r.stderr}`);
