@@ -9,7 +9,7 @@
 
 | 模块 | 现成库结论 | 建议 |
 |---|---|---|
-| 解析 parser | ✅ 纯 npm remark 插件覆盖 wikilink/embed/callout/highlight | **组装**：remark 插件 + 自建收敛到 tag/task/blockRef |
+| 解析 parser | ⚠️ remark-obsidian-md 实为**建站渲染**插件、覆盖更窄 | **自建已胜出，保留**（2026-06-28 实测对标反转「组装」结论，见 [`../specs/2026-06-28-parser-buy-vs-build-decision.md`](../specs/2026-06-28-parser-buy-vs-build-decision.md)） |
 | 索引 indexer | 存储/监听已用；SQL 构建可引 kysely；全文检索用 FTS5 | **小幅买**：kysely + FTS5；存储/监听维持 |
 | 查询 DQL | ⚠️ 无可依赖现成库（全绑 Obsidian 或非 DQL） | **自建做深**：peggy 重写文法 + 自建执行；dataview 仅作 AST 参考 |
 | skill 召回 | ✅ 轻量模糊匹配库 | **买**：Fuse.js 替手写匹配 |
@@ -32,7 +32,7 @@
 | gray-matter | JS | ✅ | frontmatter，已在用，保留 |
 
 - **#tag / task(自定义状态+due_date) / ^blockRef 无现成库精确覆盖** → 继续自建（现有正则已较完善）。
-- **模块建议**：以 `remark-obsidian-md`（确认许可证后）为主力 + gray-matter，自建收敛到 tag/task/blockRef；可移除 @flowershow。
+- **模块建议（2026-06-28 实测后反转）**：~~以 remark-obsidian-md 为主力组装~~ → **保留全自建**。实测 remark-obsidian-md 是「笔记→网页 HTML」的建站渲染插件（按磁盘路径读文件、需 vault+contentMap 解析链接为 URL、headless 字符串输入直接崩），目标与 x-basalt 的 headless 元数据提取错位；且 tag/task/blockRef 完全不做、无代码区掩码。详见 [`../specs/2026-06-28-parser-buy-vs-build-decision.md`](../specs/2026-06-28-parser-buy-vs-build-decision.md)。`@flowershow/remark-wiki-link` 等死依赖留阶段 5 评估移除。
 
 ## 2. 索引层 indexer
 

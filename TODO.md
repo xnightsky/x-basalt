@@ -44,7 +44,7 @@
 > **132 测试 / typecheck / lint / build 全绿。** DQL 子集覆盖 ~95%。
 
 ## 下一步（按路线图剩余阶段）
-- [ ] **阶段 1** 解析层改为组装（卡点 S1.1：remark-obsidian-md license + 能力 spike）
+- [x] **阶段 1 ❎ 关闭 2026-06-28**：解析层改为组装 → **决定不做，保留自建**。S1.1 实测对标 remark-obsidian-md（MIT，license 不卡）：它是建站渲染插件、headless 直接崩、不做 tag/task/blockRef、无代码区掩码；自建 8 类语法全覆盖且更正确。决策见 [`docs/specs/2026-06-28-parser-buy-vs-build-decision.md`](docs/specs/2026-06-28-parser-buy-vs-build-decision.md)。
 - [ ] **阶段 3** 索引层健壮性
   - [x] S3.1 监听健壮性（watcher error/onUnlink catch/ready 信号 + watch 增量测试）✅ 2026-06-27
   - [x] **S3.2 basename 反链歧义** ✅ 2026-06-28（跨 indexer/query，路径感知）

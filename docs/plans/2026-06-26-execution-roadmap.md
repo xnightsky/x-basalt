@@ -64,15 +64,14 @@
 
 ---
 
-## 阶段 1 · 解析层改为组装（解决 parser 类缺陷）
+## 阶段 1 · 解析层改为组装　❎ 关闭（2026-06-28：实测对标后决定保留自建）
 
-> **已下钻为原子子步**，详见 [`2026-06-26-modules-steps.md`](2026-06-26-modules-steps.md) 阶段 1。下面为总览，执行以细化清单为准。
+> **结论**：S1.1 spike 实测，remark-obsidian-md（MIT）是建站渲染插件、headless 直接崩、不做 tag/task/blockRef、无代码区掩码；自建解析 8 类全覆盖且更正确。**本阶段关闭，不做组装。** 决策见 [`../specs/2026-06-28-parser-buy-vs-build-decision.md`](../specs/2026-06-28-parser-buy-vs-build-decision.md)。S1.2 取消；S1.3 的 task `due_date` 早已在 indexer 实现。
 
-- [ ] **S1.1 复核 remark-obsidian-md 许可证与能力（卡点）**
-  - 动作：查其 repo `LICENSE` 文件确认是否宽松证（manifest license 字段缺失）；跑最小 spike 解析样例，确认 wikilink/embed/callout(`+/-`)/highlight 的 AST 字段。
-  - 验收：许可证为宽松证 **且** 四类节点字段满足映射需求；否则改用单点插件组合（@r4ai/remark-callout + remark-flexible-markers + wiki-link 插件）或保留自建。
-  - 证据：贴出 repo LICENSE 结论；spike 脚本输出样例 AST。
-  - 前置：S0.1。**许可证不过则本阶段切到备选方案。**
+- [x] **S1.1 复核 remark-obsidian-md 许可证与能力（卡点）** ✅ 2026-06-28 → **结论：保留自建**
+  - license：remark-obsidian-md = **MIT**（不卡）；remark-obsidian = GPL-3.0（排除）。
+  - 能力实测：headless 字符串输入即崩（按磁盘路径 readFileSync）；需 vault+contentMap 渲染成 HTML/URL；tag/task/blockRef 完全不做。
+  - 决策：[`../specs/2026-06-28-parser-buy-vs-build-decision.md`](../specs/2026-06-28-parser-buy-vs-build-decision.md)。
 
 - [ ] **S1.2 搭 unified 管线 + 适配层（red→green）**
   - 动作：先写 `tests/parser.test.ts` 对现有 5 个 fixture 的期望节点（沿用现有断言）；再用 `unified().use(remarkParse).use(remarkObsidianMd)` + visitor 把 mdast 映射到 `ObsidianNode`。
