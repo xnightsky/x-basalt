@@ -34,12 +34,27 @@ const ASSET_EXTENSIONS = new Set([
 
 /**
  * 由 wikilink target 推导用于匹配的规范化 key：去扩展名 + 小写 basename。
- * 对应链接解析的 MVP 近似（basename、大小写不敏感）。
+ * bare 链接（`[[Note]]`）与同名歧义回退时使用（大小写不敏感）。
  *
  * @param target - wikilink 的 target 段，如 `Folder/Note` 或 `image.png`
  */
 export function linkKey(target: string): string {
   return basename(target, extname(target)).toLowerCase();
+}
+
+/**
+ * 由 path-qualified wikilink target（或文件相对路径）推导路径键：去扩展名 + POSIX + 小写。
+ *
+ * 仅当 target 含 `/`（指定了目录）时有区分意义——用于 inlinks/outlinks 的精确匹配，
+ * 消除同名异目录串味（S3.2）：`Projects/Alpha` 与 `Archive/Alpha` 得到不同 key。
+ * 对无目录的 bare 名退化为与 {@link linkKey} 相同的小写 basename。
+ *
+ * @param target - wikilink target（如 `Projects/Alpha`）或文件相对路径（如 `Projects/Alpha.md`）
+ * @returns 形如 `projects/alpha`
+ */
+export function pathKey(target: string): string {
+  const noExt = target.slice(0, target.length - extname(target).length);
+  return toPosix(noExt).toLowerCase();
 }
 
 /**

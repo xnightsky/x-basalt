@@ -12,6 +12,10 @@ export interface WatchHandlers {
   onAdd(filePath: string): void;
   onChange(filePath: string): void;
   onUnlink(filePath: string): void;
+  /** 监听器错误（句柄耗尽/权限等）。不提供则仅吞掉，避免未处理 error 事件崩进程（I1）。 */
+  onError?(err: unknown): void;
+  /** 初始扫描完成（chokidar ready）：此后的文件变更才是真正的增量。 */
+  onReady?(): void;
 }
 
 /** 任意路径段以 `.` 开头即视为隐藏（含 `.obsidian/`、`.git/`、`.DS_Store` 等）。 */
@@ -49,6 +53,9 @@ export function startWatch(vaultPath: string, handlers: WatchHandlers): () => vo
   watcher.on("unlink", (p) => {
     if (isMarkdown(p)) handlers.onUnlink(p);
   });
+  // I1：chokidar 的 error 事件若无监听器，Node 会作为未处理错误抛出并可能崩进程。
+  watcher.on("error", (err) => handlers.onError?.(err));
+  watcher.on("ready", () => handlers.onReady?.());
 
   return () => {
     void watcher.close();

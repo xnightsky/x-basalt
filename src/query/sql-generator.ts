@@ -1,4 +1,4 @@
-import { linkKey } from "../utils/path.js";
+import { linkKey, pathKey } from "../utils/path.js";
 import type { CompareOp, DqlQuery, QueryType, ScalarFn, WhereExpr } from "./ast.js";
 import { DqlSyntaxError } from "./errors.js";
 
@@ -33,7 +33,7 @@ const FILE_COLUMNS: Record<string, string> = {
   "file.ctime": "f.ctime",
 };
 
-/** 把 [[link]] / 含锚点/别名的链接文本归约为可用于 target_key 匹配的基名。 */
+/** 把 [[link]] / 含锚点/别名的链接文本归约为 target 主体（去 [[ ]]、锚点 #、别名 |）。 */
 function stripLink(s: string): string {
   let v = s.replace(/^\[\[/, "").replace(/\]\]$/, "");
   const hash = v.indexOf("#");
@@ -42,6 +42,24 @@ function stripLink(s: string): string {
   if (pipe !== -1) v = v.slice(0, pipe);
   return v.trim();
 }
+
+/**
+ * 链接 target 文本 → 对 links 行 target 的匹配条件（S3.2 路径感知）：
+ * 含 `/` 按 `target_path_key` 精确，否则按 `target_key` basename 回退。
+ * 用于 `FROM [[link]]` 与 `contains(file.outlinks, "...")`。
+ */
+function linkTextMatch(text: string, alias: string): { sql: string; params: unknown[] } {
+  const t = stripLink(text);
+  if (t.includes("/")) return { sql: `${alias}.target_path_key = ?`, params: [pathKey(t)] };
+  return { sql: `${alias}.target_key = ?`, params: [linkKey(t)] };
+}
+
+/**
+ * links 行 l 是否指向文件 f：qualified 链接（target 含 `/`）按 path_key 精确，
+ * bare 链接按 name_key basename 回退。S3.2 消除同名异目录串味。
+ */
+const INLINK_MATCH =
+  "(l.target_path_key = f.path_key OR (l.target_path_key IS NULL AND l.target_key = f.name_key))";
 
 /**
  * 字段 → SQL 表达式 + 是否为 JSON 聚合列。
@@ -62,10 +80,10 @@ function fieldToSql(field: string): { expr: string; json: boolean } {
         json: true,
       };
     case "file.inlinks":
-      // 反向链接：其他文件的 target_key 命中本文件 name_key（basename 解析，调研 §3.3#1）。
+      // 反向链接：路径感知 JOIN（S3.2），qualified 按 path_key 精确、bare 按 name_key 回退。
       // DISTINCT：同一源文件多次链接本文件只列一次（如 [[A]] 与 [[A#^id]] 同指 A）。
       return {
-        expr: "(SELECT json_group_array(DISTINCT l.source) FROM links l WHERE l.target_key = f.name_key)",
+        expr: `(SELECT json_group_array(DISTINCT l.source) FROM links l WHERE ${INLINK_MATCH})`,
         json: true,
       };
     case "file.outlinks":
@@ -177,15 +195,21 @@ function compileCall(expr: Extract<WhereExpr, { kind: "call" }>): {
       };
     }
     if (field === "file.outlinks") {
+      // 路径感知（S3.2）：arg 含 '/' 按 path_key 精确，否则 basename 回退。
+      const m = linkTextMatch(arg, "l");
       return {
-        sql: "EXISTS (SELECT 1 FROM links l WHERE l.source = f.path AND l.target_key = ?)",
-        params: [linkKey(stripLink(arg))],
+        sql: `EXISTS (SELECT 1 FROM links l WHERE l.source = f.path AND ${m.sql})`,
+        params: m.params,
       };
     }
     if (field === "file.inlinks") {
+      // 路径感知（S3.2）：本文件被指向用 INLINK_MATCH；源文件按 arg 精确(path_key)/回退(name_key)识别。
+      const t = stripLink(arg);
+      const srcCol = t.includes("/") ? "path_key" : "name_key";
+      const srcParam = t.includes("/") ? pathKey(t) : linkKey(t);
       return {
-        sql: "EXISTS (SELECT 1 FROM links l WHERE l.target_key = f.name_key AND l.source IN (SELECT path FROM files WHERE name_key = ?))",
-        params: [linkKey(stripLink(arg))],
+        sql: `EXISTS (SELECT 1 FROM links l WHERE ${INLINK_MATCH} AND l.source IN (SELECT path FROM files WHERE ${srcCol} = ?))`,
+        params: [srcParam],
       };
     }
     const { expr: fe } = fieldToSql(field);
@@ -228,6 +252,11 @@ function compileCall(expr: Extract<WhereExpr, { kind: "call" }>): {
  * Given TABLE 默认起头的 file.name 与显式字段重复
  * When 编译
  * Then SELECT 列按字段名去重，不产出重复列
+ *
+ * @behavior
+ * Given qualified 链接 [[Dir/Note]]（inlinks / outlinks / FROM [[..]]）
+ * When 编译
+ * Then 按 path_key 精确匹配，不串到同名异目录文件；bare [[Note]] 才按 basename name_key 回退（S3.2）
  */
 export function generateSql(query: DqlQuery): CompiledSql {
   const whereSql: string[] = [];
@@ -245,9 +274,10 @@ export function generateSql(query: DqlQuery): CompiledSql {
       whereSql.push("(f.folder = ? OR f.folder LIKE ?)");
       params.push(query.from.value, `${query.from.value}/%`);
     } else {
-      // FROM [[link]]：指向该 note 的反向链接集合（§3.3#5）。
-      whereSql.push("EXISTS (SELECT 1 FROM links l WHERE l.source = f.path AND l.target_key = ?)");
-      params.push(linkKey(stripLink(query.from.value)));
+      // FROM [[link]]：指向该 note 的反向链接集合（§3.3#5），路径感知（S3.2）。
+      const m = linkTextMatch(query.from.value, "l");
+      whereSql.push(`EXISTS (SELECT 1 FROM links l WHERE l.source = f.path AND ${m.sql})`);
+      params.push(...m.params);
     }
   }
 

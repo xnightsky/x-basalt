@@ -4,23 +4,27 @@ import type { Database } from "better-sqlite3";
 // 表：files / links / tags / tasks / blocks。
 //
 // 相对设计文档的列扩展（均为查询/解析必需，故刻意加入并在此说明）：
-// - files.name_key：name 的小写无扩展名形式，wikilink 按 basename 大小写不敏感解析的连接键（调研 §3.3#1）。
+// - files.name_key：name 的小写无扩展名形式，bare 链接（[[Note]]）按 basename 大小写不敏感解析的连接键（调研 §3.3#1）。
+// - files.path_key：全路径去扩展名小写（如 projects/alpha），qualified 链接（[[Dir/Note]]）按路径精确匹配的连接键（S3.2，消除同名异目录串味）。
 // - files.folder：由 path 推导的父目录（POSIX，根为空串），支撑 file.folder 与 FROM "folder" 前缀匹配。
-// - links.target_key：raw target 的 linkKey，inlinks/outlinks 查询期 JOIN 的连接键（不物化解析结果）。
+// - links.target_key：raw target 的 basename 小写键，bare 链接 inlinks/outlinks 回退连接键（不物化解析结果）。
+// - links.target_path_key：raw target 含 '/' 时的 path_key，否则 NULL；qualified 链接的精确连接键（S3.2）。
 // - blocks.line_number：块锚点所在正文行号，与 tasks.line_number 对齐，便于回溯定位。
 
 /**
  * 五张表的建表 DDL（IF NOT EXISTS，可重复执行）。
  *
- * 隐式字段不建物化视图：inlinks = JOIN links ON target_key = files.name_key；
- * outlinks = JOIN links ON source = files.path。索引仅为加速这些 JOIN 与过滤。
+ * 隐式字段不建物化视图，查询期路径感知 JOIN（S3.2）：
+ *   inlinks  = links WHERE target_path_key = files.path_key（qualified）或 target_key = files.name_key（bare 回退）；
+ *   outlinks = links WHERE source = files.path。索引仅为加速这些 JOIN 与过滤。
  */
 export const SCHEMA_SQL = `
 CREATE TABLE IF NOT EXISTS files (
   id          INTEGER PRIMARY KEY AUTOINCREMENT,
   path        TEXT NOT NULL UNIQUE,   -- 相对 Vault 根的 POSIX 路径，含扩展名
   name        TEXT NOT NULL,          -- 文件名（无扩展名），对应 file.name
-  name_key    TEXT NOT NULL,          -- name 的小写形式，链接 basename 解析键
+  name_key    TEXT NOT NULL,          -- name 的小写形式，bare 链接 basename 解析键
+  path_key    TEXT NOT NULL,          -- 全路径去扩展名小写（projects/alpha），qualified 链接精确解析键（S3.2）
   extension   TEXT NOT NULL,          -- 扩展名（不含点），对应 file.extension
   folder      TEXT NOT NULL,          -- 父目录（POSIX，根为空串），对应 file.folder
   size        INTEGER NOT NULL,       -- 字节数
@@ -30,20 +34,23 @@ CREATE TABLE IF NOT EXISTS files (
   frontmatter TEXT NOT NULL           -- frontmatter 的 JSON 字符串（json_extract 取标量字段）
 );
 CREATE INDEX IF NOT EXISTS idx_files_name_key ON files(name_key);
+CREATE INDEX IF NOT EXISTS idx_files_path_key ON files(path_key);
 CREATE INDEX IF NOT EXISTS idx_files_folder   ON files(folder);
 
 CREATE TABLE IF NOT EXISTS links (
   id         INTEGER PRIMARY KEY AUTOINCREMENT,
   source     TEXT NOT NULL,           -- 源文件 path（POSIX）
   target     TEXT NOT NULL,           -- 原始 target 文本（展示用，如 Projects/Alpha 或 assets/x.png）
-  target_key TEXT NOT NULL,           -- linkKey(target)：小写无扩展名 basename，解析连接键
+  target_key TEXT NOT NULL,           -- linkKey(target)：小写无扩展名 basename，bare 链接回退连接键
+  target_path_key TEXT,               -- target 含 '/' 时的 path_key，否则 NULL；qualified 链接精确连接键（S3.2）
   alias      TEXT,
   heading    TEXT,
   block_id   TEXT,
   is_embed   INTEGER NOT NULL DEFAULT 0  -- 1 = ![[...]]，计入 outlinks（与 Obsidian 一致）
 );
-CREATE INDEX IF NOT EXISTS idx_links_source     ON links(source);
-CREATE INDEX IF NOT EXISTS idx_links_target_key ON links(target_key);
+CREATE INDEX IF NOT EXISTS idx_links_source          ON links(source);
+CREATE INDEX IF NOT EXISTS idx_links_target_key      ON links(target_key);
+CREATE INDEX IF NOT EXISTS idx_links_target_path_key ON links(target_path_key);
 
 CREATE TABLE IF NOT EXISTS tags (
   id             INTEGER PRIMARY KEY AUTOINCREMENT,

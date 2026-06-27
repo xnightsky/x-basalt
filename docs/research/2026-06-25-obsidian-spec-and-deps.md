@@ -96,7 +96,7 @@ Dataview 官方隐式字段很多，本项目只保证下列子集，其余**显
 | `file.day/cday/mday/link/etags/aliases/...` | — | ❌ 非目标（MVP 不实现） |
 
 ### 3.3 关键假设（不确定项，显式列明而非含糊）
-1. **链接解析**：wikilink target 按 basename（去 `.md`、大小写不敏感）解析到真实路径，歧义取第一个匹配——Obsidian「最短唯一路径」的 MVP 近似。
+1. **链接解析（路径感知，S3.2）**：qualified 链接 `[[Dir/Note]]`（target 含 `/`）按 `path_key`（全路径去 `.md`、POSIX、小写）精确匹配，消除同名异目录串味；bare 链接 `[[Note]]` 按 basename（去 `.md`、大小写不敏感）回退，同名多个时全列（Obsidian「最短唯一路径」的 MVP 近似，待精化）。索引落 `files.path_key` 与 `links.target_path_key`（bare 链接为 NULL）支撑。
 2. **embed 计入 outlinks**（`is_embed = 1`），与 Obsidian 一致。
 3. **日期比较**：task `due_date` 与 frontmatter 日期按 ISO 字符串字典序比较（与日期序一致），不做时区处理。
 4. **代码块内的 `#tag` / `==..==`**：MVP 不从代码块剔除，可能误识，列为已知近似，后续在 parser 用 remark AST 位置信息修正。

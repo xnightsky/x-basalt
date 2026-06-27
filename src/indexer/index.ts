@@ -5,7 +5,7 @@ import { readdir, readFile, stat } from "node:fs/promises";
 import { basename, dirname, extname, isAbsolute, join, relative } from "node:path";
 import { parseFrontmatter } from "../parser/frontmatter.js";
 import { VaultParser } from "../parser/index.js";
-import { linkKey, toPosix } from "../utils/path.js";
+import { linkKey, pathKey, toPosix } from "../utils/path.js";
 import { createSchema } from "./schema.js";
 import { startWatch } from "./watcher.js";
 
@@ -28,6 +28,7 @@ interface FilePayload {
   path: string;
   name: string;
   nameKey: string;
+  pathKey: string;
   extension: string;
   folder: string;
   size: number;
@@ -45,6 +46,7 @@ interface LinkRow {
   source: string;
   target: string;
   targetKey: string;
+  targetPathKey: string | null;
   alias: string | null;
   heading: string | null;
   blockId: string | null;
@@ -142,12 +144,12 @@ export class VaultIndexer {
 
     this.stmts = {
       insertFile: this.db.prepare(
-        `INSERT INTO files (path, name, name_key, extension, folder, size, mtime, ctime, content, frontmatter)
-         VALUES (@path, @name, @nameKey, @extension, @folder, @size, @mtime, @ctime, @content, @frontmatter)`,
+        `INSERT INTO files (path, name, name_key, path_key, extension, folder, size, mtime, ctime, content, frontmatter)
+         VALUES (@path, @name, @nameKey, @pathKey, @extension, @folder, @size, @mtime, @ctime, @content, @frontmatter)`,
       ),
       insertLink: this.db.prepare(
-        `INSERT INTO links (source, target, target_key, alias, heading, block_id, is_embed)
-         VALUES (@source, @target, @targetKey, @alias, @heading, @blockId, @isEmbed)`,
+        `INSERT INTO links (source, target, target_key, target_path_key, alias, heading, block_id, is_embed)
+         VALUES (@source, @target, @targetKey, @targetPathKey, @alias, @heading, @blockId, @isEmbed)`,
       ),
       insertTag: this.db.prepare(
         `INSERT INTO tags (file_path, tag, in_frontmatter) VALUES (@filePath, @tag, @inFrontmatter)`,
@@ -221,7 +223,10 @@ export class VaultIndexer {
    * @param onEvent - 可选回调：索引更新完成后触发，供 CLI 实时输出 / 执行 on-change 命令。
    *                  add/change 在 update 落库后才回调，保证回调看到的索引已是最新。
    */
-  watch(onEvent?: (event: "add" | "change" | "unlink", filePath: string) => void): void {
+  watch(
+    onEvent?: (event: "add" | "change" | "unlink", filePath: string) => void,
+    onReady?: () => void,
+  ): void {
     if (this.stopWatch) return; // 幂等：重复调用不叠加监听
     // 增量回调是 fire-and-forget：失败仅 warn，不能让一个文件异常拖垮监听循环。
     const onWrite = (event: "add" | "change", p: string): void => {
@@ -233,9 +238,17 @@ export class VaultIndexer {
       onAdd: (p) => onWrite("add", p),
       onChange: (p) => onWrite("change", p),
       onUnlink: (p) => {
-        this.remove(p);
-        onEvent?.("unlink", p);
+        // I2：删除失败仅 warn，不让一个文件异常拖垮监听循环。
+        try {
+          this.remove(p);
+          onEvent?.("unlink", p);
+        } catch (e) {
+          console.warn(`⚠ 索引删除失败 ${p}：${e}`);
+        }
       },
+      // I1：监听器错误不崩进程，降级为告警。
+      onError: (e) => console.warn(`⚠ 文件监听错误：${e}`),
+      onReady,
     });
   }
 
@@ -284,6 +297,8 @@ export class VaultIndexer {
             source: rel,
             target: node.target,
             targetKey: linkKey(node.target),
+            // qualified 链接（target 含目录）落 path_key 精确键；bare 链接为 NULL，查询期回退 basename（S3.2）。
+            targetPathKey: node.target.includes("/") ? pathKey(node.target) : null,
             alias: node.alias ?? null,
             heading: node.heading ?? null,
             blockId: node.blockId ?? null,
@@ -325,6 +340,8 @@ export class VaultIndexer {
       path: rel,
       name,
       nameKey: name.toLowerCase(),
+      // 全路径键（projects/alpha），供 qualified 链接精确反向匹配（S3.2）。
+      pathKey: pathKey(rel),
       extension: ext.startsWith(".") ? ext.slice(1) : ext,
       folder,
       size: st.size,
@@ -346,6 +363,7 @@ export class VaultIndexer {
       path: p.path,
       name: p.name,
       nameKey: p.nameKey,
+      pathKey: p.pathKey,
       extension: p.extension,
       folder: p.folder,
       size: p.size,

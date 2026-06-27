@@ -94,7 +94,7 @@
 
 ---
 
-## 阶段 2 · DQL 内核做深（代表作核心 · 重头戏）
+## 阶段 2 · DQL 内核做深（代表作核心 · 重头戏）　✅ 全部完成 2026-06-27（S2.1–S2.24，见细化清单）
 
 > **本阶段已下钻为 24 个原子子步**，详见 [`2026-06-26-dql-kernel-steps.md`](2026-06-26-dql-kernel-steps.md)（含真相源冲突卡点）。下面 7 步为总览，执行以细化清单为准。
 
@@ -146,16 +146,16 @@
 
 > **已下钻为原子子步**，详见 [`2026-06-26-modules-steps.md`](2026-06-26-modules-steps.md) 阶段 3。
 
-- [ ] **S3.1 监听健壮性（red→green）**
-  - 动作：补 `watcher.on("error")`（I1）；onUnlink 加 `.catch`（I2）；加 watch 增量测试（add/change/unlink）。
-  - 验收：watcher error 不崩进程；增量测试通过。
-  - 证据：`pnpm test tests/indexer.test.ts`（含 watch 增量 + error 用例）。
+- [x] **S3.1 监听健壮性（red→green）** ✅ 2026-06-27
+  - 动作：补 `watcher.on("error")`（I1，降级告警不崩进程）；onUnlink 加 try/catch（I2）；新增 `watcher.on("ready")` 暴露 ready 信号；加 watch 增量测试（add/change/unlink）。
+  - 验收：watcher error 不崩进程；增量测试通过（等 ready 后稳定，避开 ignoreInitial 竞态）。
+  - 证据：`tests/indexer.test.ts` watch 增量用例（133 测试 / typecheck / lint / build 全绿）。
   - 前置：S0.1。
 
-- [ ] **S3.2 basename 反链歧义修正（red→green）**
-  - 动作：加同名异目录 fixture 测试（I5）；用路径感知的链接解析（优先全路径，回退 basename）修正 inlinks JOIN。
-  - 验收：`[[A/Note]]` 与 `[[B/Note]]` 不再串味；测试通过。
-  - 证据：`pnpm test tests/indexer.test.ts`。
+- [x] **S3.2 basename 反链歧义修正（red→green）** ✅ 2026-06-28
+  - 动作：加同名异目录 fixture 测试（I5）；schema 加 `files.path_key`+`links.target_path_key`，indexer 落库计算；inlinks/outlinks/`FROM[[..]]` 路径感知（qualified 按 path_key 精确，bare 按 name_key 回退）。真相源先行（biz-dql-subset + research §3.3#1）。
+  - 验收：`[[Projects/Note]]` 与 `[[Archive/Note]]` 不再串味；测试通过。
+  - 证据：`tests/inlinks-pathaware.test.ts`（4 例，红→绿）；全量 137 测试 / typecheck / lint / build 全绿。
   - 前置：S3.1。
 
 - [ ] **S3.3 大库稳健性（rebuild 流式 + 并发 I/O）**
@@ -265,3 +265,16 @@ S0 → {S1, S2, S3, S4 可并行起步}；S2（DQL）是关键路径与最大投
 
 门禁基线快照（回归基准）：typecheck=0，test=52 pass/0 fail，lint=0，build=0。
 保留依赖中 `unified`/`remark-parse`/`@flowershow/remark-wiki-link` 仍零 import，按 S0.3 决策留到阶段 1 决定去留。
+
+### 阶段 2 · DQL 内核做深（2026-06-27 全部完成 · 代表作核心）
+
+细化清单 [`2026-06-26-dql-kernel-steps.md`](2026-06-26-dql-kernel-steps.md) S2.1–S2.24 全部 ✅。要点：
+
+- **Part A 选型与契约**：chevrotain（实证胜 peggy，决策见 specs）；扩展子集冻结（TASK+GROUP BY+FLATTEN 纳入）；真相源同步；AST 类型扩展。
+- **Part B 重写**：chevrotain `tokens.ts`(lexer，Tag 自定义 matcher 解 unicode)+`parser.ts`(EmbeddedActionsParser)；`DataviewEngine` 端到端切换；删旧手写 `tokenizer.ts`/`ast.parseQuery`，`DqlSyntaxError`→`errors.ts`。
+- **Part C 修 bug**：LIKE 转义(+修 S2.8 字符串转义解码回归)、icontains 大小写、TABLE 列去重、未知字段 DqlSyntaxError、JSON列排序报错+负 LIMIT。新建 `tests/sql-generator.test.ts`。
+- **Part D 补全子集**：多键 SORT、WHERE null、日期 ISO 比较、内置函数集（lower/upper/length/round + date today/now）、GROUP BY、FLATTEN、WITHOUT ID、TASK——均含端到端验证。
+- **Part E 安全收口**：隐式字段全集核对；`regexp.ts` safeRegexpMatch（ReDoS 缓解）+ 端到端注入用例；覆盖矩阵 §B 重写到实际（DQL 子集 ~95%）。
+
+门禁：**132 测试 / typecheck=0 / lint=0 / build=0 全绿**。范围外仍为 CALENDAR/DataviewJS/FROM-and-or。
+遗留底层边界（非 DQL 引擎层）：task `due` 提取待阶段1 S1.3、inlinks basename 歧义待阶段3 S3.2。

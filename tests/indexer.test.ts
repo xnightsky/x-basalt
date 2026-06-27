@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import Database from "better-sqlite3";
 import { mkdtempSync, rmSync } from "node:fs";
+import { rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { after, test } from "node:test";
@@ -126,4 +127,59 @@ test("remove 删除单文件记录，update 重新建立（增量幂等）", asy
 
   db.close();
   idx.close();
+});
+
+/** 轮询等待异步条件（chokidar awaitWriteFinish + 增量落库有延迟）。 */
+async function waitFor(check: () => boolean, timeoutMs = 4000): Promise<boolean> {
+  const start = Date.now();
+  while (Date.now() - start < timeoutMs) {
+    if (check()) return true;
+    await new Promise((r) => setTimeout(r, 50));
+  }
+  return check();
+}
+
+test("watch 增量：add / change / unlink 实时维护索引（S3.1）", async () => {
+  const vaultDir = mkdtempSync(join(tmpdir(), "x-basalt-watch-"));
+  tmpDirs.push(vaultDir);
+  // db 放 vault 外：避免 watch 监听到索引文件(含 WAL)自身变化 + Windows 文件锁干扰。
+  const dbPath = freshDbPath();
+  await writeFile(join(vaultDir, "A.md"), "# A\n[[B]]\n#x\n");
+
+  const idx = new VaultIndexer({ vaultPath: vaultDir, dbPath });
+  await idx.rebuild();
+
+  // 每次新建只读连接读最新已提交状态（避免 WAL 快照陈旧）。
+  const count = (sql: string): number => {
+    const rdb = openReadonly(dbPath);
+    const c = (rdb.prepare(sql).get() as { c: number }).c;
+    rdb.close();
+    return c;
+  };
+  assert.equal(count("SELECT COUNT(*) c FROM files"), 1);
+
+  // 等 chokidar 初始扫描完成（ready）：否则 ignoreInitial 会跳过 ready 前写入的文件。
+  let ready = false;
+  idx.watch(undefined, () => {
+    ready = true;
+  });
+  assert.ok(await waitFor(() => ready, 3000), "chokidar 应进入 ready");
+  try {
+    // add：新增 B.md 应被索引。
+    await writeFile(join(vaultDir, "B.md"), "# B\n#y\n");
+    assert.ok(await waitFor(() => count("SELECT COUNT(*) c FROM files") === 2), "add 应索引 B");
+
+    // change：A.md 增标签 #z，标签数应升到 2。
+    await writeFile(join(vaultDir, "A.md"), "# A\n[[B]]\n#x\n#z\n");
+    assert.ok(
+      await waitFor(() => count("SELECT COUNT(*) c FROM tags WHERE file_path = 'A.md'") >= 2),
+      "change 应更新 A 标签",
+    );
+
+    // unlink：删 B.md 应移除其索引。
+    await rm(join(vaultDir, "B.md"));
+    assert.ok(await waitFor(() => count("SELECT COUNT(*) c FROM files") === 1), "unlink 应移除 B");
+  } finally {
+    idx.close();
+  }
 });
