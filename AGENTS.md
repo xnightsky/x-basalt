@@ -45,6 +45,7 @@
 | 文件监听 | chokidar |
 | 索引存储 | better-sqlite3（单文件 SQLite，同步 API） |
 | Skill 文件格式 | json5 |
+| Skill 召回匹配 | fuse.js（模糊搜索 + 相关性排序，容拼写错） |
 | 测试 | Node 原生 Test Runner（`node:test`）+ `assert` |
 | Lint / Format | oxlint + oxfmt（oxc 工具链） |
 

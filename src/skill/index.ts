@@ -1,10 +1,16 @@
+import Fuse from "fuse.js";
 import { loadSkills, type SkillDefinition } from "./loader.js";
 
 export type { SkillDefinition, SkillRule } from "./loader.js";
 
-// === 自建实现: Skill 召回，对 triggers 与 name 做模糊匹配，内置 obsidian-base-spec 兜底 ===
+// === 自建实现: Skill 召回，Fuse.js 对 name+triggers 模糊匹配并按相关性排序，内置兜底 ===
 //
 // 上游：cli 的 skill recall/list 子命令；下游：loadSkills 提供的 SkillDefinition[]。
+// 用 Fuse.js（编辑距离 + 相关性排序）替代朴素子串匹配（M4.1）：容拼写错、结果有序；
+// 阈值收紧到 0.4 避免把无关 skill 也召回。空目录兜底逻辑仍在 loader（此处不感知）。
+
+/** Fuse 模糊匹配阈值：0=精确、1=匹配任意；0.4 容许少量拼写偏差，又不至召回无关 skill。 */
+const FUSE_THRESHOLD = 0.4;
 
 /** skill 列表项的精简元信息。 */
 export interface SkillMeta {
@@ -12,21 +18,23 @@ export interface SkillMeta {
   triggers: string[];
 }
 
-/** 关键字与某 skill 是否匹配：命中 name 子串，或与任一 trigger 互为子串（双向，宽松召回）。 */
-function matches(skill: SkillDefinition, keyword: string): boolean {
-  if (skill.name.toLowerCase().includes(keyword)) return true;
-  for (const t of skill.triggers) {
-    const tl = t.toLowerCase();
-    if (tl.includes(keyword) || keyword.includes(tl)) return true;
-  }
-  return false;
-}
-
 export class SkillRecall {
   private readonly skills: SkillDefinition[];
+  private readonly fuse: Fuse<SkillDefinition>;
 
   constructor(opts?: { skillPath?: string }) {
     this.skills = loadSkills(opts?.skillPath);
+    // 构造期建一次模糊索引（skills 一次性加载、不变）。name 权重高于单个 trigger：
+    // 名字直接命中比触发器命中更相关，排序时优先。
+    this.fuse = new Fuse(this.skills, {
+      keys: [
+        { name: "name", weight: 2 },
+        { name: "triggers", weight: 1 },
+      ],
+      threshold: FUSE_THRESHOLD,
+      ignoreLocation: true, // 触发器可落在任意位置，不偏向串首
+      minMatchCharLength: 2,
+    });
   }
 
   /** 列出全部可用 skill 的精简元信息。 */
@@ -35,14 +43,24 @@ export class SkillRecall {
   }
 
   /**
-   * 按关键字模糊召回 skill 规范详情。
+   * 按关键字模糊召回 skill 规范详情，结果按相关性降序（最相关在前）。
    *
-   * @param keyword - 召回关键字（匹配 triggers / name，大小写不敏感）
-   * @returns 命中的完整 SkillDefinition 列表；无命中返回空数组
+   * @param keyword - 召回关键字（模糊匹配 name / triggers，大小写不敏感、容拼写错）
+   * @returns 命中的完整 SkillDefinition 列表（已排序）；空关键字或无命中返回空数组
+   *
+   * @behavior
+   * Given 与某 skill 的 name 或 trigger 拼写相近（含个别错字）的关键字
+   * When 召回
+   * Then 该 skill 仍被命中，且更相关者排在结果前列
+   *
+   * @behavior
+   * Given 空白关键字，或与任何 name/trigger 都不沾边的串
+   * When 召回
+   * Then 返回空数组（阈值收紧，不放水召回无关 skill）
    */
   recall(keyword: string): SkillDefinition[] {
-    const kw = keyword.toLowerCase().trim();
+    const kw = keyword.trim();
     if (!kw) return [];
-    return this.skills.filter((s) => matches(s, kw));
+    return this.fuse.search(kw).map((r) => r.item);
   }
 }

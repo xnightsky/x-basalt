@@ -102,10 +102,10 @@
 
 ## 阶段 4 · skill 召回 + CLI/config 收编
 
-- [ ] **M4.1 skill 召回换 Fuse.js（red→green）**
-  - 动作：先写召回质量测试（同义/前缀/模糊命中）；用 Fuse.js 对 `[{name,triggers}]` 建索引替手写匹配；保留内置兜底。
-  - 验收：召回测试通过；空目录仍兜底（现有 skill 测试不回归）。
-  - 证据：`pnpm test tests/skill.test.ts`。前置：阶段 0。
+- [x] **M4.1 skill 召回换 Fuse.js（red→green）** ✅ 2026-06-28
+  - 动作：补召回质量测试（拼写容错/前缀/相关性排序/垃圾串不放水）；Fuse.js 对 `name`(权重2)+`triggers`(权重1) 建索引替朴素子串，`ignoreLocation` + 阈值 0.4；构造期建一次索引；loader 兜底不变。
+  - 验收：拼写近似（wikilnk/callot/frontmater）模糊命中；垃圾串仍空；空目录兜底、现有 skill 测试不回归。
+  - 证据：`tests/skill.test.ts`（11 例，新增 4）；全量 144 测试 / typecheck / lint / build 全绿。前置：阶段 0。
 
 - [ ] **M4.2 YAML 用 `yaml` 包（C4/C5，red→green）**
   - 动作：config 解析改 `yaml.parse`（修 `---` 吞掉 C4）；CLI 输出改 `yaml.stringify`（修键未转义 C5），删手写序列化。
