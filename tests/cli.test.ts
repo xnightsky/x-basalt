@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { spawn, spawnSync } from "node:child_process";
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { after, before, test } from "node:test";
@@ -27,14 +27,14 @@ after(() => {
 });
 
 /** 同步跑一次 CLI，返回退出码与输出。 */
-function run(args: string[], opts: { cwd?: string } = {}): {
-  status: number;
-  stdout: string;
-  stderr: string;
-} {
+function run(
+  args: string[],
+  opts: { cwd?: string; env?: Record<string, string> } = {},
+): { status: number; stdout: string; stderr: string } {
   const r = spawnSync(process.execPath, ["--import", TSX, CLI, ...args], {
     encoding: "utf8",
     cwd: opts.cwd,
+    env: opts.env ? { ...process.env, ...opts.env } : process.env,
   });
   return { status: r.status ?? -1, stdout: r.stdout ?? "", stderr: r.stderr ?? "" };
 }
@@ -91,6 +91,14 @@ test("index 主路径：建库并打印 ✓，退出 0", () => {
   const r = run(["index", vault, "--db", db]);
   assert.equal(r.status, 0);
   assert.match(r.stdout, /✓ 已索引/);
+});
+
+test("X_BASALT_DIR：index 不带 --db 时库落在 $X_BASALT_DIR/index.db", () => {
+  const vault = makeVault();
+  const base = freshDir();
+  const r = run(["index", vault], { env: { X_BASALT_DIR: base } });
+  assert.equal(r.status, 0, r.stderr);
+  assert.ok(existsSync(join(base, "index.db")), "库应落在 X_BASALT_DIR/index.db");
 });
 
 test("scan 主路径：新增文件后增量重索引报告 +1", () => {

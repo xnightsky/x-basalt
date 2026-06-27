@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 import { exec } from "node:child_process";
 import { readFileSync } from "node:fs";
+import { join } from "node:path";
 import { Command } from "commander";
 import { loadConfig } from "./config.js";
 import { emit } from "./format.js";
@@ -17,8 +18,10 @@ import { SkillRecall } from "./skill/index.js";
 // 启动时加载一次项目/全局配置；各命令以 `flag ?? config.X ?? 内置默认` 解析，免去重复传参。
 const config = loadConfig();
 
-/** 默认索引路径：放仓库内隐藏目录 .x-basalt/（indexer 会自动建该目录）。 */
-const DEFAULT_DB = ".x-basalt/index.db";
+// 基目录：env `X_BASALT_DIR` 指定则用它（可把 .x-basalt 整块搬到任意位置），否则就近隐藏目录 `.x-basalt/`。
+const BASE_DIR = process.env.X_BASALT_DIR ?? ".x-basalt";
+/** 默认索引路径：基目录下 index.db（indexer 会自动建该目录）。 */
+const DEFAULT_DB = join(BASE_DIR, "index.db");
 
 /** 取值，缺失则以统一 ✗ 报错（用于必需但可来自 config 的项）。 */
 function required<T>(value: T | undefined, message: string): T {

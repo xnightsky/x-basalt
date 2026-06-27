@@ -15,6 +15,8 @@
 ### 观察记录（实际使用中发现的问题 → 下一轮迭代输入）
 
 - **[已迭代] 无常驻 watcher 的按需重扫**：真实流程是人/AI 定期触发、丢来任意目录，需自行 diff 出新增/改动/删除、只重扫变化的。已新增 `scan` 命令 + `VaultIndexer.scanIter()`（迭代器内核，按批落库、可中途 break 断点续扫）+ `scan()` 便捷全跑；默认 mtime+size、`--rehash` 内容兜底、`--dry-run`/`--json`。设计 [`docs/specs/2026-06-28-scan-incremental-reindex-design.md`](docs/specs/2026-06-28-scan-incremental-reindex-design.md)。
+- **[已迭代] `X_BASALT_DIR` 环境变量**：指定 `.x-basalt` 基目录（config 与 index.db 都落其下），可把状态搬到任意位置。优先级 flag > env > 就近发现 > 默认。
+- **[已迭代] `x-basalt` 全局使用技能**：新增 `skills-def/x-basalt/SKILL.md`（教 AI 用 CLI，`scope: global`）+ `pnpm skills:install:global` 装到 `~/.claude/skills/`（biz-* 开发技能不进全局）。与 `skills/x-basalt-usage.json5`（CLI 自助数据）互补、各服务不同消费者。
 
 ---
 

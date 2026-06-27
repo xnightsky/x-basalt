@@ -110,6 +110,24 @@ test("M4.3 全局配置链：项目配置覆盖全局、全局独有键保留", 
   assert.equal(cfg.format, "yaml", "全局独有键应保留");
 });
 
+test("X_BASALT_DIR 指定基目录：从 $dir/config.* 读项目配置", () => {
+  const base = freshDir();
+  writeFileSync(join(base, "config.yaml"), "db: ./env.db\nvault: ./envvault\n");
+  // cwd 与 globalHome 都给空目录，确认配置来自 env 基目录。
+  const cfg = loadConfig(freshDir(), freshDir(), base);
+  assert.equal(cfg.db, "./env.db");
+  assert.equal(cfg.vault, "./envvault");
+});
+
+test("X_BASALT_DIR 优先于 cwd 就近发现的配置", () => {
+  const base = freshDir();
+  writeFileSync(join(base, "config.yaml"), "db: ./env.db\n");
+  const cwd = freshDir();
+  writeFileSync(join(cwd, ".x-basalt.yaml"), "db: ./cwd.db\n");
+  const cfg = loadConfig(cwd, freshDir(), base);
+  assert.equal(cfg.db, "./env.db", "env 基目录配置应替代 cwd 就近发现");
+});
+
 test("畸形配置降级为不抛错（返回对象）", () => {
   const dir = freshDir();
   writeFileSync(join(dir, ".x-basalt.json5"), "{ db: ");

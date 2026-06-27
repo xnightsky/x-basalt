@@ -28,6 +28,7 @@
     "format": "oxfmt .",
     "format:check": "oxfmt --check .",
     "skills:install": "node scripts/install-skills.mjs",
+    "skills:install:global": "node scripts/install-skills.mjs --global",
     "prepare": "node scripts/setup-hooks.mjs",
     "prepublishOnly": "pnpm run typecheck && pnpm test && pnpm run build"
   },

@@ -82,14 +82,13 @@ function loadProject(explorer: PublicExplorerSync, cwd: string): BasaltConfig {
   }
 }
 
-/** 全局配置：仅 <globalHome>/.x-basalt/config.{ext}（不向上走）；解析失败降级为 {}。 */
-function loadGlobal(explorer: PublicExplorerSync, globalHome: string): BasaltConfig {
+/** 从某 `.x-basalt` 目录加载 `config.{ext}`（不向上走）；解析失败降级为 {}。 */
+function loadConfigDir(explorer: PublicExplorerSync, dir: string): BasaltConfig {
   for (const ext of GLOBAL_EXTS) {
-    const p = join(globalHome, ".x-basalt", `config.${ext}`);
+    const p = join(dir, `config.${ext}`);
     if (!existsSync(p)) continue;
     try {
-      const r = explorer.load(p);
-      return pickConfig((r?.config ?? {}) as Record<string, unknown>);
+      return pickConfig((explorer.load(p)?.config ?? {}) as Record<string, unknown>);
     } catch (err) {
       console.warn(`⚠ 跳过无法解析的配置文件 ${p}：${(err as Error).message}`);
       return {};
@@ -99,12 +98,19 @@ function loadGlobal(explorer: PublicExplorerSync, globalHome: string): BasaltCon
 }
 
 /**
- * 加载并合并配置：项目配置（cwd 向上找 `.x-basalt/config.{yaml,...}`，回退扁平 `.x-basalt.{...}`）
- * 覆盖全局配置（`<globalHome>/.x-basalt/config.{...}`）。优先级与 CLI flag（flag 最高）
- * 由调用方 `flag ?? config.X` 处理；本函数只做「文件层」合并。
+ * 加载并合并配置：项目配置覆盖全局配置（`<globalHome>/.x-basalt/config.{...}`）。
+ * 项目配置来源：`X_BASALT_DIR` 设了则读 `$X_BASALT_DIR/config.{...}`（指定基目录，替代就近发现）；
+ * 否则 cwd 向上找 `.x-basalt/config.{yaml,...}`（回退扁平 `.x-basalt.{...}`）。
+ * 优先级与 CLI flag（flag 最高）由调用方 `flag ?? config.X` 处理；本函数只做「文件层」合并。
  *
  * @param cwd - 起始目录，默认 process.cwd()
  * @param globalHome - 全局配置所在 home，默认 homedir()（测试可注入隔离）
+ * @param baseDir - 基目录，默认读环境变量 `X_BASALT_DIR`（设了则项目配置从此目录读）
+ *
+ * @behavior
+ * Given 设了 X_BASALT_DIR（指向某 .x-basalt 目录）
+ * When 加载
+ * Then 项目配置从 $X_BASALT_DIR/config.* 读，替代 cwd 就近发现
  *
  * @behavior
  * Given 项目目录无配置、全局 <home>/.x-basalt/config 存在
@@ -121,9 +127,14 @@ function loadGlobal(explorer: PublicExplorerSync, globalHome: string): BasaltCon
  * When 加载
  * Then warn 并降级为空配置，不中断 CLI
  */
-export function loadConfig(cwd: string = process.cwd(), globalHome: string = homedir()): BasaltConfig {
+export function loadConfig(
+  cwd: string = process.cwd(),
+  globalHome: string = homedir(),
+  baseDir: string | undefined = process.env.X_BASALT_DIR,
+): BasaltConfig {
   const explorer = makeExplorer();
-  const globalCfg = loadGlobal(explorer, globalHome);
-  const projectCfg = loadProject(explorer, cwd);
+  const globalCfg = loadConfigDir(explorer, join(globalHome, ".x-basalt"));
+  // X_BASALT_DIR 设了 → 项目配置从该基目录读（替代 cwd 上溯发现）；否则 cosmiconfig 就近发现。
+  const projectCfg = baseDir ? loadConfigDir(explorer, baseDir) : loadProject(explorer, cwd);
   return { ...globalCfg, ...projectCfg }; // 项目覆盖全局
 }
