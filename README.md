@@ -2,121 +2,64 @@
 
 > 纯 Node.js CLI 工具：**零依赖 Obsidian GUI / 运行时**，直接通过文件系统 API 操作 Vault 目录，实现 Obsidian 规范的解析、索引、Dataview 子集查询与 Skill 召回。
 
-不引入 `obsidian` npm 包、不调用 `obsidian://` URI、不读取 `app.metadataCache`。所有索引与隐式字段（反向链接等）由自建 SQLite 实时计算。
+不引入 `obsidian` npm 包、不调用 `obsidian://` URI、不读取 `app.metadataCache`。所有索引与隐式字段（反向链接等）由自建 SQLite 在查询期实时计算。
 
-## 状态
+## 能做什么
 
-✅ MVP 完成（解析 / 索引 / Dataview 子集查询 / Skill 召回 + CLI 五子命令），见 `docs/plans/2026-06-25-x-basalt-mvp.md` 的 Evidence。`pnpm test` 全绿、`pnpm run build` 产出可用 `dist/cli.js`。
+| 命令 | 作用 |
+|---|---|
+| `parse` | 单个 `.md` → 标准化 AST（wikilink/tag/callout/task/highlight/blockRef + frontmatter） |
+| `index` | 全量扫描 Vault → 单文件 SQLite 索引 |
+| `scan` | **按需增量重索引**：diff 文件系统 vs 库，只重扫新增/改动/删除（无需常驻进程） |
+| `query` | 自建 Dataview（DQL）子集 → 参数化 SQL → JSON 结果 |
+| `skill` | 加载规范知识库，Fuse.js 模糊召回 Obsidian / DQL 语法 |
+| `watch` | chokidar 常驻监听，实时增量更新 + 变更联动命令 |
 
 ## 安装
 
-```bash
-pnpm install
-pnpm run build        # tsc → dist/
-```
-
-开发态可不构建，直接用 `tsx` 跑：
+要求 Node.js ≥ 22、包管理器 `pnpm`。
 
 ```bash
-pnpm run cli -- <command> [args]
+pnpm install          # 安装依赖（含构建 better-sqlite3 原生模块）
+pnpm run build        # tsc → dist/cli.js
+npm link              # 全局安装：之后任意目录可用 x-basalt 命令
 ```
 
-## 使用
+> 全局命令跑的是编译产物 `dist/cli.js`；改了源码需 `pnpm run build` 重新编译生效。开发态也可免构建直接跑：`pnpm run cli -- <command>`。详见 [安装与运行](docs/guides/installation.md)。
 
-> 📖 **完整用法见 [`docs/guides/usage.md`](docs/guides/usage.md)**：五条命令逐项参考、DQL 子集文法、索引数据模型、Skill 召回机制、限制与排查、配方。下面是速览。
-
-### 1. 解析单文件 → AST JSON
+## 快速上手
 
 ```bash
-x-basalt parse <file.md> [--format json|yaml]
-# 开发态：
-pnpm run cli -- parse tests/fixtures/sample-vault/Index.md
+x-basalt index ./my-vault                                   # 建索引（默认库 .x-basalt/index.db）
+x-basalt query "LIST FROM #project WHERE status = 'active' SORT file.mtime DESC LIMIT 10"
+x-basalt scan ./my-vault                                    # 之后增量重扫，只处理变化的
+x-basalt skill recall wikilink                              # 召回语法规范
 ```
 
-输出标准化的 `ObsidianNode[]` + frontmatter，含 wikilink / embed / tag / callout / task / highlight / blockRef。
+不想每次传 `--db`/`<vault>`？写个 `.x-basalt/config.yaml`，或用 `X_BASALT_DIR` 环境变量——见 [配置与基目录](docs/guides/configuration.md)。
 
-### 2. 构建 / 更新 Vault 索引
+## 📖 完整教程
 
-```bash
-x-basalt index <vault-path> [--watch] [--db ./index.db]
-pnpm run cli -- index ./tests/fixtures/sample-vault --db ./index.db
-```
+**[`docs/guides/usage.md`](docs/guides/usage.md)** 是教程总目录，分章覆盖：
 
-全量扫描 `.md` 文件写入 SQLite；`--watch` 启用 chokidar 增量监听。自动跳过 `.obsidian/` 与隐藏文件。
-
-### 3. 执行 Dataview 子集查询
-
-```bash
-x-basalt query "LIST FROM #project WHERE status = 'active' SORT file.mtime DESC LIMIT 10" \
-  --vault ./tests/fixtures/sample-vault \
-  --db ./index.db
-```
-
-支持子集：
-
-```
-LIST | TABLE <field, ...>
-FROM <"folder"> | <#tag> | <[[link]]>
-WHERE <condition>            # = != < > <= >= / contains/icontains/startswith/endswith / AND OR NOT / regexmatch
-SORT <field> ASC | DESC
-LIMIT <number>
-```
-
-隐式字段：`file.name/path/folder/extension/size/mtime/ctime/tags/inlinks/outlinks/tasks`。结果为 JSON：
-
-```json
-{ "type": "LIST", "columns": ["file.name"], "rows": [ { "file.name": "Note A" } ] }
-```
-
-### 4. 召回 Skill 规范
-
-```bash
-x-basalt skill recall usage      # 召回本 CLI 自己的说明书（自我文档）
-x-basalt skill recall wikilink
-x-basalt skill recall dataview
-x-basalt skill list
-```
-
-模糊匹配 skill 的 `triggers` 与 `name`，返回规范详情。内置 `obsidian-base-spec`（Obsidian 规范）与 `x-basalt-usage`（**CLI 自我说明书**）始终兜底可召回——外部目录为空也不影响，方便 AI 直接 `skill recall usage` 学会用法。Skill 目录：环境变量 `OBSIDIAN_SKILL_PATH` > `~/.obsidian-core/skills/` > 内置 `skills/`。
-
-### 5. 监听模式
-
-```bash
-x-basalt watch <vault-path> --on-change "echo 'File changed: {file}'"
-```
-
-### 6. 项目配置（可选，免去重复传参）
-
-项目本地配置默认放仓库内隐藏目录 **`.x-basalt/`**（类比 `.obsidian/`，**不入 git**）。复制自带模板即可：
-
-```bash
-cp .x-basalt/config.example.yaml .x-basalt/config.yaml
-```
-
-`.x-basalt/config.yaml`（**默认 YAML**，也支持 JSON5/JSON；扁平 `.x-basalt.yaml` 亦可）：
-
-```yaml
-vault: ./my-vault
-# db 省略即用默认 .x-basalt/index.db
-```
-
-之后 `x-basalt index`、`x-basalt query "LIST FROM #project"` 都能零参数运行（索引默认落在 `.x-basalt/index.db`，目录自动创建）。键：`db`/`vault`/`skillPath`/`format`/`onChange`。优先级：命令行 flag > 项目配置 > 全局配置 `~/.x-basalt/config.yaml` > 内置默认。详见 [`docs/guides/usage.md` §12](docs/guides/usage.md#12-配置文件免去重复传参)。
+- [安装与运行](docs/guides/installation.md) · [命令参考](docs/guides/commands.md) · [DQL 查询指南](docs/guides/querying-dql.md)
+- [索引与同步](docs/guides/indexing-and-sync.md) · [配置与基目录](docs/guides/configuration.md) · [Obsidian 语法](docs/guides/obsidian-syntax.md)
+- [与 AI 协作（技能召回 + 全局使用技能）](docs/guides/ai-and-skills.md) · [故障排查与限制](docs/guides/troubleshooting.md)
 
 ## 开发
 
 详见 `AGENTS.md`（项目约定与硬约束）与 `docs/README.md`（文档路由）。
 
 ```bash
-pnpm test             # Node 原生 test runner
-pnpm run typecheck    # tsc --noEmit
-pnpm run lint         # oxlint
-pnpm run format       # oxfmt
-pnpm run skills:install   # 安装 skills-def/ 业务 skill 到 .claude/skills/
+pnpm test                  # Node 原生 test runner
+pnpm run typecheck         # tsc --noEmit
+pnpm run lint              # oxlint
+pnpm run format            # oxfmt
+pnpm run skills:install         # 装 skills-def/ 的开发技能到项目 .claude/skills/
+pnpm run skills:install:global  # 装 x-basalt 使用技能到 ~/.claude/skills/（教 AI 用本 CLI）
 ```
 
-### 本地门禁（不依赖云端 CI）
-
-`pnpm install` 会经 `prepare`（`scripts/setup-hooks.mjs`）自动把 `git config core.hooksPath` 指向受版本控制的 `.githooks/`。此后 **push 前**自动跑 `typecheck + test + lint`（`.githooks/pre-push`），任一失败即阻断。零新依赖、不依赖云端。谨慎绕过：`git push --no-verify`。
+`pnpm install` 经 `prepare` 把 `git config core.hooksPath` 指向 `.githooks/`；此后 **push 前**自动跑 `typecheck + test + lint`（`.githooks/pre-push`），任一失败即阻断。绕过：`git push --no-verify`。
 
 ## 约束
 

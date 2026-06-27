@@ -21,7 +21,7 @@
 
 ## 当前活跃文档
 
-- 使用指南（面向使用者，怎么用）：[`guides/usage.md`](guides/usage.md)
+- 使用指南（面向使用者，**教程总目录 + 分章**）：[`guides/usage.md`](guides/usage.md)——安装/命令/DQL/索引同步/配置/Obsidian语法/AI协作/排查
 - 选库与许可证避坑（选第三方库前必读）：[`guides/dependency-license-policy.md`](guides/dependency-license-policy.md)
 - 设计：[`specs/2026-06-25-x-basalt-design.md`](specs/2026-06-25-x-basalt-design.md)
 - 调研：[`research/2026-06-25-obsidian-spec-and-deps.md`](research/2026-06-25-obsidian-spec-and-deps.md)
