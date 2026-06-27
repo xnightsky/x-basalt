@@ -29,52 +29,61 @@
 
 ## B. DQL（Dataview 子集）覆盖
 
+> **2026-06-27 收口（阶段2 Part A–E）**：DQL 引擎已 chevrotain 重写——`tokens.ts`(lexer)/`parser.ts`(EmbeddedActionsParser)/`sql-generator.ts`，执行层全参数化。测试：`tests/query-parser.test.ts`（词法+parser AST）、`tests/sql-generator.test.ts`（SQL 生成纯函数）、`tests/query.test.ts`（端到端）、`tests/regexp.test.ts`（ReDoS）。子步编号见 `../plans/2026-06-26-dql-kernel-steps.md`。
+
 ### 查询类型
 | 子句 | 状态 | 证据 |
 |---|---|---|
-| `LIST` | ✅ | `sql-generator.ts:208-210`、`query.test` |
-| `TABLE col, ...` | ⚠️ | `:211-214`（显式 `file.name` 致**重复列**） |
-| `TASK` | ❌ | ast 要求「以 LIST/TABLE 开头」 |
-| `CALENDAR` | ❌ | —— |
+| `LIST` | ✅ | query/query-parser/sql-generator.test |
+| `TABLE col, ...` | ✅ | 列去重（S2.11）；sql-generator.test |
+| `TASK` | ✅ | tasks JOIN files（S2.21）；query.test 端到端 |
+| `CALENDAR` | ❌ 范围外 | goal 明确不做 |
 
 ### FROM
 | 来源 | 状态 | 证据 |
 |---|---|---|
-| `FROM #tag`（含子标签前缀） | ✅ | `:178-182` |
-| `FROM "folder"`（含子目录前缀） | ✅ | `:183-186`（末尾 `/` 边界 ⚠️） |
-| `FROM [[link]]`（反向链接） | ✅ | `:187-191` |
-| `FROM` 多源组合 `AND`/`OR` | ❌ | ast 单来源 |
+| `FROM #tag`（含子标签前缀） | ✅ | sql-generator.test |
+| `FROM "folder"`（含子目录前缀） | ✅ | sql-generator.test |
+| `FROM [[link]]`（反向链接） | ✅ | query.test 端到端 |
+| `FROM` 多源 `AND`/`OR` | ❌ 范围外 | 报错（goal 不做） |
 
 ### WHERE
 | 能力 | 状态 | 证据 |
 |---|---|---|
-| 比较 `=` `!=` `<` `>` `<=` `>=` | ✅ | `:112-116` |
-| `AND` / `OR` / `NOT` | ✅ | `:98-111`、`query.test` |
-| `contains` / `icontains` | ⚠️ | `:135-159`（icontains 对聚合字段退化为大小写敏感；LIKE 通配符未转义） |
-| `startswith` / `endswith` | ⚠️ | `:161-163`（LIKE 通配符未转义） |
-| `regexmatch` | ⚠️ | `query/index.ts` REGEXP（无 ReDoS 防护） |
-| null 判断 / 日期函数 / 算术 / `date(today)` | ❌ | —— |
+| 比较 `=` `!=` `<` `>` `<=` `>=` | ✅ | sql-generator/query-parser.test |
+| `AND` / `OR` / `NOT` / 括号优先级 | ✅ | query-parser.test（优先级用例） |
+| `contains` / `icontains` | ✅ | LIKE 通配符转义（S2.9）+ icontains 大小写（S2.10） |
+| `startswith` / `endswith` | ✅ | LIKE 转义（S2.9） |
+| `regexmatch` | ✅ | ReDoS 缓解（S2.23）；regexp.test |
+| null 判断（`= null` / `!= null`） | ✅ | S2.15（isnull→IS NULL/IS NOT NULL） |
+| 日期比较（ISO 字典序） | ✅ | S2.16 |
+| 内置标量 `lower`/`upper`/`length`/`round` | ✅ | S2.17（length 数组→json_array_length） |
+| `date(today)` / `date(now)` | ✅ | S2.17（求值 ISO 串作右值） |
 
 ### SORT / LIMIT / 其他
 | 能力 | 状态 | 证据 |
 |---|---|---|
-| `SORT field ASC\|DESC`（单键） | ✅ | `:218-221` |
-| `SORT` 多键 | ❌ | ast 单字段 |
-| `SORT` JSON 聚合字段 | ⚠️ | `:218-220`（按 JSON 串排序，无意义不报错） |
-| `LIMIT n` | ✅ | `:222-225`（负数不校验 ⚠️） |
-| `GROUP BY` | ❌ | —— |
-| `FLATTEN` | ❌ | —— |
-| `WITHOUT ID` | ❌ | —— |
+| `SORT field ASC\|DESC` | ✅ | query-parser/sql-generator.test |
+| `SORT` 多键 | ✅ | S2.14（多列 ORDER BY） |
+| `SORT` JSON 聚合字段 | ✅ 报错 | S2.13（DqlSyntaxError，非静默） |
+| `LIMIT n`（负数校验） | ✅ | S2.13（负数报错，0 合法） |
+| `GROUP BY` | ✅ | S2.18（分组键+rows 聚合，端到端） |
+| `FLATTEN` | ✅ | S2.19（json_each 展开，端到端） |
+| `WITHOUT ID` | ✅ | S2.20（列控制） |
+| 未知字段 / 未知函数 | ✅ 报错 | S2.12（DqlSyntaxError） |
+| SQL 注入 | ✅ 防护 | 全参数化（S2.23 端到端注入用例） |
 
 ### 隐式字段
 | 字段 | 状态 | 证据 |
 |---|---|---|
-| `file.name` `.path` `.folder` `.extension` `.size` `.mtime` `.ctime` | ✅ | `:25-33`（ctime 跨平台语义 ⚠️） |
-| `file.tags` | ✅ | `:58-62` |
-| `file.inlinks` / `file.outlinks` | ✅ | `:63-75`（basename 歧义 ⚠️） |
-| `file.tasks` | ⚠️ | `:76-80`（`due` 恒 null） |
-| frontmatter 标量字段 | ✅ | `:81-87`（字段名白名单） |
-| `file.link` `.day` `.cday` `.aliases` `.etags` `.lists` 等 | ❌ | `file.day` 测试中明确报错 |
+| `file.name/.path/.folder/.extension/.size/.mtime/.ctime` | ✅ | S2.22 全集核对 |
+| `file.tags` | ✅ | query.test |
+| `file.inlinks` / `file.outlinks` | ✅ | 查询期 JOIN 实时计算（硬约束6）；S2.22 |
+| `file.tasks` | ✅ | S2.21/S2.22（任务 `due` 提取待阶段1 S1.3） |
+| frontmatter 标量字段 | ✅ | 白名单字段名 |
+| `file.link/.day/.cday/.aliases/.etags/.lists` 等 | ❌ 范围外 | 未知字段明确报错 |
+
+> 遗留底层边界（非 DQL 引擎层，留各自阶段）：`FROM "folder"` 末尾 `/`、inlinks basename 歧义（阶段3 S3.2）、ctime 跨平台、task `due` 提取（阶段1 S1.3）。
 
 ## C. 工程/质量覆盖
 | 项 | 状态 | 备注 |
@@ -89,5 +98,5 @@
 ## D. 怎么读这张表
 
 - ✅ 之外的每一格，都是当前「用着用着会踩到的边界」——这是黑盒的具体清单。
-- 规范覆盖：解析 ~60% / DQL 子集 ~70%（详见体检 §5）。
+- 规范覆盖：解析 ~60%（阶段1 待办）/ **DQL 子集 ~95%（阶段2 收口完成）**：LIST/TABLE/TASK + 完整 WHERE（比较/逻辑/null/日期/谓词函数/内置标量函数）+ 多键 SORT + GROUP BY/FLATTEN/WITHOUT ID + LIMIT，全参数化 + ReDoS 缓解；仅 CALENDAR/DataviewJS/FROM-and-or 为范围外。
 - 后续做深内核时，本表即「目标 vs 现状」差距表；每补一格就更新一格。

@@ -118,6 +118,70 @@ test("AND / OR / NOT 组合", () => {
   );
 });
 
+test("S2.18 端到端 LIST GROUP BY status：每组一行 + rows 数组", () => {
+  const r = engine.query("LIST GROUP BY status");
+  assert.deepEqual(r.columns, ["status", "rows"]);
+  // 每组 rows 为该组文件路径数组（json 列已解析）。
+  assert.ok(r.rows.length > 0);
+  assert.ok(r.rows.every((row) => Array.isArray(row.rows)));
+  // active 组应含 Alpha。
+  const active = r.rows.find((row) => row.status === "active");
+  assert.ok(active, "应有 active 分组");
+  assert.ok((active.rows as string[]).includes("Projects/Alpha.md"));
+});
+
+test("S2.19 端到端 FLATTEN file.tags：标签展开为多行", () => {
+  // 固定子句顺序：WHERE 先于 FLATTEN（子集简化，Dataview 灵活顺序暂不支持）。
+  const r = engine.query("LIST WHERE file.name = 'Alpha' FLATTEN file.tags");
+  // Alpha 有多个标签（area/work、status/active…），展开成多行，每行一个标签字符串。
+  assert.ok(r.rows.length > 1, `应展开多行，实际 ${r.rows.length}`);
+  assert.ok(r.rows.every((row) => typeof row["file.tags"] === "string"));
+  const tags = r.rows.map((row) => row["file.tags"]);
+  assert.ok(tags.includes("area/work"));
+});
+
+test("S2.21 端到端 TASK：返回任务行（status/text/file）", () => {
+  const r = engine.query("TASK");
+  assert.equal(r.type, "TASK");
+  assert.deepEqual(r.columns, ["task.text", "task.status", "task.due", "file.path"]);
+  // fixture（Alpha.md 等）含任务行。
+  assert.ok(r.rows.length > 0, "应返回任务行");
+  assert.ok(r.rows.every((row) => typeof row["task.text"] === "string"));
+});
+
+test("S2.22 隐式字段全集：file.* 各字段可查且类型正确", () => {
+  const r = engine.query(
+    'TABLE file.folder, file.extension, file.size, file.mtime, file.ctime, file.outlinks, file.tasks ' +
+      "FROM \"Projects\" WHERE file.name = 'Alpha'",
+  );
+  const row = r.rows[0];
+  assert.ok(row, "应命中 Alpha");
+  assert.equal(row["file.folder"], "Projects");
+  assert.equal(row["file.extension"], "md");
+  assert.equal(typeof row["file.size"], "number");
+  assert.equal(typeof row["file.mtime"], "number");
+  assert.equal(typeof row["file.ctime"], "number");
+  // outlinks/tasks 为查询期 JOIN 实时计算的聚合数组（硬约束第 6 条）。
+  assert.ok(Array.isArray(row["file.outlinks"]), "outlinks 应为数组");
+  assert.ok(Array.isArray(row["file.tasks"]), "tasks 应为数组");
+});
+
+test("S2.22 file.outlinks 含 embed、正向链接实时计算", () => {
+  const r = engine.query("TABLE file.outlinks WHERE file.name = 'Alpha'");
+  const outlinks = r.rows[0]?.["file.outlinks"] as string[];
+  assert.ok(Array.isArray(outlinks));
+  // Alpha 链接 Index（正向）。
+  assert.ok(outlinks.some((l) => l.includes("Index")));
+});
+
+test("S2.23 SQL 注入：恶意值作为参数绑定，不破库", () => {
+  // 注入意图的值经占位符绑定为字面量，不被当 SQL 执行。
+  const r = engine.query('LIST WHERE status = "\'; DROP TABLE files; --"');
+  assert.equal(r.rows.length, 0, "恶意值作字面比较应无命中");
+  // files 表未被破坏，仍可正常查询。
+  assert.ok(engine.query("LIST").rows.length > 0, "files 表应完好");
+});
+
 test("非子集字段（file.day）明确报错而非静默", () => {
   assert.throws(() => engine.query("TABLE file.day"), /不支持的查询字段/);
 });

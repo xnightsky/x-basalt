@@ -1,11 +1,12 @@
 import Database from "better-sqlite3";
 import type { Database as Db } from "better-sqlite3";
-import { parseQuery, type QueryResult } from "./ast.js";
+import type { QueryResult } from "./ast.js";
+import { parseDql } from "./parser.js";
+import { safeRegexpMatch } from "./regexp.js";
 import { generateSql } from "./sql-generator.js";
-import { tokenize } from "./tokenizer.js";
 
 export type { DqlQuery, QueryResult } from "./ast.js";
-export { DqlSyntaxError } from "./tokenizer.js";
+export { DqlSyntaxError } from "./errors.js";
 
 // === 自建实现: Dataview 子集执行引擎，不依赖 obsidian-dataview 的 Evaluator/Executor ===
 //
@@ -22,15 +23,10 @@ export class DataviewEngine {
     // fileMustExist：未建库直接报错，而非静默创建空库给出误导性空结果。
     this.db = new Database(dbPath, { readonly: !inMemory, fileMustExist: !inMemory });
     // 注册 REGEXP：SQLite 默认无正则，regexmatch() 依赖此自定义函数（deterministic 利于优化）。
-    this.db.function("regexp", { deterministic: true }, (pattern: unknown, value: unknown) => {
-      if (value === null || value === undefined) return 0;
-      try {
-        return new RegExp(String(pattern)).test(String(value)) ? 1 : 0;
-      } catch {
-        // 非法正则视为不匹配，不抛错中断整条查询。
-        return 0;
-      }
-    });
+    // 匹配逻辑 + ReDoS 缓解抽到 safeRegexpMatch（S2.23，可单元测）。
+    this.db.function("regexp", { deterministic: true }, (pattern: unknown, value: unknown) =>
+      safeRegexpMatch(pattern, value),
+    );
   }
 
   /**
@@ -38,9 +34,20 @@ export class DataviewEngine {
    *
    * @param dql - DQL 查询语句
    * @throws DqlSyntaxError 语法不在子集内；Error 字段不支持
+   *
+   * @behavior
+   * Given 落在子集内的 DQL
+   * When 执行
+   * Then 返回 { type, columns, rows }，聚合列（file.tags/inlinks/outlinks/tasks）就地解析为数组
+   *
+   * @behavior
+   * Given 语法越界或引用不支持字段的 DQL
+   * When 执行
+   * Then 抛出带位置的 DqlSyntaxError / Error，而非返回误导性的空结果
    */
   query(dql: string): QueryResult {
-    const compiled = generateSql(parseQuery(tokenize(dql)));
+    // 词法+语法走 chevrotain（parser.ts）；旧手写 tokenizer/ast.parseQuery 已退役（S2.8 切换）。
+    const compiled = generateSql(parseDql(dql));
     const rows = this.db.prepare(compiled.sql).all(...compiled.params) as Record<string, unknown>[];
 
     // 聚合列（file.tags/inlinks/outlinks/tasks）以 JSON 字符串返回，就地解析为数组。

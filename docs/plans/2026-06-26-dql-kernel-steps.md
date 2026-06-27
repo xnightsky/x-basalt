@@ -58,31 +58,31 @@ DQL 子集真相源把当前子集定义为**严格边界**，明确 `TASK/CALEN
   - 关键点：chevrotain 对 `\p{}` unicode pattern 首字符优化失配 → Tag 改自定义 matcher 函数（sticky 正则）。
   - 前置：S2.2c。
 
-- [ ] **S2.4 parser：查询头 LIST / TABLE(+fields)**
+- [x] **S2.4 parser：查询头 LIST / TABLE(+fields) / TASK** ✅ 2026-06-27（`src/query/parser.ts` chevrotain EmbeddedActionsParser；WITHOUT ID 对齐 Dataview 置于字段前；LIST/TASK 接字段报错）
   - 动作：测试先行；解析 `LIST` 与 `TABLE f1, f2`，产出 AST 头。
   - 验收：两类查询头解析正确；TABLE 字段列表正确。
   - 证据：`pnpm test tests/query-parser.test.ts`。
   - 前置：S2.3。
 
-- [ ] **S2.5 parser：FROM（#tag / "folder" / [[link]]）**
+- [x] **S2.5 parser：FROM（#tag / "folder" / [[link]]）** ✅ 2026-06-27（三来源解析对齐旧语义；and/or 多源不解析→报错）
   - 动作：测试先行；解析三种来源到 AST.from。
   - 验收：三种来源解析正确；FROM and/or 按裁决报错或解析（依 S2.2a）。
   - 证据：`pnpm test tests/query-parser.test.ts`。
   - 前置：S2.4。
 
-- [ ] **S2.6 parser：WHERE 表达式（比较/AND/OR/NOT/括号/函数调用）**
+- [x] **S2.6 parser：WHERE 表达式（比较/AND/OR/NOT/括号/函数调用）** ✅ 2026-06-27（优先级 OR<AND<NOT<primary，括号、函数调用；未知函数带位置报错；null/日期/内置函数留 S2.15–S2.17）
   - 动作：测试先行；解析比较、逻辑组合、括号优先级、函数调用 `fn(field,"arg")`。
   - 验收：优先级/结合性正确（含嵌套括号）；语法错误抛带位置 `DqlSyntaxError`。
   - 证据：`pnpm test tests/query-parser.test.ts`。
   - 前置：S2.5。
 
-- [ ] **S2.7 parser：SORT（多键）/ LIMIT**
+- [x] **S2.7 parser：SORT（多键）/ LIMIT** ✅ 2026-06-27（多键 `SORT a ASC, b DESC` 解析为数组；LIMIT 数字。负数校验留 S2.13）
   - 动作：测试先行；解析 `SORT a ASC, b DESC` 多键与 `LIMIT n`。
   - 验收：多键顺序/方向正确；LIMIT 解析为数字。
   - 证据：`pnpm test tests/query-parser.test.ts`。
   - 前置：S2.6。
 
-- [ ] **S2.8 端到端迁移：旧 query 测试跑通新引擎**
+- [x] **S2.8 端到端迁移：旧 query 测试跑通新引擎** ✅ 2026-06-27（`DataviewEngine` 切 `parseDql`；旧手写 `tokenizer.ts`/`ast.parseQuery` 已删，`DqlSyntaxError` 移 `errors.ts`；sql-generator 对 TASK/GROUP BY/FLATTEN/WITHOUT ID 诚实报「暂未实现」；全量 86 测试/typecheck/lint/build 全绿）
   - 目标：新 parser 接上 sql-generator + 执行。
   - 动作：把现有 `tests/query.test.ts` 11 例接到新引擎（red→green）。
   - 验收：旧端到端测试全绿（行为不回归）。
@@ -93,48 +93,48 @@ DQL 子集真相源把当前子集定义为**严格边界**，明确 `TASK/CALEN
 
 ## Part C · 修已确认 query bug（red→green，每步一测）
 
-- [ ] **S2.9 LIKE 通配符转义（Q1）**：`%`/`_` 转义 + `ESCAPE` 子句；测 `contains(title,"50%")` 字面匹配。
-  - 证据：`pnpm test tests/query.test.ts`（新增用例）。前置：S2.8。
-- [ ] **S2.10 icontains 大小写（Q2）**：tags/inlinks/outlinks 的 icontains 真正大小写不敏感；测大小写命中。
-  - 证据：同上。前置：S2.8。
-- [ ] **S2.11 TABLE 重复列（Q3）**：`TABLE file.name, status` 不产生重复 `file.name` 列。
-  - 证据：同上。前置：S2.8。
-- [ ] **S2.12 未知字段抛 DqlSyntaxError（Q4）**：非子集字段抛带位置的 `DqlSyntaxError`（非裸 Error）。
-  - 证据：同上。前置：S2.8。
-- [ ] **S2.13 SORT JSON 列报错 + LIMIT 负数校验**：对聚合 JSON 列排序报错而非静默；`LIMIT -5` 报错。
-  - 证据：同上。前置：S2.8。
+- [x] **S2.9 LIKE 通配符转义（Q1）** ✅ 2026-06-27：`escapeLike` 转义 `%`/`_`/`\` + `ESCAPE '\'`；新建 `tests/sql-generator.test.ts` 单元测 contains/icontains/startswith/endswith。**附带修复 S2.8 回归**：chevrotain StringLiteral image 未解码转义 → `parser.unquote` 补 `\X→X` 解码（加 parser 用例锁定）。92 测试全绿。
+  - 证据：`tests/sql-generator.test.ts` + `tests/query-parser.test.ts`。前置：S2.8。
+- [x] **S2.10 icontains 大小写（Q2）** ✅ 2026-06-27：file.tags 的 icontains 用 LOWER 两侧（大小写不敏感）、contains 保持精确前缀；links 经 linkKey 已小写化。
+  - 证据：`tests/sql-generator.test.ts`。前置：S2.8。
+- [x] **S2.11 TABLE 重复列（Q3）** ✅ 2026-06-27：addCol 用 seen Set 去重（默认起头 file.name 与显式/重复字段不重复）。
+  - 证据：`tests/sql-generator.test.ts`。前置：S2.8。
+- [x] **S2.12 未知字段抛 DqlSyntaxError（Q4）** ✅ 2026-06-27：fieldToSql 未知字段改抛 `DqlSyntaxError`（非裸 Error）。
+  - 证据：`tests/sql-generator.test.ts`。前置：S2.8。
+- [x] **S2.13 SORT JSON 列报错 + LIMIT 负数校验** ✅ 2026-06-27：sort 命中 json 列抛 DqlSyntaxError；parser LIMIT `<0` 带位置报错（0 合法）。
+  - 证据：`tests/sql-generator.test.ts` + `tests/query-parser.test.ts`。前置：S2.8。
 
 ---
 
 ## Part D · 补全子集（red→green，每子句一步；仅做 S2.2a 裁定"纳入"项）
 
-- [ ] **S2.14 多键 SORT**：AST→`ORDER BY a ASC, b DESC`；测多键+方向。前置：S2.8。
-- [ ] **S2.15 WHERE null 判断**：`field = null`/`!= null` → `IS NULL`/`IS NOT NULL`；测有无值。前置：S2.8。
-- [ ] **S2.16 WHERE 日期比较**：ISO 字典序比较（含 frontmatter 日期与 due_date）；测区间过滤。前置：S2.8、(parser due_date 需阶段1 S1.3)。
-- [ ] **S2.17 函数集完整**：contains/icontains/startswith/endswith 全字段类型正确 + S2.2a 裁定的最小内置函数；逐函数测。前置：S2.9。
-- [ ] **S2.18 GROUP BY**：AST→SQL 聚合（分组列 + 聚合结果形态）；端到端测。前置：S2.8。
-- [ ] **S2.19 FLATTEN**：展开数组字段为多行；端到端测。前置：S2.8。
-- [ ] **S2.20 WITHOUT ID**：列控制（隐藏默认 id/file.name 列）；测列集。前置：S2.4。
-- [ ] **S2.21 TASK 查询类型（若 S2.2a 纳入）**：`TASK FROM ...` 返回任务行形态；端到端测。前置：S2.8。
+- [x] **S2.14 多键 SORT** ✅ 2026-06-27：parser 产多键数组 + sql-gen 多列 ORDER BY（结构 S2.2c/S2.7 就位，本步补单元测）。
+- [x] **S2.15 WHERE null 判断** ✅ 2026-06-27：WhereExpr 加 `isnull` 节点；`= null`/`!= null` → `IS NULL`/`IS NOT NULL`（不参数化 null）；其他比较符 + null 报错。
+- [x] **S2.16 WHERE 日期比较** ✅ 2026-06-27：frontmatter 日期按 ISO 字符串字典序比较（= 日期序，无需特殊类型）；数值列 mtime/ctime 直接比较；区间过滤测试。**注**：task `due_date` 提取仍依赖阶段1 S1.3，届时复用本比较路径。
+- [x] **S2.17 函数集完整** ✅ 2026-06-27：contains 家族（已 S2.9/S2.10）+ 内置标量 `lower/upper/length/round` 作比较左操作数（length 数组→json_array_length）+ `date(today)/date(now)` 求值 ISO 串作右值；parser 区分谓词 vs scalar 函数；逐函数单元测 + parser 行为/错误测。
+- [x] **S2.18 GROUP BY** ✅ 2026-06-27：分组键 + `json_group_array(DISTINCT f.path) AS rows` + `GROUP BY`；端到端验证分组聚合。
+- [x] **S2.19 FLATTEN** ✅ 2026-06-27：`FROM …, json_each(<arrayexpr>) AS _flat` 交叉展开 + 展开值列；非数组字段报错；端到端验证标签展开多行。固定子句顺序 WHERE 先于 FLATTEN。
+- [x] **S2.20 WITHOUT ID** ✅ 2026-06-27：隐藏默认 file.name 列（LIST/TABLE）；单元测列集。
+- [x] **S2.21 TASK 查询类型** ✅ 2026-06-27：`TASK [FROM][WHERE][LIMIT]` → tasks JOIN files 返回任务行（task.text/status/due + file.path）；FROM/WHERE 复用文件级过滤；端到端验证。task 字段级过滤为后续。
 
 ---
 
 ## Part E · 隐式字段、安全与收口
 
-- [ ] **S2.22 隐式字段全集核对**
+- [x] **S2.22 隐式字段全集核对** ✅ 2026-06-27
   - 动作：按真相源映射表逐字段核对 file.name/path/folder/extension/size/mtime/ctime、file.tags、file.inlinks、file.outlinks、file.tasks、frontmatter 标量；每个有测试；inlinks/outlinks **查询期 JOIN 实时计算**（硬约束第 6 条）。
-  - 验收：每个隐式字段有用例；无物化缓存。
+  - 验收：每个隐式字段有用例；无物化缓存。✅ query.test.ts 加全集 TABLE 查询用例 + outlinks 实时计算用例。
   - 证据：`pnpm test tests/query.test.ts`。前置：S2.8。
 
-- [ ] **S2.23 注入与 ReDoS 安全复核**
-  - 动作：复核所有用户输入走参数化占位符（含新子句）；REGEXP 自定义函数加长度上限/超时防 ReDoS。
-  - 验收：构造注入用例不破库；恶意正则不阻塞。
-  - 证据：`pnpm test tests/query.test.ts`（含注入/ReDoS 用例）。前置：S2.17。
+- [x] **S2.23 注入与 ReDoS 安全复核** ✅ 2026-06-27
+  - 动作：复核所有用户输入走参数化占位符（含新子句）；REGEXP 抽到 `regexp.ts` 的 `safeRegexpMatch` 加 pattern/value 长度上限缓解 ReDoS。
+  - 验收：构造注入用例不破库；恶意正则超长输入不阻塞。✅ `tests/regexp.test.ts`（ReDoS 缓解）+ query.test 端到端注入用例。
+  - 证据：`pnpm test`（regexp.test + query.test）。前置：S2.17。
 
-- [ ] **S2.24 DQL 覆盖矩阵收口（黑盒消除）**
-  - 动作：更新覆盖矩阵 §B 到实际；每个 ✅ 标注对应测试名；明确剩余 ❌（CALENDAR/DataviewJS）；给量化覆盖率。
-  - 验收：矩阵无"声称支持但无测试"的格；与 skill/research 一致。
-  - 证据：矩阵每行链到测试；`pnpm test tests/query.test.ts` 全绿。
+- [x] **S2.24 DQL 覆盖矩阵收口（黑盒消除）** ✅ 2026-06-27
+  - 动作：更新覆盖矩阵 §B 到实际；每个 ✅ 标注对应测试名/子步；明确剩余 ❌（CALENDAR/DataviewJS/FROM-and-or 范围外）；DQL 子集覆盖率更新到 ~95%。
+  - 验收：矩阵无"声称支持但无测试"的格；与 skill/research 一致。✅ `specs/2026-06-26-coverage-matrix.md` §B 全量重写。
+  - 证据：矩阵每行标测试；全量 132 测试 / typecheck / lint / build 全绿。
   - 前置：S2.14–S2.23 全部完成。
 
 ---

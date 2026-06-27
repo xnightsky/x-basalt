@@ -1,5 +1,6 @@
 import { linkKey } from "../utils/path.js";
-import type { CompareOp, DqlQuery, QueryType, WhereExpr } from "./ast.js";
+import type { CompareOp, DqlQuery, QueryType, ScalarFn, WhereExpr } from "./ast.js";
+import { DqlSyntaxError } from "./errors.js";
 
 // === 自建实现: DQL AST → 参数化 SQL（隐式字段经 links/tags/tasks 表 JOIN 实时计算）===
 //
@@ -81,7 +82,8 @@ function fieldToSql(field: string): { expr: string; json: boolean } {
     default:
       // frontmatter 标量：仅允许安全字符后内联进 json path（已白名单校验，无注入）。
       if (!/^[A-Za-z0-9_]+$/.test(field)) {
-        throw new Error(`不支持的查询字段: ${field}`);
+        // S2.12：未知字段抛带位置的 DqlSyntaxError（pos 0：sql-gen 层无 token 偏移）。
+        throw new DqlSyntaxError(`不支持的查询字段: ${field}`, 0);
       }
       return { expr: `json_extract(f.frontmatter, '$.${field}')`, json: false };
   }
@@ -90,6 +92,20 @@ function fieldToSql(field: string): { expr: string; json: boolean } {
 /** SQL 列别名：字段名含点，统一双引号包裹，结果行 key 即字段名。 */
 function quoteAlias(name: string): string {
   return `"${name.replaceAll('"', '""')}"`;
+}
+
+/** S2.17：内置标量函数 → SQL（length 对数组字段用 json_array_length，标量用 LENGTH）。 */
+function scalarFnSql(fn: ScalarFn, fe: string, json: boolean): string {
+  switch (fn) {
+    case "lower":
+      return `LOWER(${fe})`;
+    case "upper":
+      return `UPPER(${fe})`;
+    case "length":
+      return json ? `json_array_length(${fe})` : `LENGTH(${fe})`;
+    case "round":
+      return `ROUND(${fe})`;
+  }
 }
 
 /** 编译 WHERE 表达式为 SQL 片段 + 参数。 */
@@ -110,13 +126,25 @@ function compileWhere(expr: WhereExpr): { sql: string; params: unknown[] } {
       return { sql: `(NOT ${e.sql})`, params: e.params };
     }
     case "compare": {
-      const { expr: fe } = fieldToSql(expr.field);
+      const { expr: fe, json } = fieldToSql(expr.field);
+      // S2.17：可选标量函数包裹左操作数（lower/upper/length/round）。
+      const lhs = expr.fn ? scalarFnSql(expr.fn, fe, json) : fe;
       // op 取值受 CompareOp 类型约束（= != < > <= >=），均为合法 SQL 比较符。
-      return { sql: `(${fe} ${expr.op as CompareOp} ?)`, params: [expr.value] };
+      return { sql: `(${lhs} ${expr.op as CompareOp} ?)`, params: [expr.value] };
+    }
+    case "isnull": {
+      // S2.15：= null → IS NULL；!= null → IS NOT NULL（null 不参数化）。
+      const { expr: fe } = fieldToSql(expr.field);
+      return { sql: `(${fe} IS ${expr.negated ? "NOT " : ""}NULL)`, params: [] };
     }
     case "call":
       return compileCall(expr);
   }
+}
+
+/** 转义 LIKE 通配符（`%` `_` 与转义符 `\` 自身），配合 ` ESCAPE '\'` 子句做字面匹配（S2.9）。 */
+function escapeLike(s: string): string {
+  return s.replace(/[\\%_]/g, (c) => `\\${c}`);
 }
 
 /** 编译函数调用（contains/icontains/startswith/endswith/regexmatch）。 */
@@ -136,6 +164,13 @@ function compileCall(expr: Extract<WhereExpr, { kind: "call" }>): {
     if (field === "file.tags") {
       // 标签 contains 走前缀语义：area 命中 area 与 area/work（与 FROM #tag 一致）。
       const tag = arg.replace(/^#/, "");
+      // S2.10：icontains 对标签大小写不敏感；contains 保持精确（前缀）匹配。
+      if (fn === "icontains") {
+        return {
+          sql: "EXISTS (SELECT 1 FROM tags t WHERE t.file_path = f.path AND (LOWER(t.tag) = LOWER(?) OR LOWER(t.tag) LIKE LOWER(?)))",
+          params: [tag, `${tag}/%`],
+        };
+      }
       return {
         sql: "EXISTS (SELECT 1 FROM tags t WHERE t.file_path = f.path AND (t.tag = ? OR t.tag LIKE ?))",
         params: [tag, `${tag}/%`],
@@ -154,13 +189,18 @@ function compileCall(expr: Extract<WhereExpr, { kind: "call" }>): {
       };
     }
     const { expr: fe } = fieldToSql(field);
-    if (fn === "icontains") return { sql: `(LOWER(${fe}) LIKE LOWER(?))`, params: [`%${arg}%`] };
-    return { sql: `(${fe} LIKE ?)`, params: [`%${arg}%`] };
+    const like = escapeLike(arg);
+    if (fn === "icontains") {
+      return { sql: `(LOWER(${fe}) LIKE LOWER(?) ESCAPE '\\')`, params: [`%${like}%`] };
+    }
+    return { sql: `(${fe} LIKE ? ESCAPE '\\')`, params: [`%${like}%`] };
   }
 
   const { expr: fe } = fieldToSql(field);
-  if (fn === "startswith") return { sql: `(${fe} LIKE ?)`, params: [`${arg}%`] };
-  if (fn === "endswith") return { sql: `(${fe} LIKE ?)`, params: [`%${arg}`] };
+  if (fn === "startswith") {
+    return { sql: `(${fe} LIKE ? ESCAPE '\\')`, params: [`${escapeLike(arg)}%`] };
+  }
+  if (fn === "endswith") return { sql: `(${fe} LIKE ? ESCAPE '\\')`, params: [`%${escapeLike(arg)}`] };
   throw new Error(`不支持的函数: ${fn as string}`);
 }
 
@@ -168,6 +208,26 @@ function compileCall(expr: Extract<WhereExpr, { kind: "call" }>): {
  * 将 DQL AST 编译为参数化 SQL（防注入，全部走占位符绑定）。
  *
  * @param query - 解析后的 DQL 结构
+ *
+ * @behavior
+ * Given 任意携带用户输入值的查询
+ * When 编译
+ * Then 用户输入一律绑定到 ? 占位符，仅白名单校验过的 frontmatter 字段名内联（无注入面）
+ *
+ * @behavior
+ * Given FROM #a（或 contains(file.tags,"a")）
+ * When 编译
+ * Then 生成前缀匹配，命中 #a 与嵌套 #a/b
+ *
+ * @behavior
+ * Given SORT 落在聚合 JSON 列、FLATTEN 用于非数组字段、或引用未知字段
+ * When 编译
+ * Then 抛出 DqlSyntaxError，而非产出无意义顺序或静默忽略
+ *
+ * @behavior
+ * Given TABLE 默认起头的 file.name 与显式字段重复
+ * When 编译
+ * Then SELECT 列按字段名去重，不产出重复列
  */
 export function generateSql(query: DqlQuery): CompiledSql {
   const whereSql: string[] = [];
@@ -197,27 +257,85 @@ export function generateSql(query: DqlQuery): CompiledSql {
     params.push(...w.params);
   }
 
+  // S2.21 TASK：行=任务（tasks JOIN files），FROM/WHERE 复用文件级过滤。task 字段级过滤为后续。
+  if (query.type === "TASK") {
+    let tsql =
+      `SELECT k.text AS ${quoteAlias("task.text")}, k.status AS ${quoteAlias("task.status")}, ` +
+      `k.due_date AS ${quoteAlias("task.due")}, f.path AS ${quoteAlias("file.path")} ` +
+      "FROM tasks k JOIN files f ON k.file_path = f.path";
+    if (whereSql.length) tsql += ` WHERE ${whereSql.join(" AND ")}`;
+    if (query.limit !== undefined) {
+      tsql += " LIMIT ?";
+      params.push(query.limit);
+    }
+    const taskCols: ColumnSpec[] = [
+      { name: "task.text", json: false },
+      { name: "task.status", json: false },
+      { name: "task.due", json: false },
+      { name: "file.path", json: false },
+    ];
+    return { sql: tsql, params, columns: taskCols, type: "TASK" };
+  }
+
   // SELECT 列：LIST 固定 file.name/file.path；TABLE 以 file.name 起头再接请求字段。
   const columns: ColumnSpec[] = [];
   const selectParts: string[] = [];
+  const seen = new Set<string>();
   const addCol = (name: string): void => {
+    // S2.11：列去重——TABLE 默认起头 file.name 与显式字段、重复字段不产生重复列。
+    if (seen.has(name)) return;
+    seen.add(name);
     const { expr, json } = fieldToSql(name);
     columns.push({ name, json });
     selectParts.push(`${expr} AS ${quoteAlias(name)}`);
   };
-  if (query.type === "LIST") {
-    addCol("file.name");
-    addCol("file.path");
-  } else {
-    addCol("file.name");
-    for (const f of query.fields) addCol(f);
+
+  // S2.19 FLATTEN：FROM 追加 json_each 交叉展开数组字段为多行（每元素一行）。
+  let fromClause = "FROM files f";
+  if (query.flatten) {
+    const { expr: fexpr, json } = fieldToSql(query.flatten.field);
+    if (!json) throw new DqlSyntaxError(`FLATTEN 仅适用于数组字段: ${query.flatten.field}`, 0);
+    fromClause += `, json_each(${fexpr}) AS _flat`;
   }
 
-  let sql = `SELECT ${selectParts.join(", ")} FROM files f`;
+  // S2.18 GROUP BY：分组键 + 该组文件聚合(rows)；否则常规 LIST/TABLE 列（含 S2.20 WITHOUT ID）。
+  let groupBySql = "";
+  if (query.groupBy) {
+    const { expr: gexpr } = fieldToSql(query.groupBy.expr);
+    columns.push({ name: query.groupBy.expr, json: false });
+    selectParts.push(`${gexpr} AS ${quoteAlias(query.groupBy.expr)}`);
+    columns.push({ name: "rows", json: true });
+    selectParts.push(`json_group_array(DISTINCT f.path) AS ${quoteAlias("rows")}`);
+    groupBySql = ` GROUP BY ${gexpr}`;
+  } else {
+    if (query.type === "LIST") {
+      if (!query.withoutId) addCol("file.name");
+      addCol("file.path");
+    } else {
+      if (!query.withoutId) addCol("file.name");
+      for (const f of query.fields) addCol(f);
+    }
+    // FLATTEN 展开值作为该字段的单值列（覆盖原聚合语义，每行一个元素）。
+    if (query.flatten) {
+      columns.push({ name: query.flatten.field, json: false });
+      selectParts.push(`_flat.value AS ${quoteAlias(query.flatten.field)}`);
+    }
+  }
+
+  let sql = `SELECT ${selectParts.join(", ")} ${fromClause}`;
   if (whereSql.length) sql += ` WHERE ${whereSql.join(" AND ")}`;
-  if (query.sort) {
-    const { expr } = fieldToSql(query.sort.field);
-    sql += ` ORDER BY ${expr} ${query.sort.dir}`;
+  sql += groupBySql;
+  // 多键排序：按 AST 数组顺序拼 ORDER BY（现解析仅产单键，结构已支持多键，见 S2.14）。
+  if (query.sort && query.sort.length > 0) {
+    const orderBy = query.sort
+      .map((s) => {
+        const { expr, json } = fieldToSql(s.field);
+        // S2.13：聚合 JSON 列（tags/inlinks/outlinks/tasks）不可排序，报错而非产出无意义顺序。
+        if (json) throw new DqlSyntaxError(`不能对聚合列排序: ${s.field}`, 0);
+        return `${expr} ${s.dir}`;
+      })
+      .join(", ");
+    sql += ` ORDER BY ${orderBy}`;
   }
   if (query.limit !== undefined) {
     sql += " LIMIT ?";
