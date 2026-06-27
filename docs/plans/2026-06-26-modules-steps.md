@@ -107,10 +107,10 @@
   - 验收：拼写近似（wikilnk/callot/frontmater）模糊命中；垃圾串仍空；空目录兜底、现有 skill 测试不回归。
   - 证据：`tests/skill.test.ts`（11 例，新增 4）；全量 144 测试 / typecheck / lint / build 全绿。前置：阶段 0。
 
-- [ ] **M4.2 YAML 用 `yaml` 包（C4/C5，red→green）**
-  - 动作：config 解析改 `yaml.parse`（修 `---` 吞掉 C4）；CLI 输出改 `yaml.stringify`（修键未转义 C5），删手写序列化。
-  - 验收：以 `---` 开头/含特殊字符键值的用例通过。
-  - 证据：`pnpm test tests/config.test.ts`。前置：阶段 0。
+- [x] **M4.2 YAML 用 `yaml` 包（C4/C5，red→green）** ✅ 2026-06-28
+  - 动作：config 解析改 `yaml.parse`（修 `---` 吞掉 C4）；输出格式化抽到 `src/format.ts` 用 `yaml.stringify`（修键未转义 C5），删 cli.ts 手写 toYaml/yamlScalar/isContainer。gray-matter 仅 parser 仍用，保留依赖。
+  - 验收：以 `---` 开头的 config 不丢键；含 `:`/空格/`#` 的键值往返一致；CLI parse --format yaml 冒烟 OK。
+  - 证据：`tests/config.test.ts`（+2 C4）、`tests/format.test.ts`（+4 C5/往返）；全量 150 测试全绿。前置：阶段 0。
 
 - [ ] **M4.3 config 换 cosmiconfig（L4，red→green）**
   - 动作：用 cosmiconfig 替自建路径搜索；保留 flag>项目>全局>默认；补全局配置链测试；键白名单保留。

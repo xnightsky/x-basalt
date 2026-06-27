@@ -58,10 +58,10 @@
   - [ ] **S3.4 kysely(可选) → S3.5 FTS5(可选)**（阶段 3 剩余可选项）
 - [ ] **阶段 4** skill 召回 Fuse.js + CLI/config 收编（yaml/cosmiconfig）
   - [x] **M4.1 skill 召回换 Fuse.js** ✅ 2026-06-28（模糊容错 + 相关性排序替朴素子串；阈值 0.4 不放水；name 权重>trigger；内置兜底不变）
-  - [ ] **M4.2 YAML 换 `yaml` 包**（下一步：config 解析 `yaml.parse` 修 `---` 吞掉、CLI 输出 `yaml.stringify` 修键转义，删手写序列化）
-  - [ ] M4.3 config 换 cosmiconfig → M4.4 新建 `tests/cli.test.ts` 端到端
+  - [x] **M4.2 YAML 换 `yaml` 包** ✅ 2026-06-28（config 解析换 `yaml.parse` 修 `---` 吞掉 C4；CLI 输出抽到 `src/format.ts` 用 `yaml.stringify` 修键不转义 C5；删 cli 手写 toYaml；gray-matter 仅 parser 还用）
+  - [ ] **M4.3 config 换 cosmiconfig**（下一步：替自建上溯搜索，保留 flag>项目>全局>默认 + 键白名单）→ M4.4 新建 `tests/cli.test.ts` 端到端
 - [ ] **阶段 5** 收口与发布
 
-> 当前全量 **144 测试 / typecheck / lint / build 全绿**。
+> 当前全量 **150 测试 / typecheck / lint / build 全绿**。
 > 阶段依赖：S0 → {S1, S2, S3, S4 可并行起步}；S2(DQL) 是关键路径与最大投入。
 > 阶段 1–5 子步以 `docs/plans/` 细化清单为准；本文件只记录阶段级进度与当前停点。

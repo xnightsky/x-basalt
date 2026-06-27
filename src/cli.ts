@@ -3,6 +3,7 @@ import { exec } from "node:child_process";
 import { readFileSync } from "node:fs";
 import { Command } from "commander";
 import { loadConfig } from "./config.js";
+import { emit } from "./format.js";
 import { VaultIndexer } from "./indexer/index.js";
 import { VaultParser } from "./parser/index.js";
 import { DataviewEngine } from "./query/index.js";
@@ -12,56 +13,6 @@ import { SkillRecall } from "./skill/index.js";
 //
 // 上游：终端用户 / pnpm cli；下游：装配 parser / indexer / query / skill 四层库能力。
 // 本文件只做参数装配与输出格式化，不内联业务逻辑（逻辑在各层并各有单测）。
-
-/** 是否为可继续展开的容器（数组或纯对象）；Date 等内置对象按标量处理。 */
-function isContainer(v: unknown): v is Record<string, unknown> | unknown[] {
-  return v !== null && typeof v === "object" && !(v instanceof Date);
-}
-
-/** 标量 → YAML 字面量：字符串走 JSON 引号（合法 YAML 双引号标量），其余裸输出。 */
-function yamlScalar(v: unknown): string {
-  if (v === null || v === undefined) return "null";
-  if (typeof v === "number" || typeof v === "boolean") return String(v);
-  if (typeof v === "string") return JSON.stringify(v);
-  // Date（frontmatter 日期会被 YAML 解析为 Date）按 ISO 字符串输出，与索引内口径一致（§3.3#3）。
-  if (v instanceof Date) return JSON.stringify(v.toISOString());
-  return JSON.stringify(String(v));
-}
-
-/** 极简 YAML 块序列化（仅覆盖 parse 输出这类 JSON 形态：对象/数组/标量）。 */
-function toYaml(value: unknown, indent = 0): string {
-  const pad = "  ".repeat(indent);
-  if (Array.isArray(value)) {
-    if (value.length === 0) return `${pad}[]`;
-    return value
-      .map((item) =>
-        isContainer(item)
-          ? `${pad}-\n${toYaml(item, indent + 1)}` // 对象/数组项：- 独占一行，正文缩进
-          : `${pad}- ${yamlScalar(item)}`,
-      )
-      .join("\n");
-  }
-  if (isContainer(value)) {
-    const entries = Object.entries(value);
-    if (entries.length === 0) return `${pad}{}`;
-    return entries
-      .map(([k, v]) => {
-        const nonEmpty =
-          isContainer(v) && (Array.isArray(v) ? v.length > 0 : Object.keys(v).length > 0);
-        if (nonEmpty) return `${pad}${k}:\n${toYaml(v, indent + 1)}`;
-        if (isContainer(v)) return `${pad}${k}: ${Array.isArray(v) ? "[]" : "{}"}`;
-        return `${pad}${k}: ${yamlScalar(v)}`;
-      })
-      .join("\n");
-  }
-  return `${pad}${yamlScalar(value)}`;
-}
-
-/** 按 --format 输出：json（默认，缩进 2）或 yaml。 */
-function emit(data: unknown, format = "json"): void {
-  if (format === "yaml") console.log(toYaml(data));
-  else console.log(JSON.stringify(data, null, 2));
-}
 
 // 启动时加载一次项目/全局配置；各命令以 `flag ?? config.X ?? 内置默认` 解析，免去重复传参。
 const config = loadConfig();

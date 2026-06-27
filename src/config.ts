@@ -1,15 +1,14 @@
-import matter from "gray-matter";
 import JSON5 from "json5";
 import { existsSync, readFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { dirname, join } from "node:path";
+import { parse as parseYaml } from "yaml";
 
 // === 自建实现: 项目/全局配置加载，给 CLI 选项提供默认值（免去每次重复 --db/--vault 等）===
 //
 // 上游：cli.ts 启动时加载一次；下游：各子命令以 `flag ?? config.X ?? 内置默认` 解析。
 // 不在 git 管理（项目配置已 gitignore）：相当于「本机/本项目该怎么跑」的记忆。
-// 格式：默认 YAML（.yaml/.yml），也支持 JSON5/JSON。YAML 复用 gray-matter（已是依赖）的引擎
-//       解析，故不新增 YAML 依赖。
+// 格式：默认 YAML（.yaml/.yml）走 `yaml` 包，也支持 JSON5/JSON（走 json5）。
 
 /** 配置项（全部可选，字符串）。键名与 CLI 概念对应。 */
 export interface BasaltConfig {
@@ -74,11 +73,13 @@ function pickConfig(obj: Record<string, unknown>): BasaltConfig {
   return out;
 }
 
-/** 按扩展名解析：.yaml/.yml 走 gray-matter（包成 frontmatter 取 data），其余走 JSON5（兼容 JSON）。 */
+/** 按扩展名解析：.yaml/.yml 走 `yaml` 包，其余走 JSON5（兼容 JSON）。 */
 function parseByExt(path: string, raw: string): Record<string, unknown> {
   if (path.endsWith(".yaml") || path.endsWith(".yml")) {
-    // 复用 gray-matter 的 YAML 引擎解析独立 YAML：包一层 --- 围栏即可，避免引入新的 YAML 依赖。
-    return matter(`---\n${raw}\n---\n`).data as Record<string, unknown>;
+    // 真正的 YAML 解析（M4.2）：直接 yaml.parse，不再用 gray-matter 包 `---` 围栏的 hack——
+    // 旧 hack 会把以 `---` 开头/含 `---` 的配置当 frontmatter 提前闭合而丢键（C4）。
+    // 空文件/纯注释解析为 null，归一化为 {}。
+    return (parseYaml(raw) ?? {}) as Record<string, unknown>;
   }
   return JSON5.parse(raw) as Record<string, unknown>;
 }

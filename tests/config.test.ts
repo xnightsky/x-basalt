@@ -68,6 +68,22 @@ test("向上逐级查找：子目录运行也能命中父目录配置", () => {
   assert.equal(loadConfig(nested).db, "./root.db");
 });
 
+test("C4 修复：以 --- 开头的 YAML 配置不被吞掉（真 yaml.parse，非 frontmatter hack）", () => {
+  const dir = freshDir();
+  // YAML 文件常以文档分隔符 --- 起头；旧 hack 把 raw 包进 ---\n...\n--- 当 frontmatter，
+  // 会被这行 --- 提前闭合而丢光全部键。yaml.parse 直接解析则正常。
+  writeFileSync(join(dir, ".x-basalt.yaml"), "---\ndb: ./doc.db\nvault: ./v\n");
+  const cfg = loadConfig(dir);
+  assert.equal(cfg.db, "./doc.db");
+  assert.equal(cfg.vault, "./v");
+});
+
+test("C4 修复：含 : 与 # 的引号值正确解析", () => {
+  const dir = freshDir();
+  writeFileSync(join(dir, ".x-basalt.yaml"), 'onChange: "echo {file}: done #now"\n');
+  assert.equal(loadConfig(dir).onChange, "echo {file}: done #now");
+});
+
 test("畸形配置降级为不抛错（返回对象）", () => {
   const dir = freshDir();
   writeFileSync(join(dir, ".x-basalt.json5"), "{ db: ");
