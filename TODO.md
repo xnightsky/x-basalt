@@ -52,10 +52,13 @@
     - schema 加 `files.path_key` + `links.target_path_key`（bare 链接为 NULL）；indexer 落库时计算。
     - query inlinks/outlinks/`FROM [[..]]` 路径感知：qualified（含 `/`）按 `path_key` 精确、bare 按 `name_key` 回退。
     - 新增 `tests/inlinks-pathaware.test.ts`（同名异目录不串味，4 例）；`generateSql` 补路径感知 `@behavior`。
-  - [ ] **S3.3 大库流式 rebuild**（下一步）→ S3.4 kysely(可选) → S3.5 FTS5(可选)
+  - [x] **S3.3 大库流式 rebuild** ✅ 2026-06-28（手动 BEGIN/COMMIT 分批读写，内存 O(批) 防 OOM；并发上限=批大小）
+    - rebuild 不再一次性把全部 payload 留内存；批内并发读盘、批间串行；整体失败 ROLLBACK 保原子。
+    - 新增 `tests/rebuild-streaming.test.ts`（250 文件跨批，行数/反链精确 + 重复 rebuild 不累加，3 例）。
+  - [ ] **S3.4 kysely(可选) → S3.5 FTS5(可选)**（阶段 3 剩余可选项）
 - [ ] **阶段 4** skill 召回 Fuse.js + CLI/config 收编（yaml/cosmiconfig）
 - [ ] **阶段 5** 收口与发布
 
-> 当前全量 **137 测试 / typecheck / lint / build 全绿**。
+> 当前全量 **140 测试 / typecheck / lint / build 全绿**。
 > 阶段依赖：S0 → {S1, S2, S3, S4 可并行起步}；S2(DQL) 是关键路径与最大投入。
 > 阶段 1–5 子步以 `docs/plans/` 细化清单为准；本文件只记录阶段级进度与当前停点。

@@ -158,10 +158,10 @@
   - 证据：`tests/inlinks-pathaware.test.ts`（4 例，红→绿）；全量 137 测试 / typecheck / lint / build 全绿。
   - 前置：S3.1。
 
-- [ ] **S3.3 大库稳健性（rebuild 流式 + 并发 I/O）**
-  - 动作：rebuild 改为分批/流式写事务（I3，避免全量内存）；文件读取加并发上限。
-  - 验收：用较大 fixture（或生成数千文件临时 vault）rebuild 不 OOM；行数正确。
-  - 证据：脚本生成临时大 vault → `pnpm cli -- index <tmp>` 成功；行数断言。
+- [x] **S3.3 大库稳健性（rebuild 流式 + 并发 I/O）** ✅ 2026-06-28
+  - 动作：rebuild 改手动 BEGIN/COMMIT 分批读写（I3，内存 O(批) 而非 O(库)）；批内并发读盘（并发上限=批大小 100）。
+  - 验收：250 文件临时 vault 跨多批 rebuild，files/links/tags/tasks 行数与反链精确；重复 rebuild 不累加。
+  - 证据：`tests/rebuild-streaming.test.ts`（3 例）；全量 140 测试 / typecheck / lint / build 全绿。
   - 前置：S3.2。
 
 - [ ] **S3.4 引入 kysely 收编 SQL 生成（可选但推荐）**

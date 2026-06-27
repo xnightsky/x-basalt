@@ -71,6 +71,10 @@ interface BlockRow {
   lineNumber: number;
 }
 
+// rebuild 流式分批大小（S3.3）：单批并发读盘后立即落库，使内存占用 O(批) 而非 O(整库)，
+// 兼作文件读取并发上限（批内 Promise.all 并行、批间串行），避免大库 OOM 与 fd 耗尽。
+const REBUILD_BATCH = 100;
+
 // === Obsidian 规范来源: task 文本中的到期日按 YYYY-MM-DD 提取（调研 §2.6）===
 const DUE_DATE_RE = /\b(\d{4}-\d{2}-\d{2})\b/;
 // 块锚点定义所在行的行尾 ^id，截取块内容时剥离。
@@ -170,26 +174,54 @@ export class VaultIndexer {
     };
   }
 
-  /** 全量扫描 Vault 下所有 `.md` 重建索引。 */
+  /**
+   * 全量扫描 Vault 下所有 `.md` 重建索引（流式分批，S3.3）。
+   *
+   * 手动 BEGIN/COMMIT 包裹「先清空再分批写」，整体失败 ROLLBACK，保持「无半成品索引」原子性；
+   * 每批并发读盘后立即落库、随即可回收，内存占用 O(批) 而非 O(整库)，避免大库 OOM。
+   *
+   * 约定：rebuild 期间独占该 db 连接（CLI index 一次性调用 / watch 前先 rebuild），
+   * 故跨 await 持有事务安全——其间不会有 update/remove 在同连接上插入（否则会落进本事务）。
+   *
+   * @behavior
+   * Given 文件数远超单批的大库
+   * When rebuild
+   * Then 分批读写，内存不随库规模线性膨胀，且 files/links/tags/tasks 行数与逐文件全量等价
+   *
+   * @behavior
+   * Given 重建中途某文件读取/解析抛错
+   * When rebuild
+   * Then 跳过该文件并 warn，其余照常入库（单文件失败不中断全量）
+   */
   async rebuild(): Promise<void> {
     const files = await collectMarkdownFiles(this.vaultPath);
-    const payloads: FilePayload[] = [];
-    for (const abs of files) {
-      try {
-        payloads.push(await this.buildPayload(abs));
-      } catch (err) {
-        // 设计 §5：单文件失败跳过并 warn，不中断全量重建。
-        console.warn(`⚠ 跳过无法索引的文件 ${abs}：${(err as Error).message}`);
-      }
-    }
-    // 全量重建在单事务内先清空再写入：失败整体回滚，避免半成品索引。
-    const tx = this.db.transaction((items: FilePayload[]) => {
+    // 手动事务跨 await：better-sqlite3 的 db.transaction() 仅接同步函数，无法在其中 await 读盘，
+    // 故用裸 BEGIN/COMMIT/ROLLBACK 在分批异步读取之间保持同一事务（原子 + 流式）。
+    this.db.exec("BEGIN");
+    try {
       this.db.exec(
         "DELETE FROM files; DELETE FROM links; DELETE FROM tags; DELETE FROM tasks; DELETE FROM blocks;",
       );
-      for (const p of items) this.insertPayload(p);
-    });
-    tx(payloads);
+      for (let i = 0; i < files.length; i += REBUILD_BATCH) {
+        const batch = files.slice(i, i + REBUILD_BATCH);
+        // 批内并发读盘（并发上限 = REBUILD_BATCH）；单文件失败降级为 null，不拖垮整批。
+        const payloads = await Promise.all(
+          batch.map((abs) =>
+            this.buildPayload(abs).catch((err) => {
+              // 设计 §5：单文件失败跳过并 warn，不中断全量重建。
+              console.warn(`⚠ 跳过无法索引的文件 ${abs}：${(err as Error).message}`);
+              return null;
+            }),
+          ),
+        );
+        for (const p of payloads) if (p) this.insertPayload(p);
+      }
+      this.db.exec("COMMIT");
+    } catch (err) {
+      // 任意批写入异常：整体回滚，库回到 rebuild 前状态（无半成品）。
+      this.db.exec("ROLLBACK");
+      throw err;
+    }
   }
 
   /**
