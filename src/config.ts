@@ -1,14 +1,16 @@
+import { cosmiconfigSync, type PublicExplorerSync } from "cosmiconfig";
 import JSON5 from "json5";
-import { existsSync, readFileSync } from "node:fs";
+import { existsSync } from "node:fs";
 import { homedir } from "node:os";
-import { dirname, join } from "node:path";
+import { join } from "node:path";
 import { parse as parseYaml } from "yaml";
 
 // === 自建实现: 项目/全局配置加载，给 CLI 选项提供默认值（免去每次重复 --db/--vault 等）===
 //
 // 上游：cli.ts 启动时加载一次；下游：各子命令以 `flag ?? config.X ?? 内置默认` 解析。
 // 不在 git 管理（项目配置已 gitignore）：相当于「本机/本项目该怎么跑」的记忆。
-// 格式：默认 YAML（.yaml/.yml）走 `yaml` 包，也支持 JSON5/JSON（走 json5）。
+// 路径搜索用 cosmiconfig（M4.3）：项目配置从 cwd 向上找 searchPlaces；全局固定 <home>/.x-basalt/config.*。
+// 解析：yaml 走 `yaml` 包、json5/json 走 JSON5。仅挑出已知字符串键；解析失败降级为 {}（warn 不抛错）。
 
 /** 配置项（全部可选，字符串）。键名与 CLI 概念对应。 */
 export interface BasaltConfig {
@@ -24,44 +26,31 @@ export interface BasaltConfig {
   onChange?: string;
 }
 
-/** 项目隐藏目录名：默认把配置/示例/索引等项目本地物放这里（类比 .obsidian/）。 */
-const PROJECT_DIR = ".x-basalt";
-/** 全局配置基名（拼接扩展名）。全局本就放隐藏目录 ~/.x-basalt/。 */
-const GLOBAL_BASENAME = join(homedir(), ".x-basalt", "config");
-/** 候选扩展名优先级：默认 yaml，其次 yml，再 json5/json（同目录多份时取靠前者）。 */
-const EXTS = [".yaml", ".yml", ".json5", ".json"];
 /** 允许的字符串键（其余键忽略，避免误用）。 */
 const KEYS = ["db", "vault", "skillPath", "format", "onChange"] as const;
 
-/** 给定无扩展名基路径，按 EXTS 优先级返回首个存在的文件。 */
-function firstExisting(baseNoExt: string): string | undefined {
-  for (const ext of EXTS) {
-    const p = baseNoExt + ext;
-    if (existsSync(p)) return p;
-  }
-  return undefined;
-}
+// cosmiconfig 搜索位置（按优先级）：隐藏目录形式优先于扁平形式；同形式内 yaml > yml > json5 > json。
+const SEARCH_PLACES = [
+  ".x-basalt/config.yaml",
+  ".x-basalt/config.yml",
+  ".x-basalt/config.json5",
+  ".x-basalt/config.json",
+  ".x-basalt.yaml",
+  ".x-basalt.yml",
+  ".x-basalt.json5",
+  ".x-basalt.json",
+];
 
-/**
- * 单个目录层级内的配置候选（按优先级）：
- * 1. 隐藏目录形式 `.x-basalt/config.*`（默认/推荐）
- * 2. 扁平文件形式 `.x-basalt.*`（也支持，便于轻量项目）
- */
-function configAtLevel(dir: string): string | undefined {
-  return firstExisting(join(dir, PROJECT_DIR, "config")) ?? firstExisting(join(dir, PROJECT_DIR));
-}
+// 自定义 loader：yaml 走 `yaml` 包，json5/json 走 JSON5（容注释/尾逗号）。cosmiconfig 默认不识别 .json5。
+const LOADERS = {
+  ".yaml": (_p: string, c: string) => parseYaml(c),
+  ".yml": (_p: string, c: string) => parseYaml(c),
+  ".json5": (_p: string, c: string) => JSON5.parse(c),
+  ".json": (_p: string, c: string) => JSON5.parse(c),
+};
 
-/** 从 startDir 向上逐级查找项目配置，返回首个命中（含文件系统根）。 */
-function findProjectConfig(startDir: string): string | undefined {
-  let dir = startDir;
-  // 未到根（dirname(root) === root）时持续上溯；用相等判定收敛，避免 while(true) 常量条件。
-  while (dir !== dirname(dir)) {
-    const hit = configAtLevel(dir);
-    if (hit) return hit;
-    dir = dirname(dir);
-  }
-  return configAtLevel(dir);
-}
+/** 全局配置候选扩展名（优先级同 SEARCH_PLACES 同形式内顺序）。 */
+const GLOBAL_EXTS = ["yaml", "yml", "json5", "json"];
 
 /** 仅挑出已知的字符串键，忽略未知键与非字符串值。 */
 function pickConfig(obj: Record<string, unknown>): BasaltConfig {
@@ -73,37 +62,68 @@ function pickConfig(obj: Record<string, unknown>): BasaltConfig {
   return out;
 }
 
-/** 按扩展名解析：.yaml/.yml 走 `yaml` 包，其余走 JSON5（兼容 JSON）。 */
-function parseByExt(path: string, raw: string): Record<string, unknown> {
-  if (path.endsWith(".yaml") || path.endsWith(".yml")) {
-    // 真正的 YAML 解析（M4.2）：直接 yaml.parse，不再用 gray-matter 包 `---` 围栏的 hack——
-    // 旧 hack 会把以 `---` 开头/含 `---` 的配置当 frontmatter 提前闭合而丢键（C4）。
-    // 空文件/纯注释解析为 null，归一化为 {}。
-    return (parseYaml(raw) ?? {}) as Record<string, unknown>;
-  }
-  return JSON5.parse(raw) as Record<string, unknown>;
+/** 构造一个 cosmiconfig 同步实例（自定义 searchPlaces + loaders；project 策略向上逐级查找）。 */
+function makeExplorer(): PublicExplorerSync {
+  return cosmiconfigSync("x-basalt", {
+    searchPlaces: SEARCH_PLACES,
+    loaders: LOADERS,
+    searchStrategy: "project",
+  });
 }
 
-/** 读单个配置文件；无路径→{}；解析失败→warn 并返回 {}（降级，不中断 CLI）。 */
-function readConfigFile(path: string | undefined): BasaltConfig {
-  if (!path) return {};
+/** 项目配置：从 cwd 向上搜索 SEARCH_PLACES；解析失败降级为 {}（warn 不抛错）。 */
+function loadProject(explorer: PublicExplorerSync, cwd: string): BasaltConfig {
   try {
-    return pickConfig(parseByExt(path, readFileSync(path, "utf8")));
+    const r = explorer.search(cwd);
+    return pickConfig((r?.config ?? {}) as Record<string, unknown>);
   } catch (err) {
-    console.warn(`⚠ 跳过无法解析的配置文件 ${path}：${(err as Error).message}`);
+    console.warn(`⚠ 跳过无法解析的项目配置（从 ${cwd} 向上）：${(err as Error).message}`);
     return {};
   }
 }
 
+/** 全局配置：仅 <globalHome>/.x-basalt/config.{ext}（不向上走）；解析失败降级为 {}。 */
+function loadGlobal(explorer: PublicExplorerSync, globalHome: string): BasaltConfig {
+  for (const ext of GLOBAL_EXTS) {
+    const p = join(globalHome, ".x-basalt", `config.${ext}`);
+    if (!existsSync(p)) continue;
+    try {
+      const r = explorer.load(p);
+      return pickConfig((r?.config ?? {}) as Record<string, unknown>);
+    } catch (err) {
+      console.warn(`⚠ 跳过无法解析的配置文件 ${p}：${(err as Error).message}`);
+      return {};
+    }
+  }
+  return {};
+}
+
 /**
- * 加载并合并配置：项目配置（cwd 向上找 `.x-basalt/config.{yaml,...}`，回退扁平
- * `.x-basalt.{yaml,...}`）覆盖全局配置（`~/.x-basalt/config.{yaml,...}`）。
- * 仅做「文件层」合并；与 CLI flag 的优先级（flag 最高）由调用方 `flag ?? config.X` 处理。
+ * 加载并合并配置：项目配置（cwd 向上找 `.x-basalt/config.{yaml,...}`，回退扁平 `.x-basalt.{...}`）
+ * 覆盖全局配置（`<globalHome>/.x-basalt/config.{...}`）。优先级与 CLI flag（flag 最高）
+ * 由调用方 `flag ?? config.X` 处理；本函数只做「文件层」合并。
  *
  * @param cwd - 起始目录，默认 process.cwd()
+ * @param globalHome - 全局配置所在 home，默认 homedir()（测试可注入隔离）
+ *
+ * @behavior
+ * Given 项目目录无配置、全局 <home>/.x-basalt/config 存在
+ * When 加载
+ * Then 回退使用全局配置
+ *
+ * @behavior
+ * Given 项目与全局都有配置且键重叠
+ * When 加载
+ * Then 项目键覆盖全局，全局独有键保留
+ *
+ * @behavior
+ * Given 命中的配置文件畸形（解析抛错）
+ * When 加载
+ * Then warn 并降级为空配置，不中断 CLI
  */
-export function loadConfig(cwd: string = process.cwd()): BasaltConfig {
-  const globalCfg = readConfigFile(firstExisting(GLOBAL_BASENAME));
-  const projectCfg = readConfigFile(findProjectConfig(cwd));
+export function loadConfig(cwd: string = process.cwd(), globalHome: string = homedir()): BasaltConfig {
+  const explorer = makeExplorer();
+  const globalCfg = loadGlobal(explorer, globalHome);
+  const projectCfg = loadProject(explorer, cwd);
   return { ...globalCfg, ...projectCfg }; // 项目覆盖全局
 }

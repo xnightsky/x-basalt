@@ -112,10 +112,10 @@
   - 验收：以 `---` 开头的 config 不丢键；含 `:`/空格/`#` 的键值往返一致；CLI parse --format yaml 冒烟 OK。
   - 证据：`tests/config.test.ts`（+2 C4）、`tests/format.test.ts`（+4 C5/往返）；全量 150 测试全绿。前置：阶段 0。
 
-- [ ] **M4.3 config 换 cosmiconfig（L4，red→green）**
-  - 动作：用 cosmiconfig 替自建路径搜索；保留 flag>项目>全局>默认；补全局配置链测试；键白名单保留。
-  - 验收：优先级与向上查找、全局链用例通过；删去自建 config 大半。
-  - 证据：`pnpm test tests/config.test.ts`。前置：M4.2。
+- [x] **M4.3 config 换 cosmiconfig（L4，red→green）** ✅ 2026-06-28
+  - 动作：用 cosmiconfig（`searchStrategy:'project'` + 自定义 searchPlaces/loaders）替自建上溯搜索（删 firstExisting/configAtLevel/findProjectConfig/readConfigFile/parseByExt）；保留项目>全局合并 + 键白名单 + 解析失败降级；loadConfig 加可注入 globalHome 参数便于测全局链。
+  - 验收：上溯查找、同目录多格式优先、隐藏目录优先、全局回退+项目覆盖、畸形降级用例全通过。
+  - 证据：`tests/config.test.ts`（+2 全局链，共 11 例）；全量 152 测试全绿。前置：M4.2。
 
 - [ ] **M4.4 新建 CLI 端到端测试（C1，red→green）**
   - 动作：新建 `tests/cli.test.ts` 覆盖五命令主路径 + 退出码 + flag/config 优先级链。

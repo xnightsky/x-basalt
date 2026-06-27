@@ -5,6 +5,15 @@ import { join } from "node:path";
 import { after, test } from "node:test";
 import { loadConfig } from "../src/config.js";
 
+/** 在临时 home 下写 ~/.x-basalt/config.<ext> 风格的全局配置，返回该 home 路径。 */
+function writeGlobal(content: string, ext = "yaml"): string {
+  const home = mkdtempSync(join(tmpdir(), "x-basalt-home-"));
+  tmpDirs.push(home);
+  mkdirSync(join(home, ".x-basalt"), { recursive: true });
+  writeFileSync(join(home, ".x-basalt", `config.${ext}`), content);
+  return home;
+}
+
 const tmpDirs: string[] = [];
 function freshDir(): string {
   const dir = mkdtempSync(join(tmpdir(), "x-basalt-cfg-"));
@@ -82,6 +91,23 @@ test("C4 修复：含 : 与 # 的引号值正确解析", () => {
   const dir = freshDir();
   writeFileSync(join(dir, ".x-basalt.yaml"), 'onChange: "echo {file}: done #now"\n');
   assert.equal(loadConfig(dir).onChange, "echo {file}: done #now");
+});
+
+test("M4.3 全局配置链：无项目配置时回退到全局 ~/.x-basalt/config", () => {
+  const home = writeGlobal("db: ./global.db\nformat: yaml\n");
+  const projDir = freshDir(); // 该项目目录无任何配置
+  const cfg = loadConfig(projDir, home);
+  assert.equal(cfg.db, "./global.db");
+  assert.equal(cfg.format, "yaml");
+});
+
+test("M4.3 全局配置链：项目配置覆盖全局、全局独有键保留", () => {
+  const home = writeGlobal("db: ./global.db\nformat: yaml\n");
+  const projDir = freshDir();
+  writeFileSync(join(projDir, ".x-basalt.yaml"), "db: ./project.db\n");
+  const cfg = loadConfig(projDir, home);
+  assert.equal(cfg.db, "./project.db", "项目应覆盖全局 db");
+  assert.equal(cfg.format, "yaml", "全局独有键应保留");
 });
 
 test("畸形配置降级为不抛错（返回对象）", () => {
