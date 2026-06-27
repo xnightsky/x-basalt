@@ -56,13 +56,13 @@
     - rebuild 不再一次性把全部 payload 留内存；批内并发读盘、批间串行；整体失败 ROLLBACK 保原子。
     - 新增 `tests/rebuild-streaming.test.ts`（250 文件跨批，行数/反链精确 + 重复 rebuild 不累加，3 例）。
   - [ ] **S3.4 kysely(可选) → S3.5 FTS5(可选)**（阶段 3 剩余可选项）
-- [ ] **阶段 4** skill 召回 Fuse.js + CLI/config 收编（yaml/cosmiconfig）
-  - [x] **M4.1 skill 召回换 Fuse.js** ✅ 2026-06-28（模糊容错 + 相关性排序替朴素子串；阈值 0.4 不放水；name 权重>trigger；内置兜底不变）
-  - [x] **M4.2 YAML 换 `yaml` 包** ✅ 2026-06-28（config 解析换 `yaml.parse` 修 `---` 吞掉 C4；CLI 输出抽到 `src/format.ts` 用 `yaml.stringify` 修键不转义 C5；删 cli 手写 toYaml；gray-matter 仅 parser 还用）
-  - [x] **M4.3 config 换 cosmiconfig** ✅ 2026-06-28（自建上溯搜索 firstExisting/configAtLevel/findProjectConfig 全删，换 cosmiconfig `searchStrategy:project` + 自定义 searchPlaces/loaders；保留项目>全局合并 + 键白名单 + 降级；loadConfig 加可注入 globalHome 便于测全局链）
-  - [ ] **M4.4 新建 `tests/cli.test.ts` 端到端**（下一步：五命令主路径 + 退出码 + flag/config 优先级链 → 阶段4 收尾）
-- [ ] **阶段 5** 收口与发布
+- [x] **阶段 4 ✅ 全部完成 2026-06-28**：skill 召回 Fuse.js + CLI/config 收编（yaml/cosmiconfig）
+  - [x] **M4.1 skill 召回换 Fuse.js** ✅（模糊容错 + 相关性排序替朴素子串；阈值 0.4 不放水；name 权重>trigger；内置兜底不变）
+  - [x] **M4.2 YAML 换 `yaml` 包** ✅（config 解析换 `yaml.parse` 修 `---` 吞掉 C4；CLI 输出抽到 `src/format.ts` 用 `yaml.stringify` 修键不转义 C5；删 cli 手写 toYaml；gray-matter 仅 parser 还用）
+  - [x] **M4.3 config 换 cosmiconfig** ✅（自建上溯搜索 firstExisting/configAtLevel/findProjectConfig 全删，换 cosmiconfig `searchStrategy:project` + 自定义 searchPlaces/loaders；保留项目>全局合并 + 键白名单 + 降级；loadConfig 加可注入 globalHome 便于测全局链）
+  - [x] **M4.4 新建 `tests/cli.test.ts` 端到端** ✅（五命令主路径 + 退出码 + flag/config 优先级链；subprocess 跑 `tsx src/cli.ts`，tsx 解析为绝对 URL 避子进程 cwd 问题；11 例）
+- [ ] **阶段 5** 收口与发布（剩可选项 S3.4 kysely / S3.5 FTS5 / 阶段1 解析层组装[卡 S1.1 license]）
 
-> 当前全量 **152 测试 / typecheck / lint / build 全绿**。
+> 当前全量 **163 测试 / typecheck / lint / build 全绿**。
 > 阶段依赖：S0 → {S1, S2, S3, S4 可并行起步}；S2(DQL) 是关键路径与最大投入。
 > 阶段 1–5 子步以 `docs/plans/` 细化清单为准；本文件只记录阶段级进度与当前停点。
