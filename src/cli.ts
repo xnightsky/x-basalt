@@ -167,16 +167,35 @@ program
   .option("--rehash", "按内容对比检测变化（慢但稳），默认 mtime+size", false)
   .option("--dry-run", "只报告差异，不写库（供触发前预览）", false)
   .option("--json", "输出结构化差异报告（默认人读摘要）", false)
+  .option(
+    "--pipeline <name>",
+    "用配置 pipelines 段的声明式管道处理 scan 出的变更（替代默认仅 index）",
+  )
   .action(
     async (
       vault: string | undefined,
-      opts: { db?: string; rehash: boolean; dryRun: boolean; json: boolean },
+      opts: { db?: string; rehash: boolean; dryRun: boolean; json: boolean; pipeline?: string },
     ) => {
       const vaultPath = required(
         vault ?? config.vault,
         "需要 <vault> 参数或在配置文件中设置 vault",
       );
       const dbPath = opts.db ?? config.db ?? DEFAULT_DB;
+      // 管道模式：scan 源（FS↔DB diff）→ 声明式管道（替代默认仅 index 落库）。等价 `run <pipeline>` 默认源。
+      if (opts.pipeline) {
+        const pipeline = config.pipelines?.[opts.pipeline];
+        if (!pipeline) {
+          const known = Object.keys(config.pipelines ?? {}).join(", ") || "无";
+          throw new Error(`未知管道 "${opts.pipeline}"（配置 pipelines 段；已知：${known}）`);
+        }
+        const orch = new Orchestrator({ vaultPath, dbPath });
+        try {
+          reportRun(await orch.runScan(pipeline), opts.pipeline, opts.json);
+        } finally {
+          orch.close();
+        }
+        return;
+      }
       const indexer = new VaultIndexer({ vaultPath, dbPath });
       try {
         const report = await indexer.scan({ rehash: opts.rehash, dryRun: opts.dryRun });

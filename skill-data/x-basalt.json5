@@ -45,6 +45,15 @@
       examples: ["x-basalt index ./vault --db ./index.db"],
     },
     {
+      pattern: "scan <vault> [--db ./index.db] [--rehash] [--dry-run] [--json] [--pipeline <name>]",
+      description: "按需增量重索引（无需常驻 watch）：diff 文件系统 vs 库，只重扫新增/改动/删除文件，断点续扫，适合 cron/CI 触发。默认 mtime+size 判变化、--rehash 内容兜底、--dry-run 只报告不写库、--json 结构化差异。--pipeline 用配置 pipelines 段的声明式管道处理 scan 出的变更（替代默认仅 index 落库），一次性 scan 源编排，等价 run <pipeline> 不带 --where/--paths。",
+      examples: [
+        "x-basalt scan ./vault --dry-run",
+        "x-basalt scan ./vault --rehash --json",
+        "x-basalt scan ./vault --pipeline maintain",
+      ],
+    },
+    {
       pattern: "query <dql> --db <path> [--vault <path>]",
       description: "执行 DQL 子集 → 参数化 SQL → JSON { type, columns, rows }；聚合字段已解析为数组。--db 必填且只读打开；--vault 接受但不使用。文法：LIST|TABLE <fields> FROM (#tag|[[link]]|\"folder\") WHERE <cond> SORT <field> ASC|DESC LIMIT <n>。",
       examples: [

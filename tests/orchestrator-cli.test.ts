@@ -57,6 +57,22 @@ test("CO-G2 Given idx 管道 When run（scan 源）Then 落库并报告 total=1"
   }
 });
 
+test("CO-G2 Given scan --pipeline When 一次性 scan 源编排 Then 落库并报告", () => {
+  const { vault, baseDir, db } = setup(
+    "pipelines:\n  idx:\n    actions: [index]\n    dryRun: true\n",
+    { "a.md": "---\ntags: [pkm]\n---\nA\n" },
+  );
+  try {
+    const r = run(["scan", "--pipeline", "idx", vault, "--db", db, "--json"], {
+      X_BASALT_DIR: baseDir,
+    });
+    assert.equal(r.status, 0, r.stderr);
+    assert.equal(JSON.parse(r.stdout).total, 1);
+  } finally {
+    rmSync(vault, { recursive: true, force: true });
+  }
+});
+
 test("CO-G2 Given 未知管道 When run Then 报错退出码 1", () => {
   const { vault, baseDir } = setup("pipelines:\n  idx:\n    actions: [index]\n", {});
   try {

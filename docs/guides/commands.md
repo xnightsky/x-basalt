@@ -106,6 +106,7 @@ x-basalt scan [vault] [--db <path>] [--rehash] [--dry-run] [--json]
 | `--rehash` | `false` | 按文件内容 hash 判断变化（慢但稳）；默认用 mtime + size 快速判断 |
 | `--dry-run` | `false` | 仅报告差异，**不写库**（触发前预览用） |
 | `--json` | `false` | 输出结构化 JSON 报告；默认打印人读摘要 |
+| `--pipeline <name>` | — | 用配置 `pipelines` 段的声明式管道处理 scan 出的变更（替代默认仅 index 落库）：一次性 **scan 源编排**，等价 [`run <pipeline>`](#run--变更编排管道) 不带 `--where/--paths`；输出为管道报告（`total`/`changed`/`skipped`/`failed`），有失败退出码 `1` |
 
 **输出形态**
 
@@ -134,8 +135,10 @@ x-basalt scan [vault] [--db <path>] [--rehash] [--dry-run] [--json]
 x-basalt scan ./my-vault
 x-basalt scan ./my-vault --dry-run           # 预览差异，不写库
 x-basalt scan ./my-vault --rehash --json     # 精确内容对比，机器可读输出
+x-basalt scan ./my-vault --pipeline maintain # scan 出的变更跑声明式管道（一次性编排）
 ```
 
+> 三种「源」对称：`scan --pipeline`（一次性 diff 源）/ [`watch --pipeline`](#watch--常驻监听)（常驻事件源）/ [`run`](#run--变更编排管道)（默认 scan 源，`--where`/`--paths` 切手动源）——共享同一套管道语义。
 > mtime 模式 vs `--rehash` 的权衡、断点续扫、数据模型细节——见 [indexing-and-sync.md](indexing-and-sync.md)。
 
 ---
