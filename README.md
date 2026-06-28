@@ -33,7 +33,7 @@ npm link              # 全局安装：之后任意目录可用 x-basalt 命令
 x-basalt index ./my-vault                                   # 建索引（默认库 .x-basalt/index.db）
 x-basalt query "LIST FROM #project WHERE status = 'active' SORT file.mtime DESC LIMIT 10"
 x-basalt scan ./my-vault                                    # 之后增量重扫，只处理变化的
-x-basalt skill recall wikilink                              # 召回语法规范
+x-basalt skills get obsidian-base-spec                      # 召回语法规范
 ```
 
 不想每次传 `--db`/`<vault>`？写个 `.x-basalt/config.yaml`，或用 `X_BASALT_DIR` 环境变量——见 [配置与基目录](docs/guides/configuration.md)。

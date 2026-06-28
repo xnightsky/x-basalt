@@ -31,7 +31,7 @@ x-basalt query "LIST FROM #project WHERE status = 'active' SORT file.mtime DESC 
 x-basalt scan ./my-vault      # 只重扫新增/改动/删除
 
 # 5) 召回 Obsidian / DQL 语法规范
-x-basalt skill recall wikilink
+x-basalt skills recall wikilink
 ```
 
 (3) 的输出形态：
@@ -47,14 +47,14 @@ x-basalt skill recall wikilink
 | 章节 | 内容 |
 |---|---|
 | [安装与运行](installation.md) | 要求（Node ≥ 22）、从源码构建、**全局安装（npm link）**、三种运行方式、改源码后重编译 |
-| [命令参考](commands.md) | 7 个命令逐项：`parse` / `index` / `scan` / `query` / `skill` / `meta` / `watch`（签名、选项、默认、示例） |
+| [命令参考](commands.md) | 7 个命令逐项：`parse` / `index` / `scan` / `query` / `skills` / `meta` / `watch`（签名、选项、默认、示例） |
 | [DQL 查询指南](querying-dql.md) | 完整 Dataview 子集文法（LIST/TABLE/TASK + WHERE + GROUP BY/FLATTEN/WITHOUT ID + 多键 SORT + 函数）、隐式字段、报错口径 |
 | [索引与同步](indexing-and-sync.md) | `index` vs `scan` vs `watch` 何时用；scan 深入（mtime/`--rehash`/`--dry-run`/分批断点续）；5 表数据模型；路径感知链接 |
 | [配置与基目录](configuration.md) | 配置文件（cosmiconfig 向上查找、yaml/json5）、可配置项、**`X_BASALT_DIR`**、优先级 |
 | [Obsidian 语法](obsidian-syntax.md) | `parse` 覆盖的 6 类节点字段与边界、代码区掩码、已知近似 |
-| [与 AI 协作](ai-and-skills.md) | `skill recall` 自助召回（Fuse.js）、**全局 `x-basalt` 使用技能**（教 AI 用 CLI）、三类「skill」之别 |
+| [与 AI 协作](ai-and-skills.md) | `skills recall` 自助召回（Fuse.js）、**全局 `x-basalt` 使用技能**（教 AI 用 CLI）、三类「skill」之别 |
 | [故障排查与限制](troubleshooting.md) | 常见报错→处理、已知限制与近似 |
 
 ---
 
-> 维护：命令签名 / DQL 子集 / 数据模型 / 配置项变化时，同步对应章节、`README.md`、自我说明书 skill（`skills/x-basalt-usage.json5`）与 `docs/specs`，确保互相验证（见 `../README.md` 三层口径）。
+> 维护：命令签名 / DQL 子集 / 数据模型 / 配置项变化时，同步对应章节、`README.md`、自我说明书 skill（`skill-data/x-basalt.json5`）与 `docs/specs`，确保互相验证（见 `../README.md` 三层口径）。

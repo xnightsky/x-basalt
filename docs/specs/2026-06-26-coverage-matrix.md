@@ -91,7 +91,7 @@
 | parser/indexer/query/skill/config 单测 | ✅ | 52 pass，但多为正路径 |
 | CLI 端到端测试 | ❌ | 无 `tests/cli.test.ts` |
 | watch 增量 / 错误降级 / 路径边界 / 全局配置链 测试 | ❌ | 见体检 §3-4 |
-| `--format yaml` 全命令支持 | ⚠️ | 仅 `parse`；query/skill 恒 JSON |
+| `--format yaml` 全命令支持 | ⚠️ | 仅 `parse`；query/skills 恒 JSON |
 | 日志脱敏 | ❌ | 无实现（影响低） |
 | 仓库 `oxfmt --check .` | ⚠️ | docs/json 18 文件红（中文 prose 漂移） |
 

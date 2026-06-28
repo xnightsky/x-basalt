@@ -30,7 +30,7 @@
 
 ### 阶段 4 · skill + cli（✅ 完成）
 - `skill/loader.ts` + `index.ts`（json5 + 模糊匹配 + 内置兜底）；`cli.ts` 用 commander 接线全部子命令 + `--format`、`--watch`、`--on-change`。
-- 验收：`skill recall wikilink` / `skill list` 召回；`watch --on-change` 触发命令模板替换 `{file}`。
+- 验收：`skills recall wikilink` / `skills list` 召回；`watch --on-change` 触发命令模板替换 `{file}`。
 
 ### 阶段 5 · 收口（✅ 完成）
 - 补全 README 示例校验、注释收口、self-review；最小充分验证（typecheck/build/test）。
@@ -70,8 +70,8 @@
 - 阶段 4（2026-06-25 验证通过）：
   - `skill/loader.ts`（JSON5 + 目录解析 env>~/.obsidian-core>内置 + 兜底）、`skill/index.ts`（name/triggers 双向子串模糊召回）；`tests/skill.test.ts` 5 例（含空目录兜底）。
   - `cli.ts` commander 接线五子命令 + `--format json|yaml`（YAML 极简块序列化，Date→ISO）、`--watch`、`--on-change {file}`。
-  - CLI 冒烟（tsx + dist 双跑）：parse(json/yaml)、index、query(LIST/TABLE/inlinks)、skill list/recall、watch（初始 rebuild + add/change 增量 + on-change 触发 + `FROM #fresh` 命中新笔记）。
+  - CLI 冒烟（tsx + dist 双跑）：parse(json/yaml)、index、query(LIST/TABLE/inlinks)、skills list/recall、watch（初始 rebuild + add/change 增量 + on-change 触发 + `FROM #fresh` 命中新笔记）。
   - 附带：按用户要求从邻居 y-bot 抄入 `biz-code-comments` skill 并本地化（真相源指向本仓库 `AGENTS.md`、示例改本项目域、补「规范来源/自建实现」分界），同步 `skills-def/README.md`、`AGENTS.md` 清单并 `skills:install`。
 - 阶段 5（2026-06-25 收口验证通过）：
-  - 全量门：`pnpm run typecheck` exit 0；`pnpm run build` exit 0（dist 产出，`node dist/cli.js` 五命令可用、dist→`skills/` 兜底解析正常）；`pnpm test` → 41 项全绿（todo 0）；`pnpm run lint` 0 告警；改动的源码/测试文件 `oxfmt --check` 全通过。
+  - 全量门：`pnpm run typecheck` exit 0；`pnpm run build` exit 0（dist 产出，`node dist/cli.js` 五命令可用、dist→`skill-data/` 兜底解析正常）；`pnpm test` → 41 项全绿（todo 0）；`pnpm run lint` 0 告警；改动的源码/测试文件 `oxfmt --check` 全通过。
   - **[已知风险]** 仓库级 `oxfmt --check .` 在 docs/markdown/json 等**未被本次改动触及**的文件上仍报格式不符（如 `README.md`、`docs/*`、`skills-def/INSTALL.md`、`.oxlintrc.json`），为既有基线漂移（oxfmt 默认会重排中文 prose）。本次只格式化自身改动文件，未对用户手写文档做大规模重排；是否全仓 `pnpm format` 留待单独决策。

@@ -35,8 +35,9 @@ x-basalt scan <vault>                  # 之后：增量重扫，只处理新增
 | `meta normalize <file>` | **无约定纯标准化**：tags 列表化/去#/去重/单数键迁移 | `--sort-keys` · `--dry-run` |
 | `meta profile list / show <name>` | 列出 / 查看元数据策略（profile）的规范+模板 | — |
 | `meta apply <profile> <file>` | **按策略补全**：机械补时间/哈希 + `--set` 补语义 + 自动标准化 | `--set k=v`(可重复) · `--dry-run` |
-| `skill recall <kw>` | 召回 Obsidian / DQL 语法规范详情 | — |
-| `skill list` | 列出可召回规范 | — |
+| `skills get <name>` | 按名取整篇规范（`obsidian-base-spec` / `x-basalt`） | `--all` · `--json` |
+| `skills recall <kw>` | 模糊召回规范详情（容拼写错、相关性排序） | `--json` |
+| `skills list` / `skills path` | 列出可召回规范 / 打印数据目录 | `--json` |
 | `watch [vault]` | 常驻监听增量更新（有守护进程时用；否则首选 `scan`） | `--db` · `--on-change <cmd>`(`{file}` 占位) |
 
 ## 改元数据（meta，唯一写侧）
@@ -59,4 +60,4 @@ x-basalt scan <vault>                  # 之后：增量重扫，只处理新增
 
 `LIST | TABLE <字段,...> | TASK` · `FROM <#tag | "folder" | [[link]]>`（单一来源）· `WHERE`（`= != < > <= >=`、`AND/OR/NOT`、括号、`field = null`、日期 ISO 比较）· 字符串谓词 `contains/icontains/startswith/endswith/regexmatch` · `GROUP BY` · `FLATTEN` · `WITHOUT ID` · 多键 `SORT` · `LIMIT`。内置函数：`lower/upper/length/round`、`date(today)/date(now)`。隐式字段：`file.name/path/folder/extension/size/mtime/ctime/tags/inlinks/outlinks/tasks` 与 frontmatter 标量。范围外（CALENDAR、DataviewJS、多源 FROM、未知字段）会带位置报 `DqlSyntaxError`，不静默。
 
-> **要精确语法 / 边界**：装好 x-basalt 后直接 `x-basalt skill recall <关键字>`（如 `wikilink`/`dataview`/`callout`），它返回带模式与示例的规范——本技能只给概览，细节以 `skill recall` 为准，避免漂移。
+> **要精确语法 / 边界**：装好 x-basalt 后直接 `x-basalt skills get obsidian-base-spec`（取整篇），或 `x-basalt skills recall <关键字>`（如 `wikilink`/`dataview`/`callout`，模糊召回），返回带模式与示例的规范——本技能只给概览，细节以 `skills` 召回结果为准，避免漂移。

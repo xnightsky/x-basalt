@@ -79,7 +79,7 @@ DQL 子集与隐式字段见调研 §3。文件：`tokenizer.ts` / `ast.ts` / `s
 
 ```typescript
 class SkillRecall {
-  constructor(opts?: { skillPath?: string });   // env OBSIDIAN_SKILL_PATH > ~/.obsidian-core/skills > 内置 skills/
+  constructor(opts?: { skillPath?: string });   // env OBSIDIAN_SKILL_PATH > ~/.obsidian-core/skills > 内置 skill-data/
   list(): SkillMeta[];
   recall(keyword: string): SkillDefinition[];
 }
@@ -88,7 +88,7 @@ class SkillRecall {
 文件：`loader.ts`（json5 + 目录解析）、`index.ts`（匹配）。
 
 ### 3.5 cli（`src/cli.ts`）
-commander 五子命令：`parse / index / query / skill / watch`，签名见 README。
+commander 五子命令：`parse / index / query / skills / watch`，签名见 README。
 选项默认值可由项目/全局配置文件提供（`src/config.ts`）。项目配置默认放隐藏目录 `.x-basalt/config.{yaml,yml,json5,json}`（回退扁平 `.x-basalt.{...}`），cwd 向上查找；全局回退 `~/.x-basalt/config.{...}`。默认 YAML（复用 gray-matter 引擎解析，不新增依赖）；键 `db/vault/skillPath/format/onChange`。索引默认落 `.x-basalt/index.db`（indexer 自动建父目录）。优先级：命令行 flag > 项目配置 > 全局配置 > 内置默认。`.x-basalt/` 整体不入 git（仅保留 `config.example.yaml` 模板）。详见 `docs/guides/usage.md` §12。
 
 ## 4. 数据流
@@ -116,5 +116,5 @@ skill 关键字 ──SkillRecall──▶ SkillDefinition(JSON)
 - `pnpm run build` / `pnpm run typecheck` 通过；`pnpm test` 全绿。
 - `parse` 输出含 wikilink/tag/callout/task 的 AST JSON。
 - `index` 建库；`query` 跑通 `LIST FROM #tag WHERE ... SORT ... LIMIT ...`。
-- `skill recall wikilink` / `skill list` 召回内置规范。
+- `skills recall wikilink` / `skills list` 召回内置规范。
 - README 含安装/索引/查询/skill 示例。

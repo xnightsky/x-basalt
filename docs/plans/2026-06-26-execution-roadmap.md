@@ -200,7 +200,7 @@
   - 前置：S4.2。
 
 - [ ] **S4.4 CLI 修缺陷 + 补端到端测试（red→green）**
-  - 动作：新增 `tests/cli.test.ts` 覆盖五命令主路径 + 退出码 + 优先级链（C1）；`--format` 推广到 query/skill（C2）；`--on-change` 改 `execFile` 参数化或转义（C3）；非法 format 报错退出 1（C6）；顶层 catch 用 `instanceof Error`（C7）。
+  - 动作：新增 `tests/cli.test.ts` 覆盖五命令主路径 + 退出码 + 优先级链（C1）；`--format` 推广到 query/skills（C2）；`--on-change` 改 `execFile` 参数化或转义（C3）；非法 format 报错退出 1（C6）；顶层 catch 用 `instanceof Error`（C7）。
   - 验收：CLI 端到端测试全绿；上述每项有用例。
   - 证据：`pnpm test tests/cli.test.ts`。
   - 前置：S4.2、S4.3。

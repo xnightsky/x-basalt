@@ -118,13 +118,13 @@
   - 证据：`tests/config.test.ts`（+2 全局链，共 11 例）；全量 152 测试全绿。前置：M4.2。
 
 - [x] **M4.4 新建 CLI 端到端测试（C1，red→green）** ✅ 2026-06-28
-  - 动作：新建 `tests/cli.test.ts`（subprocess 跑 `node --import <tsx绝对URL> src/cli.ts`，避子进程 cwd 找不到 tsx）覆盖 parse/index/query/skill/watch 主路径 + 退出码（非法 DQL/缺 vault/无命中→1）+ flag↔config 优先级链（config format 生效、flag 覆盖、config 提供 vault+db 无参跑通）。watch 用 spawn+killTree 跨平台收尾。
+  - 动作：新建 `tests/cli.test.ts`（subprocess 跑 `node --import <tsx绝对URL> src/cli.ts`，避子进程 cwd 找不到 tsx）覆盖 parse/index/query/skills/watch 主路径 + 退出码（非法 DQL/缺 vault/无命中→1）+ flag↔config 优先级链（config format 生效、flag 覆盖、config 提供 vault+db 无参跑通）。watch 用 spawn+killTree 跨平台收尾。
   - 验收：端到端 11 例全绿。
   - 证据：`tests/cli.test.ts`；全量 163 测试 / typecheck / lint / build 全绿。前置：M4.2、M4.3。
 
 - [ ] **M4.5 `--format` 推广 + 非法值处理（C2/C6）**
-  - 动作：`--format` 接到 query/skill（不再恒 JSON）；非法 format 报错并退出码 1。
-  - 验收：query/skill 的 yaml 输出用例通过；非法 format 退出 1。
+  - 动作：`--format` 接到 query/skills（不再恒 JSON）；非法 format 报错并退出码 1。
+  - 验收：query/skills 的 yaml 输出用例通过；非法 format 退出 1。
   - 证据：`pnpm test tests/cli.test.ts`。前置：M4.4。
 
 - [ ] **M4.6 on-change 防注入（C3）**
