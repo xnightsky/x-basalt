@@ -146,14 +146,21 @@ test("query 主路径：经 --db 查共享索引返回命中行", () => {
   assert.equal(res.rows[0]["file.name"], "Note");
 });
 
-test("skill recall / list 主路径：召回内置规范", () => {
-  const recall = run(["skill", "recall", "wikilink"]);
+test("skills get / recall / list 主路径：召回内置规范", () => {
+  // get 按名取完整（默认 Markdown，含标题）
+  const got = run(["skills", "get", "obsidian-base-spec"]);
+  assert.equal(got.status, 0);
+  assert.match(got.stdout, /# obsidian-base-spec/);
+
+  // recall --json（结构化）
+  const recall = run(["skills", "recall", "wikilink", "--json"]);
   assert.equal(recall.status, 0);
   assert.ok(
     JSON.parse(recall.stdout).some((s: { name: string }) => s.name === "obsidian-base-spec"),
   );
 
-  const list = run(["skill", "list"]);
+  // list --json（结构化）
+  const list = run(["skills", "list", "--json"]);
   assert.equal(list.status, 0);
   assert.ok(JSON.parse(list.stdout).some((s: { name: string }) => s.name === "obsidian-base-spec"));
 });
@@ -170,10 +177,22 @@ test("退出码：index 无 <vault> 且无配置 → 退出 1 且提示需要 va
   assert.match(r.stderr, /需要 <vault>/);
 });
 
-test("退出码：skill recall 无命中 → 退出 1", () => {
-  const r = run(["skill", "recall", "zzz-not-a-trigger-xyz"]);
+test("退出码：skills recall 无命中 → 退出 1", () => {
+  const r = run(["skills", "recall", "zzz-not-a-trigger-xyz"]);
   assert.equal(r.status, 1);
   assert.match(r.stderr, /未召回/);
+});
+
+test("退出码：skills get 未命中名 → 退出 1", () => {
+  const r = run(["skills", "get", "nope-not-a-skill"]);
+  assert.equal(r.status, 1);
+  assert.match(r.stderr, /未找到/);
+});
+
+test("skills path 打印数据目录（非空）", () => {
+  const r = run(["skills", "path"]);
+  assert.equal(r.status, 0);
+  assert.ok(r.stdout.trim().length > 0);
 });
 
 test("优先级链：config 设 format=yaml 生效，--format json 覆盖", () => {

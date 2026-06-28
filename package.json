@@ -8,7 +8,7 @@
   },
   "files": [
     "dist",
-    "skills",
+    "skill-data",
     "README.md",
     "CHANGELOG.md",
     "LICENSE"

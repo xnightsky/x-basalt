@@ -6,8 +6,8 @@ import { fileURLToPath } from "node:url";
 
 // === 自建实现: Skill 加载（JSON5 文件 + 目录解析 + 内置兜底）===
 //
-// 上游：SkillRecall 构造；下游：读 skills/*.json5 解析为 SkillDefinition[]。
-// 内置 skills/ 目录随包发布（src/skill 与 dist/skill 同为上溯两级到仓库根的 skills/）。
+// 上游：SkillRecall 构造；下游：读 skill-data/*.json5 解析为 SkillDefinition[]。
+// 内置 skill-data/ 目录随包发布（src/skill 与 dist/skill 同为上溯两级到仓库根的 skill-data/）。
 
 /** 单条规范规则。 */
 export interface SkillRule {
@@ -16,9 +16,11 @@ export interface SkillRule {
   examples?: string[];
 }
 
-/** 一个 skill 的定义结构（对应 skills/*.json5）。 */
+/** 一个 skill 的定义结构（对应 skill-data/*.json5）。 */
 export interface SkillDefinition {
   name: string;
+  /** 一句话用途（`skills list` 展示、`skills get` 渲染标题下方）。 */
+  description?: string;
   /** 触发召回的关键字列表（如 `["wikilink", "link"]`）；SkillRecall 在 name+triggers 上做 Fuse 模糊匹配。 */
   triggers: string[];
   /** 本 skill 关注的代码匹配模式（可选）；由外层调用方解析使用，加载层不感知。 */
@@ -28,20 +30,20 @@ export interface SkillDefinition {
 }
 
 /** 随包发布的内置 skill 目录（兜底来源）。src/skill 与 dist/skill 上溯两级均为仓库根。 */
-const BUILTIN_DIR = fileURLToPath(new URL("../../skills", import.meta.url));
+const BUILTIN_DIR = fileURLToPath(new URL("../../skill-data", import.meta.url));
 /**
  * 始终可召回的内置 skill 名：基础规范 + 本 CLI 自我说明书。
  * 即便外部 skill 目录（OBSIDIAN_SKILL_PATH 等）缺失/为空/无效，这两者也兜底补回，
- * 使「CLI 召回自身用法」(`skill recall usage`) 与基础规范召回永远可用。
+ * 使「CLI 召回自身用法」(`skills get x-basalt`) 与基础规范召回永远可用。
  * 外部目录若自带同名 skill 则不覆盖（允许使用者 shadow）。
  */
-const ALWAYS_AVAILABLE = ["obsidian-base-spec", "x-basalt-usage"];
+const ALWAYS_AVAILABLE = ["obsidian-base-spec", "x-basalt"];
 
 /**
  * 解析最终使用的 skill 目录。
- * 优先级：显式 skillPath > env `OBSIDIAN_SKILL_PATH` > `~/.obsidian-core/skills`（存在时）> 内置 `skills/`。
+ * 优先级：显式 skillPath > env `OBSIDIAN_SKILL_PATH` > `~/.obsidian-core/skills`（存在时）> 内置 `skill-data/`。
  */
-function resolveSkillDir(skillPath?: string): string {
+export function resolveSkillDir(skillPath?: string): string {
   if (skillPath) return skillPath;
   const env = process.env.OBSIDIAN_SKILL_PATH;
   if (env) return env;
@@ -62,6 +64,7 @@ function loadDir(dir: string): SkillDefinition[] {
       if (typeof def.name === "string" && Array.isArray(def.rules)) {
         out.push({
           name: def.name,
+          description: def.description,
           triggers: Array.isArray(def.triggers) ? def.triggers : [],
           patterns: def.patterns,
           rules: def.rules,
@@ -85,7 +88,7 @@ function loadDir(dir: string): SkillDefinition[] {
  * @behavior
  * Given 外部 skill 目录为空、不存在或全部 json5 均解析/校验失败
  * When loadSkills
- * Then obsidian-base-spec 与 x-basalt-usage 仍出现在结果中（内置兜底），使基础召回永远可用
+ * Then obsidian-base-spec 与 x-basalt 仍出现在结果中（内置兜底），使基础召回永远可用
  *
  * @behavior
  * Given skill 目录内某个 json5 格式错误或缺少必要字段（name / rules）

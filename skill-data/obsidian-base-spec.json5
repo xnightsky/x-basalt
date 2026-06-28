@@ -2,6 +2,7 @@
   // 内置兜底 skill：即使外部 skill 目录为空，也能召回 Obsidian 基础规范。
   // 由 src/skill（SkillRecall）在运行时加载；triggers 用于模糊召回。
   name: "obsidian-base-spec",
+  description: "Obsidian Markdown 与 Dataview(DQL) 子集语法规范：wikilink/embed/frontmatter/tag/callout/task/highlight/blockRef 提取规则与 DQL 文法。",
   triggers: [
     "wikilink", "link", "embed", "alias", "heading", "block", "blockref",
     "frontmatter", "yaml", "metadata",

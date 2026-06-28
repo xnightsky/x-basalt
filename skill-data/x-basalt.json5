@@ -1,8 +1,9 @@
 {
-  // 本 CLI 的「自我说明书」skill：让 `x-basalt skill recall usage` 经核心 SkillRecall
-  // 召回自身用法，方便 AI / 使用者无需外部文档即可学会驱动本工具。
+  // 本 CLI 的「自我说明书」skill：让 `x-basalt skills get x-basalt`（或 recall usage）经核心
+  // SkillRecall 召回自身用法，方便 AI / 使用者无需外部文档即可学会驱动本工具。
   // 与 obsidian-base-spec 一样由 loader 列为「始终可召回」内置兜底。完整版见 docs/guides/usage.md。
-  name: "x-basalt-usage",
+  name: "x-basalt",
+  description: "x-basalt CLI 自我说明书：parse/index/scan/query/skills/meta/watch 各命令用法、DQL 子集、项目配置与示例。",
   triggers: [
     "usage", "help", "howto", "how-to", "manual", "guide", "readme",
     "说明书", "用法", "怎么用", "帮助", "命令", "指令",
@@ -17,14 +18,14 @@
     "x-basalt parse <file>",
     "x-basalt index <vault> --db <path>",
     "x-basalt query <dql> --db <path>",
-    "x-basalt skill recall <keyword>",
+    "x-basalt skills get <name>",
     "x-basalt meta set <file> <key> <value>",
     "x-basalt watch <vault> --on-change <cmd>",
   ],
   rules: [
     {
-      pattern: "x-basalt <parse|index|scan|query|skill|meta|watch>",
-      description: "零依赖 Obsidian 运行时的 Vault 工具。典型流程：index 建库 → query 查询；parse 看单文件 AST；scan 增量重扫；skill 召回规范；meta 读改 frontmatter（唯一写侧）；watch 监听增量。开发态 `pnpm run cli -- <command>`，构建后 `node dist/cli.js <command>`。出错统一打印 ✗ 并退出码 1。",
+      pattern: "x-basalt <parse|index|scan|query|skills|meta|watch>",
+      description: "零依赖 Obsidian 运行时的 Vault 工具。典型流程：index 建库 → query 查询；parse 看单文件 AST；scan 增量重扫；skills 召回规范；meta 读改 frontmatter（唯一写侧）；watch 监听增量。开发态 `pnpm run cli -- <command>`，构建后 `node dist/cli.js <command>`。出错统一打印 ✗ 并退出码 1。",
       examples: [
         "pnpm install && pnpm run build",
         "pnpm run cli -- index ./vault --db ./index.db",
@@ -50,9 +51,15 @@
       ],
     },
     {
-      pattern: "skill (recall <keyword> | list)",
-      description: "recall 按关键字模糊召回规范（匹配 name 与 triggers，大小写不敏感、双向子串）；list 列出全部 skill。本说明书自身即一个可召回 skill —— `skill recall usage` 即可读到本 CLI 用法。",
-      examples: ["x-basalt skill recall usage", "x-basalt skill recall wikilink", "x-basalt skill list"],
+      pattern: "skills (list | get <name> [--all] | recall <keyword> | path [name]) [--json]",
+      description: "召回规范知识库（内置 obsidian-base-spec + 本说明书 x-basalt）。list 列出 name—description；get <name> 按名输出该 skill 完整内容（--all 输出全部）；recall <kw> 模糊召回（Fuse，容拼写错、按相关性排序）；path 打印数据目录（带 name 打印该文件路径）。默认输出人类/AI 可读 Markdown，加 --json 切换结构化。本说明书自身即一个可召回 skill —— `skills get x-basalt` 直接读到本 CLI 完整用法。",
+      examples: [
+        "x-basalt skills",
+        "x-basalt skills get x-basalt",
+        "x-basalt skills get obsidian-base-spec",
+        "x-basalt skills recall wikilink",
+        "x-basalt skills list --json",
+      ],
     },
     {
       pattern: "meta (get|set|unset|rename|normalize) <file> ...",
@@ -108,7 +115,7 @@
   ],
   metadata: {
     doc: "docs/guides/usage.md",
-    commands: ["parse", "index", "scan", "query", "skill", "meta", "watch"],
+    commands: ["parse", "index", "scan", "query", "skills", "meta", "watch"],
     self_recall: true,
   },
 }

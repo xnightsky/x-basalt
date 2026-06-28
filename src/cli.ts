@@ -24,8 +24,9 @@ import {
 } from "./meta/index.js";
 import { DataviewEngine } from "./query/index.js";
 import { SkillRecall } from "./skill/index.js";
+import { renderSkill, renderSkillList, renderSkills } from "./skill/render.js";
 
-// === 自建实现: CLI 入口（commander），命令 parse / index / scan / query / skill / meta / watch ===
+// === 自建实现: CLI 入口（commander），命令 parse / index / scan / query / skills / meta / watch ===
 //
 // 上游：终端用户 / pnpm cli；下游：装配 parser / indexer / query / skill 四层库能力。
 // 本文件只做参数装配与输出格式化，不内联业务逻辑（逻辑在各层并各有单测）。
@@ -193,25 +194,72 @@ program
     }
   });
 
-const skill = program.command("skill").description("Skill 规范召回");
-skill
+const skills = program
+  .command("skills")
+  .description("Skill 规范召回（内置 Obsidian/DQL 规范 + CLI 自我说明书）")
+  .action(() => {
+    // 无子命令时默认等价 list（人类/AI 可读）。
+    console.log(renderSkillList(new SkillRecall({ skillPath: config.skillPath }).list()));
+  });
+skills
+  .command("list")
+  .description("列出全部可用 skill（name — description）")
+  .option("--json", "结构化 JSON 输出")
+  .action((opts: { json?: boolean }) => {
+    const metas = new SkillRecall({ skillPath: config.skillPath }).list();
+    if (opts.json) emit(metas);
+    else console.log(renderSkillList(metas));
+  });
+skills
+  .command("get")
+  .description("按名输出 skill 完整内容；--all 输出全部")
+  .argument("[name]", "skill 名（省略时须配 --all）")
+  .option("--all", "输出全部 skill")
+  .option("--json", "结构化 JSON 输出（原始 SkillDefinition）")
+  .action((name: string | undefined, opts: { all?: boolean; json?: boolean }) => {
+    const recall = new SkillRecall({ skillPath: config.skillPath });
+    if (opts.all) {
+      const defs = recall.all();
+      if (opts.json) emit(defs);
+      else console.log(renderSkills(defs));
+      return;
+    }
+    if (!name) {
+      console.error("✗ 用法：x-basalt skills get <name> | x-basalt skills get --all");
+      process.exitCode = 1;
+      return;
+    }
+    const def = recall.get(name);
+    if (!def) {
+      console.error(`✗ 未找到名为 "${name}" 的 skill（用 \`skills list\` 查看可用名）`);
+      process.exitCode = 1;
+      return;
+    }
+    if (opts.json) emit(def);
+    else console.log(renderSkill(def));
+  });
+skills
   .command("recall")
-  .description("按关键字召回规范")
+  .description("按关键字模糊召回规范（Fuse.js，容拼写错、相关性排序）")
   .argument("<keyword>", "召回关键字")
-  .action((keyword: string) => {
+  .option("--json", "结构化 JSON 输出")
+  .action((keyword: string, opts: { json?: boolean }) => {
     const hits = new SkillRecall({ skillPath: config.skillPath }).recall(keyword);
     if (hits.length === 0) {
       console.error(`✗ 未召回到与 "${keyword}" 相关的 skill`);
       process.exitCode = 1;
       return;
     }
-    emit(hits);
+    if (opts.json) emit(hits);
+    else console.log(renderSkills(hits));
   });
-skill
-  .command("list")
-  .description("列出全部可用 skill")
-  .action(() => {
-    emit(new SkillRecall({ skillPath: config.skillPath }).list());
+skills
+  .command("path")
+  .description("打印解析出的 skill 数据目录；带 name 打印该 skill 文件路径")
+  .argument("[name]", "skill 名")
+  .action((name: string | undefined) => {
+    const dir = new SkillRecall({ skillPath: config.skillPath }).resolvedDir();
+    console.log(name ? join(dir, `${name}.json5`) : dir);
   });
 
 // meta：读/改单文件 frontmatter（元数据头）。写操作原子写、可 --dry-run 预览。
