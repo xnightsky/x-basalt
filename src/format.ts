@@ -24,5 +24,5 @@ export function toYaml(data: unknown): string {
  */
 export function emit(data: unknown, format = "json"): void {
   if (format === "yaml") console.log(toYaml(data));
-  else console.log(JSON.stringify(data, null, 2));
+  else console.log(JSON.stringify(data, null, 2)); // 未知 format 静默降级为 JSON（不抛错）；实践中仅 "json" | "yaml" 两值合法
 }

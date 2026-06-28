@@ -1,3 +1,13 @@
+/**
+ * Parser 模块入口：将 Vault 文件内容解析为标准化 ObsidianNode[]，纯函数，不触碰 fs/DB。
+ *
+ * 上游：src/indexer（index/watch 子命令通过 VaultParser 解析每个文件内容）。
+ * 下游：parseFrontmatter（./frontmatter.ts）、extractWikilinks（./wikilink.ts）；
+ *       其余提取器（tag/callout/task/highlight/blockRef）在本文件内实现并保持模块私有。
+ *
+ * 不变量：parser 产出的 ObsidianNode[] 是 indexer/query 对 Markdown 的唯一解析来源；
+ *         indexer 不重复解析原始正文，query 不感知 ObsidianNode。
+ */
 import { parseFrontmatter } from "./frontmatter.js";
 import type { ObsidianNode, ParsedFile } from "./types.js";
 import { extractWikilinks } from "./wikilink.js";
@@ -205,6 +215,21 @@ export class VaultParser {
    * 解析单文件内容为 frontmatter + ObsidianNode[]。
    *
    * @param content - 文件完整内容
+   *
+   * @behavior
+   * Given 文件含合法 frontmatter 且正文含各类 Obsidian 语法
+   * When 调用 parse()
+   * Then 返回 frontmatter 键值对 + 含 wikilink/tag/callout/task/highlight/blockRef 节点的数组
+   *
+   * @behavior
+   * Given 正文代码块或行内代码内含 #tag 或 ==text==
+   * When 调用 parse()
+   * Then 代码区域被等长掩码，其内的 # 与 == 不被识别为标签或高亮；行号计算不受影响
+   *
+   * @behavior
+   * Given frontmatter YAML 非法
+   * When 调用 parse()
+   * Then 降级为空 frontmatter {}，整个文件内容作为正文继续提取，不向上抛出异常
    */
   parse(content: string): ParsedFile {
     const { frontmatter, body } = parseFrontmatter(content);

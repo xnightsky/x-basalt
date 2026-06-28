@@ -67,7 +67,7 @@ function makeExplorer(): PublicExplorerSync {
   return cosmiconfigSync("x-basalt", {
     searchPlaces: SEARCH_PLACES,
     loaders: LOADERS,
-    searchStrategy: "project",
+    searchStrategy: "project", // "project" 策略向上搜索到含 package.json / .git 的目录为止，不越过项目边界；"global" 策略会一路搜到文件系统根，在 monorepo / 嵌套工程中可能误命中上层无关配置
   });
 }
 

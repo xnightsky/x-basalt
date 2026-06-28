@@ -26,6 +26,7 @@ export {
 // 设计：docs/plans/2026-06-28-meta-frontmatter-write.md
 // 上游：cli.ts meta 命令组；下游：document（往返内核）+ operations（CRUD）+ fs。
 // 边界：parser/indexer 不依赖本模块；本模块只读写单个 .md，不碰 SQLite。
+// 不变量：src/meta 是整个进程中唯一写 .md 文件的层；非法 YAML 拒写、原子写、归一在 profile 之上。
 
 /** editMeta 结果。content 为写入（或 dry-run 下将写入）的完整文件内容。 */
 export interface EditResult {
@@ -52,6 +53,18 @@ export function readMeta(file: string, key?: string): unknown {
  * @param file - 目标 .md 路径
  * @param mutate - 在 yaml Document 上的改动（用 operations 的 set/unset/rename）
  * @param opts.dryRun - 只算不写
+ *
+ * @behavior
+ * Given frontmatter 含非法 YAML（parseDocument 有 errors）When editMeta Then 抛错拒写，文件保持原样
+ *
+ * @behavior
+ * Given mutate 未改变任何值（序列化后与原文字节相同）When editMeta Then changed=false，不落盘（不触发 mtime 变动）
+ *
+ * @behavior
+ * Given opts.dryRun=true When editMeta Then 计算出 content 但不写盘，返回 dryRun=true
+ *
+ * @behavior
+ * Given 需要落盘 When editMeta Then 写同目录临时文件再 rename 覆盖（原子写，避免半写损坏）
  */
 export function editMeta(
   file: string,
@@ -99,6 +112,21 @@ export interface ApplyResult {
  * @param profileName - profile 名（未知则报错并列可用名）
  * @param opts.sets - 消费者传入的 key=value（按 profile 类型转）
  * @param opts.dryRun - 只算不写
+ *
+ * @behavior
+ * Given frontmatter 含非法 YAML When applyProfile Then 抛错拒写（同 editMeta 防毁文件保证）
+ *
+ * @behavior
+ * Given 未知 profileName When applyProfile Then 抛错并列出可用 profile 名
+ *
+ * @behavior
+ * Given --set 与机械预填同时作用于同一字段 When applyProfile Then --set 先写（显式覆盖），机械层跳过该字段（不 clobber --set）
+ *
+ * @behavior
+ * Given profile 机械字段已存在于 frontmatter When applyProfile Then 保持原值不动（top-up），不因写盘更新 mtime 漂移
+ *
+ * @behavior
+ * Given 完整流程 When applyProfile Then 执行顺序为 applySets → prefillTrivial → normalizeDoc → diffProfile（归一在填充之后）
  */
 export function applyProfile(
   file: string,

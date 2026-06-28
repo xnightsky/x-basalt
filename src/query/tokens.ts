@@ -16,24 +16,41 @@ export const Identifier = createToken({
 const keyword = (name: string, word: string) =>
   createToken({ name, pattern: new RegExp(word, "i"), longer_alt: Identifier });
 
-// null 也是「关键字」（用于 `= null`），须在 Identifier 前。
+/** `null` 字面量关键字 token（用于 `= null` / `!= null`）；须在 Identifier 前定义，否则被 longer_alt 回退吞掉。 */
 export const Null = keyword("Null", "null");
+/** `LIST` 查询类型关键字。 */
 export const List = keyword("List", "list");
+/** `TABLE` 查询类型关键字（后接字段列表）。 */
 export const Table = keyword("Table", "table");
+/** `TASK` 查询类型关键字（返回任务行而非文件行）。 */
 export const Task = keyword("Task", "task");
+/** `FROM` 子句关键字。 */
 export const From = keyword("From", "from");
+/** `WHERE` 子句关键字。 */
 export const Where = keyword("Where", "where");
+/** `AND` 逻辑操作符关键字。 */
 export const And = keyword("And", "and");
+/** `OR` 逻辑操作符关键字。 */
 export const Or = keyword("Or", "or");
+/** `NOT` 逻辑取反关键字。 */
 export const Not = keyword("Not", "not");
+/** `SORT` 子句关键字（支持多键排序）。 */
 export const Sort = keyword("Sort", "sort");
+/** `ASC` 升序方向关键字（省略时默认升序）。 */
 export const Asc = keyword("Asc", "asc");
+/** `DESC` 降序方向关键字。 */
 export const Desc = keyword("Desc", "desc");
+/** `LIMIT` 子句关键字（结果行数上限，负数在 parser 层报错）。 */
 export const Limit = keyword("Limit", "limit");
+/** `GROUP` 关键字，与 `By` 组合为 `GROUP BY` 子句。 */
 export const Group = keyword("Group", "group");
+/** `BY` 关键字，与 `Group` 组合为 `GROUP BY`；单独出现无意义。 */
 export const By = keyword("By", "by");
+/** `FLATTEN` 子句关键字（将数组字段展开为多行）。 */
 export const Flatten = keyword("Flatten", "flatten");
+/** `WITHOUT` 关键字，与 `Id` 组合为 `WITHOUT ID`。 */
 export const Without = keyword("Without", "without");
+/** `ID` 关键字，与 `Without` 组合为 `WITHOUT ID`（隐藏默认 file.link 列）。 */
 export const Id = keyword("Id", "id");
 
 // === Obsidian 规范来源: 标签体取 Unicode 字母/数字/下划线/连字符/斜杠（嵌套）===
@@ -48,6 +65,11 @@ const matchTag = (text: string, startOffset: number): [string] | null => {
   if (m === null || m.index !== startOffset + 1) return null;
   return [text.slice(startOffset, startOffset + 1 + m[0].length)];
 };
+/**
+ * `#tag` token（含嵌套标签如 `#项目/子项`）：使用 `matchTag` 自定义函数，
+ * 绕开 chevrotain 对 Unicode `\p{}` 首字符优化的 sticky 失配限制
+ * （详见上方 Obsidian 规范来源注释）。
+ */
 export const Tag = createToken({
   name: "Tag",
   pattern: matchTag,
@@ -70,12 +92,20 @@ export const NumberLiteral = createToken({ name: "NumberLiteral", pattern: /-?\d
 /** 比较操作符：多字符（!= <= >=）在正则交替中先于单字符，避免被截断。 */
 export const Op = createToken({ name: "Op", pattern: /!=|<=|>=|=|<|>/ });
 
+/** 左括号 token，用于分组条件与函数调用。 */
 export const LParen = createToken({ name: "LParen", pattern: /\(/ });
+/** 右括号 token，与 LParen 配对闭合。 */
 export const RParen = createToken({ name: "RParen", pattern: /\)/ });
+/** 逗号 token，分隔 TABLE 字段列表与多键 SORT 排序键。 */
 export const Comma = createToken({ name: "Comma", pattern: /,/ });
+/** 空白 token（匹配后跳过不入 token 流）。 */
 export const WhiteSpace = createToken({ name: "WhiteSpace", pattern: /\s+/, group: Lexer.SKIPPED });
 
-// 顺序敏感：空白先跳过；关键字（含 Null）在 Identifier 前；Identifier 兜底放最后。
+/**
+ * chevrotain Lexer 的有序 token 列表（顺序即优先级，不可随意调整）：
+ * 空白先跳过；关键字（含 Null）须在 Identifier 前，确保 longer_alt 回退生效；
+ * Identifier 兜底放最后。顺序是 DQL 词法正确性的结构保证。
+ */
 export const allTokens = [
   WhiteSpace,
   List, Table, Task, From, Where, And, Or, Not, Sort, Asc, Desc, Limit,

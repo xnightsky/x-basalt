@@ -6,7 +6,9 @@ import { renameMeta } from "./operations.js";
 // 设计：docs/plans/2026-06-28-meta-normalize.md
 // 把"裸/乱"的 frontmatter 归一成对 Obsidian 合法有效的形态。纯函数，在 yaml Document 上原位改，
 // 返回应用了哪些变更（供报告）。建立在 Phase 1 往返内核之上（正文/原子写/幂等由 editMeta 复用）。
+// 上游：src/meta/index.ts（applyProfile 在机械预填后调 normalizeDoc 收尾）；下游：src/meta/operations.ts（renameMeta）。
 
+/** normalizeDoc 的选项；所有字段可选，未提供时取默认值。 */
 export interface NormalizeOptions {
   /** opt-in：顶层键按字母序排序（可能动空行，故默认 false）。 */
   sortKeys?: boolean;
@@ -65,7 +67,19 @@ function sameList(before: unknown, list: string[]): boolean {
  * opt-in：sortKeys 顶层键排序。幂等：已规范时返回 []。
  *
  * @param doc - frontmatter 的 yaml Document
- * @param opts.sortKeys - 是否排序顶层键
+ * @param opts.sortKeys - 是否排序顶层键（可能影响空行，默认 false）
+ *
+ * @behavior
+ * Given tag/alias/cssclass 单数键与对应复数键同时存在 When normalize Then 合并两者并集后删单数键
+ *
+ * @behavior
+ * Given 只有单数键（无对应复数键）When normalize Then 原位改名为复数键，保留在 items 中的位置与值节点
+ *
+ * @behavior
+ * Given tags 含带 # 前缀的项（如 "#工具"）When normalize Then 去掉 # 前缀并去重，输出干净字符串列表
+ *
+ * @behavior
+ * Given frontmatter 已完全规范 When normalize Then 返回空数组且不改 doc（幂等）
  */
 export function normalizeDoc(doc: Document, opts: NormalizeOptions = {}): string[] {
   const changes: string[] = [];

@@ -19,7 +19,13 @@ export type DqlSource =
   | { kind: "tag"; value: string }
   | { kind: "link"; value: string };
 
-/** WHERE 条件表达式（递归）。 */
+/**
+ * WHERE 条件表达式（递归 ADT）：
+ * - `and`/`or`：二元逻辑组合；`not`：一元取反。
+ * - `compare`：`field op value`，`fn` 为可选标量函数（lower/upper/length/round）包裹字段后再比较。
+ * - `isnull`：`field = null`（`negated=false` → IS NULL）/ `!= null`（`negated=true` → IS NOT NULL）。
+ * - `call`：字符串谓词函数（contains/icontains/startswith/endswith/regexmatch），直接产出布尔条件。
+ */
 export type WhereExpr =
   | { kind: "and" | "or"; left: WhereExpr; right: WhereExpr }
   | { kind: "not"; expr: WhereExpr }
@@ -32,7 +38,9 @@ export interface DqlQuery {
   type: QueryType;
   /** TABLE 的列；LIST/TASK 时为空数组 */
   fields: string[];
+  /** 无 FROM 子句时匹配整个 Vault（不加来源过滤）。 */
   from?: DqlSource;
+  /** 无 WHERE 子句时不附加行过滤条件。 */
   where?: WhereExpr;
   /** 多键排序：按数组顺序生成 ORDER BY；undefined/空表示不排序。 */
   sort?: { field: string; dir: "ASC" | "DESC" }[];
@@ -42,6 +50,7 @@ export interface DqlQuery {
   flatten?: { field: string };
   /** WITHOUT ID 列控制：隐藏默认 id/file.link 列（S2.20 实现）。 */
   withoutId?: boolean;
+  /** 无 LIMIT 时不截断结果；负数在 parser 层报错（parseDql 前置校验）。 */
   limit?: number;
 }
 

@@ -5,10 +5,19 @@ import type { DeriveSource } from "./derive.js";
 // 设计：docs/plans/2026-06-28-meta-derive-profiles.md ；调研：docs/research/2026-06-28-metadata-profiles-research.md
 // 一套 profile = 模板（字段及其角色/类型/含义）+ 规范文本。x-basalt 只负责把它「告知」给消费者读，
 // 补不补 / 补什么 / AI 还是人，x-basalt 不介入、不调 LLM。机械字段（derive 非空）由 apply 顺手预填。
+// 上游：src/meta/index.ts（getProfile/listProfiles via barrel）、src/meta/apply.ts（Profile 类型）。
+// 下游：src/meta/derive.ts（DeriveSource 类型引用）。纯数据 + 查找函数，无 fs / IO。
 
-/** 字段在该约定中的角色。 */
+/**
+ * 字段在该约定中的角色：required 缺失则 profile 失效；recommended 建议补但不阻塞；optional 按需。
+ * 用于 diffProfile 的 missing 分组，供消费者决策优先级。
+ */
 export type FieldRole = "required" | "recommended" | "optional";
 
+/**
+ * profile 中单个字段的模板定义：描述该字段的角色、期望类型、含义与机械来源（若有）。
+ * 供 diffProfile（差异检测）、prefillTrivial（机械预填）、coerceForProfile（类型转换）共用。
+ */
 export interface ProfileField {
   key: string;
   role: FieldRole;
@@ -20,6 +29,10 @@ export interface ProfileField {
   note: string;
 }
 
+/**
+ * 元数据策略（profile）：一套字段模板 + 规范文本。x-basalt 负责维护并「告知」，
+ * 不负责填充语义字段——消费者（AI 读 profile 规范后 / 人按判断）经 --set 或 meta set 决定补什么。
+ */
 export interface Profile {
   name: string;
   title: string;

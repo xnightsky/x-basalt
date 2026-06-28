@@ -1,3 +1,10 @@
+/**
+ * Wikilink / Embed 提取子模块：从正文中识别 [[...]] 与 ![[...]] 并产出规范化节点。
+ *
+ * 上游：src/parser/index.ts 的 VaultParser.parse() 是唯一调用方。
+ * 下游：extractWikilinks 的输出经 indexer 写入 links 表（is_embed 区分嵌入与普通链接）。
+ *       资源 vs 笔记嵌入的区分由 indexer 调用 utils/path.isAssetEmbed 完成，parser 不区分。
+ */
 import { linkKey } from "../utils/path.js";
 import type { ObsidianNode } from "./types.js";
 
@@ -42,6 +49,27 @@ function parseInner(inner: string): Omit<WikilinkNode, "type" | "embed"> {
  * 若忽略 embed 会把 [[X]] 与 ![[X]] 合并而丢失嵌入语义。
  *
  * @param text - 去掉 frontmatter 的正文
+ * @returns 规范化后的 wikilink 节点数组；同一文件内 target+anchor+embed 相同的链接只保留一次
+ *
+ * @behavior
+ * Given 正文含 [[Target#Heading|Alias]] 形式的链接
+ * When 提取 wikilink
+ * Then 产出含 target/heading/alias 字段的节点，embed=false
+ *
+ * @behavior
+ * Given 正文含 ![[Image.png]] 形式的嵌入
+ * When 提取 wikilink
+ * Then 产出 embed=true 的节点；资源 vs 笔记区分由 indexer 的 isAssetEmbed 完成，parser 不区分
+ *
+ * @behavior
+ * Given 同一文件内相同 target+anchor+embed 的链接出现多次
+ * When 提取 wikilink
+ * Then 只保留第一次出现的节点，后续重复被静默丢弃
+ *
+ * @behavior
+ * Given [[...]] 内部为空字符串
+ * When 提取 wikilink
+ * Then 该匹配被静默跳过，不产出节点
  */
 export function extractWikilinks(text: string): ObsidianNode[] {
   const out: ObsidianNode[] = [];

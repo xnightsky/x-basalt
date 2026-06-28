@@ -19,7 +19,9 @@ export interface SkillRule {
 /** 一个 skill 的定义结构（对应 skills/*.json5）。 */
 export interface SkillDefinition {
   name: string;
+  /** 触发召回的关键字列表（如 `["wikilink", "link"]`）；SkillRecall 在 name+triggers 上做 Fuse 模糊匹配。 */
   triggers: string[];
+  /** 本 skill 关注的代码匹配模式（可选）；由外层调用方解析使用，加载层不感知。 */
   patterns?: string[];
   rules: SkillRule[];
   metadata?: Record<string, unknown>;
@@ -79,6 +81,16 @@ function loadDir(dir: string): SkillDefinition[] {
  * 当解析出的集合缺少它时（外部目录为空/无效），补加内置版本。
  *
  * @param skillPath - 覆盖默认 skill 目录（可选）
+ *
+ * @behavior
+ * Given 外部 skill 目录为空、不存在或全部 json5 均解析/校验失败
+ * When loadSkills
+ * Then obsidian-base-spec 与 x-basalt-usage 仍出现在结果中（内置兜底），使基础召回永远可用
+ *
+ * @behavior
+ * Given skill 目录内某个 json5 格式错误或缺少必要字段（name / rules）
+ * When loadSkills
+ * Then 该文件被跳过并 warn，其余合法 skill 照常加载（单文件失败不中断全量）
  */
 export function loadSkills(skillPath?: string): SkillDefinition[] {
   const dir = resolveSkillDir(skillPath);

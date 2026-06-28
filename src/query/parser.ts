@@ -43,7 +43,7 @@ import {
 
 // === 自建实现: DQL parser（chevrotain EmbeddedActionsParser，产出 ast.ts 的 DqlQuery）===
 //
-// 上游：parseDql；下游：DqlQuery 交 sql-generator。替代手写 ast.parseQuery（S2.8 端到端切换）。
+// 上游：DataviewEngine.query（query/index.ts）；下游：DqlQuery 交 sql-generator。替代手写 ast.parseQuery（S2.8 端到端切换）。
 // WHERE 优先级：OR < AND < NOT < primary（比较 / 函数调用 / 括号），与旧实现一致。
 // 子句文法（固定顺序，超出报错）：
 //   (LIST | TABLE field,... | TASK) (WITHOUT ID)? (FROM src)? (WHERE expr)?

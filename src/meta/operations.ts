@@ -5,6 +5,8 @@ import { type Document, isMap, isScalar } from "yaml";
 // 设计：docs/plans/2026-06-28-meta-frontmatter-write.md
 // 在 yaml Document 上原位操作：set/unset 走 Document API（保留键序）；rename 改 Pair 的 key 节点
 // （保位置 + 值节点连同其注释）。类型推断保守（避开 YAML 1.1 yes/no/on/off 的 Norway 陷阱）。
+// 上游：src/meta/index.ts（editMeta/applyProfile）、src/meta/normalize.ts（renameMeta）、src/meta/apply.ts（hasMeta/setMeta）。
+// 下游：yaml(eemeli) Document API。纯函数，不碰 fs / SQLite。
 
 /** set 的取值类型；auto 为保守推断。 */
 export type MetaScalarType = "string" | "number" | "boolean" | "null" | "list" | "auto";
@@ -33,6 +35,15 @@ export function unsetMeta(doc: Document, key: string): void {
 /**
  * 重命名键：保留键在文档中的位置与值节点（连同值上的注释）。
  * 源不存在或目标已存在则抛错（不静默覆盖）。
+ *
+ * @behavior
+ * Given oldKey 不存在 When rename Then 抛 Error，避免静默丢失意图（不作 no-op）
+ *
+ * @behavior
+ * Given newKey 已存在 When rename Then 抛 Error，避免静默覆盖已有字段
+ *
+ * @behavior
+ * Given 合法 rename When 执行 Then 仅替换 Pair.key 节点，位置（items 下标）与值节点/注释完整保留
  */
 export function renameMeta(doc: Document, oldKey: string, newKey: string): void {
   if (!doc.has(oldKey)) throw new Error(`属性 "${oldKey}" 不存在`);
@@ -55,7 +66,16 @@ export function renameMeta(doc: Document, oldKey: string, newKey: string): void 
  * 避免 yes/no/on/off 被静默当布尔（调研结论：Norway 问题）。
  *
  * @param raw - 原始字符串
- * @param type - 目标类型
+ * @param type - 目标类型：list 按逗号拆分并 trim；auto 保守推断（严格 number/true/false/null，不识别 yes/no/on/off）
+ *
+ * @behavior
+ * Given type="auto" 且 raw="yes" When 转换 Then 返回字符串 "yes"（不当布尔，守 Norway 安全）
+ *
+ * @behavior
+ * Given type="list" 且 raw="a, b, c" When 转换 Then 返回 ["a","b","c"]（逗号拆分+trim+去空项）
+ *
+ * @behavior
+ * Given type="number" 且 raw 不是合法数字 When 转换 Then 抛 Error
  */
 export function coerceValue(raw: string, type: MetaScalarType): unknown {
   switch (type) {

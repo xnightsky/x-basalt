@@ -7,7 +7,12 @@ import { Document, parseDocument } from "yaml";
 //
 // 职责：content ⇄ FrontmatterParts。纯字符串/对象变换，不碰 fs（fs 在 src/meta/index.ts）。
 // 硬要求：body（闭合 --- 之后的内容）逐字节保真，绝不经 YAML 解析；EOL/BOM 保留；只认顶部块。
+// 上游：src/meta/index.ts（editMeta/applyProfile 读文件后传入 content）。下游：yaml(eemeli) Document API。
 
+/**
+ * 文件切分产物：frontmatter 各部件与原始正文切片。
+ * 由 splitDocument 产出；经 operations 改动 doc 后由 serializeDocument 重组。
+ */
 export interface FrontmatterParts {
   /** 文件开头 BOM（"" 或 "﻿"），原样保留在最前。 */
   bom: string;
@@ -38,6 +43,15 @@ function itemCount(doc: Document): number {
  * 切分文件为 frontmatter 各部件。无/非法 frontmatter 时整文件作 body（不毁文件）。
  *
  * @param content - 文件完整内容
+ *
+ * @behavior
+ * Given 文件首行不是 --- When 切分 Then hasFrontmatter=false，整文件作 body
+ *
+ * @behavior
+ * Given 首行是 --- 但无闭合 --- When 切分 Then hasFrontmatter=false，整文件作 body（防误改非 frontmatter 的 --- 分割线）
+ *
+ * @behavior
+ * Given 合法 frontmatter 含 UTF-8 BOM When 切分 Then BOM 单独提取到 bom 字段，body 为闭合后切片逐字节保真
  */
 export function splitDocument(content: string): FrontmatterParts {
   let bom = "";
@@ -70,6 +84,12 @@ export function splitDocument(content: string): FrontmatterParts {
  * 当 doc 有键（即使原本无 frontmatter）则产出 `---\n…\n---`；doc 空且原本无 frontmatter 则不产块。
  *
  * @param parts - splitDocument 的产物（doc 可能已被 operations 改动）
+ *
+ * @behavior
+ * Given doc 无键且原本无 frontmatter When 序列化 Then 直接返回 body，不产 --- 块（保持无 frontmatter 文件不变）
+ *
+ * @behavior
+ * Given doc 有键（含原本无 frontmatter 的新建场景）When 序列化 Then 产出 ---\nyaml\n--- 块并按文件 EOL 风格换行
  */
 export function serializeDocument(parts: FrontmatterParts): string {
   const hasContent = itemCount(parts.doc) > 0;

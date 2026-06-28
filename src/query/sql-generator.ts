@@ -67,7 +67,7 @@ const INLINK_MATCH =
  * 隐式字段（tags/inlinks/outlinks/tasks）用相关子查询聚合，对应硬约束「查询期 JOIN 实时计算」。
  *
  * @param field - DQL 字段名（file.* 或 frontmatter 标量）
- * @throws Error 非目标字段（如 file.day）或非法 frontmatter 字段名
+ * @throws {DqlSyntaxError} 非目标字段（如 file.day）或非法 frontmatter 字段名
  */
 function fieldToSql(field: string): { expr: string; json: boolean } {
   const direct = FILE_COLUMNS[field];

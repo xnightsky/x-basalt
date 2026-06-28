@@ -13,6 +13,14 @@ export { DqlSyntaxError } from "./errors.js";
 // 上游：cli 的 query 子命令；下游：只读打开索引库，执行 tokenizer→ast→sql 编译出的参数化 SQL。
 // 不直接读取 `.md` 文件（边界见 AGENTS.md）：一切数据来自 indexer 写入的 SQLite。
 
+/**
+ * DQL 查询执行引擎：query 模块的唯一对外接口。
+ *
+ * 只读打开 indexer 写入的 SQLite 库，执行 tokenize→parse→generateSql 编译管线，
+ * 用 better-sqlite3 prepare/all 取结果，聚合 JSON 列（tags/inlinks/outlinks/tasks）就地解析为数组。
+ *
+ * 不变量：不读取任何 `.md` 文件；不执行写操作；隐式字段无物化视图，查询期 JOIN 实时计算。
+ */
 export class DataviewEngine {
   private readonly db: Db;
 
