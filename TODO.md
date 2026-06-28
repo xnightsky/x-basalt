@@ -2,9 +2,9 @@
 
 > backlog / roadmap（存在 = 有待做项）。**已完成的不堆这**——见 git log、`docs/plans/`、`docs/specs/`。
 
-## ▶ 当前：变更编排器 P0 实现中（2026-06-29 起）
+## ▶ 当前：dogfood 观察期（变更编排器 P0 已落地）
 
-按 spec 开工：实现 `src/orchestrator/`（源→堆积→去重→路由→执行）。计划见 [`docs/plans/2026-06-29-change-orchestration.md`](docs/plans/2026-06-29-change-orchestration.md)，设计见 [`docs/specs/2026-06-29-change-orchestration-design.md`](docs/specs/2026-06-29-change-orchestration-design.md)。范围 = spec §12 的 P0；写动作默认 dry-run。
+变更编排器 **P0 已落地**：`src/orchestrator/`（源→堆积(debounce+maxWait)→去重(L2/L3)→DQL 路由→执行(并发/超时/失败continue/优雅退出/防回环)）+ CLI `run <pipeline>` / `watch --pipeline`；写动作默认 dry-run；全量 335 测试绿。计划见 [`docs/plans/2026-06-29-change-orchestration.md`](docs/plans/2026-06-29-change-orchestration.md)。**P1/P2 待 dogfood 暴露真实需求再开**（见下方 backlog）。
 
 ## dogfood 观察期（2026-06-28 起）
 
@@ -15,8 +15,9 @@
 
 ## 💡 backlog（待 dogfood 暴露真实需求再开，各自写计划/spec）
 
-- **变更编排器（change orchestration）**：把 `watch`（实时）/`scan`（diff）/手动批量统一为**同一条声明式管线的三个「源」**——源 → 堆积(debounce+maxWait) → 去重(L2/L3 事件折叠) → **路由(DQL 选择器)** → 执行(有界并发/重启语义/超时/失败continue/dry-run/优雅退出)，跑一串**强类型内建动作**(index/normalize/apply…)自动维护 vault。**吸收原 `migrate` 与 `watch pipeline` 两项**：批量改元数据 = 手动源+写动作（不再独立立项；调研结论：批量改属性「键」官方本体已做，「值」级才是空白）。**有评估背书**：[`docs/specs/2026-06-29-change-orchestration-design.md`](docs/specs/2026-06-29-change-orchestration-design.md)。设计完整、实现分阶段（P0 只读先行、写动作后置 dry-run）；**现在不做**，触发条件见 spec §13。
-- **lint（schema 校验）**：按用户 schema 校验属性存在性/类型/取值，报告或修（"修"复用 normalize/set）。需先定 frontmatter schema 格式（JSON Schema 或自创轻量 DSL，对标 `remark-lint-frontmatter-schema`）——长期 API 承诺最重，**最后做**。- **更多 profile**：按需扩（加 profile = 加数据；现有 `pkm-note` / `llm-wiki` / `ssg-blog`）。
+- **变更编排器 P1/P2（change orchestration）**：P0 已落地（源→堆积→去重→DQL 路由→执行，CLI `run`/`watch --pipeline`，吸收原 `migrate`/`watch pipeline`）。**P1 待续**：写动作落盘确认闸 `--apply`（当前写动作仅 dry-run）、`apply/set/unset/rename(+--if-exists)` 动作、背压、缓存跳过、条件分支、检查点续跑、失败告警、内容 hash 去重。**P2**：DAG/补偿回滚/定时·空闲触发/配置热重载。设计见 [`docs/specs/2026-06-29-change-orchestration-design.md`](docs/specs/2026-06-29-change-orchestration-design.md) §12；**按 dogfood 真实需求再开**。
+- **lint（schema 校验）**：按用户 schema 校验属性存在性/类型/取值，报告或修（"修"复用 normalize/set）。需先定 frontmatter schema 格式（JSON Schema 或自创轻量 DSL，对标 `remark-lint-frontmatter-schema`）——长期 API 承诺最重，**最后做**。
+- **更多 profile**：按需扩（加 profile = 加数据；现有 `pkm-note` / `llm-wiki` / `ssg-blog`）。
 - **meta refresh（机械字段重算）**：dogfood 发现——`meta apply` 对已存在的机械字段（`timestamp`/`sha256`）是 top-up 不重算，文档改内容后须先 `unset` 再 `apply` 才能刷新。可加 `meta apply --refresh-derived` / `meta refresh` 一键重算 derive 字段。小改动，按需做。
 - **不做**：type 强制 / 日期格式统一（调研判风险高、格式不确定）。
 - **语义/全文检索（S3.5）**：FTS5 全文（core、无 AI、中文 trigram）补"查正文"空洞；embedding 向量做成最小可选 AI（接口后、默认关、FTS5 兜底）。**有评估背书**：[`docs/specs/2026-06-28-semantic-retrieval-integration.md`](docs/specs/2026-06-28-semantic-retrieval-integration.md)。FTS5 优先级高于 embedding；**现在不做**，触发条件见 spec。

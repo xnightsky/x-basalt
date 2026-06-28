@@ -15,6 +15,7 @@
 5. [`skills` — 规范召回](#skills--规范召回)
 6. [`meta`](#meta--读改-frontmatter)
 7. [`watch`](#watch--常驻监听)
+8. [`run`](#run--变更编排管道)
 
 ---
 
@@ -336,6 +337,7 @@ x-basalt watch [vault] [--db <path>] [--on-change <cmd>]
 | `[vault]` | 配置 `vault` | Vault 根目录；省略时取配置 `vault`，二者皆无则 `✗` 报错 |
 | `--db <path>` | `.x-basalt/index.db` / 配置 `db` | SQLite 路径（可由配置 `db` 覆盖） |
 | `--on-change <cmd>` | 配置 `onChange` | 变更时执行的 shell 命令模板；`{file}` 占位替换为变更文件路径 |
+| `--pipeline <name>` | — | 用配置 `pipelines` 段定义的**声明式管道**维护（替代 `--on-change` 裸 shell）：启动先全量 scan 建基线，再按变更跑管道（去重/路由/动作链），`Ctrl+C` 优雅退出。详见 [`run`](#run--变更编排管道) |
 
 **行为细节**
 
@@ -352,7 +354,59 @@ x-basalt watch [vault] [--db <path>] [--on-change <cmd>]
 ```bash
 x-basalt watch ./my-vault --db ./index.db
 x-basalt watch ./my-vault --db ./index.db --on-change "node reindex-hook.js {file}"
+x-basalt watch ./my-vault --pipeline maintain     # 声明式管道维护（替代裸 shell）
 ```
+
+---
+
+## `run` — 变更编排管道
+
+```
+x-basalt run <pipeline> [--where <dql>] [--paths <p...>] [--vault <path>] [--db <path>] [--json]
+```
+
+按配置 `pipelines` 段定义的**声明式管道**处理一批变更：源 → 去重（同文件折叠）→ 路由（事件类型 / glob / DQL）→ 执行一串内建动作（`index` / `normalize` / `parse`…）。写动作默认 **dry-run**（须在管道配置显式 `dryRun: false` 才落盘）。
+
+| 参数/选项 | 默认 | 说明 |
+|---|---|---|
+| `<pipeline>` | 必填 | 管道名（定义在配置 `pipelines` 段；未知名 `✗` 报错并列已知名） |
+| `--where <dql>` | — | 用 DQL 选文件作为**手动源**（语义选一批，如"带 #pkm 且缺 status"） |
+| `--paths <p...>` | — | 文件相对路径列表作为手动源 |
+| （二者都不给） | — | 默认用 **scan 源**（全库 FS↔DB diff） |
+| `--vault <path>` | 配置 `vault` | Vault 根目录 |
+| `--db <path>` | `.x-basalt/index.db` / 配置 `db` | SQLite 路径 |
+| `--json` | 关 | 输出结构化报告（`total`/`changed`/`skipped`/`failed`/`dryRun`） |
+
+**退出码**：有动作失败时退出码 `1`（失败明细打到 stderr）。
+
+**配置该管道**（`.x-basalt/config.yaml` 的 `pipelines` 段）：
+
+```yaml
+pipelines:
+  maintain:
+    on: [add, change]        # 事件类型过滤（可选；缺省全部）
+    paths: ["pkm/**"]        # glob 入口过滤（可选）
+    where: "LIST FROM #pkm"  # DQL 语义路由（可选；依赖索引，引擎会先 index 再路由）
+    actions: [index, normalize]   # 必填：内建动作序列（串行）
+    concurrency: 4           # 文件间并发上限，默认 4
+    onError: continue        # continue | stop，默认 continue
+    dryRun: true             # 写动作默认 true（只预览不落盘）
+```
+
+**示例**
+
+```bash
+# 全库 diff 跑 maintain 管道
+x-basalt run maintain --vault ./my-vault
+
+# 语义选一批改造（原 migrate 用法）：对带 #pkm 的笔记跑管道
+x-basalt run apply-pkm --where "LIST FROM #pkm" --vault ./my-vault
+
+# 结构化报告
+x-basalt run idx --json
+```
+
+> `run`（手动 / scan 源，一次性）与 [`watch --pipeline`](#watch--常驻监听)（事件源，常驻）共享同一套管道语义——只是「源」不同。
 
 ---
 
