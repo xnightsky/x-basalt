@@ -31,6 +31,8 @@ export interface ActionContext {
   engine?: DataviewEngine;
   /** 写动作安全闸：true 时写动作只预览不落盘（spec §6.6，P0 默认 true）。 */
   dryRun: boolean;
+  /** 写动作落盘成功后回调路径（供编排器记录"自产生写"做防回环，spec §9 坑①）。 */
+  onWrite?: (path: string) => void;
 }
 
 /** 单个动作对单个文件执行后的结果（供 RunReport 汇总）。 */

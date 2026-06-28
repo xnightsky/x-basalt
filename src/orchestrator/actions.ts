@@ -38,10 +38,12 @@ const normalizeAction: Action = {
     const abs = join(ctx.vaultPath, ev.path);
     const r = editMeta(abs, (d) => void normalizeDoc(d), { dryRun: ctx.dryRun });
     // dryRun → 未落盘记 skipped；非 dryRun 且有字节变化才记 changed。
+    const changed = r.changed && !r.dryRun;
+    if (changed) ctx.onWrite?.(ev.path); // 落盘成功 → 通知编排器记录自产生写（防回环 §9 坑①）
     return {
       action: "normalize",
       path: ev.path,
-      changed: r.changed && !r.dryRun,
+      changed,
       skipped: r.dryRun,
     };
   },

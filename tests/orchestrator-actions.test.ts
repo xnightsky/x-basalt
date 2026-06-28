@@ -107,3 +107,35 @@ test("CO-D1 Given 可解析文件 When parse 动作 Then 成功且不写", async
     rmSync(dir, { recursive: true, force: true });
   }
 });
+
+test("CO-F2 Given normalize 落盘 When 提供 onWrite Then 回调该路径（防回环钩子）", async () => {
+  const dir = mkVault({ "a.md": "---\ntag: x\n---\nbody\n" });
+  const indexer = new VaultIndexer({ vaultPath: dir, dbPath: join(dir, "i.db") });
+  try {
+    const written: string[] = [];
+    await getAction("normalize").run(
+      { path: "a.md", type: "change" },
+      { vaultPath: dir, indexer, dryRun: false, onWrite: (p) => written.push(p) },
+    );
+    assert.deepEqual(written, ["a.md"]);
+  } finally {
+    indexer.close();
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test("CO-F2 Given normalize dryRun When 提供 onWrite Then 不回调（未落盘）", async () => {
+  const dir = mkVault({ "a.md": "---\ntag: x\n---\nbody\n" });
+  const indexer = new VaultIndexer({ vaultPath: dir, dbPath: join(dir, "i.db") });
+  try {
+    const written: string[] = [];
+    await getAction("normalize").run(
+      { path: "a.md", type: "change" },
+      { vaultPath: dir, indexer, dryRun: true, onWrite: (p) => written.push(p) },
+    );
+    assert.deepEqual(written, []);
+  } finally {
+    indexer.close();
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
