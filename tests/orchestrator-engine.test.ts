@@ -35,7 +35,10 @@ test("CO-F2 Given 空库 When runScan index 管道 Then 文件落库", async () 
     orch.close();
   }
   const engine = new DataviewEngine(dbPath);
-  assert.ok(engine.query("LIST").rows.some((r) => r["file.path"] === "a.md"), "a.md 应已落库");
+  assert.ok(
+    engine.query("LIST").rows.some((r) => r["file.path"] === "a.md"),
+    "a.md 应已落库",
+  );
   engine.close();
   rmSync(dir, { recursive: true, force: true });
 });
@@ -45,7 +48,10 @@ test("CO-F2 Given DQL 手动源 When runManual Then 只处理命中文件", asyn
   const orch = new Orchestrator({ vaultPath: dir, dbPath: join(dir, "i.db") });
   try {
     await orch.runScan({ actions: ["index"], dryRun: true }); // 先落库供 DQL 查询
-    const report = await orch.runManual({ actions: ["parse"], dryRun: true }, { dql: "LIST FROM #pkm" });
+    const report = await orch.runManual(
+      { actions: ["parse"], dryRun: true },
+      { dql: "LIST FROM #pkm" },
+    );
     assert.equal(report.total, 1, "只 a.md 命中 #pkm");
   } finally {
     orch.close();

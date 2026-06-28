@@ -22,6 +22,8 @@ import {
   setMeta,
   unsetMeta,
 } from "./meta/index.js";
+import { Orchestrator } from "./orchestrator/index.js";
+import type { RunReport } from "./orchestrator/index.js";
 import { DataviewEngine } from "./query/index.js";
 import { SkillRecall } from "./skill/index.js";
 import { renderSkill, renderSkillList, renderSkills } from "./skill/render.js";
@@ -101,6 +103,20 @@ function reportApply(r: ApplyResult): void {
   }
   console.log(`${r.changed ? "✓" : "·"} apply ${r.profile} → ${r.file}`);
   for (const l of lines) console.log(`  ${l}`);
+}
+
+/** 汇报一次编排器 run：文件/改动/跳过/失败计数；有失败置退出码 1。 */
+function reportRun(report: RunReport, name: string, json: boolean): void {
+  if (json) {
+    emit(report);
+  } else {
+    const mark = report.failed.length === 0 ? "✓" : "⚠";
+    console.log(
+      `${mark} run ${name}：${report.total} 文件 / ${report.changed} 改动 / ${report.skipped} 跳过 / ${report.failed.length} 失败${report.dryRun ? "（dry-run，写动作未落盘）" : ""}`,
+    );
+    for (const f of report.failed) console.error(`  ✗ ${f.action} ${f.path}：${f.error}`);
+  }
+  if (report.failed.length > 0) process.exitCode = 1;
 }
 
 const program = new Command();
@@ -364,31 +380,101 @@ meta
   });
 
 program
+  .command("run")
+  .description("按声明式管道处理变更（默认 scan 全库 diff；--where/--paths 切手动源）")
+  .argument("<pipeline>", "管道名（定义在配置 pipelines 段）")
+  .option("--where <dql>", "用 DQL 选文件作为手动源（= 原 migrate 的语义选一批）")
+  .option("--paths <p...>", "文件相对路径列表作为手动源")
+  .option("--vault <path>", "Vault 目录（可回退配置 vault）")
+  .option("--db <path>", "SQLite 索引路径（默认 .x-basalt/index.db，可由配置 db 覆盖）")
+  .option("--json", "结构化报告输出", false)
+  .action(
+    async (
+      name: string,
+      opts: { where?: string; paths?: string[]; vault?: string; db?: string; json: boolean },
+    ) => {
+      const vaultPath = required(
+        opts.vault ?? config.vault,
+        "需要 --vault 参数或在配置文件中设置 vault",
+      );
+      const dbPath = opts.db ?? config.db ?? DEFAULT_DB;
+      const pipeline = config.pipelines?.[name];
+      if (!pipeline) {
+        const known = Object.keys(config.pipelines ?? {}).join(", ") || "无";
+        throw new Error(`未知管道 "${name}"（在配置 pipelines 段定义；已知：${known}）`);
+      }
+      const orch = new Orchestrator({ vaultPath, dbPath });
+      try {
+        const report =
+          opts.where !== undefined
+            ? await orch.runManual(pipeline, { dql: opts.where })
+            : opts.paths !== undefined
+              ? await orch.runManual(pipeline, { paths: opts.paths })
+              : await orch.runScan(pipeline);
+        reportRun(report, name, opts.json);
+      } finally {
+        orch.close();
+      }
+    },
+  );
+
+program
   .command("watch")
   .description("监听模式：索引 + 文件变更实时输出")
   .argument("[vault]", "Vault 目录（可省略，回退配置 vault）")
   .option("--db <path>", "SQLite 索引文件路径（默认 .x-basalt/index.db，可由配置 db 覆盖）")
   .option("--on-change <cmd>", "变更时执行的命令模板（{file} 占位；可由配置 onChange 提供）")
-  .action(async (vault: string | undefined, opts: { db?: string; onChange?: string }) => {
-    const vaultPath = required(vault ?? config.vault, "需要 <vault> 参数或在配置文件中设置 vault");
-    const dbPath = opts.db ?? config.db ?? DEFAULT_DB;
-    const onChange = opts.onChange ?? config.onChange;
-    const indexer = new VaultIndexer({ vaultPath, dbPath });
-    await indexer.rebuild();
-    console.log(`✓ 已索引 ${vaultPath} → ${dbPath}，开始监听… 按 Ctrl+C 退出。`);
-    indexer.watch((event, file) => {
-      console.log(`· ${event} ${file}`);
-      // on-change 命令模板：{file} 占位替换为变更文件路径，经 shell 执行。
-      if (onChange) {
-        const cmd = onChange.replaceAll("{file}", file);
-        exec(cmd, (err, stdout, stderr) => {
-          if (stdout) process.stdout.write(stdout);
-          if (stderr) process.stderr.write(stderr);
-          if (err) console.error(`✗ on-change 失败：${err.message}`);
-        });
+  .option("--pipeline <name>", "用声明式管道维护（配置 pipelines 段）；替代 --on-change 裸 shell")
+  .action(
+    async (
+      vault: string | undefined,
+      opts: { db?: string; onChange?: string; pipeline?: string },
+    ) => {
+      const vaultPath = required(
+        vault ?? config.vault,
+        "需要 <vault> 参数或在配置文件中设置 vault",
+      );
+      const dbPath = opts.db ?? config.db ?? DEFAULT_DB;
+      // 管道模式：常驻编排器（启动先全量 scan 建基线，再 watch 增量维护，SIGINT 优雅退出）。
+      if (opts.pipeline) {
+        const pipeline = config.pipelines?.[opts.pipeline];
+        if (!pipeline) {
+          const known = Object.keys(config.pipelines ?? {}).join(", ") || "无";
+          throw new Error(`未知管道 "${opts.pipeline}"（配置 pipelines 段；已知：${known}）`);
+        }
+        const orch = new Orchestrator({ vaultPath, dbPath });
+        await orch.runScan(pipeline); // 初始运行：建基线
+        orch.watch(
+          pipeline,
+          (r) =>
+            console.log(
+              `· 管道 ${opts.pipeline}：${r.total} 文件 / ${r.changed} 改 / ${r.failed.length} 败`,
+            ),
+          () => console.log(`✓ 监听中（管道 ${opts.pipeline}）… 按 Ctrl+C 退出。`),
+        );
+        const shutdown = (): void => void orch.stop().then(() => process.exit(0));
+        process.on("SIGINT", shutdown);
+        process.on("SIGTERM", shutdown);
+        return;
       }
-    });
-  });
+      const onChange = opts.onChange ?? config.onChange;
+      const indexer = new VaultIndexer({ vaultPath, dbPath });
+      await indexer.rebuild();
+      console.log(`✓ 已索引 ${vaultPath} → ${dbPath}，开始监听… 按 Ctrl+C 退出。`);
+      indexer.watch((event, file) => {
+        console.log(`· ${event} ${file}`);
+        // on-change 命令模板：{file} 占位替换为变更文件路径，经 shell 执行。
+        if (onChange) {
+          const cmd = onChange.replaceAll("{file}", file);
+          exec(cmd, (err, stdout, stderr) => {
+            if (stdout) process.stdout.write(stdout);
+            if (stderr) process.stderr.write(stderr);
+            if (err) console.error(`✗ on-change 失败：${err.message}`);
+          });
+        }
+      });
+    },
+  );
 
 program.parseAsync(process.argv).catch((err: unknown) => {
   console.error(`✗ ${(err as Error).message}`);

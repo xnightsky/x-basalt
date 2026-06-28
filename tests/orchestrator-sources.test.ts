@@ -28,13 +28,10 @@ test("CO-F1 Given 空库 When scanSource Then 全部为 add 事件", async () =>
   const indexer = new VaultIndexer({ vaultPath: dir, dbPath: join(dir, "i.db") });
   try {
     const evs = await scanSource(indexer);
-    assert.deepEqual(
-      evs.map((e) => [e.path, e.type]).sort(),
-      [
-        ["a.md", "add"],
-        ["b.md", "add"],
-      ],
-    );
+    assert.deepEqual(evs.map((e) => [e.path, e.type]).toSorted(), [
+      ["a.md", "add"],
+      ["b.md", "add"],
+    ]);
   } finally {
     indexer.close();
     rmSync(dir, { recursive: true, force: true });
@@ -94,7 +91,7 @@ test("CO-F1 Given DQL When manualSourceFromDql Then 命中文件的 change 事�
 test("CO-F1 Given 启动监听后新建文件 When watchSource Then 收到 add 事件", async () => {
   const dir = mkVault({});
   const evs: ChangeEvent[] = [];
-  let stop = () => {};
+  let stop: (() => void) | undefined;
   await new Promise<void>((resolve) => {
     stop = watchSource(
       dir,
@@ -110,7 +107,7 @@ test("CO-F1 Given 启动监听后新建文件 When watchSource Then 收到 add �
       "应收到 new.md 的 add 事件",
     );
   } finally {
-    stop();
+    stop?.();
     rmSync(dir, { recursive: true, force: true });
   }
 });

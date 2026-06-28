@@ -101,7 +101,8 @@ export async function runPipeline(
   // 有界并发：worker 池从共享游标领取事件；stop 后不再领新事件。
   let next = 0;
   const worker = async (): Promise<void> => {
-    while (next < batch.length && !stopped) {
+    while (next < batch.length) {
+      if (stopped) return; // onError=stop 后不再领新文件（processEvent 内置 stopped）
       const idx = next++;
       const e = batch[idx];
       if (e) await processEvent(e);

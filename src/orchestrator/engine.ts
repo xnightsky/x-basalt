@@ -122,11 +122,7 @@ export class Orchestrator {
    * 常驻：watch 源 + 堆积 + 防回环。定时检查堆积器，到点 flush 一批跑管道。
    * 批之间用 running 链串行（不重叠执行 = onBusy queue 雏形）。
    */
-  watch(
-    pipeline: PipelineConfig,
-    onReport?: (r: RunReport) => void,
-    onReady?: () => void,
-  ): void {
+  watch(pipeline: PipelineConfig, onReport?: (r: RunReport) => void, onReady?: () => void): void {
     const wait = pipeline.debounce?.wait ?? 300;
     const maxWait = pipeline.debounce?.maxWait ?? 3000;
     this.accumulator = new Accumulator({ wait, maxWait });

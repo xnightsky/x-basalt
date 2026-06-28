@@ -60,10 +60,15 @@ test("CO-E1 Given 某动作抛错 onError=continue When runPipeline Then 跳过�
 
 test("CO-E1 Given 某动作抛错 onError=stop When runPipeline Then 立即停止、后续文件不执行", async () => {
   const log: string[] = [];
-  const report = await runPipeline([ev("x.md"), ev("y.md")], [failing("boom"), recording("after", log)], ctx, {
-    onError: "stop",
-    concurrency: 1,
-  });
+  const report = await runPipeline(
+    [ev("x.md"), ev("y.md")],
+    [failing("boom"), recording("after", log)],
+    ctx,
+    {
+      onError: "stop",
+      concurrency: 1,
+    },
+  );
   assert.deepEqual(log, []);
   // stop：第一个文件失败后不再处理第二个
   assert.equal(report.failed.length, 1);

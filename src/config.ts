@@ -4,6 +4,7 @@ import { existsSync } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
 import { parse as parseYaml } from "yaml";
+import type { PipelineConfig } from "./orchestrator/types.js";
 
 // === 自建实现: 项目/全局配置加载，给 CLI 选项提供默认值（免去每次重复 --db/--vault 等）===
 //
@@ -24,6 +25,8 @@ export interface BasaltConfig {
   format?: string;
   /** watch 默认的 on-change 命令模板（{file} 占位） */
   onChange?: string;
+  /** 声明式管道（变更编排器，spec §8）：name → 管道配置。 */
+  pipelines?: Record<string, PipelineConfig>;
 }
 
 /** 允许的字符串键（其余键忽略，避免误用）。 */
@@ -52,13 +55,43 @@ const LOADERS = {
 /** 全局配置候选扩展名（优先级同 SEARCH_PLACES 同形式内顺序）。 */
 const GLOBAL_EXTS = ["yaml", "yml", "json5", "json"];
 
-/** 仅挑出已知的字符串键，忽略未知键与非字符串值。 */
+/**
+ * 解析配置的 pipelines 段为带缺省值的 PipelineConfig 映射（变更编排器，spec §8）。
+ * 每个 pipeline 必须有 actions（字符串数组），否则报错（不静默忽略，防拼错）；
+ * concurrency/onBusy/onError/dryRun 缺省填 4/queue/continue/true。
+ */
+export function parsePipelines(raw: unknown): Record<string, PipelineConfig> {
+  if (raw == null) return {};
+  if (typeof raw !== "object") throw new Error("pipelines 必须是对象");
+  const out: Record<string, PipelineConfig> = {};
+  for (const [name, value] of Object.entries(raw as Record<string, unknown>)) {
+    const p = (value ?? {}) as Record<string, unknown>;
+    if (!Array.isArray(p.actions) || p.actions.some((a) => typeof a !== "string")) {
+      throw new Error(`pipeline "${name}" 缺少 actions（字符串数组）`);
+    }
+    out[name] = {
+      actions: p.actions as string[],
+      on: p.on as PipelineConfig["on"],
+      paths: Array.isArray(p.paths) ? (p.paths as string[]) : undefined,
+      where: typeof p.where === "string" ? p.where : undefined,
+      debounce: p.debounce as PipelineConfig["debounce"],
+      concurrency: typeof p.concurrency === "number" ? p.concurrency : 4,
+      onBusy: (p.onBusy as PipelineConfig["onBusy"]) ?? "queue",
+      onError: (p.onError as PipelineConfig["onError"]) ?? "continue",
+      dryRun: typeof p.dryRun === "boolean" ? p.dryRun : true,
+    };
+  }
+  return out;
+}
+
+/** 仅挑出已知的字符串键 + pipelines 段；忽略未知键与非字符串值。 */
 function pickConfig(obj: Record<string, unknown>): BasaltConfig {
   const out: BasaltConfig = {};
   for (const k of KEYS) {
     const v = obj[k];
     if (typeof v === "string") out[k] = v;
   }
+  if (obj.pipelines !== undefined) out.pipelines = parsePipelines(obj.pipelines);
   return out;
 }
 
