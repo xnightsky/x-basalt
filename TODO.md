@@ -20,4 +20,6 @@
   - 风险/待定：写动作（apply/normalize）会改 `.md`，常驻自动改文件需谨慎——默认 dry-run/需显式开启写、失败汇总而非中断、避免与编辑器保存竞争（已有 awaitWriteFinish 兜底）。与 migrate（一次性批改）互补：migrate 是手动批量，watch-pipeline 是常驻增量。
 - **更多 profile**：按需扩（加 profile = 加数据；现有 `pkm-note` / `llm-wiki` / `ssg-blog`）。
 - **不做**：type 强制 / 日期格式统一（调研判风险高、格式不确定）。
-- **可选增强**（按需再定）：S3.4 kysely 收编 DQL→SQL；S3.5 FTS5 全文检索。
+- **语义/全文检索（S3.5）**：FTS5 全文（core、无 AI、中文 trigram）补"查正文"空洞；embedding 向量做成最小可选 AI（接口后、默认关、FTS5 兜底）。**有评估背书**：[`docs/specs/2026-06-28-semantic-retrieval-integration.md`](docs/specs/2026-06-28-semantic-retrieval-integration.md)。FTS5 优先级高于 embedding；**现在不做**，触发条件见 spec。
+- **CLI chat（可选 AI · 远期）**：自然语言驱动 vault，对标 `agent-browser chat`（单发 `chat "<指令>"` + REPL）。最小可选 AI——内核纯离线、默认关、用户自配 `AI_GATEWAY_*`（兼容 agent-browser）、无配置全功能。**有评估背书**：[`docs/specs/2026-06-28-cli-chat-design.md`](docs/specs/2026-06-28-cli-chat-design.md)。依赖 FTS5 先落地，**现在不做**。
+- **可选增强**（按需再定）：S3.4 kysely 收编 DQL→SQL。
