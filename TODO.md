@@ -2,7 +2,11 @@
 
 > backlog / roadmap（存在 = 有待做项）。**已完成的不堆这**——见 git log、`docs/plans/`、`docs/specs/`。
 
-## ▶ 当前：dogfood 观察期（2026-06-28 起）
+## ▶ 当前：变更编排器 P0 实现中（2026-06-29 起）
+
+按 spec 开工：实现 `src/orchestrator/`（源→堆积→去重→路由→执行）。计划见 [`docs/plans/2026-06-29-change-orchestration.md`](docs/plans/2026-06-29-change-orchestration.md)，设计见 [`docs/specs/2026-06-29-change-orchestration-design.md`](docs/specs/2026-06-29-change-orchestration-design.md)。范围 = spec §12 的 P0；写动作默认 dry-run。
+
+## dogfood 观察期（2026-06-28 起）
 
 核心读侧（解析/索引/查询/召回/CLI）+ 写侧（meta：CRUD / normalize / profile-apply，3 套 profile）均已落地。**先不发布，全局安装实际用一段时间，据真实反馈再迭代。**
 
