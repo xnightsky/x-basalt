@@ -1,11 +1,16 @@
-import { readFileSync, renameSync, writeFileSync } from "node:fs";
+import { readFileSync, renameSync, statSync, writeFileSync } from "node:fs";
 import { basename, dirname, join } from "node:path";
 import type { Document } from "yaml";
+import { applySets, diffProfile, type ProfileDiff, prefillTrivial } from "./apply.js";
 import { serializeDocument, splitDocument } from "./document.js";
+import { normalizeDoc } from "./normalize.js";
 import { getMeta } from "./operations.js";
+import { getProfile } from "./profiles.js";
 
 export type { FrontmatterParts } from "./document.js";
+export type { ProfileDiff } from "./apply.js";
 export { type NormalizeOptions, normalizeDoc } from "./normalize.js";
+export { getProfile, listProfiles, type Profile } from "./profiles.js";
 export {
   coerceValue,
   getMeta,
@@ -66,6 +71,75 @@ export function editMeta(
   const dryRun = opts.dryRun === true;
   if (changed && !dryRun) atomicWrite(file, content);
   return { file, changed, dryRun, content };
+}
+
+/** applyProfile 结果。filled/skipped 为本次补入/跳过的 key；present/missing 为应用后对照 profile 的状态。 */
+export interface ApplyResult {
+  file: string;
+  profile: string;
+  /** 本次新补入的字段（原本缺失：消费者 --set + 机械预填）。 */
+  filled: string[];
+  /** 消费者 --set 覆盖掉的、原本已有值的 key。 */
+  overridden: string[];
+  /** 应用后已存在的 profile 字段。 */
+  present: string[];
+  /** 应用后仍缺的 profile 字段（按角色分组）——消费者据此决定是否补。 */
+  missing: ProfileDiff["missing"];
+  changed: boolean;
+  dryRun: boolean;
+  content: string;
+}
+
+/**
+ * 套用元数据策略（profile）：消费者 --set 补缺（explicit 优先）+ 机械预填（created/modified/sha256）。
+ * 全 top-up（已有不动）；非法 YAML 拒写；未知 profile 报错。x-basalt 不补语义字段、不调 LLM——
+ * 仍缺的语义/额外字段由消费者（AI 读 `meta profile show` 的规范+文档 / 人）经 --set 或事后 `meta set` 补。
+ *
+ * @param file - 目标 .md
+ * @param profileName - profile 名（未知则报错并列可用名）
+ * @param opts.sets - 消费者传入的 key=value（按 profile 类型转）
+ * @param opts.dryRun - 只算不写
+ */
+export function applyProfile(
+  file: string,
+  profileName: string,
+  opts: { sets?: Record<string, string>; dryRun?: boolean } = {},
+): ApplyResult {
+  const profile = getProfile(profileName); // 未知 → 抛错列可用名
+  const original = readFileSync(file, "utf8");
+  const parts = splitDocument(original);
+  if (parts.doc.errors.length > 0) {
+    throw new Error(
+      `frontmatter YAML 解析失败，拒绝写入：${parts.doc.errors[0]?.message ?? "未知错误"}`,
+    );
+  }
+  const stat = statSync(file);
+  // 显式 --set 先写（权威覆盖），再机械预填剩余缺失项（机械层只补缺、不抢 --set）——显式值优先。
+  const setRes = applySets(parts.doc, profile, opts.sets ?? {});
+  const mech = prefillTrivial(parts.doc, profile, {
+    birthtime: stat.birthtime,
+    mtime: stat.mtime,
+    body: parts.body,
+  });
+  // 标准化收尾：profile 建立在标准化之上——填完即归一（tags 列表化/去#/去重/单数键迁移），
+  // 产出既合规又齐全（含清理文件里旧的不规范字段，与 --set/机械填入的值）。
+  normalizeDoc(parts.doc);
+  const diff = diffProfile(parts.doc, profile); // 归一后：present + 仍缺
+  const content = serializeDocument(parts);
+  const changed = content !== original;
+  const dryRun = opts.dryRun === true;
+  if (changed && !dryRun) atomicWrite(file, content);
+  return {
+    file,
+    profile: profileName,
+    filled: [...setRes.filled, ...mech],
+    overridden: setRes.overridden,
+    present: diff.present,
+    missing: diff.missing,
+    changed,
+    dryRun,
+    content,
+  };
 }
 
 /** 原子写：同目录临时文件 + rename 覆盖，避免半写损坏。 */

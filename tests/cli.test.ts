@@ -339,6 +339,71 @@ test("meta normalize --dry-run：打印将写入内容但不落盘", () => {
   assert.equal(readFileSync(file, "utf8"), prev, "dry-run 不应改文件");
 });
 
+// === MW3.3 meta profile / apply 端到端 ===
+
+test("meta profile list：列出 profile，pkm-note 居首", () => {
+  const r = run(["meta", "profile", "list"]);
+  assert.equal(r.status, 0, r.stderr);
+  const arr = JSON.parse(r.stdout) as { name: string }[];
+  assert.equal(arr[0]?.name, "pkm-note");
+  assert.ok(arr.some((p) => p.name === "llm-wiki"));
+});
+
+test("meta profile show pkm-note：输出规范+模板（含字段与 summary）", () => {
+  const r = run(["meta", "profile", "show", "pkm-note"]);
+  assert.equal(r.status, 0);
+  const p = JSON.parse(r.stdout);
+  assert.equal(p.name, "pkm-note");
+  assert.ok(p.summary.length > 0);
+  assert.ok((p.fields as { key: string }[]).some((f) => f.key === "created"));
+});
+
+test("meta apply pkm-note：机械补 created/modified 落盘", () => {
+  const file = join(freshDir(), "N.md");
+  writeFileSync(file, "---\n---\n# Note\n", "utf8");
+  const r = run(["meta", "apply", "pkm-note", file]);
+  assert.equal(r.status, 0, r.stderr);
+  assert.match(r.stdout, /apply pkm-note/);
+  assert.match(readFileSync(file, "utf8"), /created:/);
+  assert.match(readFileSync(file, "utf8"), /modified:/);
+});
+
+test("meta apply --set：消费者一次补语义字段（按类型转）", () => {
+  const file = join(freshDir(), "N.md");
+  writeFileSync(file, "---\n---\n# Note\n", "utf8");
+  const r = run(["meta", "apply", "pkm-note", file, "--set", "tags=a,b", "--set", "status=active"]);
+  assert.equal(r.status, 0, r.stderr);
+  assert.deepEqual(JSON.parse(run(["meta", "get", file, "tags"]).stdout), ["a", "b"]);
+  assert.equal(JSON.parse(run(["meta", "get", file, "status"]).stdout), "active");
+});
+
+test("meta apply --set 覆盖：显式值覆盖已有/机械字段", () => {
+  const file = join(freshDir(), "N.md");
+  writeFileSync(file, "---\ntitle: Old\n---\n# Note\n", "utf8");
+  const r = run(["meta", "apply", "llm-wiki", file, "--set", "title=abc", "--set", "type=note"]);
+  assert.equal(r.status, 0, r.stderr);
+  assert.equal(JSON.parse(run(["meta", "get", file, "title"]).stdout), "abc"); // 覆盖 Old
+  assert.equal(JSON.parse(run(["meta", "get", file, "type"]).stdout), "note");
+});
+
+test("meta apply --dry-run：不落盘", () => {
+  const file = join(freshDir(), "N.md");
+  writeFileSync(file, "---\n---\n# Note\n", "utf8");
+  const prev = readFileSync(file, "utf8");
+  const r = run(["meta", "apply", "pkm-note", file, "--dry-run"]);
+  assert.equal(r.status, 0);
+  assert.match(r.stdout, /created:/);
+  assert.equal(readFileSync(file, "utf8"), prev);
+});
+
+test("meta apply 退出码：未知 profile → 退出 1 且列可用名", () => {
+  const file = join(freshDir(), "N.md");
+  writeFileSync(file, "---\n---\n# Note\n", "utf8");
+  const r = run(["meta", "apply", "nope", file]);
+  assert.equal(r.status, 1);
+  assert.match(r.stderr, /✗.*pkm-note/s);
+});
+
 test("watch 主路径：启动后打印已索引并进入监听（随后终止进程树）", async () => {
   const vault = makeVault();
   const db = join(freshDir(), "w.db");

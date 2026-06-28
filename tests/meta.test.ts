@@ -3,7 +3,7 @@ import { mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from "n
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { after, test } from "node:test";
-import { editMeta, readMeta } from "../src/meta/index.js";
+import { applyProfile, editMeta, readMeta } from "../src/meta/index.js";
 import { renameMeta, setMeta, unsetMeta } from "../src/meta/operations.js";
 
 // === MW1.3 编排 + 原子写 + dry-run ===
@@ -93,4 +93,81 @@ test("MW1.3 Given 无改动的 set（值相同）When editMeta Then changed=fals
   const r = editMeta(file, (d) => setMeta(d, "n", 5));
   assert.equal(r.changed, false);
   assert.equal(readFileSync(file, "utf8"), before);
+});
+
+// === MW3.3 applyProfile 编排 ===
+
+test("MW3.3 Given 文件 When applyProfile(pkm-note) Then 机械补 created/modified、报告仍缺语义字段", () => {
+  const file = tmpFile("---\n---\n# 笔记\n正文\n");
+  const r = applyProfile(file, "pkm-note");
+  assert.equal(r.changed, true);
+  assert.deepEqual(r.filled, ["created", "modified"]);
+  assert.match(readMeta(file, "created") as string, /^\d{4}-\d{2}-\d{2}T/); // ISO
+  assert.match(readMeta(file, "modified") as string, /^\d{4}-\d{2}-\d{2}T/);
+  assert.equal(readMeta(file, "tags"), undefined); // 语义字段不机械补
+  assert.ok(r.missing.recommended.includes("tags")); // 报告仍缺
+  assert.ok(readFileSync(file, "utf8").endsWith("# 笔记\n正文\n")); // 正文保留
+});
+
+test("MW3.3 Given --set kwargs When applyProfile Then 同时补语义字段、按类型转", () => {
+  const file = tmpFile("---\n---\nbody\n");
+  const r = applyProfile(file, "pkm-note", { sets: { tags: "a, b", status: "active" } });
+  assert.ok(r.filled.includes("tags") && r.filled.includes("status"));
+  assert.deepEqual(readMeta(file, "tags"), ["a", "b"]); // list 拆
+  assert.equal(readMeta(file, "status"), "active");
+  assert.ok(!r.missing.recommended.includes("tags")); // 补了就不再缺
+});
+
+test("MW3.3 Given 旧的不规范字段 When applyProfile Then 收尾归一（profile 建立在标准化之上）", () => {
+  // tag(单数) + 带 # → apply 应迁移为 tags、去 #、列表化，同时机械补 created/modified
+  const file = tmpFile('---\ntag: "#x"\n---\nbody\n');
+  applyProfile(file, "pkm-note");
+  assert.deepEqual(readMeta(file, "tags"), ["x"]); // 单数迁移 + 去# + 列表化
+  assert.equal(readMeta(file, "tag"), undefined);
+  assert.match(readMeta(file, "created") as string, /^\d{4}-/); // 机械字段也补了
+});
+
+test("MW3.3 Given --set 覆盖机械/已有字段 When applyProfile Then 显式值优先", () => {
+  const file = tmpFile("---\ntitle: Old\n---\nbody\n");
+  const r = applyProfile(file, "pkm-note", { sets: { created: "2020-01-01", title: "New" } });
+  assert.equal(readMeta(file, "created"), "2020-01-01"); // --set 覆盖机械 birthtime
+  assert.equal(readMeta(file, "title"), "New"); // --set 覆盖已有的额外字段
+  assert.ok(r.overridden.includes("title")); // 原本已有→overridden
+  assert.ok(r.filled.includes("created")); // 原本缺→filled（--set 先写，机械层跳过）
+});
+
+test("MW3.3 Given 连跑两次 When applyProfile Then 第二次幂等（changed=false、字节稳定）", () => {
+  const file = tmpFile("---\n---\nbody\n");
+  applyProfile(file, "pkm-note");
+  const first = readFileSync(file, "utf8");
+  const r2 = applyProfile(file, "pkm-note");
+  assert.equal(r2.changed, false);
+  assert.equal(readFileSync(file, "utf8"), first);
+});
+
+test("MW3.3 Given ssg-blog When applyProfile Then 机械补 pubDate/updatedDate、报告仍缺 title/description", () => {
+  const file = tmpFile("---\n---\n# Post\n正文\n");
+  const r = applyProfile(file, "ssg-blog");
+  assert.ok(r.filled.includes("pubDate") && r.filled.includes("updatedDate"));
+  assert.match(readMeta(file, "pubDate") as string, /^\d{4}-/);
+  assert.ok(r.missing.required.includes("title") && r.missing.required.includes("description"));
+});
+
+test("MW3.3 Given dry-run When applyProfile Then 不落盘", () => {
+  const file = tmpFile("---\n---\nbody\n");
+  const before = readFileSync(file, "utf8");
+  const r = applyProfile(file, "pkm-note", { dryRun: true });
+  assert.equal(r.dryRun, true);
+  assert.match(r.content, /created:/);
+  assert.equal(readFileSync(file, "utf8"), before);
+});
+
+test("MW3.3 Given 未知 profile / 非法 YAML When applyProfile Then 报错且不毁文件", () => {
+  const ok = tmpFile("---\n---\nbody\n");
+  assert.throws(() => applyProfile(ok, "nope"), /未知 profile/);
+
+  const bad = tmpFile("---\nk: [unclosed\n---\nbody\n");
+  const before = readFileSync(bad, "utf8");
+  assert.throws(() => applyProfile(bad, "pkm-note"), /解析失败|拒绝/);
+  assert.equal(readFileSync(bad, "utf8"), before);
 });

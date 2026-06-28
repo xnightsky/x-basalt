@@ -8,9 +8,13 @@ import { emit } from "./format.js";
 import { VaultIndexer } from "./indexer/index.js";
 import { VaultParser } from "./parser/index.js";
 import {
+  type ApplyResult,
+  applyProfile,
   coerceValue,
   editMeta,
   type EditResult,
+  getProfile,
+  listProfiles,
   type MetaScalarType,
   normalizeDoc,
   readMeta,
@@ -59,6 +63,43 @@ function reportNormalize(r: EditResult, changes: string[]): void {
     return;
   }
   console.log(r.changed ? `✓ normalize（${summary}）→ ${r.file}` : `· 已是规范形态：${r.file}`);
+}
+
+/** 解析重复的 --set key=value 为对象（无 `=` 报错）。 */
+function parseSets(pairs: string[]): Record<string, string> {
+  const out: Record<string, string> = {};
+  for (const p of pairs) {
+    const i = p.indexOf("=");
+    if (i <= 0) throw new Error(`--set 需 key=value 形式，得到 "${p}"`);
+    out[p.slice(0, i)] = p.slice(i + 1);
+  }
+  return out;
+}
+
+/** 汇报一次 apply：补入 / 跳过 / 仍缺；仍缺指向 profile show 让消费者决定补什么。 */
+function reportApply(r: ApplyResult): void {
+  const lines: string[] = [];
+  if (r.filled.length > 0) lines.push(`补入：${r.filled.join(", ")}`);
+  if (r.overridden.length > 0) lines.push(`覆盖(--set)：${r.overridden.join(", ")}`);
+  const miss = [
+    ...r.missing.required.map((k) => `${k}(必填)`),
+    ...r.missing.recommended,
+    ...r.missing.optional.map((k) => `${k}(可选)`),
+  ];
+  if (miss.length > 0) {
+    lines.push(
+      `仍缺：${miss.join(", ")}（读规范 meta profile show ${r.profile}；可 --set 或 meta set 补）`,
+    );
+  }
+  if (r.dryRun) {
+    process.stdout.write(r.content);
+    console.error(
+      `· dry-run（未写入）apply ${r.profile} → ${r.file}${lines.length > 0 ? `\n  ${lines.join("\n  ")}` : ""}`,
+    );
+    return;
+  }
+  console.log(`${r.changed ? "✓" : "·"} apply ${r.profile} → ${r.file}`);
+  for (const l of lines) console.log(`  ${l}`);
 }
 
 const program = new Command();
@@ -240,6 +281,38 @@ meta
       { dryRun: opts.dryRun },
     );
     reportNormalize(r, changes);
+  });
+
+// meta profile：列出 / 查看元数据策略规范（“告知”能力——x-basalt 只告知，补全由消费者 AI/人）。
+const metaProfile = meta.command("profile").description("元数据策略 profile：列出 / 查看规范");
+metaProfile
+  .command("list")
+  .description("列出可用 profile")
+  .action(() => {
+    emit(listProfiles().map((p) => ({ name: p.name, title: p.title, source: p.source })));
+  });
+metaProfile
+  .command("show")
+  .description("输出某 profile 的规范+模板（供 AI/人读后决定补什么）")
+  .argument("<name>", "profile 名")
+  .option("--format <fmt>", "输出格式 json|yaml（默认 json，可由配置 format 覆盖）")
+  .action((name: string, opts: { format?: string }) => {
+    emit(getProfile(name), opts.format ?? config.format ?? "json");
+  });
+meta
+  .command("apply")
+  .description("套用 profile：机械预填（created/modified/sha256）+ --set 补缺 + 报告仍缺")
+  .argument("<profile>", "profile 名")
+  .argument("<file>", "Markdown 文件路径")
+  .option(
+    "--set <kv>",
+    "key=value（可重复，按 profile 字段类型转值）",
+    (v: string, prev: string[]) => [...prev, v],
+    [] as string[],
+  )
+  .option("--dry-run", "只预览，不落盘", false)
+  .action((profile: string, file: string, opts: { set: string[]; dryRun: boolean }) => {
+    reportApply(applyProfile(file, profile, { sets: parseSets(opts.set), dryRun: opts.dryRun }));
   });
 
 program

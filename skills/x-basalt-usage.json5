@@ -10,6 +10,7 @@
     "parse", "index", "query", "skill", "watch", "recall",
     "meta", "frontmatter", "property", "properties", "元数据", "属性", "改写", "set", "rename",
     "normalize", "归一", "标准化", "tags", "aliases",
+    "profile", "apply", "strategy", "策略", "模板", "pkm-note", "llm-wiki", "ssg-blog",
     "example", "示例", "用例",
   ],
   patterns: [
@@ -64,6 +65,17 @@
         "x-basalt meta rename note.md tag tags",
         "x-basalt meta normalize note.md",
         "x-basalt meta set note.md status done --dry-run",
+      ],
+    },
+    {
+      pattern: "meta profile (list|show <name>) / meta apply <profile> <file> [--set k=v]...",
+      description: "元数据策略（profile）= 一套现成约定（模板+规范）。x-basalt 只「告知」、不调 LLM——你（AI）读规范后自己决定补什么。内置 3 套：pkm-note(Obsidian,第一推荐)、llm-wiki(OKF)、ssg-blog(SSG)。用法：先 `meta profile show <name>` 读该约定的字段/必填/语义/可额外补什么；再 `meta apply <profile> <file>` —— 机械补 created/modified/pubDate/timestamp/sha256（按文件时间/正文）+ 你用 `--set key=value`(可重复) 补语义字段（type/title/description/tags…）和额外字段。--set 按 profile 字段类型转值（list 自动按逗号拆）、且**显式覆盖**已有值；apply 收尾自动 normalize（产出既合规又齐全）。报告 filled/overridden/仍缺。典型流程：apply 看“仍缺”→ profile show 读规范 → 读文档内容 → apply --set 补齐。",
+      examples: [
+        "x-basalt meta profile list",
+        "x-basalt meta profile show pkm-note",
+        "x-basalt meta apply pkm-note note.md",
+        "x-basalt meta apply pkm-note note.md --set tags=area/work,moc --set status=active",
+        "x-basalt meta apply llm-wiki note.md --set type=note --set description=\"一句话摘要\"",
       ],
     },
     {

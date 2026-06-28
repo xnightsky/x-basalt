@@ -11,7 +11,7 @@
 | 索引 | `index` / `scan` / `watch` | 全量建库 / **按需增量重扫** / 常驻监听，写入单文件 SQLite |
 | 查询 | `query` | 自建 Dataview（DQL）子集 → 参数化 SQL → JSON 结果 |
 | 召回 | `skill` | 加载规范知识库，Fuse.js 模糊召回 |
-| 改元数据 | `meta` | 读 / 改单文件 frontmatter（**唯一写侧**）：get/set/unset/rename + **normalize 归一**，YAML 往返保真、原子写、`--dry-run` |
+| 改元数据 | `meta` | 读 / 改单文件 frontmatter（**唯一写侧**）：get/set/unset/rename + **normalize 归一** + **profile 元数据策略**（apply 按约定补缺/补全），YAML 往返保真、原子写、`--dry-run` |
 
 **硬约束（设计红线）**：不引入 `obsidian` npm 包、不调 `obsidian://`、不使用 dataview 的执行层、不依赖浏览器自动化；文件操作仅经 `fs`/`chokidar`；反向链接等隐式字段**一律在查询期由 SQLite JOIN 实时计算**，不假设任何外部缓存。
 

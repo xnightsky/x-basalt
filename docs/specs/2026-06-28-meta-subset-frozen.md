@@ -1,9 +1,9 @@
-# meta 子集冻结 · frontmatter 写侧（Phase 1 + 2）
+# meta 子集冻结 · frontmatter 写侧（Phase 1 + 2 + 3）
 
-> 日期：2026-06-28 · 状态：冻结（Phase 1 CRUD + Phase 2 normalize）
-> 实现：`src/meta/`（document 往返内核 / operations CRUD / normalize 归一 / index 编排+原子写）；CLI `meta` 组。
-> 计划：[`../plans/2026-06-28-meta-frontmatter-write.md`](../plans/2026-06-28-meta-frontmatter-write.md)（Phase 1，含 deep-research 调研结论）、[`../plans/2026-06-28-meta-normalize.md`](../plans/2026-06-28-meta-normalize.md)（Phase 2）。
-> 测试真相源：`tests/meta-document.test.ts` / `meta-ops.test.ts` / `meta.test.ts` / `meta-adversarial.test.ts` / `meta-normalize.test.ts` / `cli.test.ts`(meta 段)。
+> 日期：2026-06-28 · 状态：冻结（Phase 1 CRUD + Phase 2 normalize + Phase 3 profile/apply）
+> 实现：`src/meta/`（document 往返内核 / operations CRUD / normalize 归一 / profiles+derive+apply 策略 / index 编排+原子写）；CLI `meta` 组。
+> 计划：[`../plans/2026-06-28-meta-frontmatter-write.md`](../plans/2026-06-28-meta-frontmatter-write.md)（P1）、[`../plans/2026-06-28-meta-normalize.md`](../plans/2026-06-28-meta-normalize.md)（P2）、[`../plans/2026-06-28-meta-derive-profiles.md`](../plans/2026-06-28-meta-derive-profiles.md)（P3，调研 [`../research/2026-06-28-metadata-profiles-research.md`](../research/2026-06-28-metadata-profiles-research.md)）。
+> 测试真相源：`tests/meta-document.test.ts` / `meta-ops.test.ts` / `meta.test.ts` / `meta-adversarial.test.ts` / `meta-normalize.test.ts` / `meta-derive.test.ts` / `meta-apply.test.ts` / `cli.test.ts`(meta 段)。
 
 本文件冻结 x-basalt **写侧**第一期支持的 frontmatter 操作子集——「声称支持」即以本文 + 对应测试为准。
 
@@ -15,6 +15,9 @@ meta set   <file> <key> <value> [--type string|number|boolean|null|list|auto] [-
 meta unset <file> <key> [--dry-run]
 meta rename <file> <oldKey> <newKey> [--dry-run]
 meta normalize <file> [--sort-keys] [--dry-run]              # Phase 2
+meta profile list                                            # Phase 3
+meta profile show <name> [--format json|yaml]               # Phase 3
+meta apply <profile> <file> [--set key=value]... [--dry-run] # Phase 3
 ```
 
 ## 语义（冻结）
@@ -40,6 +43,24 @@ meta normalize <file> [--sort-keys] [--dry-run]              # Phase 2
 | 单数键迁移 | `tag`→`tags`/`alias`→`aliases`/`cssclass`→`cssclasses`：都在→合并并集删单数；仅单数→原位改名保位置 |
 
 opt-in：`--sort-keys` 顶层键字母序排序（可能动空行，默认 OFF）。normalize 同样幂等、只动 frontmatter、非法 YAML 拒写。
+
+### profile / apply 语义（冻结 · Phase 3）
+
+**模型**：profile = 模板（字段 + 角色/类型/含义）+ 规范文本。x-basalt 只「告知」（`meta profile show`），补不补 / 补什么由消费者（AI/人）决定，**x-basalt 不调 LLM**。
+
+内置 profile（`listProfiles` 顺序即推荐序）：
+
+| profile | 来源 | 机械字段（derive）| 语义字段（消费者）|
+|---|---|---|---|
+| `pkm-note`（第一推荐）| Obsidian Properties + 社区惯例 | `created`(birthtime,回退mtime) / `modified`(mtime) | tags(rec) / aliases / cssclasses / status |
+| `llm-wiki` | Google OKF v0.1（Draft 2026-05）| `timestamp`(mtime) / `sha256`(正文hash) | type(required) / title / description / resource / tags |
+| `ssg-blog` | Astro/Hugo/Jekyll 等 SSG | `pubDate`(birthtime) / `updatedDate`(mtime) | title(required) / description(required) / draft / tags / slug |
+
+`meta apply <profile> <file>` 两层语义：
+
+- **机械预填 = 补缺**：仅当机械字段缺失时按 fs 信息填（日期写 **ISO 字符串**，绝不数值时间戳；birthtime 不可靠回退 mtime；sha256 仅算正文）；已有不动。
+- **`--set key=value`（可重复）= 显式权威覆盖**：始终写入——覆盖文件已有值与机械预填；值按 profile 声明字段类型转（list 拆逗号、number/bool 保守 auto；profile 外的额外 key 用 auto）。apply 内 `--set` 先写、机械层只补 `--set` 没给的缺。
+- 报告 `{ filled, overridden, present, missing(required/recommended/optional) }`；没补的字段不出现（保持干净）。幂等、只动 frontmatter、非法 YAML 拒写、未知 profile 报错列可用名。
 
 ## 往返保真规则（冻结）
 

@@ -214,6 +214,9 @@ x-basalt meta set   <file> <key> <value> [--type <t>] [--dry-run]
 x-basalt meta unset <file> <key> [--dry-run]
 x-basalt meta rename <file> <oldKey> <newKey> [--dry-run]
 x-basalt meta normalize <file> [--sort-keys] [--dry-run]
+x-basalt meta profile list
+x-basalt meta profile show <name> [--format json|yaml]
+x-basalt meta apply <profile> <file> [--set key=value]... [--dry-run]
 ```
 
 读取与改造单个 `.md` 的 **frontmatter（元数据头 / Obsidian Properties）**。这是 x-basalt 唯一的**写侧**命令：写操作只动 frontmatter，**正文逐字节不动**；用 [`yaml`](https://eemeli.org/yaml/) Document 往返，保留键顺序、注释（尽力）、并对需要引号的值（如 `[[链接]]`）自动加引号产出合法 YAML。写入为**原子写**（临时文件 + rename），失败不留半成品。
@@ -225,6 +228,8 @@ x-basalt meta normalize <file> [--sort-keys] [--dry-run]
 | `unset <file> <key>` | 删除一个属性；键不存在为 no-op |
 | `rename <file> <oldKey> <newKey>` | 重命名键，**保留位置与值**；源键不存在或目标键已存在则 `✗` 报错（不静默覆盖） |
 | `normalize <file>` | **归一**（见下）：tags/aliases/cssclasses 列表化 + tags 去 `#` + 去重 + 单数键迁移；`--sort-keys` 额外排序顶层键 |
+| `profile list` / `profile show <name>` | **元数据策略**（见下）：列出 / 查看某套约定的规范+模板（“告知”，供 AI/人读后决定补什么）|
+| `apply <profile> <file>` | 套用策略：机械预填 + `--set` 补/覆盖 + 报告仍缺（见下）|
 
 **`set --type` 取值类型**（默认 `auto`）：
 
@@ -250,6 +255,28 @@ x-basalt meta normalize <file> [--sort-keys] [--dry-run]
 
 `--sort-keys`（opt-in，默认 OFF）：额外按字母序排序顶层键——可能动空行，故不默认。
 **不做**（风险/不确定）：类型强制、日期格式统一、删空键。归一同样**幂等**、只动 frontmatter、非法 YAML 拒写。
+
+**`profile` / `apply` 元数据策略**
+
+> **`normalize` vs `apply` 分工**：`normalize` = **无约定的纯标准化**（只把已有字段改合规：tags 列表化 / 去 `#` / 去重 / 单数键迁移，**不挑 profile、不加新字段**）；`apply <profile>` = **按某约定补全/覆盖该有的字段，并自动标准化**（apply 内部以 normalize 收尾，产出既合规又齐全）。想"只把笔记变干净/批量清洗"用 `normalize`；想"让笔记符合某套约定"用 `apply`。
+
+「策略（profile）」= 一套现成的元数据约定（模板 + 规范），帮你免去逐字段手敲。x-basalt 只负责**告知**这套约定长什么样——`meta profile show <name>` 输出它的规范+字段模板（哪些字段、必填/推荐/可选、各是什么意思、可额外补什么），供 **AI 或人读后自行决定补什么**。x-basalt **不替你判断、不调用 LLM**。
+
+内置 profile（`meta profile list` 查看）：
+
+| profile | 来源 | 机械预填的字段 | 需消费者补的（语义）|
+|---|---|---|---|
+| **`pkm-note`**（第一推荐）| Obsidian Properties + 社区惯例 | `created`(birthtime) / `modified`(mtime) | tags / aliases / cssclasses / status |
+| `llm-wiki` | Google OKF v0.1 | `timestamp`(mtime) / `sha256`(正文hash) | type(必填) / title / description / resource / tags |
+| `ssg-blog` | Astro / Hugo / Jekyll 等 SSG | `pubDate`(birthtime) / `updatedDate`(mtime) | title(必填) / description(必填) / draft / tags / slug |
+
+`meta apply <profile> <file>` 做两件事：
+
+1. **机械预填**（确定性）：把该 profile 里"无需理解文档"的字段按文件信息补上——`created`/`modified`（文件时间，ISO 字符串）、`sha256`（正文哈希）。**只补缺、不覆盖已有**。
+2. **`--set key=value`（可重复）**：你（AI 读规范+文档后 / 人）把语义字段和额外字段**一并传入**，免去逐条 `meta set`。值**按 profile 声明的类型自动转**（如 `tags` 是 list → 按逗号拆；profile 没有的额外 key 按 `auto` 转）。**`--set` 是显式权威值，会覆盖**已有值与机械预填（例：`--set title=abc` 把 title 覆盖为 abc）。
+3. **标准化收尾**：填完自动跑 `normalize`（tags 列表化 / 去 `#` / 去重 / 单数键迁移），把文件里旧的不规范字段连同填入的值一起归一——产出**既合规又齐全**。
+
+apply 报告：**补入** / **覆盖(--set)** / **仍缺**（按 必填/推荐/可选 分组），并指向 `meta profile show` 让你读完整规范再补其余。没补的字段不出现（保持干净）。幂等、只动 frontmatter、非法 YAML 拒写、未知 profile `✗` 退出 1。
 
 **输出**
 
@@ -280,6 +307,10 @@ x-basalt meta rename note.md tag tags           # 改键名（如修历史单数
 x-basalt meta unset note.md draft
 x-basalt meta normalize note.md                 # 归一：tags 列表化/去#/去重 + 单数键迁移
 x-basalt meta normalize note.md --sort-keys --dry-run  # 含排序、先预览
+x-basalt meta profile list                      # 看有哪些策略
+x-basalt meta profile show pkm-note             # 读 Obsidian 笔记策略的规范+模板
+x-basalt meta apply pkm-note note.md            # 机械补 created/modified + 报告仍缺
+x-basalt meta apply pkm-note note.md --set tags=area/work,moc --set status=active   # 顺手补语义字段
 ```
 
 ---

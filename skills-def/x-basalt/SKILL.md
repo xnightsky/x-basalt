@@ -1,6 +1,6 @@
 ---
 name: x-basalt
-description: 用 x-basalt CLI 在终端无头操作 Obsidian vault（不依赖 Obsidian App）——解析笔记为 AST、构建/增量刷新 SQLite 索引、用 Dataview(DQL) 子集查询笔记、按需重扫文件夹变更、召回 Obsidian/DQL 语法规范。当任务涉及从命令行读取/查询 Obsidian markdown vault 时使用。
+description: 用 x-basalt CLI 在终端无头操作 Obsidian vault（不依赖 Obsidian App）——解析笔记为 AST、构建/增量刷新 SQLite 索引、用 Dataview(DQL) 子集查询笔记、按需重扫文件夹变更、读改笔记 frontmatter 元数据（get/set/unset/rename、normalize 归一、按 profile 策略补全）、召回 Obsidian/DQL 语法规范。当任务涉及从命令行读取/查询/改写 Obsidian markdown vault 时使用。
 scope: global
 ---
 
@@ -30,9 +30,24 @@ x-basalt scan <vault>                  # 之后：增量重扫，只处理新增
 | `index [vault]` | 全量建/重建索引 | `--db <path>` · `--watch`(常驻监听) |
 | `scan [vault]` | **按需增量重索引**：diff 文件系统 vs 库，只重扫变化的 | `--rehash`(按内容比，稳但慢) · `--dry-run`(只报告不写) · `--json` |
 | `query "<dql>"` | 执行 DQL 查询，输出 `{type,columns,rows}` | `--db <path>` |
+| `meta get <file> [key]` | 读 frontmatter（缺 key 读全部，缺失键输出 null） | `--format json\|yaml` |
+| `meta set/unset/rename <file> ...` | 改单个属性（set 增改 / unset 删 / rename 改键名） | `--type` · `--dry-run` |
+| `meta normalize <file>` | **无约定纯标准化**：tags 列表化/去#/去重/单数键迁移 | `--sort-keys` · `--dry-run` |
+| `meta profile list / show <name>` | 列出 / 查看元数据策略（profile）的规范+模板 | — |
+| `meta apply <profile> <file>` | **按策略补全**：机械补时间/哈希 + `--set` 补语义 + 自动标准化 | `--set k=v`(可重复) · `--dry-run` |
 | `skill recall <kw>` | 召回 Obsidian / DQL 语法规范详情 | — |
 | `skill list` | 列出可召回规范 | — |
 | `watch [vault]` | 常驻监听增量更新（有守护进程时用；否则首选 `scan`） | `--db` · `--on-change <cmd>`(`{file}` 占位) |
+
+## 改元数据（meta，唯一写侧）
+
+写操作**只动 frontmatter、正文逐字节不变**；YAML 往返保真（保键序/注释尽力）、原子写、幂等、`--dry-run` 预览、非法 YAML 拒写。
+
+- **直接改**：`meta set note.md status active`（`--type string|number|boolean|null|list|auto`，默认 auto 保守推断）/ `meta unset` / `meta rename old new`。
+- **`normalize`（无约定纯标准化）**：把已有字段改合规——tags 列表化、去 `#`、去重、单数键 `tag→tags` 迁移。不挑 profile、不加新字段。「只想把笔记变干净」用它。
+- **`apply <profile>`（按约定补全）= 元数据策略**：x-basalt 只「告知」规范，**补不补/补什么由你（AI）决定，它不调 LLM**。内置 3 套：`pkm-note`(Obsidian,第一推荐) / `llm-wiki`(OKF) / `ssg-blog`(SSG)。
+  - **AI 用法**：① `meta apply <profile> <file>` —— 机械补 created/modified/pubDate/timestamp/sha256，并报告「仍缺」哪些语义字段；② 缺的字段你 `meta profile show <profile>` 读规范（每个字段什么意思）+ 读文档内容，自己判断值；③ 再 `meta apply <profile> <file> --set key=value ...` 一次补上（`--set` 按 profile 类型转值、**显式覆盖**已有值；apply 收尾自动 normalize）。额外字段也可直接 `--set` 加。
+  - 例：`meta apply pkm-note daily.md --set tags=area/work,moc --set status=active`
 
 ## 配置与基目录
 
