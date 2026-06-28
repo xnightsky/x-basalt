@@ -58,3 +58,31 @@ GPL-3.0 这类 copyleft 的核心机制一句话：**义务由「分发」触发
 | `kysely` / `peggy`（拟引入） | MIT | ✅ 可用 | 选型时确认（peggy 以实际 manifest 为准复核） |
 
 > 上表"拟引入"项的许可证以最终 `pnpm install` 时的实际 manifest 为准复核，勿凭本表当定论。
+
+## 6. 开源/发布前总检查（流程图）
+
+> 本节是开源前的**全局检查总览**，范围不止许可证，含商标与命名。基于 2026-06-28 的开源风险评估沉淀。✅ = 已完成；其余为发布前待办。
+
+```mermaid
+flowchart TD
+    S([开源前检查]) --> A[商标合规]
+    S --> B[依赖与许可]
+    S --> C[命名查重]
+    S --> D["贡献者机制 · 可选"]
+
+    A --> A1["✅ README 加免责声明<br/>声明与 Obsidian / Dataview 无隶属、未获背书"]
+    A --> A2["不使用 Obsidian / Dataview<br/>logo 与品牌视觉"]
+
+    B --> B1["✅ 清死依赖 unified / remark-parse / @flowershow<br/>连带移除 52 个传递依赖"]
+    B --> B2["✅ 直接依赖全 MIT / Apache-2.0 / ISC<br/>无 GPL / AGPL copyleft"]
+    B --> B3{"未来改用 bundle<br/>打包进 dist?"}
+    B3 -->|是| B4["必须随附第三方许可证 NOTICE"]
+    B3 -->|否| B5["npm 单独安装<br/>无额外 attribution 义务"]
+
+    C --> C1["查 npm 包名 x-basalt 是否被占用"]
+    C --> C2["查 basalt 软件商标 / 同名项目撞名"]
+
+    D --> D1["可选：CONTRIBUTING.md + DCO<br/>(Signed-off-by) 规避贡献者版权争议"]
+```
+
+> 整体结论：无致命法律障碍，主要为商标措辞与命名查重；删死依赖与法律无关（都是 MIT），属发布前工程整洁，已提前随本次完成。**非正式法律意见；如需商用维权层面确定性，就商标项另寻专业意见。**

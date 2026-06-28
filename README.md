@@ -65,6 +65,13 @@ pnpm run skills:install:global  # 装 x-basalt 使用技能到 ~/.claude/skills/
 
 零 Obsidian 运行时依赖；执行层（DQL → SQL）完全自建；隐式字段一律 SQLite JOIN 实时计算。完整禁止项见 `AGENTS.md`「项目硬约束」。
 
+## 声明
+
+x-basalt 是独立的第三方开源工具，与 Obsidian（© Dynalist Inc.）及 Dataview 插件均**无隶属关系**，也未获得其授权或背书。「Obsidian」「Dataview」等名称仅用于说明本工具所兼容的文件格式与查询语法，属指名性合理使用，相关商标归各自权利人所有。
+
+x-basalt 不打包、不链接、不依赖 Obsidian 运行时，仅通过文件系统操作 Markdown 文件。
+_x-basalt is an independent project, not affiliated with or endorsed by Obsidian (Dynalist Inc.) or the Dataview plugin._
+
 ## License
 
 MIT
