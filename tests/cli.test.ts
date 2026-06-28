@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { spawn, spawnSync } from "node:child_process";
-import { existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { after, before, test } from "node:test";
@@ -126,13 +126,15 @@ test("scan --dry-run：报告差异但不写库（再扫仍报 +1）", () => {
   const db = join(freshDir(), "scan.db");
   run(["index", vault, "--db", db]);
   writeFileSync(join(vault, "New.md"), "# New\n");
-  assert.deepEqual(JSON.parse(run(["scan", vault, "--db", db, "--dry-run", "--json"]).stdout).added, [
-    "New.md",
-  ]);
+  assert.deepEqual(
+    JSON.parse(run(["scan", vault, "--db", db, "--dry-run", "--json"]).stdout).added,
+    ["New.md"],
+  );
   // dry-run 没写库，第二次仍报 New.md 为新增。
-  assert.deepEqual(JSON.parse(run(["scan", vault, "--db", db, "--dry-run", "--json"]).stdout).added, [
-    "New.md",
-  ]);
+  assert.deepEqual(
+    JSON.parse(run(["scan", vault, "--db", db, "--dry-run", "--json"]).stdout).added,
+    ["New.md"],
+  );
 });
 
 test("query 主路径：经 --db 查共享索引返回命中行", () => {
@@ -147,7 +149,9 @@ test("query 主路径：经 --db 查共享索引返回命中行", () => {
 test("skill recall / list 主路径：召回内置规范", () => {
   const recall = run(["skill", "recall", "wikilink"]);
   assert.equal(recall.status, 0);
-  assert.ok(JSON.parse(recall.stdout).some((s: { name: string }) => s.name === "obsidian-base-spec"));
+  assert.ok(
+    JSON.parse(recall.stdout).some((s: { name: string }) => s.name === "obsidian-base-spec"),
+  );
 
   const list = run(["skill", "list"]);
   assert.equal(list.status, 0);
@@ -203,6 +207,136 @@ test("优先级链：config 提供 vault+db，index/query 无参也能跑通", (
   const q = run(["query", "LIST"], { cwd: proj });
   assert.equal(q.status, 0, `query(config) 应成功 stderr=${q.stderr}`);
   assert.ok(JSON.parse(q.stdout).rows.length >= 1, "应能经 config.db 查到行");
+});
+
+// === MW1.5 meta 命令组端到端 ===
+
+/** 建一个含 frontmatter 的临时 .md，返回路径。 */
+function makeNote(content = "---\ntitle: A\nstatus: draft\n---\n# Note\n\nbody\n"): string {
+  const file = join(freshDir(), "Note.md");
+  writeFileSync(file, content, "utf8");
+  return file;
+}
+
+test("meta get：无 key 输出整个 frontmatter；有 key 输出该值", () => {
+  const file = makeNote();
+  const all = run(["meta", "get", file]);
+  assert.equal(all.status, 0, all.stderr);
+  assert.deepEqual(JSON.parse(all.stdout), { title: "A", status: "draft" });
+
+  const one = run(["meta", "get", file, "status"]);
+  assert.equal(one.status, 0);
+  assert.equal(JSON.parse(one.stdout), "draft");
+});
+
+test("meta get --format yaml：输出 YAML", () => {
+  const file = makeNote();
+  const r = run(["meta", "get", file, "--format", "yaml"]);
+  assert.equal(r.status, 0);
+  assert.ok(!r.stdout.trimStart().startsWith("{"), "yaml 输出不应以 { 起始");
+  assert.match(r.stdout, /title: A/);
+});
+
+test("meta set：写入属性并落盘、退出 0", () => {
+  const file = makeNote();
+  const r = run(["meta", "set", file, "status", "active"]);
+  assert.equal(r.status, 0, r.stderr);
+  assert.match(r.stdout, /✓ set status/);
+  assert.match(readFileSync(file, "utf8"), /status: active/);
+});
+
+test("meta set --type number：按类型写入数值", () => {
+  const file = makeNote();
+  assert.equal(run(["meta", "set", file, "rank", "3", "--type", "number"]).status, 0);
+  assert.equal(JSON.parse(run(["meta", "get", file, "rank"]).stdout), 3);
+});
+
+test("meta set --type string：强制字符串（证明 --type 真被解析，区别于 auto）", () => {
+  const file = makeNote();
+  // auto 会把 "3" 推断为 number 3；--type string 必须得到字符串 "3"。
+  assert.equal(run(["meta", "set", file, "code", "3", "--type", "string"]).status, 0);
+  const got = JSON.parse(run(["meta", "get", file, "code"]).stdout);
+  assert.strictEqual(got, "3");
+});
+
+test("meta set --dry-run：打印将写入内容但不落盘", () => {
+  const file = makeNote();
+  const prev = readFileSync(file, "utf8");
+  const r = run(["meta", "set", file, "x", "9", "--dry-run"]);
+  assert.equal(r.status, 0);
+  assert.match(r.stdout, /x: 9/);
+  assert.equal(readFileSync(file, "utf8"), prev, "dry-run 不应改文件");
+});
+
+test("meta unset / rename：删除与改名落盘正确", () => {
+  const file = makeNote();
+  assert.equal(run(["meta", "unset", file, "status"]).status, 0);
+  assert.equal(run(["meta", "get", file, "status"]).stdout.trim(), "null");
+
+  assert.equal(run(["meta", "rename", file, "title", "name"]).status, 0);
+  assert.equal(JSON.parse(run(["meta", "get", file, "name"]).stdout), "A");
+});
+
+test("meta 退出码：rename 到已存在键 → 退出 1 且 ✗", () => {
+  const file = makeNote();
+  const r = run(["meta", "rename", file, "title", "status"]);
+  assert.equal(r.status, 1);
+  assert.match(r.stderr, /✗.*已存在/);
+});
+
+test("meta 退出码：非法 YAML frontmatter 的写操作 → 退出 1、文件不变", () => {
+  const file = makeNote("---\nk: [bad\n---\nbody\n");
+  const prev = readFileSync(file, "utf8");
+  const r = run(["meta", "set", file, "x", "1"]);
+  assert.equal(r.status, 1);
+  assert.match(r.stderr, /✗/);
+  assert.equal(readFileSync(file, "utf8"), prev);
+});
+
+test("meta normalize：tags 标量化为列表 + 单数键迁移，落盘并报告", () => {
+  const file = join(freshDir(), "N.md");
+  writeFileSync(file, '---\ntag: "#a #b a"\ntitle: T\n---\n# body\n', "utf8");
+  const r = run(["meta", "normalize", file]);
+  assert.equal(r.status, 0, r.stderr);
+  assert.match(r.stdout, /✓ normalize/);
+  assert.deepEqual(JSON.parse(run(["meta", "get", file, "tags"]).stdout), ["a", "b"]);
+  // 单数 tag 已迁走
+  assert.equal(run(["meta", "get", file, "tag"]).stdout.trim(), "null");
+});
+
+test("meta normalize：已规范文件报告已是规范形态、不写盘", () => {
+  const file = join(freshDir(), "N.md");
+  writeFileSync(file, "---\ntags:\n  - a\n  - b\n---\n# body\n", "utf8");
+  const prev = readFileSync(file, "utf8");
+  const r = run(["meta", "normalize", file]);
+  assert.equal(r.status, 0);
+  assert.match(r.stdout, /已是规范形态/);
+  assert.equal(readFileSync(file, "utf8"), prev);
+});
+
+test("meta normalize --sort-keys：排序顶层键；不传则不排序", () => {
+  const mk = () => {
+    const f = join(freshDir(), "N.md");
+    writeFileSync(f, "---\nb: 1\na: 2\n---\n# body\n", "utf8");
+    return f;
+  };
+  const noSort = mk();
+  run(["meta", "normalize", noSort]);
+  assert.deepEqual(Object.keys(JSON.parse(run(["meta", "get", noSort]).stdout)), ["b", "a"]);
+
+  const sorted = mk();
+  assert.equal(run(["meta", "normalize", sorted, "--sort-keys"]).status, 0);
+  assert.deepEqual(Object.keys(JSON.parse(run(["meta", "get", sorted]).stdout)), ["a", "b"]);
+});
+
+test("meta normalize --dry-run：打印将写入内容但不落盘", () => {
+  const file = join(freshDir(), "N.md");
+  writeFileSync(file, '---\ntag: "#x y"\n---\n# body\n', "utf8");
+  const prev = readFileSync(file, "utf8");
+  const r = run(["meta", "normalize", file, "--dry-run"]);
+  assert.equal(r.status, 0);
+  assert.match(r.stdout, /tags:/);
+  assert.equal(readFileSync(file, "utf8"), prev, "dry-run 不应改文件");
 });
 
 test("watch 主路径：启动后打印已索引并进入监听（随后终止进程树）", async () => {

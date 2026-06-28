@@ -8,6 +8,8 @@
     "说明书", "用法", "怎么用", "帮助", "命令", "指令",
     "cli", "x-basalt", "getting-started", "quickstart",
     "parse", "index", "query", "skill", "watch", "recall",
+    "meta", "frontmatter", "property", "properties", "元数据", "属性", "改写", "set", "rename",
+    "normalize", "归一", "标准化", "tags", "aliases",
     "example", "示例", "用例",
   ],
   patterns: [
@@ -15,12 +17,13 @@
     "x-basalt index <vault> --db <path>",
     "x-basalt query <dql> --db <path>",
     "x-basalt skill recall <keyword>",
+    "x-basalt meta set <file> <key> <value>",
     "x-basalt watch <vault> --on-change <cmd>",
   ],
   rules: [
     {
-      pattern: "x-basalt <parse|index|query|skill|watch>",
-      description: "零依赖 Obsidian 运行时的 Vault 工具。典型流程：index 建库 → query 查询；parse 看单文件 AST；skill 召回规范；watch 监听增量。开发态 `pnpm run cli -- <command>`，构建后 `node dist/cli.js <command>`。出错统一打印 ✗ 并退出码 1。",
+      pattern: "x-basalt <parse|index|scan|query|skill|meta|watch>",
+      description: "零依赖 Obsidian 运行时的 Vault 工具。典型流程：index 建库 → query 查询；parse 看单文件 AST；scan 增量重扫；skill 召回规范；meta 读改 frontmatter（唯一写侧）；watch 监听增量。开发态 `pnpm run cli -- <command>`，构建后 `node dist/cli.js <command>`。出错统一打印 ✗ 并退出码 1。",
       examples: [
         "pnpm install && pnpm run build",
         "pnpm run cli -- index ./vault --db ./index.db",
@@ -49,6 +52,19 @@
       pattern: "skill (recall <keyword> | list)",
       description: "recall 按关键字模糊召回规范（匹配 name 与 triggers，大小写不敏感、双向子串）；list 列出全部 skill。本说明书自身即一个可召回 skill —— `skill recall usage` 即可读到本 CLI 用法。",
       examples: ["x-basalt skill recall usage", "x-basalt skill recall wikilink", "x-basalt skill list"],
+    },
+    {
+      pattern: "meta (get|set|unset|rename|normalize) <file> ...",
+      description: "读/改单文件 frontmatter（元数据头），唯一写侧命令。get [key] 读（缺省读全部，缺失键输出 null）；set <key> <value> 增改（存在则原位更新、否则追加）；unset <key> 删；rename <old> <new> 改键名（保位置/值，源缺失或目标已存在则报错）；normalize 归一。写只动 frontmatter、正文逐字节不动；YAML 往返保留键序与注释、需引号的值（如 [[链接]]）自动加引号；原子写；--dry-run 只打印将写入内容不落盘。set --type string|number|boolean|null|list|auto（默认 auto 保守推断，不识别 yes/no/on/off 避免 Norway 陷阱）。normalize 默认 ON：tags/aliases/cssclasses 列表化（tags/cssclasses 标量按空白/逗号拆、aliases 不拆）、tags 去 #、去重、单数键 tag/alias/cssclass→复数键迁移；opt-in --sort-keys 排序顶层键。非法 YAML 的写操作拒绝执行、文件不变。幂等。仅顶层扁平键。",
+      examples: [
+        "x-basalt meta get note.md",
+        "x-basalt meta set note.md status active",
+        "x-basalt meta set note.md rank 3 --type number",
+        "x-basalt meta set note.md tags \"a, b, c\" --type list",
+        "x-basalt meta rename note.md tag tags",
+        "x-basalt meta normalize note.md",
+        "x-basalt meta set note.md status done --dry-run",
+      ],
     },
     {
       pattern: "watch <vault> [--db ./index.db] [--on-change <cmd>]",
@@ -80,7 +96,7 @@
   ],
   metadata: {
     doc: "docs/guides/usage.md",
-    commands: ["parse", "index", "query", "skill", "watch"],
+    commands: ["parse", "index", "scan", "query", "skill", "meta", "watch"],
     self_recall: true,
   },
 }

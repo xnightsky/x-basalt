@@ -7,10 +7,21 @@ import { loadConfig } from "./config.js";
 import { emit } from "./format.js";
 import { VaultIndexer } from "./indexer/index.js";
 import { VaultParser } from "./parser/index.js";
+import {
+  coerceValue,
+  editMeta,
+  type EditResult,
+  type MetaScalarType,
+  normalizeDoc,
+  readMeta,
+  renameMeta,
+  setMeta,
+  unsetMeta,
+} from "./meta/index.js";
 import { DataviewEngine } from "./query/index.js";
 import { SkillRecall } from "./skill/index.js";
 
-// === 自建实现: CLI 入口（commander），五子命令 parse / index / query / skill / watch ===
+// === 自建实现: CLI 入口（commander），命令 parse / index / scan / query / skill / meta / watch ===
 //
 // 上游：终端用户 / pnpm cli；下游：装配 parser / indexer / query / skill 四层库能力。
 // 本文件只做参数装配与输出格式化，不内联业务逻辑（逻辑在各层并各有单测）。
@@ -27,6 +38,27 @@ const DEFAULT_DB = join(BASE_DIR, "index.db");
 function required<T>(value: T | undefined, message: string): T {
   if (value === undefined || value === null || value === "") throw new Error(message);
   return value;
+}
+
+/** 汇报一次 meta 写操作结果：dry-run 打印将写入的完整内容到 stdout；否则打印 ✓/无变化摘要。 */
+function reportEdit(r: EditResult, label: string): void {
+  if (r.dryRun) {
+    process.stdout.write(r.content);
+    console.error(`· dry-run（未写入）：${label} → ${r.file}`);
+    return;
+  }
+  console.log(r.changed ? `✓ ${label} → ${r.file}` : `· 无变化：${r.file}`);
+}
+
+/** 汇报一次 normalize：列出应用的归一项；无变更则提示已规范。 */
+function reportNormalize(r: EditResult, changes: string[]): void {
+  const summary = changes.length > 0 ? changes.join("；") : "无变更";
+  if (r.dryRun) {
+    process.stdout.write(r.content);
+    console.error(`· dry-run（未写入）：${summary} → ${r.file}`);
+    return;
+  }
+  console.log(r.changed ? `✓ normalize（${summary}）→ ${r.file}` : `· 已是规范形态：${r.file}`);
 }
 
 const program = new Command();
@@ -69,7 +101,9 @@ program
 
 program
   .command("scan")
-  .description("按需增量重索引：diff 文件系统 vs 索引，只重扫新增/改动/删除的文件（无需常驻 watch）")
+  .description(
+    "按需增量重索引：diff 文件系统 vs 索引，只重扫新增/改动/删除的文件（无需常驻 watch）",
+  )
   .argument("[vault]", "Vault 目录（可省略，回退配置 vault）")
   .option("--db <path>", "SQLite 索引文件路径（默认 .x-basalt/index.db，可由配置 db 覆盖）")
   .option("--rehash", "按内容对比检测变化（慢但稳），默认 mtime+size", false)
@@ -80,7 +114,10 @@ program
       vault: string | undefined,
       opts: { db?: string; rehash: boolean; dryRun: boolean; json: boolean },
     ) => {
-      const vaultPath = required(vault ?? config.vault, "需要 <vault> 参数或在配置文件中设置 vault");
+      const vaultPath = required(
+        vault ?? config.vault,
+        "需要 <vault> 参数或在配置文件中设置 vault",
+      );
       const dbPath = opts.db ?? config.db ?? DEFAULT_DB;
       const indexer = new VaultIndexer({ vaultPath, dbPath });
       try {
@@ -134,6 +171,75 @@ skill
   .description("列出全部可用 skill")
   .action(() => {
     emit(new SkillRecall({ skillPath: config.skillPath }).list());
+  });
+
+// meta：读/改单文件 frontmatter（元数据头）。写操作原子写、可 --dry-run 预览。
+const meta = program.command("meta").description("读/改笔记 frontmatter（元数据头）");
+meta
+  .command("get")
+  .description("读取 frontmatter（省略 key 输出整个元数据）")
+  .argument("<file>", "Markdown 文件路径")
+  .argument("[key]", "属性名（省略则输出整个 frontmatter）")
+  .option("--format <fmt>", "输出格式 json|yaml（默认 json，可由配置 format 覆盖）")
+  .action((file: string, key: string | undefined, opts: { format?: string }) => {
+    emit(readMeta(file, key) ?? null, opts.format ?? config.format ?? "json");
+  });
+meta
+  .command("set")
+  .description("设置 / 更新一个属性")
+  .argument("<file>", "Markdown 文件路径")
+  .argument("<key>", "属性名")
+  .argument("<value>", "属性值（按 --type 解释）")
+  .option("--type <t>", "值类型 string|number|boolean|null|list|auto（默认 auto，保守推断）")
+  .option("--dry-run", "只预览将写入的内容，不落盘", false)
+  .action((file: string, key: string, value: string, opts: { type?: string; dryRun: boolean }) => {
+    const typed = coerceValue(value, (opts.type ?? "auto") as MetaScalarType);
+    reportEdit(
+      editMeta(file, (d) => setMeta(d, key, typed), { dryRun: opts.dryRun }),
+      `set ${key}`,
+    );
+  });
+meta
+  .command("unset")
+  .description("删除一个属性")
+  .argument("<file>", "Markdown 文件路径")
+  .argument("<key>", "属性名")
+  .option("--dry-run", "只预览，不落盘", false)
+  .action((file: string, key: string, opts: { dryRun: boolean }) => {
+    reportEdit(
+      editMeta(file, (d) => unsetMeta(d, key), { dryRun: opts.dryRun }),
+      `unset ${key}`,
+    );
+  });
+meta
+  .command("rename")
+  .description("重命名一个属性键（保位置/值，重名或缺失则报错）")
+  .argument("<file>", "Markdown 文件路径")
+  .argument("<oldKey>", "原键名")
+  .argument("<newKey>", "新键名")
+  .option("--dry-run", "只预览，不落盘", false)
+  .action((file: string, oldKey: string, newKey: string, opts: { dryRun: boolean }) => {
+    reportEdit(
+      editMeta(file, (d) => renameMeta(d, oldKey, newKey), { dryRun: opts.dryRun }),
+      `rename ${oldKey} → ${newKey}`,
+    );
+  });
+meta
+  .command("normalize")
+  .description("归一 frontmatter：tags/aliases/cssclasses 列表化、去 #、去重、单数键→复数键迁移")
+  .argument("<file>", "Markdown 文件路径")
+  .option("--sort-keys", "额外按字母序排序顶层键（opt-in，可能动空行）", false)
+  .option("--dry-run", "只预览，不落盘", false)
+  .action((file: string, opts: { sortKeys: boolean; dryRun: boolean }) => {
+    let changes: string[] = [];
+    const r = editMeta(
+      file,
+      (d) => {
+        changes = normalizeDoc(d, { sortKeys: opts.sortKeys });
+      },
+      { dryRun: opts.dryRun },
+    );
+    reportNormalize(r, changes);
   });
 
 program
