@@ -11,14 +11,9 @@
 
 ## 💡 backlog（待 dogfood 暴露真实需求再开，各自写计划/spec）
 
-- **migrate（vault 级批量改造）**：批量重命名 / 改值 / 合并拆分属性。≈ `query/index` 找出含某属性的文件（无头独有优势，MetaEdit 等需 Obsidian 运行时）+ 逐文件 meta + 批量 dry-run/进度/失败汇总。**发散度最低、最该先做**。
-- **lint（schema 校验）**：按用户 schema 校验属性存在性/类型/取值，报告或修（"修"复用 normalize/set）。需先定 frontmatter schema 格式（JSON Schema 或自创轻量 DSL，对标 `remark-lint-frontmatter-schema`）——长期 API 承诺最重，**最后做**。
-- **watch pipeline（常驻维护管线）**：把 `watch` 从「索引 + 跑裸 shell（`--on-change`）」升级为**声明式的、由内建动作组成的管线**——常驻进程监听变更，按 `文件变更 → 一串 defined 动作` 自动维护 Vault。
-  - 形态设想：`watch | apply profile pkm-note`、`watch | normalize`、`watch | scan && apply ...`；动作是 x-basalt 自己的强类型动词（index/scan/meta apply/normalize，未来 lint/migrate），**不是**任意 shell（区别于现有 `--on-change`，后者保留作逃生口）。
-  - **「足够 defined」是核心要求**：每个动作的输入/输出/失败语义/幂等性/触发条件（add/change/unlink、路径/标签过滤）要先定清；管线可声明在配置（如 `.x-basalt/config` 的 `pipeline:` 段）而非命令行硬拼，便于常驻复用与审计。
-  - 复用现有：watcher 增量回调（`indexer/index.ts` 的 `watch(onEvent)`）作为管线源；动作复用 meta/index 的 `applyProfile`/`normalizeDoc` 等。
-  - 风险/待定：写动作（apply/normalize）会改 `.md`，常驻自动改文件需谨慎——默认 dry-run/需显式开启写、失败汇总而非中断、避免与编辑器保存竞争（已有 awaitWriteFinish 兜底）。与 migrate（一次性批改）互补：migrate 是手动批量，watch-pipeline 是常驻增量。
-- **更多 profile**：按需扩（加 profile = 加数据；现有 `pkm-note` / `llm-wiki` / `ssg-blog`）。
+- **变更编排器（change orchestration）**：把 `watch`（实时）/`scan`（diff）/手动批量统一为**同一条声明式管线的三个「源」**——源 → 堆积(debounce+maxWait) → 去重(L2/L3 事件折叠) → **路由(DQL 选择器)** → 执行(有界并发/重启语义/超时/失败continue/dry-run/优雅退出)，跑一串**强类型内建动作**(index/normalize/apply…)自动维护 vault。**吸收原 `migrate` 与 `watch pipeline` 两项**：批量改元数据 = 手动源+写动作（不再独立立项；调研结论：批量改属性「键」官方本体已做，「值」级才是空白）。**有评估背书**：[`docs/specs/2026-06-29-change-orchestration-design.md`](docs/specs/2026-06-29-change-orchestration-design.md)。设计完整、实现分阶段（P0 只读先行、写动作后置 dry-run）；**现在不做**，触发条件见 spec §13。
+- **lint（schema 校验）**：按用户 schema 校验属性存在性/类型/取值，报告或修（"修"复用 normalize/set）。需先定 frontmatter schema 格式（JSON Schema 或自创轻量 DSL，对标 `remark-lint-frontmatter-schema`）——长期 API 承诺最重，**最后做**。- **更多 profile**：按需扩（加 profile = 加数据；现有 `pkm-note` / `llm-wiki` / `ssg-blog`）。
+- **meta refresh（机械字段重算）**：dogfood 发现——`meta apply` 对已存在的机械字段（`timestamp`/`sha256`）是 top-up 不重算，文档改内容后须先 `unset` 再 `apply` 才能刷新。可加 `meta apply --refresh-derived` / `meta refresh` 一键重算 derive 字段。小改动，按需做。
 - **不做**：type 强制 / 日期格式统一（调研判风险高、格式不确定）。
 - **语义/全文检索（S3.5）**：FTS5 全文（core、无 AI、中文 trigram）补"查正文"空洞；embedding 向量做成最小可选 AI（接口后、默认关、FTS5 兜底）。**有评估背书**：[`docs/specs/2026-06-28-semantic-retrieval-integration.md`](docs/specs/2026-06-28-semantic-retrieval-integration.md)。FTS5 优先级高于 embedding；**现在不做**，触发条件见 spec。
 - **CLI chat（可选 AI · 远期）**：自然语言驱动 vault，对标 `agent-browser chat`（单发 `chat "<指令>"` + REPL）。最小可选 AI——内核纯离线、默认关、用户自配 `AI_GATEWAY_*`（兼容 agent-browser）、无配置全功能。**有评估背书**：[`docs/specs/2026-06-28-cli-chat-design.md`](docs/specs/2026-06-28-cli-chat-design.md)。依赖 FTS5 先落地，**现在不做**。
