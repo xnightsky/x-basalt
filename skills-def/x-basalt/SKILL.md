@@ -39,20 +39,21 @@ x-basalt scan <vault>                  # 之后：增量重扫，只处理新增
 | `skills recall <kw>` | 模糊召回规范详情（容拼写错、相关性排序） | `--json` |
 | `skills list` / `skills path` | 列出可召回规范 / 打印数据目录 | `--json` |
 | `watch [vault]` | 常驻监听增量更新（有守护进程时用；否则首选 `scan`） | `--db` · `--on-change <cmd>`(`{file}` 占位) · `--pipe k=v`/`--apply`(走管道) |
-| `run` | **变更编排管道**：源→去重→路由→动作链（index/normalize/parse；原 migrate） | `--pipe k=v`(可重复) · `--apply`(写动作落盘) |
+| `run` | **变更编排管道**：源→去重→路由→动作链（index/normalize/parse/apply/set/unset/rename） | `--pipe k=v`(可重复，含 `if-exists`) · `--apply`(写动作落盘) |
 
 ## 变更编排管道（`run` / `scan --pipe` / `watch --pipe`）
 
 把"源 → 去重 → 路由 → 一串内建动作"声明成一条管道，自动维护 vault。**写动作默认 dry-run，加 `--apply` 才落盘**。
 
-- **管道参数 `--pipe k=v`（可重复）**：`actions=index,normalize`（动作链，必填）· `where="<dql>"`（按 DQL 选文件）· `on=add,change`（事件类型）· `paths=<glob>` · `concurrency=N` · `use=<name>`（从配置 `pipelines` 段加载作基底，再被其它 `--pipe` 覆盖）。
+- **管道参数 `--pipe k=v`（可重复）**：`actions=index,normalize`（动作链，必填）· `where="<dql>"`（按 DQL 选文件）· `on=add,change`（事件类型）· `paths=<glob>` · `concurrency=N` · `if-exists=skip|overwrite|merge`（`rename` 键冲突策略，默认 `skip`）· `use=<name>`（从配置 `pipelines` 段加载作基底，再被其它 `--pipe` 覆盖）。
 - **命令决定「源」**：`run`（默认 scan 全库 diff；`--pipe where=`/`paths=` 切手动源）· `scan --pipe`（一次性 diff 源）· `watch --pipe`（常驻事件源）。
 - **命令行 = 规范，配置段 = 加速**：`--pipe k=v` 与配置 `pipelines.<name>` 一一对应；**纯命令行即可自包含运行，无需先写配置**。
   ```bash
-  x-basalt run --pipe actions=index,normalize --pipe where="LIST FROM #pkm" --apply   # 内联，免配置
-  x-basalt run --pipe use=maintain --apply                                            # 引用配置段
+  x-basalt run --pipe actions="apply pkm-note, normalize" --pipe where="LIST FROM #pkm" --apply   # 内联，免配置
+  x-basalt run --pipe actions="rename tag tags" --pipe if-exists=skip --apply                     # 批量改名，冲突跳过
+  x-basalt run --pipe use=maintain --apply                                                         # 引用配置段
   ```
-- 内建动作：`index`（落库）· `normalize`（归一 frontmatter）· `parse`（校验）。**原 migrate（语义选一批改造）= `run --pipe actions=… --pipe where=…`**。
+- 内建动作：`index`（落库）· `normalize`（归一 frontmatter）· `parse`（校验）· `apply <profile>`（按 profile 纯 top-up 补字段）· `set <key>=<value>`（仅标量）· `unset <key>`· `rename <old> <new>`（冲突按 `if-exists`）。**写动作默认 dry-run，必须 `--apply` 才落盘**；**原 migrate（语义选一批改造）= `run --pipe actions=… --pipe where=… --apply`**。
 
 ## 改元数据（meta，唯一写侧）
 

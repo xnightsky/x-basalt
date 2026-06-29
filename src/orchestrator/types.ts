@@ -33,6 +33,8 @@ export interface ActionContext {
   dryRun: boolean;
   /** 写动作落盘成功后回调路径（供编排器记录"自产生写"做防回环，spec §9 坑①）。 */
   onWrite?: (path: string) => void;
+  /** rename 动作遇目标键已存在时的冲突策略（默认 skip）。 */
+  ifExists?: "skip" | "overwrite" | "merge";
 }
 
 /** 单个动作对单个文件执行后的结果（供 RunReport 汇总）。 */
@@ -73,6 +75,8 @@ export interface PipelineConfig {
   onError?: "continue" | "stop";
   /** 写动作 dry-run（默认 true）。 */
   dryRun?: boolean;
+  /** rename 写动作的键冲突策略（默认 skip）。 */
+  ifExists?: "skip" | "overwrite" | "merge";
   /** 内建动作名序列（串行 pipe 执行）。 */
   actions: string[];
 }

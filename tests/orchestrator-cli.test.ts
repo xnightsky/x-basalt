@@ -158,3 +158,77 @@ test("CLI Given --pipe actions=normalize Then 默认 dry-run 不落盘，--apply
     rmSync(vault, { recursive: true, force: true });
   }
 });
+
+test("CLI Given --pipe actions=apply Then 默认 dry-run 不落盘，--apply 落盘", () => {
+  const { vault, baseDir, db } = setup("{}\n", { "a.md": "---\n---\n# A\n正文\n" });
+  try {
+    const before = readFileSync(join(vault, "a.md"), "utf8");
+    const dry = run(
+      ["run", "--pipe", "actions=apply pkm-note", "--vault", vault, "--db", db, "--json"],
+      { X_BASALT_DIR: baseDir },
+    );
+    assert.equal(dry.status, 0, dry.stderr);
+    assert.equal(readFileSync(join(vault, "a.md"), "utf8"), before, "dry-run 不应改文件");
+
+    const apply = run(
+      [
+        "run",
+        "--pipe",
+        "actions=apply pkm-note",
+        "--apply",
+        "--vault",
+        vault,
+        "--db",
+        db,
+        "--json",
+      ],
+      { X_BASALT_DIR: baseDir },
+    );
+    assert.equal(apply.status, 0, apply.stderr);
+    assert.match(readFileSync(join(vault, "a.md"), "utf8"), /created:/, "--apply 应落盘补 created");
+  } finally {
+    rmSync(vault, { recursive: true, force: true });
+  }
+});
+
+test("CLI Given --pipe rename + if-exists=overwrite Then 冲突策略经 CLI 生效", () => {
+  const { vault, baseDir, db } = setup("{}\n", { "a.md": "---\ntag: x\ntags: y\n---\nbody\n" });
+  try {
+    const r = run(
+      [
+        "run",
+        "--pipe",
+        "actions=rename tag tags",
+        "--pipe",
+        "if-exists=overwrite",
+        "--apply",
+        "--vault",
+        vault,
+        "--db",
+        db,
+        "--json",
+      ],
+      { X_BASALT_DIR: baseDir },
+    );
+    assert.equal(r.status, 0, r.stderr);
+    const content = readFileSync(join(vault, "a.md"), "utf8");
+    assert.match(content, /tags: x/);
+    assert.doesNotMatch(content, /tag:/);
+  } finally {
+    rmSync(vault, { recursive: true, force: true });
+  }
+});
+
+test("CLI Given --pipe if-exists=非法值 Then 报错退出码 1", () => {
+  const { vault, baseDir } = setup("{}\n", {});
+  try {
+    const r = run(
+      ["run", "--pipe", "actions=parse", "--pipe", "if-exists=bogus", "--vault", vault],
+      { X_BASALT_DIR: baseDir },
+    );
+    assert.equal(r.status, 1);
+    assert.match(r.stderr, /if-exists/);
+  } finally {
+    rmSync(vault, { recursive: true, force: true });
+  }
+});

@@ -79,6 +79,7 @@ export function parsePipelines(raw: unknown): Record<string, PipelineConfig> {
       onBusy: (p.onBusy as PipelineConfig["onBusy"]) ?? "queue",
       onError: (p.onError as PipelineConfig["onError"]) ?? "continue",
       dryRun: typeof p.dryRun === "boolean" ? p.dryRun : true,
+      ifExists: (p.ifExists as PipelineConfig["ifExists"]) ?? "skip",
     };
   }
   return out;

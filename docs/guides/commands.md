@@ -379,11 +379,26 @@ x-basalt run [--pipe k=v]... [--apply] [--vault <path>] [--db <path>] [--json]
 | key | 值 | 含义 |
 |---|---|---|
 | `use` | name | 从配置 `pipelines.<name>` 加载作基底（其余 `--pipe` 覆盖它） |
-| `actions` | a,b,c | 内建动作链（必填）：`index` / `normalize` / `parse` |
+| `actions` | a,b,c | 内建动作链（必填）：`index` / `normalize` / `parse` / `apply <profile>` / `set <key>=<value>` / `unset <key>` / `rename <old> <new>` |
 | `where` | DQL | 按 DQL 选文件（手动源 / 语义筛） |
 | `paths` | glob | 路径过滤 |
 | `on` | add,change | 事件类型过滤 |
 | `concurrency` | N | 文件间并发上限（默认 4） |
+| `if-exists` | skip\|overwrite\|merge | `rename` 键冲突策略（默认 `skip`） |
+
+**内建动作**
+
+| 动作 | 是否写 `.md` | 说明 |
+|---|---|---|
+| `index` | 否（写库） | 把文件增量写入 SQLite 索引 |
+| `normalize` | 是 | 归一 frontmatter：tags 列表化 / 去 `#` / 去重 / 单数键迁移 |
+| `parse` | 否 | 只读解析校验 |
+| `apply <profile>` | 是 | 套用 profile：机械补时间/哈希 + 自动标准化（**纯 top-up**，不带 `--set`/`--refresh-derived`；要补语义/刷新用 `meta apply`） |
+| `set <key>=<value>` | 是 | 设置属性（**仅标量值**，不含空格/逗号；列表值暂不支持） |
+| `unset <key>` | 是 | 删除属性 |
+| `rename <old> <new>` | 是 | 改键名；目标键已存在时按 `if-exists` 策略处理 |
+
+所有**写动作**（`normalize` / `apply` / `set` / `unset` / `rename`）默认 **dry-run 只预览**，必须加 `--apply` 才落盘。
 
 **运行环境**（顶层 flag，与管道无关）：
 
@@ -396,6 +411,11 @@ x-basalt run [--pipe k=v]... [--apply] [--vault <path>] [--db <path>] [--json]
 
 **源**：`run` 默认 **scan 源**（全库 diff）；给 `--pipe where=` / `--pipe paths=` 切**手动源**。**退出码**：有动作失败时 `1`（明细打到 stderr）。
 
+**限制**
+
+- 管道 `set` **仅支持标量值**：token 按空格切，值不能含空格/逗号；列表值暂不支持（P2）。
+- 管道 `apply` 是**纯 top-up**（只补缺字段 + 自动 normalize），不带 `meta apply` 的 `--set`/`--refresh-derived`；要补语义字段或重算 `sha256`/`modified` 等请用独立 `meta apply` 命令。
+
 **示例**
 
 ```bash
@@ -405,6 +425,10 @@ x-basalt run --pipe actions=index,normalize --pipe where="LIST FROM #pkm" --appl
 x-basalt run --pipe use=maintain --apply --vault ./v
 # 引用 + 覆盖一项
 x-basalt run --pipe use=maintain --pipe concurrency=8 --vault ./v
+# 批量套用 profile 后归一
+x-basalt run --pipe actions="apply pkm-note, normalize" --pipe where="LIST FROM #pkm" --apply --vault ./v
+# 批量改名：tag -> tags，冲突跳过
+x-basalt run --pipe actions="rename tag tags" --pipe if-exists=skip --apply --vault ./v
 ```
 
 **配置段**（`.x-basalt/config.yaml`，命名快照；每个 key ⟷ 一个 `--pipe key=val`）：

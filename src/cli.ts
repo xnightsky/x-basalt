@@ -135,7 +135,7 @@ function splitList(s: string): string[] {
 
 /**
  * 解析统一管道参数 `--pipe k=v`（可重复）+ `--apply`，产出 PipelineConfig。
- * 次级 key：`use`（从配置 pipelines.<name> 加载作基底）/ actions / where / paths / on / concurrency。
+ * 次级 key：`use`（从配置 pipelines.<name> 加载作基底）/ actions / where / paths / on / concurrency / if-exists。
  * 命令行是规范落地、配置段是命名快照——`use` 加载后其余 k=v 覆盖；纯命令行即可自包含、不依赖配置。
  * scan/run/watch 三命令共用本解析（命令只决定「源」）。
  */
@@ -161,6 +161,16 @@ function resolvePipeline(pipeFlags: string[], apply: boolean): PipelineConfig {
       "缺少管道动作：用 --pipe actions=index,normalize（内联）或 --pipe use=<配置管道>",
     );
   }
+  // if-exists：rename 冲突策略（命令行覆盖配置基底）；非法值报错。
+  const ifExistsRaw = kv["if-exists"] ?? base?.ifExists;
+  if (
+    ifExistsRaw !== undefined &&
+    ifExistsRaw !== "skip" &&
+    ifExistsRaw !== "overwrite" &&
+    ifExistsRaw !== "merge"
+  ) {
+    throw new Error(`--pipe if-exists 仅接受 skip|overwrite|merge，得到 "${ifExistsRaw}"`);
+  }
   return {
     actions,
     where: kv.where ?? base?.where,
@@ -170,6 +180,7 @@ function resolvePipeline(pipeFlags: string[], apply: boolean): PipelineConfig {
     debounce: base?.debounce,
     onError: base?.onError,
     dryRun: apply ? false : (base?.dryRun ?? true), // --apply 覆盖；否则配置 dryRun 或默认 true
+    ifExists: ifExistsRaw as PipelineConfig["ifExists"],
   };
 }
 
@@ -223,7 +234,7 @@ program
   .option("--json", "输出结构化差异报告（默认人读摘要）", false)
   .option(
     "--pipe <kv>",
-    "用管道处理 scan 出的变更（key=value 可重复：actions/use/where/on/concurrency）",
+    "用管道处理 scan 出的变更（key=value 可重复：actions/use/where/on/concurrency/if-exists）",
     collectPipe,
     [] as string[],
   )
@@ -482,7 +493,7 @@ program
   )
   .option(
     "--pipe <kv>",
-    "管道参数 key=value（可重复）：use/actions/where/paths/on/concurrency",
+    "管道参数 key=value（可重复）：use/actions/where/paths/on/concurrency/if-exists",
     collectPipe,
     [] as string[],
   )
@@ -527,7 +538,7 @@ program
   .option("--on-change <cmd>", "变更时执行的命令模板（{file} 占位；可由配置 onChange 提供）")
   .option(
     "--pipe <kv>",
-    "用管道维护（key=value 可重复：actions/use/where/on/concurrency）；替代 --on-change 裸 shell",
+    "用管道维护（key=value 可重复：actions/use/where/on/concurrency/if-exists）；替代 --on-change 裸 shell",
     collectPipe,
     [] as string[],
   )

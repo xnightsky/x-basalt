@@ -1,7 +1,7 @@
 import { VaultIndexer } from "../indexer/index.js";
 import { DataviewEngine } from "../query/index.js";
 import { Accumulator } from "./accumulate.js";
-import { getAction } from "./actions.js";
+import { parseAction } from "./actions.js";
 import { foldEvents } from "./dedup.js";
 import { matchEvent, selectByDql } from "./route.js";
 import { manualSourceFromDql, manualSourceFromPaths, scanSource, watchSource } from "./sources.js";
@@ -81,11 +81,12 @@ export class Orchestrator {
       }
     }
 
-    const actions = pipeline.actions.map(getAction);
+    const actions = pipeline.actions.map(parseAction);
     const ctx: ActionContext = {
       vaultPath: this.vaultPath,
       indexer: this.indexer,
       dryRun: pipeline.dryRun ?? true, // 写动作默认 dry-run（spec §6.6）
+      ifExists: pipeline.ifExists ?? "skip",
       onWrite: (p) => this.selfWritten.set(p, Date.now()),
     };
     return runPipeline(routed, actions, ctx, {
