@@ -55,9 +55,6 @@ importers:
         specifier: ^5.7.0
         version: 5.9.3
     optionalDependencies:
-      '@ai-sdk/gateway':
-        specifier: ^4.0.5
-        version: 4.0.5(zod@4.4.3)
       '@ai-sdk/openai-compatible':
         specifier: ^3.0.1
         version: 3.0.1(zod@4.4.3)

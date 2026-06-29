@@ -67,7 +67,6 @@
     "typescript": "^5.7.0"
   },
   "optionalDependencies": {
-    "@ai-sdk/gateway": "^4.0.5",
     "@ai-sdk/openai-compatible": "^3.0.1",
     "ai": "^7.0.6"
   }
