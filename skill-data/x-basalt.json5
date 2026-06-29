@@ -3,7 +3,7 @@
   // SkillRecall 召回自身用法，方便 AI / 使用者无需外部文档即可学会驱动本工具。
   // 与 obsidian-base-spec 一样由 loader 列为「始终可召回」内置兜底。完整版见 docs/guides/usage.md。
   name: "x-basalt",
-  description: "x-basalt CLI 自我说明书：parse/index/scan/query/skills/meta/watch/run 各命令用法、变更编排管道、DQL 子集、项目配置与示例。",
+  description: "x-basalt CLI 自我说明书：parse/index/scan/query/skills/meta/watch/run/chat 各命令用法、变更编排管道、可选 AI 的自然语言 chat、DQL 子集、项目配置与示例。",
   triggers: [
     "usage", "help", "howto", "how-to", "manual", "guide", "readme",
     "说明书", "用法", "怎么用", "帮助", "命令", "指令",
@@ -13,6 +13,9 @@
     "normalize", "归一", "标准化", "tags", "aliases",
     "profile", "apply", "strategy", "策略", "模板", "pkm-note", "llm-wiki", "ssg-blog",
     "run", "pipeline", "orchestration", "编排", "管道", "migrate", "批量",
+    "chat", "ai", "AI", "自然语言", "聊天", "对话", "llm", "agent",
+    "gateway", "AI_GATEWAY", "AI_GATEWAY_API_KEY", "ollama", "model", "模型", "离线", "offline",
+    "windows", "powershell", "linux", "env", "环境变量", "配置 ai", "怎么配",
     "example", "示例", "用例",
   ],
   patterns: [
@@ -23,6 +26,7 @@
     "x-basalt meta set <file> <key> <value>",
     "x-basalt watch <vault> --on-change <cmd>",
     "x-basalt run --pipe actions=... [--apply]",
+    "x-basalt chat \"<自然语言>\"  (需 AI_GATEWAY_API_KEY)",
   ],
   rules: [
     {
@@ -113,6 +117,16 @@
       ],
     },
     {
+      pattern: "chat [\"<自然语言>\"] [--model <name>] [--max-steps <n>] [--db <path>] [--vault <path>]",
+      description: "可选 AI 子命令（如何用）：用自然语言驱动既有原语（读 query/parse/scan/meta_get/skills_recall + 写 meta_set/unset/rename/normalize/apply + 批量 pipeline_run）跑 plan→act→observe 循环。带参=单发翻译执行即退；省略参数=进 REPL（quit/exit/q 退出）。最小可选 AI：内核零 AI、chat 隔离懒加载 SDK；没配 key=本命令禁用但其余命令全功能照常（需 AI_GATEWAY_API_KEY，--model 覆盖模型）。写动作直接落盘、无逐个确认弹窗——安全靠流式可观测 + Ctrl+C 中断在途 + 既有原子写（kill 不损坏文件）+ git 兜底。**只做一次性操作，不支持常驻 watch/监听**：绝不让它跑 watch 或 index --watch 这类常驻命令——会永不返回、把 chat 挂死；持续维护 vault 用独立的 watch / scan --pipe。能力边界：当前做结构化任务（DQL/元数据/规范），按笔记正文全文检索依赖 FTS5（未落地）。**如何配置（AI_GATEWAY_* 三变量、Linux/macOS 与 Windows 各平台设法与持久化、离线本地端点）见 docs/guides/ai-and-skills.md 第四节。**",
+      examples: [
+        "x-basalt chat \"把 projects 下 status 为空的笔记列出来\"",
+        "x-basalt chat \"给 2024 年的周报都补上 tag weekly\"",
+        "x-basalt chat --model anthropic/claude-opus-4.8 \"...\"",
+        "x-basalt chat   # 省略参数进 REPL，连续提问，quit/exit/q 退出",
+      ],
+    },
+    {
       pattern: "DQL 操作符与隐式字段",
       description: "操作符：= != < > <= >= / contains icontains startswith endswith / AND OR NOT / regexmatch(field,\"pattern\")。隐式字段：file.name/path/folder/extension/size/mtime/ctime/tags/inlinks/outlinks/tasks 与任意 frontmatter 标量。FROM #a 前缀命中 #a/b；FROM \"F\" 含子文件夹；FROM [[N]] 取指向 N 的反向链接。",
       examples: [
@@ -137,7 +151,7 @@
   ],
   metadata: {
     doc: "docs/guides/usage.md",
-    commands: ["parse", "index", "scan", "query", "skills", "meta", "watch", "run"],
+    commands: ["parse", "index", "scan", "query", "skills", "meta", "watch", "run", "chat"],
     self_recall: true,
   },
 }

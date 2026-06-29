@@ -40,6 +40,7 @@ x-basalt scan <vault>                  # 之后：增量重扫，只处理新增
 | `skills list` / `skills path` | 列出可召回规范 / 打印数据目录 | `--json` |
 | `watch [vault]` | 常驻监听增量更新（有守护进程时用；否则首选 `scan`） | `--db` · `--on-change <cmd>`(`{file}` 占位) · `--pipe k=v`/`--apply`(走管道) |
 | `run` | **变更编排管道**：源→去重→路由→动作链（index/normalize/parse/apply/set/unset/rename） | `--pipe k=v`(可重复，含 `if-exists`) · `--apply`(写动作落盘) |
+| `chat ["<NL>"]` | **可选 AI**：自然语言驱动既有原语（单发/REPL）；无 key 则禁用、不影响其他命令 | `--model` · `--max-steps` · 需 env `AI_GATEWAY_API_KEY` |
 
 ## 变更编排管道（`run` / `scan --pipe` / `watch --pipe`）
 
@@ -65,6 +66,16 @@ x-basalt scan <vault>                  # 之后：增量重扫，只处理新增
   - **AI 用法**：① `meta apply <profile> <file>` —— 机械补 created/modified/pubDate/timestamp/sha256，并报告「仍缺」哪些语义字段；② 缺的字段你 `meta profile show <profile>` 读规范（每个字段什么意思）+ 读文档内容，自己判断值；③ 再 `meta apply <profile> <file> --set key=value ...` 一次补上（`--set` 按 profile 类型转值、**显式覆盖**已有值；apply 收尾自动 normalize）。额外字段也可直接 `--set` 加。
   - 例：`meta apply pkm-note daily.md --set tags=area/work,moc --set status=active`
   - **改完正文重算**：`meta apply <profile> <file> --refresh-derived` —— 内容派生字段（modified/timestamp/sha256）即使已有也重算覆盖；创建时间（created/pubDate）恒定不动，`--set` 显式值不被覆盖。（不加该开关时机械字段是 top-up 只补缺，改正文后须用它才刷新。）
+
+## 可选 AI：chat（自然语言驱动 vault）
+
+`x-basalt chat` 把上面的原语包成 AI 工具，用自然语言驱动（plan→act→observe）。**最小可选 AI**：内核零 AI、chat 懒加载 SDK；**没配 key = chat 禁用，其余命令全功能照常**。
+
+- **两形态**：`x-basalt chat "<指令>"`（单发，翻译→执行→退）/ `x-basalt chat`（REPL，`quit`/`exit`/`q` 退出）。
+- **需配 `AI_GATEWAY_API_KEY`**（兼容 agent-browser；可选 `AI_GATEWAY_MODEL`/`AI_GATEWAY_URL`，`--model` 覆盖模型，`AI_GATEWAY_URL` 指本地端点可离线）。无 key → 友好退出码 1、不影响其他命令。**各平台怎么设、怎么持久化（Linux/macOS 的 `~/.bashrc`/`~/.zshrc`、Windows 的 PowerShell profile / `setx`）见 [docs/guides/ai-and-skills.md](../../docs/guides/ai-and-skills.md) 第四节。**
+- **写动作直接落盘、无确认弹窗**——安全靠流式可观测 + **Ctrl+C 中断在途** + 既有原子写（kill 不损坏文件）+ git 兜底。
+- **只做一次性操作，不支持常驻 watch / 监听**：**绝不要让它跑 `watch` 或 `index --watch` 这类常驻命令——会永不返回、把 chat 挂死**。需要持续维护 vault 用独立的 `x-basalt watch` / `scan --pipe`，不要走 chat。
+- **能力边界**：当前做结构化任务（DQL/元数据/规范）；按笔记**正文**全文检索依赖 FTS5（未落地）。
 
 ## 配置与基目录
 
