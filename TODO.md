@@ -11,11 +11,12 @@
 
 ## 🚧 执行中：CLI chat（读+写，可选 AI）
 
-dogfood 期决定提前做：自然语言驱动 vault 的 `chat` 子命令（单发 + REPL）。**范围读+写**（既有读原语 + meta 写 + 编排器一次性批量），仅排除常驻 watch；「按正文找」依赖 FTS5 仍推后。最小可选 AI（内核零 AI、`src/chat/` 懒加载 Vercel `ai` SDK、`AI_GATEWAY_*` 兼容、无 key 友好退出）；写动作逐动作确认。
+dogfood 期决定提前做：自然语言驱动 vault 的 `chat` 子命令（单发 + REPL）。**范围读+写**（既有读原语 + meta 写 + 编排器一次性批量），仅排除常驻 watch；「按正文找」依赖 FTS5 仍推后。最小可选 AI（内核零 AI、`src/chat/` 懒加载 Vercel `ai` SDK、`AI_GATEWAY_*` 兼容、无 key 友好退出）；写动作直接落盘、Ctrl+C 中断（无确认闸，见设计变更）。
 
 - 设计：[`docs/specs/2026-06-30-cli-chat-readwrite-design.md`](docs/specs/2026-06-30-cli-chat-readwrite-design.md)（父评估 [`docs/specs/2026-06-28-cli-chat-design.md`](docs/specs/2026-06-28-cli-chat-design.md)）。
-- 计划：[`docs/plans/2026-06-30-cli-chat-readwrite.md`](docs/plans/2026-06-30-cli-chat-readwrite.md)（4 段：P1 provider→P2 safety+confirm→P3 tools+loop→P4 单发+REPL+cli）。
+- 计划：[`docs/plans/2026-06-30-cli-chat-readwrite.md`](docs/plans/2026-06-30-cli-chat-readwrite.md)（4 段：P1 provider ✅ → P2 safety ✅ → P3 tools+loop ✅ → P4 单发+REPL+cli）。
 - 交付：pi 起进程逐段实现，编排方编排+独立复核（不轻信 pi 自报）。
+- 设计变更（2026-06-30）：删除写动作逐动作确认；写工具直接落盘，终止靠 Ctrl+C/SIGINT → AbortController。
 
 ## 💡 backlog（待 dogfood 暴露真实需求再开，各自写计划/spec）
 
