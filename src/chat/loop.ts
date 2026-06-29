@@ -18,6 +18,11 @@ export interface LoopDeps {
   onEvent: (e: LoopEvent) => void;
   /** Ctrl+C/SIGINT 接入：abort 时中断在途模型调用与循环。 */
   abortSignal?: AbortSignal;
+  /**
+   * 系统提示。**必须经此参数传给 streamText 的 system 选项，绝不能塞进 messages**——
+   * ai@7.0.6 默认禁止 messages 里出现 system 角色（InvalidPromptError），系统提示是顶层独立项。
+   */
+  system?: string;
 }
 
 /**
@@ -35,6 +40,7 @@ export async function runLoop(messages: ModelMessage[], deps: LoopDeps): Promise
   }
   const result = streamText({
     model: deps.model as Parameters<typeof streamText>[0]["model"],
+    system: deps.system, // 顶层系统提示；v7 禁止 system 进 messages
     tools: deps.tools,
     messages,
     stopWhen: stepCountIs(deps.maxSteps),

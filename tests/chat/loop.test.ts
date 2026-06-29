@@ -77,6 +77,9 @@ test("runLoop：模型发 tool-call → 工具执行 → 结果喂回 → 收尾
     tools: probeTools(calls),
     maxSteps: 5,
     onEvent: (e) => events.push(e),
+    // 回归守门：system 必须经 deps.system 传给 streamText 顶层；若误入 messages，
+    // ai@7.0.6 的 standardizePrompt 会抛 InvalidPromptError（即此前 dogfood 暴露的 bug）。
+    system: "你是操作 Obsidian vault 的助手。",
   });
   assert.deepEqual(calls, ["hi"]);
   assert.ok(events.some((e) => e.type === "tool-call" && e.toolName === "echo"));

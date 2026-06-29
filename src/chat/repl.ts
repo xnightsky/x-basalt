@@ -17,7 +17,8 @@ export async function runRepl(
   cfg: { system: string; onEvent: (e: LoopEvent) => void },
 ): Promise<number> {
   const rl = createInterface({ input: process.stdin, output: process.stdout });
-  let messages: ModelMessage[] = [{ role: "system", content: cfg.system }];
+  // system 不进 messages（v7 禁止），每轮经 runLoop 的 system 参数传；messages 只累积 user/assistant/tool。
+  let messages: ModelMessage[] = [];
   try {
     for (;;) {
       const line = (await rl.question("\nchat> ")).trim();
@@ -28,7 +29,14 @@ export async function runRepl(
       const onSigint = (): void => ac.abort();
       process.on("SIGINT", onSigint);
       try {
-        messages = await runLoop(messages, { model, tools, maxSteps: opts.maxSteps, onEvent: cfg.onEvent, abortSignal: ac.signal });
+        messages = await runLoop(messages, {
+          model,
+          tools,
+          maxSteps: opts.maxSteps,
+          onEvent: cfg.onEvent,
+          abortSignal: ac.signal,
+          system: cfg.system,
+        });
       } catch (e) {
         if (ac.signal.aborted) process.stdout.write("\n· 已中断当前轮\n");
         else process.stderr.write(`\n✗ ${(e as Error).message}\n`);

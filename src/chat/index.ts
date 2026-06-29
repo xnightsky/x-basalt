@@ -58,12 +58,17 @@ export async function runOnce(input: string, opts: ChatOptions): Promise<number>
   const ac = new AbortController();
   const onSigint = (): void => ac.abort();
   process.on("SIGINT", onSigint);
-  const messages: ModelMessage[] = [
-    { role: "system", content: SYSTEM_PROMPT },
-    { role: "user", content: input },
-  ];
+  // system 不进 messages（v7 禁止），经 runLoop 的 system 参数传给 streamText 顶层。
+  const messages: ModelMessage[] = [{ role: "user", content: input }];
   try {
-    await runLoop(messages, { model: s.model, tools: s.tools, maxSteps: opts.maxSteps, onEvent: renderEvent, abortSignal: ac.signal });
+    await runLoop(messages, {
+      model: s.model,
+      tools: s.tools,
+      maxSteps: opts.maxSteps,
+      onEvent: renderEvent,
+      abortSignal: ac.signal,
+      system: SYSTEM_PROMPT,
+    });
     return 0;
   } catch (e) {
     if (ac.signal.aborted) {
