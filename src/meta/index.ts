@@ -4,7 +4,7 @@ import type { Document } from "yaml";
 import { applySets, diffProfile, type ProfileDiff, prefillTrivial } from "./apply.js";
 import { serializeDocument, splitDocument } from "./document.js";
 import { normalizeDoc } from "./normalize.js";
-import { getMeta } from "./operations.js";
+import { getMeta, hasMeta } from "./operations.js";
 import { getProfile } from "./profiles.js";
 
 export type { FrontmatterParts } from "./document.js";
@@ -94,6 +94,8 @@ export interface ApplyResult {
   filled: string[];
   /** 消费者 --set 覆盖掉的、原本已有值的 key。 */
   overridden: string[];
+  /** 本次因 --refresh-derived 重算覆盖的内容派生字段（原本已有值、被重算）。 */
+  refreshed: string[];
   /** 应用后已存在的 profile 字段。 */
   present: string[];
   /** 应用后仍缺的 profile 字段（按角色分组）——消费者据此决定是否补。 */
@@ -112,6 +114,7 @@ export interface ApplyResult {
  * @param profileName - profile 名（未知则报错并列可用名）
  * @param opts.sets - 消费者传入的 key=value（按 profile 类型转）
  * @param opts.dryRun - 只算不写
+ * @param opts.refreshDerived - 为 true 时重算内容派生字段（mtime/sha256-body）覆盖旧值；birthtime 恒定
  *
  * @behavior
  * Given frontmatter 含非法 YAML When applyProfile Then 抛错拒写（同 editMeta 防毁文件保证）
@@ -126,12 +129,15 @@ export interface ApplyResult {
  * Given profile 机械字段已存在于 frontmatter When applyProfile Then 保持原值不动（top-up），不因写盘更新 mtime 漂移
  *
  * @behavior
+ * Given opts.refreshDerived=true When applyProfile Then 内容派生字段（modified/timestamp/sha256 等）重算覆盖，创建时间字段（created/pubDate）保持不动；--set 给过的字段不被机械层覆盖
+ *
+ * @behavior
  * Given 完整流程 When applyProfile Then 执行顺序为 applySets → prefillTrivial → normalizeDoc → diffProfile（归一在填充之后）
  */
 export function applyProfile(
   file: string,
   profileName: string,
-  opts: { sets?: Record<string, string>; dryRun?: boolean } = {},
+  opts: { sets?: Record<string, string>; dryRun?: boolean; refreshDerived?: boolean } = {},
 ): ApplyResult {
   const profile = getProfile(profileName); // 未知 → 抛错列可用名
   const original = readFileSync(file, "utf8");
@@ -142,13 +148,20 @@ export function applyProfile(
     );
   }
   const stat = statSync(file);
+  // 快照原本已存在的机械字段（用于把 prefillTrivial 写入的 key 分成"补缺"与"重算"两类汇报）。
+  const derivedPresentBefore = new Set(
+    profile.fields.filter((f) => f.derive && hasMeta(parts.doc, f.key)).map((f) => f.key),
+  );
   // 显式 --set 先写（权威覆盖），再机械预填剩余缺失项（机械层只补缺、不抢 --set）——显式值优先。
   const setRes = applySets(parts.doc, profile, opts.sets ?? {});
-  const mech = prefillTrivial(parts.doc, profile, {
-    birthtime: stat.birthtime,
-    mtime: stat.mtime,
-    body: parts.body,
-  });
+  const mech = prefillTrivial(
+    parts.doc,
+    profile,
+    { birthtime: stat.birthtime, mtime: stat.mtime, body: parts.body },
+    { refresh: opts.refreshDerived, protect: new Set(Object.keys(opts.sets ?? {})) },
+  );
+  const refreshed = mech.filter((k) => derivedPresentBefore.has(k)); // 原本已有 → 重算
+  const mechFilled = mech.filter((k) => !derivedPresentBefore.has(k)); // 原本缺 → 补缺
   // 标准化收尾：profile 建立在标准化之上——填完即归一（tags 列表化/去#/去重/单数键迁移），
   // 产出既合规又齐全（含清理文件里旧的不规范字段，与 --set/机械填入的值）。
   normalizeDoc(parts.doc);
@@ -160,8 +173,9 @@ export function applyProfile(
   return {
     file,
     profile: profileName,
-    filled: [...setRes.filled, ...mech],
+    filled: [...setRes.filled, ...mechFilled],
     overridden: setRes.overridden,
+    refreshed,
     present: diff.present,
     missing: diff.missing,
     changed,

@@ -171,3 +171,53 @@ test("MW3.3 Given 未知 profile / 非法 YAML When applyProfile Then 报错且�
   assert.throws(() => applyProfile(bad, "pkm-note"), /解析失败|拒绝/);
   assert.equal(readFileSync(bad, "utf8"), before);
 });
+
+// === MW3.3.1 applyProfile refreshDerived 集成：改正文后刷新 sha256；created 恒定；--set 优先 ===
+
+test("MW3.3.1 Given 改正文后、refreshDerived=true When applyProfile Then sha256 重算并报告 refreshed", () => {
+  const file = tmpFile("---\n---\n# A\n原始正文\n");
+  applyProfile(file, "llm-wiki", { sets: { type: "note" } });
+  const h1 = readMeta(file, "sha256") as string;
+  assert.match(h1, /^[0-9a-f]{64}$/);
+
+  // 改正文但保留 frontmatter
+  const current = readFileSync(file, "utf8");
+  writeFileSync(file, `${current}\n改动后新增正文\n`, "utf8");
+
+  const r = applyProfile(file, "llm-wiki", { refreshDerived: true });
+  const h2 = readMeta(file, "sha256") as string;
+  assert.notEqual(h2, h1);
+  assert.ok(r.refreshed.includes("sha256"));
+});
+
+test("MW3.3.1 Given 改正文后、refreshDerived=false When applyProfile Then sha256 保持不变（top-up 回归）", () => {
+  const file = tmpFile("---\n---\n# A\n原始正文\n");
+  applyProfile(file, "llm-wiki", { sets: { type: "note" } });
+  const h1 = readMeta(file, "sha256") as string;
+
+  const current = readFileSync(file, "utf8");
+  writeFileSync(file, `${current}\n改动后新增正文\n`, "utf8");
+
+  applyProfile(file, "llm-wiki");
+  assert.equal(readMeta(file, "sha256"), h1);
+});
+
+test("MW3.3.1 Given refreshDerived=true When applyProfile Then 创建时间字段仍恒定", () => {
+  const file = tmpFile("---\n---\nbody\n");
+  applyProfile(file, "pkm-note");
+  const c1 = readMeta(file, "created");
+
+  const r = applyProfile(file, "pkm-note", { refreshDerived: true });
+  assert.equal(readMeta(file, "created"), c1);
+  assert.ok(!r.refreshed.includes("created"));
+});
+
+test("MW3.3.1 Given refreshDerived=true + --set 同时给字段 When applyProfile Then --set 显式值优先", () => {
+  const file = tmpFile("---\n---\nbody\n");
+  const r = applyProfile(file, "llm-wiki", {
+    sets: { timestamp: "2099-01-01T00:00:00Z", type: "note" },
+    refreshDerived: true,
+  });
+  assert.equal(readMeta(file, "timestamp"), "2099-01-01T00:00:00Z");
+  assert.ok(!r.refreshed.includes("timestamp"));
+});

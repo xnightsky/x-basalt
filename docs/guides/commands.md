@@ -229,7 +229,7 @@ x-basalt meta rename <file> <oldKey> <newKey> [--dry-run]
 x-basalt meta normalize <file> [--sort-keys] [--dry-run]
 x-basalt meta profile list
 x-basalt meta profile show <name> [--format json|yaml]
-x-basalt meta apply <profile> <file> [--set key=value]... [--dry-run]
+x-basalt meta apply <profile> <file> [--set key=value]... [--refresh-derived] [--dry-run]
 ```
 
 读取与改造单个 `.md` 的 **frontmatter（元数据头 / Obsidian Properties）**。这是 x-basalt 唯一的**写侧**命令：写操作只动 frontmatter，**正文逐字节不动**；用 [`yaml`](https://eemeli.org/yaml/) Document 往返，保留键顺序、注释（尽力）、并对需要引号的值（如 `[[链接]]`）自动加引号产出合法 YAML。写入为**原子写**（临时文件 + rename），失败不留半成品。
@@ -285,11 +285,13 @@ x-basalt meta apply <profile> <file> [--set key=value]... [--dry-run]
 
 `meta apply <profile> <file>` 做两件事：
 
-1. **机械预填**（确定性）：把该 profile 里"无需理解文档"的字段按文件信息补上——`created`/`modified`（文件时间，ISO 字符串）、`sha256`（正文哈希）。**只补缺、不覆盖已有**。
+1. **机械预填**（确定性）：把该 profile 里"无需理解文档"的字段按文件信息补上——`created`/`modified`（文件时间，ISO 字符串）、`sha256`（正文哈希）。**只补缺、不覆盖已有**（top-up）。
 2. **`--set key=value`（可重复）**：你（AI 读规范+文档后 / 人）把语义字段和额外字段**一并传入**，免去逐条 `meta set`。值**按 profile 声明的类型自动转**（如 `tags` 是 list → 按逗号拆；profile 没有的额外 key 按 `auto` 转）。**`--set` 是显式权威值，会覆盖**已有值与机械预填（例：`--set title=abc` 把 title 覆盖为 abc）。
 3. **标准化收尾**：填完自动跑 `normalize`（tags 列表化 / 去 `#` / 去重 / 单数键迁移），把文件里旧的不规范字段连同填入的值一起归一——产出**既合规又齐全**。
 
-apply 报告：**补入** / **覆盖(--set)** / **仍缺**（按 必填/推荐/可选 分组），并指向 `meta profile show` 让你读完整规范再补其余。没补的字段不出现（保持干净）。幂等、只动 frontmatter、非法 YAML 拒写、未知 profile `✗` 退出 1。
+**`--refresh-derived`（改完正文后重算机械字段）**：默认机械预填是 top-up，改了正文后 `sha256`/`modified` 等不会刷新。加 `--refresh-derived` 后，**内容派生**字段（来源 `mtime`：modified/timestamp/updatedDate；来源正文 hash：sha256）即使已存在也**重算覆盖**；**创建时间**字段（来源 `birthtime`：created/pubDate）仍恒定不动（避免在 birthtime 不可靠的文件系统上把 created 刷成当前时间而漂移）；`--set` 给过的字段始终优先、不被重算覆盖。
+
+apply 报告：**补入** / **覆盖(--set)** / **重算(--refresh-derived)** / **仍缺**（按 必填/推荐/可选 分组），并指向 `meta profile show` 让你读完整规范再补其余。没补的字段不出现（保持干净）。幂等、只动 frontmatter、非法 YAML 拒写、未知 profile `✗` 退出 1。
 
 **输出**
 
@@ -324,6 +326,7 @@ x-basalt meta profile list                      # 看有哪些策略
 x-basalt meta profile show pkm-note             # 读 Obsidian 笔记策略的规范+模板
 x-basalt meta apply pkm-note note.md            # 机械补 created/modified + 报告仍缺
 x-basalt meta apply pkm-note note.md --set tags=area/work,moc --set status=active   # 顺手补语义字段
+x-basalt meta apply llm-wiki note.md --refresh-derived   # 改完正文后重算 sha256/timestamp（created 不动）
 ```
 
 ---

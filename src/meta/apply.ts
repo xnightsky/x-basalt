@@ -1,7 +1,10 @@
 import type { Document } from "yaml";
-import { type DeriveContext, deriveValue } from "./derive.js";
+import { type DeriveContext, type DeriveSource, deriveValue } from "./derive.js";
 import { coerceValue, hasMeta, type MetaScalarType, setMeta } from "./operations.js";
 import type { Profile } from "./profiles.js";
+
+/** 内容派生来源：内容/文件变化时应随之重算的机械来源（区别于恒定的 birthtime 创建时间）。 */
+const CONTENT_DERIVED: ReadonlySet<DeriveSource> = new Set<DeriveSource>(["mtime", "sha256-body"]);
 
 // === 自建实现: profile 应用（apply · Phase 3）===
 //
@@ -38,26 +41,49 @@ export function diffProfile(doc: Document, profile: Profile): ProfileDiff {
 }
 
 /**
- * 仅补缺失的机械字段（derive 非空），已有跳过。返回补了哪些 key。
- * 幂等：机械字段已存在时不覆盖（top-up 语义）；timestamp 二次调用因已存在而跳过，不因写盘更新 mtime 而漂移。
+ * 仅补缺失的机械字段（derive 非空），已有跳过（top-up 语义）。返回本次写入的 key（含补缺与重算）。
+ * 幂等：机械字段已存在时默认不覆盖；timestamp 二次调用因已存在而跳过，不因写盘更新 mtime 而漂移。
+ *
+ * @param opts.refresh - 为 true 时，对**内容派生**字段（来源 mtime / sha256-body）即使已存在也重算覆盖；
+ *   **创建时间**字段（来源 birthtime）仍只补缺、永不重算（防 created/pubDate 在不可靠文件系统上漂移）。
+ * @param opts.protect - 这些 key 永不被机械层写入/重算（用于保护 --set 给过的显式值，显式优先于机械）。
  *
  * @behavior
- * Given profile 字段有 derive 来源且 frontmatter 中已存在该 key When prefill Then 跳过（不 clobber 已有值）
+ * Given profile 字段有 derive 来源且 frontmatter 中已存在该 key 且未开 refresh When prefill Then 跳过（不 clobber 已有值）
  *
  * @behavior
  * Given profile 字段有 derive 来源且 frontmatter 缺失该 key When prefill Then 机械计算并写入，返回含该 key
  *
  * @behavior
- * Given profile 字段无 derive（语义字段，如 type/title/description）When prefill Then 始终跳过，不补语义字段
+ * Given 内容派生字段（mtime/sha256-body）已存在且 opts.refresh=true When prefill Then 重算覆盖并计入返回
+ *
+ * @behavior
+ * Given 创建时间字段（birthtime）已存在且 opts.refresh=true When prefill Then 仍跳过、不重算（created/pubDate 恒定）
+ *
+ * @behavior
+ * Given key 在 opts.protect 中（--set 给过）When prefill（含 refresh）Then 永不写入/重算（显式值优先）
+ *
+ * @behavior
+ * Given profile 字段无 derive（语义字段）When prefill Then 始终跳过，不补语义字段
  */
-export function prefillTrivial(doc: Document, profile: Profile, ctx: DeriveContext): string[] {
-  const filled: string[] = [];
+export function prefillTrivial(
+  doc: Document,
+  profile: Profile,
+  ctx: DeriveContext,
+  opts: { refresh?: boolean; protect?: ReadonlySet<string> } = {},
+): string[] {
+  const written: string[] = [];
   for (const f of profile.fields) {
-    if (!f.derive || hasMeta(doc, f.key)) continue; // 非机械字段 / 已有 → 不碰
+    if (!f.derive) continue; // 非机械字段 → 不碰
+    if (opts.protect?.has(f.key)) continue; // --set 显式值优先，机械层永不碰
+    const exists = hasMeta(doc, f.key);
+    // top-up：缺则补。refresh：内容派生字段即使已有也重算覆盖；birthtime 创建时间恒定、永不刷新。
+    const recompute = exists && opts.refresh === true && CONTENT_DERIVED.has(f.derive);
+    if (exists && !recompute) continue;
     setMeta(doc, f.key, deriveValue(f.derive, ctx));
-    filled.push(f.key);
+    written.push(f.key);
   }
-  return filled;
+  return written;
 }
 
 /**

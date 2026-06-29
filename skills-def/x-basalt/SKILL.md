@@ -34,7 +34,7 @@ x-basalt scan <vault>                  # 之后：增量重扫，只处理新增
 | `meta set/unset/rename <file> ...` | 改单个属性（set 增改 / unset 删 / rename 改键名） | `--type` · `--dry-run` |
 | `meta normalize <file>` | **无约定纯标准化**：tags 列表化/去#/去重/单数键迁移 | `--sort-keys` · `--dry-run` |
 | `meta profile list / show <name>` | 列出 / 查看元数据策略（profile）的规范+模板 | — |
-| `meta apply <profile> <file>` | **按策略补全**：机械补时间/哈希 + `--set` 补语义 + 自动标准化 | `--set k=v`(可重复) · `--dry-run` |
+| `meta apply <profile> <file>` | **按策略补全**：机械补时间/哈希 + `--set` 补语义 + 自动标准化 | `--set k=v`(可重复) · `--refresh-derived`(重算 mtime/sha256) · `--dry-run` |
 | `skills get <name>` | 按名取整篇规范（`obsidian-base-spec` / `x-basalt`） | `--all` · `--json` |
 | `skills recall <kw>` | 模糊召回规范详情（容拼写错、相关性排序） | `--json` |
 | `skills list` / `skills path` | 列出可召回规范 / 打印数据目录 | `--json` |
@@ -63,6 +63,7 @@ x-basalt scan <vault>                  # 之后：增量重扫，只处理新增
 - **`apply <profile>`（按约定补全）= 元数据策略**：x-basalt 只「告知」规范，**补不补/补什么由你（AI）决定，它不调 LLM**。内置 3 套：`pkm-note`(Obsidian,第一推荐) / `llm-wiki`(OKF) / `ssg-blog`(SSG)。
   - **AI 用法**：① `meta apply <profile> <file>` —— 机械补 created/modified/pubDate/timestamp/sha256，并报告「仍缺」哪些语义字段；② 缺的字段你 `meta profile show <profile>` 读规范（每个字段什么意思）+ 读文档内容，自己判断值；③ 再 `meta apply <profile> <file> --set key=value ...` 一次补上（`--set` 按 profile 类型转值、**显式覆盖**已有值；apply 收尾自动 normalize）。额外字段也可直接 `--set` 加。
   - 例：`meta apply pkm-note daily.md --set tags=area/work,moc --set status=active`
+  - **改完正文重算**：`meta apply <profile> <file> --refresh-derived` —— 内容派生字段（modified/timestamp/sha256）即使已有也重算覆盖；创建时间（created/pubDate）恒定不动，`--set` 显式值不被覆盖。（不加该开关时机械字段是 top-up 只补缺，改正文后须用它才刷新。）
 
 ## 配置与基目录
 

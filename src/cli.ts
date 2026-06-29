@@ -84,6 +84,7 @@ function reportApply(r: ApplyResult): void {
   const lines: string[] = [];
   if (r.filled.length > 0) lines.push(`补入：${r.filled.join(", ")}`);
   if (r.overridden.length > 0) lines.push(`覆盖(--set)：${r.overridden.join(", ")}`);
+  if (r.refreshed.length > 0) lines.push(`重算(--refresh-derived)：${r.refreshed.join(", ")}`);
   const miss = [
     ...r.missing.required.map((k) => `${k}(必填)`),
     ...r.missing.recommended,
@@ -453,9 +454,26 @@ meta
     [] as string[],
   )
   .option("--dry-run", "只预览，不落盘", false)
-  .action((profile: string, file: string, opts: { set: string[]; dryRun: boolean }) => {
-    reportApply(applyProfile(file, profile, { sets: parseSets(opts.set), dryRun: opts.dryRun }));
-  });
+  .option(
+    "--refresh-derived",
+    "重算内容派生的机械字段（modified/timestamp/sha256）覆盖旧值；created/pubDate 恒定不动",
+    false,
+  )
+  .action(
+    (
+      profile: string,
+      file: string,
+      opts: { set: string[]; dryRun: boolean; refreshDerived: boolean },
+    ) => {
+      reportApply(
+        applyProfile(file, profile, {
+          sets: parseSets(opts.set),
+          dryRun: opts.dryRun,
+          refreshDerived: opts.refreshDerived,
+        }),
+      );
+    },
+  );
 
 program
   .command("run")
