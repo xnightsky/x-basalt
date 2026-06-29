@@ -1,6 +1,6 @@
 # skills-def · 开发侧业务 skill 真相源
 
-本目录是 x-basalt **开发期** AI 召回用 skill 的**唯一源码**。`.claude/skills/` 仅为安装产物（已 gitignore），由 `pnpm run skills:install` 从这里拷贝生成，**不要手改安装产物**。
+本目录是 x-basalt **开发期** AI 召回用 skill 的**唯一源码**。`.claude/skills/` 与 `.agents/skills/` 仅为安装产物（均已 gitignore），由 `pnpm run skills:install` 从这里拷贝生成，**不要手改安装产物**。
 
 > 区分：`skills-def/` 是开发侧（AI 写代码时召回规范）；仓库根的 `skill-data/` 是**产品运行时** SkillRecall 加载的数据，两者互不替代。
 
@@ -20,4 +20,4 @@
 
 ## 安装机制
 
-`scripts/install-skills.mjs` 遍历本目录下含 `SKILL.md` 的子目录，拷贝到 `.claude/skills/<name>/`（覆盖旧产物）。跨平台、纯 Node、无第三方依赖。
+`scripts/install-skills.mjs` 遍历本目录下含 `SKILL.md` 的子目录，按 frontmatter `scope` 分流后拷贝到 `.claude/skills/<name>/` 与 `.agents/skills/<name>/`（覆盖旧产物）。跨平台、纯 Node、无第三方依赖。

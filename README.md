@@ -55,8 +55,8 @@ pnpm test                  # Node 原生 test runner
 pnpm run typecheck         # tsc --noEmit
 pnpm run lint              # oxlint
 pnpm run format            # oxfmt
-pnpm run skills:install         # 装 skills-def/ 的开发技能到项目 .claude/skills/
-pnpm run skills:install:global  # 装 x-basalt 使用技能到 ~/.claude/skills/（教 AI 用本 CLI）
+pnpm run skills:install         # 装 skills-def/ 的开发技能到项目 .claude/skills/ + .agents/skills/
+pnpm run skills:install:global  # 装 x-basalt 使用技能到 ~/.claude/skills/ + ~/.agents/skills/（教 AI 用本 CLI）
 ```
 
 `pnpm install` 经 `prepare` 把 `git config core.hooksPath` 指向 `.githooks/`；此后 **push 前**自动跑 `typecheck + test + lint`（`.githooks/pre-push`），任一失败即阻断。绕过：`git push --no-verify`。

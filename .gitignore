@@ -99,3 +99,4 @@ AGENTS.local.md
 .claude/settings.local.json
 .claude/skills/
 .claude/commands/
+.agents/skills/

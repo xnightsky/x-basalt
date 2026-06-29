@@ -112,7 +112,7 @@ docs/         research / specs / plans / guides / architecture / testing（见 d
 
 ## Skills 真相源（skills-def）
 
-- 开发侧自建 skill 源码**唯一维护在 `skills-def/<name>/SKILL.md`**；`.claude/skills/` 仅安装产物（由 `pnpm run skills:install` 拷贝生成，已 gitignore），不手改安装产物。
+- 开发侧自建 skill 源码**唯一维护在 `skills-def/<name>/SKILL.md`**；`.claude/skills/` 与 `.agents/skills/` 仅安装产物（由 `pnpm run skills:install` 拷贝生成，均已 gitignore），不手改安装产物。
 - 现有业务 skill：
   - `biz-obsidian-spec`：Obsidian Markdown 精确文法，开发/维护 parser 时召回。
   - `biz-dql-subset`：DQL 子集文法 + SQL 编译映射 + 隐式字段语义，开发 query/indexer 时召回。
