@@ -1,6 +1,6 @@
 # 与 AI 协作：技能召回与全局使用技能
 
-> 本章说明 x-basalt 围绕"技能"提供的两条独立功能路径，以及它们如何互补。
+> 本章说明 x-basalt 围绕"技能"的两条功能路径（CLI 自助召回 · 全局使用技能）及其互补，外加可选 AI 的 `chat` 命令（自然语言驱动 vault，见第四节）。
 > 索引：[使用指南](usage.md) ｜ 相关章节：[命令参考](commands.md) · [配置](configuration.md) · [故障排查](troubleshooting.md)
 
 ---
@@ -195,6 +195,55 @@ x-basalt skills list
 
 # 或写进配置文件（见 configuration.md），免去环境变量
 ```
+
+---
+
+## 四、CLI chat：自然语言驱动 vault（可选 AI · 默认关）
+
+### 它是什么
+
+`x-basalt chat` 用自然语言驱动**既有原语**（query/parse/scan/meta/skills + 写动作 + 编排器批量）：一圈薄 LLM 循环（plan→act→observe），把你的话翻成命令、执行、把结果喂回、续推。两形态：
+
+```bash
+x-basalt chat "把 projects/ 下 status 为空的笔记列出来"   # 单发：翻译→执行→输出→退出
+x-basalt chat "给 2024 年的周报都补上 tag weekly"          # 含写动作（直接落盘，见下）
+x-basalt chat                                              # 进 REPL，连续提问，quit/exit/q 退出
+```
+
+> **最小可选 AI（不可协商）**：chat 是唯一触达 LLM 的命令，隔离在 `src/chat/`、依赖懒加载（`ai`/`@ai-sdk/*` 列 `optionalDependencies`）。**内核（parse/index/scan/query/meta/skill）永远零 AI、纯离线**。没配 key = chat 不可用，但**其余命令全功能照常**。
+
+### 配置 provider（兼容 agent-browser 的 `AI_GATEWAY_*`）
+
+```bash
+export AI_GATEWAY_API_KEY=gw_xxx                            # 必填：配了才启用 chat；不配 = 命令禁用
+export AI_GATEWAY_MODEL=anthropic/claude-sonnet-4.6         # 可选，默认值（网关 provider/model slug）
+export AI_GATEWAY_URL=https://ai-gateway.vercel.sh          # 可选，默认 Vercel AI Gateway
+x-basalt chat --model anthropic/claude-opus-4.8 "..."       # --model 覆盖默认模型
+```
+
+- **没配 `AI_GATEWAY_API_KEY`** → chat 打印「未配置 AI」+ 本文指引后退出（码非 0），**绝不崩、绝不影响其他命令**。
+- **离线/本地模型**：把 `AI_GATEWAY_URL` 指向本地 OpenAI 兼容端点（Ollama / llama.cpp），可让可选 AI 也全程不出本地、不联网——与项目离线身份对齐。
+
+### 写动作：直接执行 + Ctrl+C 兜底
+
+chat 既能读也能改 vault。**写动作直接落盘，没有逐个确认弹窗**（你主动开 chat 即视为知情）。安全靠四道兜底：
+
+1. **流式可观测**：模型推理与每一步动作实时回显——看到要改的不对，立刻按 **Ctrl+C** 中断。
+2. **原子写**：所有写经 `src/meta` 原子写（临时文件 + rename），中途 kill 不会留下半写损坏的文件。
+3. **批量先看报告**：`pipeline_run` 批量写会回显「N 文件 / M 改动」报告，面太大就刹车。
+4. **git 兜底**：vault 在 git 下时，误改可回滚。
+
+> 想要"只看不改"，目前用读命令（`query`/`meta get`）或直接对模型说"只列出来、先别改"。
+
+### 工具面（chat 能调的既有能力）
+
+| 类 | 工具 | 对应命令 |
+|---|---|---|
+| 读 | query / parse / scan / meta_get / skills_recall | `query` / `parse` / `scan` / `meta get` / `skills recall` |
+| 写·单文件 | meta_set / meta_unset / meta_rename / meta_normalize / meta_apply | `meta set/unset/rename/normalize/apply` |
+| 写·批量 | pipeline_run | `run --pipe` / `scan --pipe`（一次性，不含常驻 watch） |
+
+> **能力边界**：当前 chat 做**结构化**任务（DQL/元数据/规范）。"按笔记**正文内容**找"依赖全文检索（FTS5，规划中），尚未落地——让它"找讲 X 的笔记"时它只能靠结构化字段，不能搜正文。
 
 ---
 
