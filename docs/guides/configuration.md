@@ -83,7 +83,7 @@ echo 'export X_BASALT_DIR="/home/user/vault-state/.x-basalt"' >> ~/.bashrc
 | `skillPath` | 等价 `OBSIDIAN_SKILL_PATH` 环境变量 | 默认 skill 目录 |
 | `format` | `parse --format` | 默认输出格式，`json` 或 `yaml` |
 | `onChange` | `watch --on-change` | 默认变更命令模板（`{file}` 占位） |
-| `pipelines` | `run <name>` / `watch --pipeline <name>` | **结构化对象**：声明式变更管道（`name → {on, paths, where, actions, concurrency, onError, dryRun}`）。字段与示例见 [commands.md `run`](commands.md#run--变更编排管道) |
+| `pipelines` | `--pipe use=<name>`（run/scan/watch 共用） | **结构化对象**：命名管道快照（`name → {actions, where, on, paths, concurrency, dryRun}`）。**命令行 `--pipe k=v` 与之一一对应**——命令行是规范落地、配置段是加速。见 [commands.md `run`](commands.md#run--变更编排管道) |
 
 ---
 

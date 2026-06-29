@@ -22,7 +22,7 @@
     "x-basalt skills get <name>",
     "x-basalt meta set <file> <key> <value>",
     "x-basalt watch <vault> --on-change <cmd>",
-    "x-basalt run <pipeline> [--where <dql>]",
+    "x-basalt run --pipe actions=... [--apply]",
   ],
   rules: [
     {
@@ -45,12 +45,12 @@
       examples: ["x-basalt index ./vault --db ./index.db"],
     },
     {
-      pattern: "scan <vault> [--db ./index.db] [--rehash] [--dry-run] [--json] [--pipeline <name>]",
-      description: "按需增量重索引（无需常驻 watch）：diff 文件系统 vs 库，只重扫新增/改动/删除文件，断点续扫，适合 cron/CI 触发。默认 mtime+size 判变化、--rehash 内容兜底、--dry-run 只报告不写库、--json 结构化差异。--pipeline 用配置 pipelines 段的声明式管道处理 scan 出的变更（替代默认仅 index 落库），一次性 scan 源编排，等价 run <pipeline> 不带 --where/--paths。",
+      pattern: "scan <vault> [--db ./index.db] [--rehash] [--dry-run] [--json] [--pipe k=v]... [--apply]",
+      description: "按需增量重索引（无需常驻 watch）：diff 文件系统 vs 库，只重扫新增/改动/删除文件，断点续扫，适合 cron/CI 触发。默认 mtime+size 判变化、--rehash 内容兜底、--dry-run 只报告不写库、--json 结构化差异。--pipe 用管道处理 scan 出的变更（替代默认仅 index）：--pipe actions=… 内联 或 --pipe use=<name> 引用配置；--apply 才落盘。管道语义同 run。",
       examples: [
         "x-basalt scan ./vault --dry-run",
         "x-basalt scan ./vault --rehash --json",
-        "x-basalt scan ./vault --pipeline maintain",
+        "x-basalt scan ./vault --pipe use=maintain",
       ],
     },
     {
@@ -97,19 +97,19 @@
       ],
     },
     {
-      pattern: "watch <vault> [--db ./index.db] [--on-change <cmd>] [--pipeline <name>]",
-      description: "先全量 rebuild 再监听；add/change 先增量更新索引再触发回调，unlink 删记录。--on-change 命令模板用 {file} 占位替换变更文件路径。--pipeline 用配置 pipelines 段的声明式管道维护（替代裸 shell）：启动先 scan 建基线，常驻编排，Ctrl+C 优雅退出。前台运行。",
+      pattern: "watch <vault> [--db ./index.db] [--on-change <cmd>] [--pipe k=v]... [--apply]",
+      description: "先全量 rebuild 再监听；add/change 先增量更新索引再触发回调，unlink 删记录。--on-change 命令模板用 {file} 占位替换变更文件路径。--pipe 用管道维护（替代裸 shell）：--pipe actions=… 或 --pipe use=<name>；常驻自动改文件需 --apply，Ctrl+C 优雅退出。管道语义同 run。前台运行。",
       examples: [
         "x-basalt watch ./vault --db ./index.db --on-change \"echo changed {file}\"",
-        "x-basalt watch ./vault --pipeline maintain",
+        "x-basalt watch ./vault --pipe use=maintain",
       ],
     },
     {
-      pattern: "run <pipeline> [--where <dql>] [--paths <p...>] [--json]",
-      description: "按配置 pipelines 段的声明式管道处理一批变更：源（默认 scan 全库 diff；--where 用 DQL 选文件、--paths 用列表作手动源）→ 去重（同文件折叠）→ 路由（事件类型/glob/DQL）→ 执行内建动作链（index/normalize/parse…）。写动作默认 dry-run（管道配置 dryRun:false 才落盘）。--json 输出结构化报告；有失败退出码 1。原 migrate（语义选一批改造）= run --where。",
+      pattern: "run [--pipe k=v]... [--apply] [--vault <path>] [--db <path>] [--json]",
+      description: "按管道处理一批变更。--pipe k=v（可重复）定义管道：use=<name> 引用配置段、actions=a,b 动作链(必填)、where=DQL 选文件、on=类型、paths=glob、concurrency=N；命令行 --pipe 是规范、配置段 pipelines.<name> 是命名快照（一一对应）。源：默认 scan 全库 diff，--pipe where=/paths= 切手动源。流程 源→去重(同文件折叠)→路由→动作链(index/normalize/parse)。写动作默认 dry-run，--apply 才落盘。--json 报告；失败退出码 1。原 migrate = run --pipe actions=… --pipe where=…。",
       examples: [
-        "x-basalt run maintain --vault ./vault",
-        "x-basalt run apply-pkm --where \"LIST FROM #pkm\" --vault ./vault",
+        "x-basalt run --pipe actions=index,normalize --pipe where=\"LIST FROM #pkm\" --apply --vault ./vault",
+        "x-basalt run --pipe use=maintain --apply --vault ./vault",
       ],
     },
     {

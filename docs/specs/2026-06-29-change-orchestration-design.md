@@ -8,8 +8,8 @@ tags:
   - pipeline
   - migrate
   - design
-timestamp: 2026-06-28T17:03:41Z
-sha256: d0c272b39c31faadef0fbd4f95b2c939d927d77f74257f5fa792ba3f849365e9
+timestamp: 2026-06-29T00:51:33Z
+sha256: 05600dc1ec06ed8a9c1ccfc0fd04c8e911f7d6d3586fb0ba5e02c698145cfc1c
 ---
 # 设计评估：变更编排器（change orchestration）—— 统一 watch / scan / 手动 三源的声明式维护管线
 
@@ -222,31 +222,72 @@ sha256: d0c272b39c31faadef0fbd4f95b2c939d927d77f74257f5fa792ba3f849365e9
 - **写动作分级**：`index`/`parse` 读侧直接放行；`normalize`/`apply`/`set...` 默认 dry-run + 确认闸。
 - **`rename` 的批量冲突**：现有 `renameMeta` 遇目标键已存在是抛错；批量场景需 `--if-exists skip|overwrite|merge`，否则一个冲突=整批多文件失败。
 
-## 8. 配置形态（示意，不冻结）
+## 8. 命令面与配置（统一管道参数模型）
+
+> **P1 收敛**：P0 初版把"配置段 pipeline"当主入口（`scan`/`watch` 只能 `--pipeline` 引用配置）造成"两套"。收敛为单一模型——
+> **管道 = 一组参数；命令行 `--pipe k=v` 是规范落地，配置段是命名快照（加速/复用），二者一一对应。**
+
+### 8.1 两层参数（管道定义 vs 运行环境）
+
+**管道定义**（归属"管道"；命令行 `--pipe k=v` 可重复 ⟷ 配置段 `pipelines.<name>` 一一对应）：
+
+| `--pipe` key | 值 | 含义 | 配置段 key |
+|---|---|---|---|
+| `use` | name | 从配置 `pipelines.<name>` 加载作基底（**"从配置读取"降为次级参数**，不是独立 flag） | （引用入口） |
+| `actions` | a,b,c | 动作链（必填） | `actions` |
+| `where` | DQL | 按 DQL 选文件（手动源 / 语义筛） | `where` |
+| `paths` | glob | 路径过滤（glob） | `paths` |
+| `on` | add,change | 事件类型过滤 | `on` |
+| `concurrency` | N | 并发上限 | `concurrency` |
+| `debounce` | wait,maxWait | 堆积窗（watch 用） | `debounce` |
+
+**运行环境**（顶层 flag，与管道无关）：`--vault` `--db` `--json` `--apply`。
+- `--apply` = 运行时落盘闸，覆盖管道 `dryRun` 默认（"这次要不要落盘"是运行时决定，不属管道定义）。
+
+**解析**：收集所有 `--pipe k=v` → 若含 `use=name` 先加载配置基底 → 其余 k=v 覆盖 → 得 `PipelineConfig`。唯一一个 `--pipe` 参数，配置引用（`use`）与内联字段平级；命令行可逐行翻成配置、反之亦然。
+
+### 8.2 三命令共享、命令只决定「源」
+
+`scan`（FS↔DB diff 源）/ `watch`（事件流源）/ `run`（默认 scan 源，`--pipe where/paths` 切手动源）共用同一套 `--pipe`：
+
+```bash
+x-basalt run --pipe actions=index,normalize --pipe where="LIST FROM #pkm" --apply   # 纯内联（自包含）
+x-basalt run --pipe use=maintain --apply                                            # 配置引用
+x-basalt run --pipe use=maintain --pipe concurrency=8                               # 引用 + 覆盖
+x-basalt scan --pipe use=maintain                                                   # 一次性 diff 源
+x-basalt watch --pipe use=maintain --apply                                          # 常驻事件源
+```
+
+配置段（命名快照，主要给常驻 / 反复复用；每个 key ⟷ 一个 `--pipe key=val`）：
 
 ```yaml
 # .x-basalt/config
 pipelines:
-  maintain:                      # 一个命名管道
-    on: [add, change]            # 事件类型过滤
-    paths: ["pkm/**"]            # glob 入口过滤
-    where: "contains(file.tags, 'pkm')"   # DQL 语义路由（可选）
+  maintain:
+    actions: [index, normalize]              # 必填
+    where: "contains(file.tags, 'pkm')"
+    on: [add, change]
+    paths: ["pkm/**"]
     debounce: { wait: 300, maxWait: 3000 }
-    dedup: event-fold            # L2+L3
     concurrency: 4
-    onBusy: queue
-    onError: continue
-    dryRun: true                 # 写动作默认预览
-    actions:
-      - index                    # 先落库（保证后续 where 新鲜）
-      - normalize
-      - { apply: pkm-note }
+    dryRun: true                             # 默认预览；命令行 --apply 覆盖
 ```
 
-命令面设想（不冻结，与现有子命令对齐）：
-- `x-basalt watch --pipeline maintain`（常驻，watch 源）
-- `x-basalt scan --pipeline maintain`（一次性，diff 源）
-- `x-basalt run maintain --where "<dql>"`（手动源，批量改造入口 = 原 migrate 用法）
+### 8.3 原生管道（stdin）—— 与 `--pipe` 正交的独立设计
+
+`--pipe`（内建**有状态**管道）和 Unix **原生管道**（stdin）是**两个独立设计：可组装、互不绑定**。stdin **不**塞进 `--pipe`（不是 `paths=-`），而是独立的「手动源来自 stdin」机制，与 `--pipe`（管道定义）正交：
+
+- **独立开关**（形态待定：`--stdin` 或位置 `-`）：从 `process.stdin` 读文件列表作手动源；不触碰 `--pipe`。
+- **自由组合**——源用原生管道喂、动作链用内建 `--pipe` 定义：
+
+```bash
+x-basalt query "LIST FROM #pkm" --json | jq -r '.rows[]["file.path"]' \
+  | x-basalt run --stdin --pipe actions=normalize --apply
+```
+
+契约（架构）：读 `process.stdin` 到 EOF → 按行 trim、跳空行与 `#` 注释 → 相对 vault 路径 → 复用 `manualSourceFromPaths`；**不内置 JSON 猜测**（用 `jq`，单一职责）；stdin 是 TTY（无管道输入）报错不挂起；Windows 走 `process.stdin` 可靠。
+
+> **设计独立性**：stdin 只是"源接入"的一种，正交于 `--pipe`（管道定义）。未来若加别的源接入（如 `--from-file list.txt`）同样不污染 `--pipe`。两个设计可分期落地、可组装，**`--pipe` 不依赖它、它也不依赖 `--pipe`**。
 
 ## 9. 关键风险与坑（写动作 + watch 的命门）
 

@@ -23,7 +23,7 @@ import {
   unsetMeta,
 } from "./meta/index.js";
 import { Orchestrator } from "./orchestrator/index.js";
-import type { RunReport } from "./orchestrator/index.js";
+import type { EventType, PipelineConfig, RunReport } from "./orchestrator/index.js";
 import { DataviewEngine } from "./query/index.js";
 import { SkillRecall } from "./skill/index.js";
 import { renderSkill, renderSkillList, renderSkills } from "./skill/render.js";
@@ -119,6 +119,59 @@ function reportRun(report: RunReport, name: string, json: boolean): void {
   if (report.failed.length > 0) process.exitCode = 1;
 }
 
+/** commander 累积器：把可重复的 `--pipe k=v` 收进数组。 */
+function collectPipe(v: string, prev: string[]): string[] {
+  return [...prev, v];
+}
+
+/** 逗号分隔串 → trim 去空的数组（管道值如 actions/on/paths）。 */
+function splitList(s: string): string[] {
+  return s
+    .split(",")
+    .map((x) => x.trim())
+    .filter(Boolean);
+}
+
+/**
+ * 解析统一管道参数 `--pipe k=v`（可重复）+ `--apply`，产出 PipelineConfig。
+ * 次级 key：`use`（从配置 pipelines.<name> 加载作基底）/ actions / where / paths / on / concurrency。
+ * 命令行是规范落地、配置段是命名快照——`use` 加载后其余 k=v 覆盖；纯命令行即可自包含、不依赖配置。
+ * scan/run/watch 三命令共用本解析（命令只决定「源」）。
+ */
+function resolvePipeline(pipeFlags: string[], apply: boolean): PipelineConfig {
+  const kv: Record<string, string> = {};
+  for (const p of pipeFlags) {
+    const i = p.indexOf("=");
+    if (i <= 0) throw new Error(`--pipe 需 key=value 形式，得到 "${p}"`);
+    kv[p.slice(0, i).trim()] = p.slice(i + 1);
+  }
+  // use=<name>：从配置 pipelines 段加载作基底，其余 --pipe 覆盖它。
+  let base: PipelineConfig | undefined;
+  if (kv.use !== undefined) {
+    base = config.pipelines?.[kv.use];
+    if (!base) {
+      const known = Object.keys(config.pipelines ?? {}).join(", ") || "无";
+      throw new Error(`未知管道 "${kv.use}"（配置 pipelines 段；已知：${known}）`);
+    }
+  }
+  const actions = kv.actions !== undefined ? splitList(kv.actions) : base?.actions;
+  if (!actions || actions.length === 0) {
+    throw new Error(
+      "缺少管道动作：用 --pipe actions=index,normalize（内联）或 --pipe use=<配置管道>",
+    );
+  }
+  return {
+    actions,
+    where: kv.where ?? base?.where,
+    paths: kv.paths !== undefined ? splitList(kv.paths) : base?.paths,
+    on: kv.on !== undefined ? (splitList(kv.on) as EventType[]) : base?.on,
+    concurrency: kv.concurrency !== undefined ? Number(kv.concurrency) : base?.concurrency,
+    debounce: base?.debounce,
+    onError: base?.onError,
+    dryRun: apply ? false : (base?.dryRun ?? true), // --apply 覆盖；否则配置 dryRun 或默认 true
+  };
+}
+
 const program = new Command();
 
 program
@@ -168,29 +221,35 @@ program
   .option("--dry-run", "只报告差异，不写库（供触发前预览）", false)
   .option("--json", "输出结构化差异报告（默认人读摘要）", false)
   .option(
-    "--pipeline <name>",
-    "用配置 pipelines 段的声明式管道处理 scan 出的变更（替代默认仅 index）",
+    "--pipe <kv>",
+    "用管道处理 scan 出的变更（key=value 可重复：actions/use/where/on/concurrency）",
+    collectPipe,
+    [] as string[],
   )
+  .option("--apply", "管道写动作落盘（默认 dry-run；仅 --pipe 时有效）", false)
   .action(
     async (
       vault: string | undefined,
-      opts: { db?: string; rehash: boolean; dryRun: boolean; json: boolean; pipeline?: string },
+      opts: {
+        db?: string;
+        rehash: boolean;
+        dryRun: boolean;
+        json: boolean;
+        pipe: string[];
+        apply: boolean;
+      },
     ) => {
       const vaultPath = required(
         vault ?? config.vault,
         "需要 <vault> 参数或在配置文件中设置 vault",
       );
       const dbPath = opts.db ?? config.db ?? DEFAULT_DB;
-      // 管道模式：scan 源（FS↔DB diff）→ 声明式管道（替代默认仅 index 落库）。等价 `run <pipeline>` 默认源。
-      if (opts.pipeline) {
-        const pipeline = config.pipelines?.[opts.pipeline];
-        if (!pipeline) {
-          const known = Object.keys(config.pipelines ?? {}).join(", ") || "无";
-          throw new Error(`未知管道 "${opts.pipeline}"（配置 pipelines 段；已知：${known}）`);
-        }
+      // 管道模式：scan 源（FS↔DB diff）→ 声明式管道（替代默认仅 index 落库）。
+      if (opts.pipe.length > 0) {
+        const pipeline = resolvePipeline(opts.pipe, opts.apply);
         const orch = new Orchestrator({ vaultPath, dbPath });
         try {
-          reportRun(await orch.runScan(pipeline), opts.pipeline, opts.json);
+          reportRun(await orch.runScan(pipeline), "scan", opts.json);
         } finally {
           orch.close();
         }
@@ -400,37 +459,42 @@ meta
 
 program
   .command("run")
-  .description("按声明式管道处理变更（默认 scan 全库 diff；--where/--paths 切手动源）")
-  .argument("<pipeline>", "管道名（定义在配置 pipelines 段）")
-  .option("--where <dql>", "用 DQL 选文件作为手动源（= 原 migrate 的语义选一批）")
-  .option("--paths <p...>", "文件相对路径列表作为手动源")
+  .description(
+    "按管道处理变更：--pipe 内联(actions=…) 或引用配置(use=…)；默认 scan 源，--pipe where=/paths= 切手动源",
+  )
+  .option(
+    "--pipe <kv>",
+    "管道参数 key=value（可重复）：use/actions/where/paths/on/concurrency",
+    collectPipe,
+    [] as string[],
+  )
+  .option("--apply", "写动作落盘（默认 dry-run 只预览）", false)
   .option("--vault <path>", "Vault 目录（可回退配置 vault）")
   .option("--db <path>", "SQLite 索引路径（默认 .x-basalt/index.db，可由配置 db 覆盖）")
   .option("--json", "结构化报告输出", false)
   .action(
-    async (
-      name: string,
-      opts: { where?: string; paths?: string[]; vault?: string; db?: string; json: boolean },
-    ) => {
+    async (opts: {
+      pipe: string[];
+      apply: boolean;
+      vault?: string;
+      db?: string;
+      json: boolean;
+    }) => {
       const vaultPath = required(
         opts.vault ?? config.vault,
         "需要 --vault 参数或在配置文件中设置 vault",
       );
       const dbPath = opts.db ?? config.db ?? DEFAULT_DB;
-      const pipeline = config.pipelines?.[name];
-      if (!pipeline) {
-        const known = Object.keys(config.pipelines ?? {}).join(", ") || "无";
-        throw new Error(`未知管道 "${name}"（在配置 pipelines 段定义；已知：${known}）`);
-      }
+      const pipeline = resolvePipeline(opts.pipe, opts.apply);
       const orch = new Orchestrator({ vaultPath, dbPath });
       try {
+        // 源：--pipe where= → DQL 手动源；否则默认 scan 源。
+        // 注：--pipe paths= 是 glob 路由过滤（在 runBatch 内 matchEvent 生效），不作源；显式文件列表源属正交的 stdin 设计（后续）。
         const report =
-          opts.where !== undefined
-            ? await orch.runManual(pipeline, { dql: opts.where })
-            : opts.paths !== undefined
-              ? await orch.runManual(pipeline, { paths: opts.paths })
-              : await orch.runScan(pipeline);
-        reportRun(report, name, opts.json);
+          pipeline.where !== undefined
+            ? await orch.runManual(pipeline, { dql: pipeline.where })
+            : await orch.runScan(pipeline);
+        reportRun(report, "run", opts.json);
       } finally {
         orch.close();
       }
@@ -443,11 +507,17 @@ program
   .argument("[vault]", "Vault 目录（可省略，回退配置 vault）")
   .option("--db <path>", "SQLite 索引文件路径（默认 .x-basalt/index.db，可由配置 db 覆盖）")
   .option("--on-change <cmd>", "变更时执行的命令模板（{file} 占位；可由配置 onChange 提供）")
-  .option("--pipeline <name>", "用声明式管道维护（配置 pipelines 段）；替代 --on-change 裸 shell")
+  .option(
+    "--pipe <kv>",
+    "用管道维护（key=value 可重复：actions/use/where/on/concurrency）；替代 --on-change 裸 shell",
+    collectPipe,
+    [] as string[],
+  )
+  .option("--apply", "管道写动作落盘（默认 dry-run；常驻自动改文件，慎用）", false)
   .action(
     async (
       vault: string | undefined,
-      opts: { db?: string; onChange?: string; pipeline?: string },
+      opts: { db?: string; onChange?: string; pipe: string[]; apply: boolean },
     ) => {
       const vaultPath = required(
         vault ?? config.vault,
@@ -455,21 +525,14 @@ program
       );
       const dbPath = opts.db ?? config.db ?? DEFAULT_DB;
       // 管道模式：常驻编排器（启动先全量 scan 建基线，再 watch 增量维护，SIGINT 优雅退出）。
-      if (opts.pipeline) {
-        const pipeline = config.pipelines?.[opts.pipeline];
-        if (!pipeline) {
-          const known = Object.keys(config.pipelines ?? {}).join(", ") || "无";
-          throw new Error(`未知管道 "${opts.pipeline}"（配置 pipelines 段；已知：${known}）`);
-        }
+      if (opts.pipe.length > 0) {
+        const pipeline = resolvePipeline(opts.pipe, opts.apply);
         const orch = new Orchestrator({ vaultPath, dbPath });
         await orch.runScan(pipeline); // 初始运行：建基线
         orch.watch(
           pipeline,
-          (r) =>
-            console.log(
-              `· 管道 ${opts.pipeline}：${r.total} 文件 / ${r.changed} 改 / ${r.failed.length} 败`,
-            ),
-          () => console.log(`✓ 监听中（管道 ${opts.pipeline}）… 按 Ctrl+C 退出。`),
+          (r) => console.log(`· 管道：${r.total} 文件 / ${r.changed} 改 / ${r.failed.length} 败`),
+          () => console.log("✓ 监听中（管道）… 按 Ctrl+C 退出。"),
         );
         const shutdown = (): void => void orch.stop().then(() => process.exit(0));
         process.on("SIGINT", shutdown);
