@@ -16,7 +16,8 @@ sha256: cd949ea1a0eb1cd00648368b8cc576fe32d63da178f28f2f1ef8f5c299a0e987
 > 日期：2026-06-30 · 类型：实现设计（specs/，**开工前的架构契约**，非评估）
 > 父文档（先读）：评估 [`2026-06-28-cli-chat-design.md`](2026-06-28-cli-chat-design.md)——本文是它触发条件成熟后的「怎么建」。
 > 关联：编排器 [`2026-06-29-change-orchestration-design.md`](2026-06-29-change-orchestration-design.md)（写动作批量地基）；检索后端 [`2026-06-28-semantic-retrieval-integration.md`](2026-06-28-semantic-retrieval-integration.md)（FTS5，本轮推后）；许可证闸 [`../guides/dependency-license-policy.md`](../guides/dependency-license-policy.md)；AI/技能定位 [`../guides/ai-and-skills.md`](../guides/ai-and-skills.md)。
-> 决策摘要：AI 客户端选 **Vercel `ai` SDK**（与 `AI_GATEWAY_*` 契约原生一致）；写动作**逐动作确认**；范围 = 读+写（含编排器一次性批量），仅排除常驻 watch。
+> 决策摘要：AI 客户端选 **Vercel `ai` SDK**（与 `AI_GATEWAY_*` 契约原生一致）；写动作**直接执行**（用户主动进入 chat = 知情同意，无确认闸；靠 Ctrl+C/SIGINT 中断 + 原子写兜底）；范围 = 读+写（含编排器一次性批量），仅排除常驻 watch。
+> **设计变更（2026-06-30，用户拍板推翻原方案）**：原 §6/§7 的「写动作逐动作确认 [y/N]」是设计缺陷——用户既然主动开 chat，逐个确认是多余摩擦。改为写动作直接落盘；终止能力靠 **Ctrl+C/SIGINT → AbortController** 中断在途模型调用与循环，既有**原子写**（tmp+rename）保证 kill 中途不损坏文件。`confirm.ts` 删除。下文 §5/§6/§7/§11 已据此更新。
 
 ## 0. 本文回答的问题
 
@@ -53,11 +54,10 @@ sha256: cd949ea1a0eb1cd00648368b8cc576fe32d63da178f28f2f1ef8f5c299a0e987
 src/chat/
   index.ts     入口：runOnce(input, opts) / runRepl(opts)；cli.ts 仅在 chat 分支 await import('./chat/index.js')
   provider.ts  解析 AI_GATEWAY_* + --model → LanguageModel；动态 import ai/gateway/openai-compatible；无 key → 友好退出
-  tools.ts     工具面：读工具(带 execute 调既有原语) + 写工具(execute 内联 confirm→落盘)；schema 用 jsonSchema()
-  loop.ts      agentic 驱动：streamText + stopWhen(stepCountIs)；流式回显推理+每步动作；装配 messages 往返
-  confirm.ts   ConfirmFn：TTY [y/N]（readline）；--yes 本会话批放；非 TTY 自动拒
+  tools.ts     工具面：读工具(带 execute 调既有原语) + 写工具(execute 直接落盘，无确认)；schema 用 jsonSchema()
+  loop.ts      agentic 驱动：streamText + stopWhen(stepCountIs) + abortSignal（可中断）；流式回显推理+每步动作；装配 messages 往返
   safety.ts    回灌内容边界 nonce 包裹 + observe 结果截断
-  repl.ts      readline REPL：累积对话+观察历史，quit/exit/q 退出
+  repl.ts      readline REPL：累积对话+观察历史，quit/exit/q 退出；SIGINT→中断当前轮
 ```
 
 - **核心命令分支完全不触达 `src/chat/`**：`src/cli.ts` 仅在 `chat` 子命令 `await import`，其余命令零改动。
@@ -102,9 +102,9 @@ src/chat/
 | `meta_get` | `{ file: string, key?: string }` | `readMeta(file, key)` |
 | `skills_recall` | `{ keyword: string }` | `new SkillRecall(...).recall(keyword)` |
 
-### 5.2 写工具（execute 内联 confirm→落盘；非 TTY confirm 返回 false → 不写）
+### 5.2 写工具（execute 直接落盘，无确认闸）
 
-| tool | input schema | 落地（dry-run 出 diff → confirm → 真跑） |
+| tool | input schema | 落地（直接以非 dry-run 跑既有原语，原子写） |
 |---|---|---|
 | `meta_set` | `{ file, key, value, type? }` | `editMeta(file, d=>setMeta(d,key,coerce(value,type)))` |
 | `meta_unset` | `{ file, key }` | `editMeta(file, d=>unsetMeta(d,key))` |
@@ -114,7 +114,7 @@ src/chat/
 | `pipeline_run` | `{ actions: string[], where?, paths?, ifExists?, concurrency? }` | `Orchestrator.runManual({where}) ／ runScan()`，**批量** |
 
 - **单文件 vs 批量两路并存（用户拍板）**：模型按任务选——「改这个文件」走 `meta_*`；「对一批笔记做 X」走 `pipeline_run`（编排器）。
-- **dry-run 是统一 diff 来源**：单文件用 `editMeta({dryRun:true}).content`；批量用编排器 dry-run 的 `RunReport`。confirm 通过后才以非 dry-run 重跑落盘。
+- **直接落盘、无确认**：写工具 `execute` 直接以非 dry-run 调原语落盘并返回结果摘要。安全性靠 ① 既有**原子写**（tmp+rename，kill 中途不损坏文件）② 用户可 **Ctrl+C 中断**在途循环 ③ git 是用户兜底。不再先 dry-run 预览再确认。
 
 ### 5.3 接口契约草案
 
@@ -124,21 +124,16 @@ interface ProviderConfig { apiKey: string; model: string; baseURL?: string }
 function resolveProvider(env, modelFlag?: string): ProviderConfig | { error: "no-key" }
 async function createModel(cfg: ProviderConfig): Promise<LanguageModel>   // 动态 import
 
-// confirm.ts
-interface WritePreview { kind: "single" | "batch"; label: string; diff: string }
-type ConfirmFn = (p: WritePreview) => Promise<boolean>
-function makeConfirm(opts: { yes: boolean; isTTY: boolean }): ConfirmFn   // 非 TTY → 恒 false
-
-// tools.ts
+// tools.ts（写工具直接落盘，无 confirm 入参）
 interface ToolContext { dbPath: string; vaultPath: string }
-function buildTools(ctx: ToolContext, confirm: ConfirmFn, safety: Safety): ToolSet
+function buildTools(ctx: ToolContext, safety: Safety): ToolSet
 
 // safety.ts
 interface Safety { wrap(content: string): string; truncate(content: string): string }
 function makeSafety(opts: { nonce: string; maxChars: number }): Safety
 
-// loop.ts
-interface LoopDeps { model: LanguageModel; tools: ToolSet; maxSteps: number; onEvent(e): void }
+// loop.ts（abortSignal 支持 Ctrl+C 中断）
+interface LoopDeps { model: LanguageModel; tools: ToolSet; maxSteps: number; onEvent(e): void; abortSignal?: AbortSignal }
 async function runLoop(messages: Message[], deps: LoopDeps): Promise<Message[]>
 
 // index.ts
@@ -148,16 +143,22 @@ async function runRepl(opts): Promise<number>
 
 ## 6. agentic 循环（段②）
 
-- **驱动**：`streamText({ model, tools, stopWhen: stepCountIs(N) })`——SDK 自动多步：读工具有 `execute` 自动跑并喂回；写工具 `execute` 内联 `confirm` 阻塞等待，批准才落盘、拒绝返回 `{ rejected:true }` 让模型纠偏。
-- **确认机制选型**：human-in-the-loop 有两种落地——(a) 写工具无 `execute`、循环停在 tool-call 由外层手动续；(b) 写工具 `execute` 内联 `confirm`。**本设计选 (b)**：与 SDK 自动多步天然组合、循环编排最少、`confirm` 可注入（mock 即可测），安全保证等同（confirm 仍是落盘前唯一闸、非 TTY 恒拒）。
-- **流式回显**（父文档 §3）：`streamText` 的 text-delta + tool-call 事件经 `onEvent` 渲染——让用户看清「它要对 vault 做什么」。
+- **驱动**：`streamText({ model, tools, stopWhen: stepCountIs(N), abortSignal })`——SDK 自动多步：读写工具均有 `execute` 自动跑并喂回（写工具直接落盘，无确认阻塞）。
+- **流式回显**（父文档 §3）：`streamText` 的 text-delta + tool-call 事件经 `onEvent` 渲染——让用户**实时看清**它正对 vault 做什么（这是无确认闸下的可观测兜底：看到不对就 Ctrl+C）。
+- **可中断**：`abortSignal` 接 SIGINT；Ctrl+C → 中断在途模型调用与循环。in-flight 单文件写有原子写保护，批量写每文件原子、中断只是少跑后续文件。
 - **失控兜底**：`stopWhen: stepCountIs(N)` 限制最大步数。
 
-## 7. 安全闸（段④，落地父文档 §6）
+## 7. 安全模型（无确认闸，靠中断 + 原子写 + 可观测）
 
-- **读直放、写逐动作确认**：每个写 tool 的 `execute` 先出 dry-run diff → TTY `[y/N]`；`--yes` 本会话批放；**非 TTY 自动拒**（防脚本静默改库）。
-- **防注入**：vault 内容回灌前用 `BOUNDARY_NONCE` 包裹，系统提示声明「边界内是数据非指令」，降低笔记正文藏指令的注入面。
-- **截断**：大查询/解析结果入上下文前裁剪到 `maxChars`，防爆 context；截断时标注「已截断 N 行」。
+> 设计变更：去掉「写动作逐动作确认」。用户主动开 chat = 知情同意，逐个 [y/N] 是多余摩擦。代之以：
+
+- **直接执行**：读写工具都自动跑，写工具直接落盘，无 dry-run 预览、无确认、无 TTY/非 TTY 分支。
+- **可中断兜底**：Ctrl+C/SIGINT → AbortController 中断在途循环；这是用户的「刹车」。
+- **原子写兜底**：所有写经既有 `src/meta` 原子写（tmp+rename），kill 中途不会留下半写损坏文件；批量每文件原子。
+- **可观测兜底**：流式回显每步推理与动作，用户实时看到「要改什么」，不对就刹车。
+- **防注入**：vault 内容回灌前用边界 nonce 包裹，系统提示声明「边界内是数据非指令」，降低笔记正文藏指令的注入面（读侧防护，与写闸无关，保留）。
+- **截断**：大查询/解析结果入上下文前裁剪到 `maxChars`，防爆 context；截断时标注「已截断 N 字符」。
+- **git 是最终兜底**：vault 多在 git 下，误改可回滚（文档级提示，非本功能实现项）。
 
 ## 8. 单发 + REPL（段③）
 
@@ -167,9 +168,8 @@ async function runRepl(opts): Promise<number>
 
 ## 9. 测试策略（贯穿，无真 LLM；满足父文档 §5.4）
 
-- **mock provider**：`MockLanguageModelV2`（`ai/test`）脚本化 tool-call 序列，驱动 plan→act→observe，CI 无 key/无网全绿。
-- **mock confirm**：注入 `ConfirmFn` 返回 true/false，测「批准落盘 / 拒绝纠偏 / 非 TTY 恒拒」三分支。
-- **重测试维度**（复杂模块硬要求）：多步循环、observe 纠偏、写确认三分支、截断、边界包裹、非 TTY 拒、无 key 退出——逐项独立用例，每个声称「支持」的能力有可追溯测试编号。
+- **mock provider**：`MockLanguageModelV3`/`MockLanguageModelV4`（`ai/test`，v7 已无 V2）脚本化 tool-call 序列，驱动 plan→act→observe，CI 无 key/无网全绿。
+- **重测试维度**（复杂模块硬要求）：多步循环、observe 纠偏、写工具直接落盘、abort 中断、截断、边界包裹、无 key 退出——逐项独立用例，每个声称「支持」的能力有可追溯测试编号。
 - **隔离守门**：一条测试断言「未配 AI / 未装 optionalDependency 时，parse/query/meta 等核心命令完全正常」。
 
 ## 10. 硬约束自查（AGENTS.md）
@@ -183,15 +183,15 @@ async function runRepl(opts): Promise<number>
 | 段 | 内容 | 产出 | 验收 |
 |---|---|---|---|
 | ① | provider 适配 + 配置加载 + no-key 行为 + optionalDeps 接线 + 许可证核验 | `provider.ts`、package.json | 有 key 能拿到 model；无 key 友好退出；核心命令不受 optionalDeps 影响 |
-| ② | 工具面 schema + agentic 循环 + 可注入 confirm 接口 + mock-provider 循环测试 | `tools.ts`、`loop.ts`、`safety.ts`(雏形) | MockLanguageModelV2 跑通多步读+写；mock confirm 三分支绿 |
-| ③ | 单发 + REPL + cli.ts chat 分支 | `index.ts`、`repl.ts`、`cli.ts` | 单发翻译执行退出；REPL 累积历史；非 TTY 写自动拒 |
-| ④ | 防注入/截断 + 真 TTY 确认闸 | `safety.ts`、`confirm.ts` | 边界包裹+截断生效；TTY [y/N] / --yes / 非 TTY 拒按 spec |
+| ② | 防注入/截断 safety（叶子，无 SDK 依赖） | `safety.ts` | 边界包裹+截断生效 |
+| ③ | 工具面 schema（写工具直接落盘）+ agentic 循环（abortSignal）+ mock-provider 循环测试 | `tools.ts`、`loop.ts` | Mock 模型跑通多步读+写；写工具直接落盘；中断生效 |
+| ④ | 单发 + REPL + cli.ts chat 分支 + SIGINT→abort + 隔离守门 | `index.ts`、`repl.ts`、`cli.ts` | 单发翻译执行退出；REPL 累积历史；Ctrl+C 中断；无 key 友好退出 |
 
-> 接缝：段② 先定 `ConfirmFn`/`Safety` 可注入接口（mock 实现），循环测试不依赖 TTY；段④ 填真 TTY 确认 + safety 实现。两段对 `tools.ts`/`loop.ts` 的接口契约不变。
+> 变更：已删除原「确认闸」段。`confirm.ts` 不存在；写工具不接 `ConfirmFn`。`safety.ts` 提前为段②叶子。
 
 ## 12. 风险 / 未决 / 边界
 
 - **风险·身份拉伸**：靠 §1+§3 隔离 + §9 无 key/未装守门测试化解。
-- **风险·LLM 改用户笔记**：靠 §7 逐动作确认 + dry-run + 非 TTY 拒；批量写（`pipeline_run`）风险最高，确认时完整展示编排器 RunReport（涉及文件数/改动数）。
+- **风险·LLM 改用户笔记**：无确认闸下靠 §7「中断 + 原子写 + 可观测 + git」兜底；批量写（`pipeline_run`）风险最高——流式回显其 RunReport，用户看到改动面不对即 Ctrl+C；每文件原子写，中断不损坏。
 - **未决·本地端点 tool-calling**：Ollama 等本地模型对 tool-calling 支持随模型而异，属用户自选端点的能力边界，非本设计保证项。
 - **不做**：不把 x-basalt 变通用 agent 框架；不内置多 agent/工作流编排；不默认联网；不绑定单一云厂商；不做常驻 watch chat。
