@@ -2,6 +2,7 @@
 
 > 纯 Node.js CLI 工具：零依赖 Obsidian GUI / 运行时，直接通过文件系统操作 Vault，实现 Obsidian 规范的解析、索引、Dataview 子集查询与 Skill 召回。
 > 本文件是项目「全局提示词」主体；`CLAUDE.md` 仅指向本文件。
+> 根目录 `AGENTS.*.md`（如 `AGENTS.ai.md`、`AGENTS.local.md`）与本文件同级并列，会话启动时一并读取；AI / 提交授权等细则以 `AGENTS.ai.md` 为准。
 
 ## 响应与沟通
 
@@ -13,6 +14,7 @@
 
 ## 工作方式
 
+- 进入会话后先在仓库根目录跑 `rg --files --max-depth 0 -g 'AGENTS.md' -g 'AGENTS.*.md'` 定位根规则；只读根目录已存在且与当前宿主/流程直接相关的 `AGENTS.*.md`（含 `AGENTS.ai.md`；`AGENTS.local.md` 若存在则读）。未完成上述最小必要读取前，不得继续探索、计划或实现。
 - 先做非破坏性探索，再进入实现。
 - 变更前说明目标、范围、预期影响；若方案需要扩大范围，先说明再继续。
 - 优先用 `rg`（ripgrep）搜索文件与文本；优先非交互式命令。
@@ -93,7 +95,7 @@ docs/         research / specs / plans / guides / architecture / testing（见 d
 - `scope` 映射变更边界（英文）：`parser`/`indexer`/`query`/`skill`/`cli`/`docs`/`repo`/`test`。
 - `summary` 用简短中文短句，直接描述变更。
 - 示例：`feat(parser): 支持 wikilink heading 锚点解析`。
-- **AI 默认不得自行 `git commit` / `git push`**；仅当用户在当前会话明确授权方可本地 commit。
+- AI 提交授权、禁止 trailer 小尾巴等细则见 `AGENTS.ai.md`「Git 提交约定」。
 
 ## 代码与规范
 
@@ -138,5 +140,3 @@ docs/         research / specs / plans / guides / architecture / testing（见 d
 - 默认最小充分验证：优先跑受影响边界的 `typecheck`、`build` 与本次改动直接覆盖的测试；不把全量测试当默认动作。
 - 只有触及跨模块公共契约、根级脚本/配置、测试基础设施或用户明确要求时，才升级到全量 lint/typecheck/build/test。
 - 声称「完成 / 通过 / 可用」前，必须运行与改动风险匹配的验证命令，并依据实际输出说明结果；跳过的全量项要列出原因与剩余风险。
-
-[by=x-basalt]
