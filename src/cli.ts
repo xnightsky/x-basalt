@@ -354,11 +354,15 @@ program
   .argument("<dql>", "DQL 查询语句")
   .option("--vault <path>", "Vault 目录（查询仅读索引，可省略）")
   .option("--db <path>", "SQLite 索引文件路径（默认 .x-basalt/index.db，可由配置 db 覆盖）")
-  .action((dql: string, opts: { db?: string }) => {
+  .option("--offset <n>", "结果起始偏移（默认 0）")
+  .option("--size <n>", "本页最大行数（默认不分页/全部；给定则分页，结果含 total/hasMore）")
+  .action((dql: string, opts: { db?: string; offset?: string; size?: string }) => {
     const dbPath = opts.db ?? config.db ?? DEFAULT_DB;
     const engine = new DataviewEngine(dbPath);
     try {
-      emit(engine.query(dql));
+      const offset = opts.offset !== undefined ? Number(opts.offset) : 0;
+      const size = opts.size !== undefined ? Number(opts.size) : undefined;
+      emit(engine.query(dql, { offset, size }));
     } finally {
       engine.close();
     }

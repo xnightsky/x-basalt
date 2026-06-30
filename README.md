@@ -32,6 +32,8 @@ npm link              # 全局安装：之后任意目录可用 x-basalt 命令
 ```bash
 x-basalt index ./my-vault                                   # 建索引（默认库 .x-basalt/index.db）
 x-basalt query "LIST FROM #project WHERE status = 'active' SORT file.mtime DESC LIMIT 10"
+x-basalt query 'TABLE count() FROM "" GROUP BY file.extension'   # 计数（或读任一结果的 total 字段）
+x-basalt query 'LIST FROM ""' --size 50 --offset 0          # 大结果分页：每页 50，读 total 知总量
 x-basalt scan ./my-vault                                    # 之后增量重扫，只处理变化的
 x-basalt skills get obsidian-base-spec                      # 召回语法规范
 ```

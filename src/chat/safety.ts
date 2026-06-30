@@ -26,7 +26,9 @@ export function makeSafety(opts: { nonce?: string; maxChars?: number } = {}): Sa
     truncate(content) {
       if (content.length <= maxChars) return content;
       const omitted = content.length - maxChars;
-      return `${content.slice(0, maxChars)}\n…（已截断 ${omitted} 字符，请用更精确的查询缩小范围）`;
+      // 兜底截断：query/scan 已支持分页，正常不该触达此处。提示走分页而非"缩小范围"，
+      // 并强调数总量看结果里的 total/counts（前置字段，截断后仍可见），勿据残缺内容下结论。
+      return `${content.slice(0, maxChars)}\n…（已截断 ${omitted} 字符——这是兜底截断；请改用分页：调小 size 或带 offset 翻页，数总量直接读结果开头的 total/counts，勿据被截断的内容下结论）`;
     },
   };
 }

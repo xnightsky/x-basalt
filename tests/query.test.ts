@@ -206,3 +206,56 @@ test("语法错误抛 DqlSyntaxError（带位置）", () => {
   assert.throws(() => engine.query("LISTE FROM #x"), DqlSyntaxError);
   assert.throws(() => engine.query("LIST FROM"), DqlSyntaxError);
 });
+
+test("分页：不带 size 时返回全部，total=行数、hasMore=false（向后兼容）", () => {
+  const r = engine.query('LIST FROM "" SORT file.name ASC');
+  assert.equal(r.total, r.rows.length);
+  assert.equal(r.returned, r.rows.length);
+  assert.equal(r.offset, 0);
+  assert.equal(r.hasMore, false);
+  assert.equal(r.size, undefined);
+});
+
+test("分页：size/offset 切窗口，total 恒为命中总数、顺序与全量一致", () => {
+  const full = engine.query('LIST FROM "" SORT file.name ASC');
+  const N = full.rows.length;
+  assert.ok(N >= 3, "fixture 应有 ≥3 篇便于分页");
+  const names = full.rows.map((row) => row["file.name"]);
+
+  const p0 = engine.query('LIST FROM "" SORT file.name ASC', { size: 2, offset: 0 });
+  assert.equal(p0.total, N);
+  assert.equal(p0.size, 2);
+  assert.equal(p0.returned, 2);
+  assert.equal(p0.hasMore, N > 2);
+  assert.deepEqual(
+    p0.rows.map((row) => row["file.name"]),
+    names.slice(0, 2),
+  );
+
+  const p1 = engine.query('LIST FROM "" SORT file.name ASC', { size: 2, offset: 2 });
+  assert.equal(p1.offset, 2);
+  assert.deepEqual(
+    p1.rows.map((row) => row["file.name"]),
+    names.slice(2, 4),
+  );
+});
+
+test("分页：size=0 只回 total 不取行；offset 越界返回空页", () => {
+  const N = engine.query('LIST FROM ""').total;
+  const c = engine.query('LIST FROM ""', { size: 0 });
+  assert.equal(c.total, N);
+  assert.equal(c.returned, 0);
+  assert.equal(c.rows.length, 0);
+  assert.equal(c.hasMore, N > 0);
+
+  const over = engine.query('LIST FROM ""', { size: 5, offset: N + 10 });
+  assert.equal(over.total, N);
+  assert.equal(over.returned, 0);
+  assert.equal(over.hasMore, false);
+});
+
+test("分页：count() GROUP BY 一次取总量（各组求和=全库文件数）", () => {
+  const groups = engine.query('TABLE count() FROM "" GROUP BY file.extension');
+  const sum = groups.rows.reduce((a, row) => a + Number(row["count()"]), 0);
+  assert.equal(sum, engine.query('LIST FROM ""').total);
+});

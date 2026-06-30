@@ -125,11 +125,20 @@
       ],
     },
     {
-      pattern: "query <dql> --db <path> [--vault <path>]",
-      description: '执行 DQL 子集 → 参数化 SQL → JSON { type, columns, rows }；聚合字段已解析为数组。--db 必填且只读打开；--vault 接受但不使用。文法：LIST|TABLE <fields> FROM (#tag|[[link]]|"folder") WHERE <cond> SORT <field> ASC|DESC LIMIT <n>。',
+      pattern: "query <dql> [--db <path>] [--offset <n>] [--size <n>] [--vault <path>]",
+      description: '执行 DQL 子集 → 参数化 SQL → JSON { type, columns, total, offset, size, returned, hasMore, rows }；聚合字段已解析为数组。total=命中总数（独立 COUNT，不随分页变）——**数总量直接读 total，别 LIST 全量再数**。--offset/--size 在引擎层分页（不改 DQL 文法，外层包 LIMIT/OFFSET）：不传 size=全量返回（向后兼容），翻页 offset+=size，hasMore 标示还有更多。--db 只读打开；--vault 接受但不使用。文法：LIST|TABLE <fields> FROM (#tag|[[link]]|"folder") WHERE <cond> GROUP BY <field> SORT <field> ASC|DESC LIMIT <n>。',
       examples: [
         "x-basalt query \"LIST FROM #project WHERE status = 'active' SORT file.mtime DESC LIMIT 10\" --db ./index.db",
-        "x-basalt query 'TABLE status, due FROM \"Projects\" SORT file.name ASC' --db ./index.db",
+        "x-basalt query 'LIST FROM \"\"' --size 50 --offset 0 --db ./index.db   # 分页：每页 50，读 total 知总量",
+        "x-basalt query 'TABLE count() FROM \"\" GROUP BY file.extension' --db ./index.db   # 计数惯用法",
+      ],
+    },
+    {
+      pattern: "计数 / 分页（数总量别全量 LIST）",
+      description: '要"有多少"绝不全量 LIST 再数：① 任何 query 结果都带 total（命中总数）——读它即可；② 全库/分组计数用 `TABLE count() FROM "" GROUP BY <字段>`（count()/length(rows) 是 GROUP BY 聚合列，单独 `TABLE count()` 不带 GROUP BY 无效）。分页：CLI 用 `--offset/--size`，chat 的 query/scan 工具用 `offset/size`（默认 size=50，上限 500，size=0 只回 total/counts）。chat 的 scan 工具还返回 counts{added,modified,deleted,unchanged}（标量、永不截断）——"多少新增/未索引"直接读 counts。DQL 自身只有 LIMIT、无 OFFSET，分页一律在 CLI/工具层。',
+      examples: [
+        'x-basalt query \'TABLE count() FROM "" GROUP BY file.extension\' --db ./index.db',
+        'x-basalt query \'LIST FROM ""\' --size 100 --offset 100 --db ./index.db',
       ],
     },
     {

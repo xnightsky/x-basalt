@@ -19,6 +19,8 @@ scope: global
 ```bash
 x-basalt index <vault>                 # 首次：全量建索引（默认库 <vault基目录>/.x-basalt/index.db）
 x-basalt query "LIST FROM #project WHERE status = 'active' SORT file.mtime DESC LIMIT 10"
+x-basalt query 'TABLE count() FROM "" GROUP BY file.extension'   # 计数：读 count()，或任一 query 结果的 total
+x-basalt query 'LIST FROM ""' --size 50 --offset 0              # 大结果分页：每页 50，读 total 知总量
 x-basalt scan <vault>                  # 之后：增量重扫，只处理新增/改动/删除（diff mtime+size）
 ```
 
@@ -29,7 +31,7 @@ x-basalt scan <vault>                  # 之后：增量重扫，只处理新增
 | `parse <file>`                     | 单文件 → AST（wikilink/tag/task/callout/highlight/blockRef + frontmatter）            | `--format json\|yaml`                                                                    |
 | `index [vault]`                    | 全量建/重建索引                                                                       | `--db <path>` · `--watch`(常驻监听)                                                      |
 | `scan [vault]`                     | **按需增量重索引**：diff 文件系统 vs 库，只重扫变化的                                 | `--rehash`(按内容比，稳但慢) · `--dry-run`(只报告不写) · `--json` · `--pipe k=v`(走管道) |
-| `query "<dql>"`                    | 执行 DQL 查询，输出 `{type,columns,rows}`                                             | `--db <path>`                                                                            |
+| `query "<dql>"`                    | 执行 DQL 查询，输出 `{type,columns,total,offset,size,returned,hasMore,rows}`（带分页） | `--db <path>` · `--offset <n>` · `--size <n>`(分页;不传=全量返回)                        |
 | `meta get <file> [key]`            | 读 frontmatter（缺 key 读全部，缺失键输出 null）                                      | `--format json\|yaml`                                                                    |
 | `meta set/unset/rename <file> ...` | 改单个属性（set 增改 / unset 删 / rename 改键名）                                     | `--type` · `--dry-run`                                                                   |
 | `meta normalize <file>`            | **无约定纯标准化**：tags 列表化/去#/去重/单数键迁移                                   | `--sort-keys` · `--dry-run`                                                              |
@@ -86,5 +88,7 @@ x-basalt scan <vault>                  # 之后：增量重扫，只处理新增
 ## DQL 子集要点
 
 `LIST | TABLE <字段,...> | TASK` · `FROM <#tag | "folder" | [[link]]>`（单一来源）· `WHERE`（`= != < > <= >=`、`AND/OR/NOT`、括号、`field = null`、日期 ISO 比较）· 字符串谓词 `contains/icontains/startswith/endswith/regexmatch` · `GROUP BY` · `FLATTEN` · `WITHOUT ID` · 多键 `SORT` · `LIMIT`。内置函数：`lower/upper/length/round`、`date(today)/date(now)`。隐式字段：`file.name/path/folder/extension/size/mtime/ctime/tags/inlinks/outlinks/tasks` 与 frontmatter 标量。范围外（CALENDAR、DataviewJS、多源 FROM、未知字段）会带位置报 `DqlSyntaxError`，不静默。
+
+**计数 / 分页**：要"有多少"别全量 `LIST` 再数——读 query 结果的 `total`（命中总数），或 `TABLE count() FROM "" GROUP BY <字段>`（`count()`/`length(rows)` 仅作 GROUP BY 聚合列，单独 `TABLE count()` 不带 GROUP BY 无效）。大结果翻页用 `--offset/--size`（`query` 结果含 `total`/`hasMore`，翻页 `offset += size`）；**DQL 本身只有 `LIMIT`、无 `OFFSET`**，分页在 CLI/工具层做。
 
 > **要精确语法 / 边界**：装好 x-basalt 后直接 `x-basalt skills get obsidian-base-spec`（取整篇），或 `x-basalt skills recall <关键字>`（如 `wikilink`/`dataview`/`callout`，模糊召回），返回带模式与示例的规范——本技能只给概览，细节以 `skills` 召回结果为准，避免漂移。

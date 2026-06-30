@@ -54,9 +54,24 @@ export interface DqlQuery {
   limit?: number;
 }
 
-/** 查询结果 JSON 形态。 */
+/**
+ * 查询结果 JSON 形态。
+ *
+ * 分页元信息（total/offset/size/returned/hasMore）置于 rows 之前，
+ * 即便结果被下游兜底截断，"总量/是否还有"也优先可见——数总量看 total，无需翻页枚举。
+ */
 export interface QueryResult {
   type: QueryType;
   columns: string[];
+  /** 命中总数（整个查询的行数，独立 COUNT，不随分页变化）。 */
+  total: number;
+  /** 本页起始偏移（默认 0）。 */
+  offset: number;
+  /** 本页请求的页大小；undefined = 不分页（返回全部）。 */
+  size?: number;
+  /** 本页实际返回行数（= rows.length）。 */
+  returned: number;
+  /** 是否还有更多行（offset + returned < total）。翻页：offset += size。 */
+  hasMore: boolean;
   rows: Record<string, unknown>[];
 }

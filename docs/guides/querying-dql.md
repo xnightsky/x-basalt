@@ -1,6 +1,6 @@
 ---
-timestamp: 2026-06-30T00:01:23Z
-sha256: bcbc25cd5fa6079fba0190e16ea14a06a86f96a95683c1acd49661e582847596
+timestamp: 2026-06-30T10:50:38Z
+sha256: c40097a48fa0133200d3b173e02b82be62c8dc3fc28caebb450bd2d26ab9f7a2
 type: guide
 title: DQL 查询指南 · x-basalt
 description: Dataview 子集 DQL 语法、隐式字段与查询示例
@@ -28,8 +28,10 @@ DQL 字符串
   → parse（递归下降，产出 DqlQuery AST）
   → generateSql（AST → 参数化 SQL）
   → better-sqlite3 执行
-  → QueryResult { type, columns, rows }
+  → QueryResult { type, columns, total, offset, size, returned, hasMore, rows }
 ```
+
+> `total` 为命中总数（独立 `COUNT`，不随分页变化）；不传 `--size` 时返回全部行、`total`=行数、`hasMore=false`（向后兼容）。分页与计数见 [§8 GROUP BY](#8-group-by) 末与 [§12 LIMIT](#12-limit)。
 
 **安全保障**：所有用户输入值一律走 `?` 占位符参数化绑定，禁止字符串拼接；唯一直接内联进 SQL 的是 frontmatter 字段名，且须通过 `/^[A-Za-z0-9_]+$/` 白名单校验，否则报错。
 
@@ -322,6 +324,14 @@ x-basalt query 'TABLE status GROUP BY status'
 x-basalt query 'TABLE category GROUP BY category FROM "Projects"'
 ```
 
+**组内计数 `count()` / `length(rows)`**：TABLE 字段写 `count()` 或 `length(rows)` 时，该列输出每组的**文件数**（`COUNT(DISTINCT f.path)`），而非 `rows` 路径数组。这是"数总量"的惯用法——按 `file.extension` 分组即得各类型文件数（全 `.md` 时单组 = 全库总数）：
+
+```bash
+x-basalt query 'TABLE count() FROM "" GROUP BY file.extension'    # 各扩展名文件数（全 md 即单组=全库总数）
+x-basalt query 'TABLE length(rows) FROM "" GROUP BY file.folder'  # 各文件夹文件数
+```
+
+> `count()`/`length(rows)` **仅在 GROUP BY 下作聚合列**；单独 `TABLE count()` 不带 GROUP BY 无意义。不分组只想要命中总数时，直接读任一 `query` 结果的 `total` 字段即可，无需全量 `LIST` 再数。
 > GROUP BY 后接 FLATTEN 或多列 TABLE 字段目前仅保留分组键 + rows，无法在组内做额外投影；复杂分组后处理建议在调用层消费 `rows` 数组。
 
 ---
@@ -396,6 +406,15 @@ LIMIT <n>     # n 为非负整数；负数在解析期报 DqlSyntaxError
 x-basalt query 'LIST SORT file.mtime DESC LIMIT 10'
 x-basalt query 'TASK LIMIT 50'
 ```
+
+**分页（`--offset` / `--size`）**：`LIMIT` 是 DQL 文法内的"取前 n 条"；要在大结果里**翻页**，用 CLI 的 `--offset/--size`——引擎层在编译 SQL 外再包一层 `LIMIT/OFFSET`（**DQL 本身没有 `OFFSET`**，分页不进文法）。`query` 结果带 `total`（命中总数）与 `hasMore`，翻页即 `offset += size`；要"有多少"直接读 `total`，别全量 `LIST` 再数。
+
+```bash
+x-basalt query 'LIST FROM ""' --size 50 --offset 0     # 第 1 页，读 total 知总量
+x-basalt query 'LIST FROM ""' --size 50 --offset 50    # 第 2 页（hasMore=false 即到底）
+```
+
+> 参数详情见 [commands.md](commands.md) §query。
 
 ---
 

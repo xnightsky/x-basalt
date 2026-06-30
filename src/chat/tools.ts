@@ -37,6 +37,55 @@ function observe(safety: Safety, v: unknown): string {
   return safety.wrap(safety.truncate(s));
 }
 
+/** 工具层页大小：缺省取 def，给定则截断到 [0, max]（0 = 只看 total/counts 不取明细）。 */
+function clampSize(v: number | undefined, def: number, max: number): number {
+  if (v === undefined || Number.isNaN(v)) return def;
+  return Math.min(max, Math.max(0, Math.trunc(v)));
+}
+
+/** scan kind 标签。 */
+type ScanKind = "added" | "modified" | "deleted";
+
+/**
+ * scan 报告 → 计数永远全（counts，标量、永不截断）+ 变更明细分页（changes）。
+ * changes = (added⧺modified⧺deleted) 的窗口 [offset, offset+size)；counts/total 不随分页变化。
+ */
+function paginateScan(
+  report: { added: string[]; modified: string[]; deleted: string[]; unchanged: number },
+  offset: number,
+  size: number,
+): {
+  counts: { added: number; modified: number; deleted: number; unchanged: number };
+  total: number;
+  offset: number;
+  size: number;
+  returned: number;
+  hasMore: boolean;
+  changes: { kind: ScanKind; path: string }[];
+} {
+  const flat: { kind: ScanKind; path: string }[] = [
+    ...report.added.map((path) => ({ kind: "added" as const, path })),
+    ...report.modified.map((path) => ({ kind: "modified" as const, path })),
+    ...report.deleted.map((path) => ({ kind: "deleted" as const, path })),
+  ];
+  const off = Math.max(0, Math.trunc(offset));
+  const changes = flat.slice(off, off + size);
+  return {
+    counts: {
+      added: report.added.length,
+      modified: report.modified.length,
+      deleted: report.deleted.length,
+      unchanged: report.unchanged,
+    },
+    total: flat.length,
+    offset: off,
+    size,
+    returned: changes.length,
+    hasMore: off + changes.length < flat.length,
+    changes,
+  };
+}
+
 export function buildTools(ctx: ToolContext, safety: Safety): ToolSet {
   const layout = resolveVaultLayout(ctx.vaultPath);
   const toAbs = (file: string): string => layout.toAbs(file);
@@ -45,17 +94,21 @@ export function buildTools(ctx: ToolContext, safety: Safety): ToolSet {
     // ---- 读工具（带 execute，自动跑）----
     query: tool({
       description:
-        "执行 Dataview(DQL) 子集查询，返回匹配行。结构化只读，查不了正文。构造 DQL 不确定文法时，先 skills_get 取 obsidian-base-spec。",
-      inputSchema: jsonSchema<{ dql: string }>({
+        "执行 Dataview(DQL) 子集查询，返回匹配行（分页）。结构化只读，查不了正文。结果含 total（命中总数）/returned/hasMore——数总量直接看 total，不要靠翻页枚举。size 默认 50（上限 500，size=0 只回 total 不取行），offset 默认 0；翻页用 offset+=size。构造 DQL 不确定文法时，先 skills_get 取 obsidian-base-spec。",
+      inputSchema: jsonSchema<{ dql: string; offset?: number; size?: number }>({
         type: "object",
-        properties: { dql: { type: "string", description: "DQL 查询语句" } },
+        properties: {
+          dql: { type: "string", description: "DQL 查询语句" },
+          offset: { type: "number", description: "结果起始偏移，默认 0" },
+          size: { type: "number", description: "本页最大行数，默认 50，上限 500（0=只回 total）" },
+        },
         required: ["dql"],
         additionalProperties: false,
       }),
-      execute: ({ dql }) => {
+      execute: ({ dql, offset, size }) => {
         const engine = new DataviewEngine(ctx.dbPath);
         try {
-          return observe(safety, engine.query(dql));
+          return observe(safety, engine.query(dql, { offset: offset ?? 0, size: clampSize(size, 50, 500) }));
         } finally {
           engine.close();
         }
@@ -72,18 +125,22 @@ export function buildTools(ctx: ToolContext, safety: Safety): ToolSet {
       execute: ({ file }) => observe(safety, new VaultParser().parse(readFileSync(toAbs(file), "utf8"))),
     }),
     scan: tool({
-      description: "对比文件系统与索引，报告新增/改动/删除（不写库）。",
-      inputSchema: jsonSchema<{ rehash?: boolean }>({
+      description:
+        "对比文件系统与索引，报告新增/改动/删除（不写库）。返回 counts（各类计数，标量永不截断——要数量看这里）+ changes（变更明细，分页）+ total/hasMore。size 默认 50（上限 500，0=只回 counts），offset 默认 0；翻页用 offset+=size。",
+      inputSchema: jsonSchema<{ rehash?: boolean; offset?: number; size?: number }>({
         type: "object",
         properties: {
           rehash: { type: "boolean", description: "按内容对比（慢但稳），默认 mtime+size" },
+          offset: { type: "number", description: "changes 起始偏移，默认 0" },
+          size: { type: "number", description: "changes 本页最大条数，默认 50，上限 500（0=只回 counts）" },
         },
         additionalProperties: false,
       }),
-      execute: async ({ rehash }) => {
+      execute: async ({ rehash, offset, size }) => {
         const indexer = new VaultIndexer({ vaultPath: ctx.vaultPath, dbPath: ctx.dbPath });
         try {
-          return observe(safety, await indexer.scan({ rehash: rehash ?? false, dryRun: true }));
+          const report = await indexer.scan({ rehash: rehash ?? false, dryRun: true });
+          return observe(safety, paginateScan(report, offset ?? 0, clampSize(size, 50, 500)));
         } finally {
           indexer.close();
         }

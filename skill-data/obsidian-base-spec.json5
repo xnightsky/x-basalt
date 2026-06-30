@@ -75,13 +75,14 @@
       examples: ["这是一个段落 ^para-1"],
     },
     {
-      pattern: "(LIST|TABLE)\\s+.*?(FROM\\s+.+?)?(WHERE\\s+.+?)?(SORT\\s+.+?)?(LIMIT\\s+\\d+)?",
-      description: 'Dataview DQL 子集：LIST|TABLE <fields> [FROM <源>] [WHERE <cond>] [SORT <field> ASC|DESC] [LIMIT <n>]。FROM 可省略，省略或 FROM "" 均表示全库；FROM 源仅三类："folder"(含子文件夹) / #tag(前缀命中子标签) / [[link]](反链)。按 frontmatter 字段筛笔记一律用 WHERE，别把字段名或取值当 #tag 写进 FROM。操作符 = != < > <= >= / contains/icontains/startswith/endswith / AND OR NOT / regexmatch。隐式字段 file.name/path/folder/extension/size/mtime/ctime/tags/inlinks/outlinks/tasks，外加任意 frontmatter 标量字段。',
+      pattern: "(LIST|TABLE)\\s+.*?(FROM\\s+.+?)?(WHERE\\s+.+?)?(GROUP\\s+BY\\s+.+?)?(SORT\\s+.+?)?(LIMIT\\s+\\d+)?",
+      description: 'Dataview DQL 子集：LIST|TABLE <fields> [FROM <源>] [WHERE <cond>] [GROUP BY <field>] [FLATTEN <field>] [SORT <field> ASC|DESC] [LIMIT <n>]。FROM 可省略，省略或 FROM "" 均表示全库；FROM 源仅三类："folder"(含子文件夹) / #tag(前缀命中子标签) / [[link]](反链)。按 frontmatter 字段筛笔记一律用 WHERE，别把字段名或取值当 #tag 写进 FROM。操作符 = != < > <= >= / contains/icontains/startswith/endswith / AND OR NOT / regexmatch。隐式字段 file.name/path/folder/extension/size/mtime/ctime/tags/inlinks/outlinks/tasks，外加任意 frontmatter 标量字段。**计数**：count() / length(rows) 是 GROUP BY 聚合列（按 <field> 分组的文件数），单独 `TABLE count()` 不带 GROUP BY 无效；要全库总数用 `TABLE count() FROM "" GROUP BY file.extension`，或直接读任一 query 结果的 total 字段。DQL 只有 LIMIT、**无 OFFSET**——分页在 CLI `--offset/--size` 或 chat 工具 offset/size 层做，不在 DQL 文法里。',
       examples: [
         'LIST WHERE type = "moc"',
         'TABLE file.name, rating FROM "" WHERE rating >= 4 SORT rating DESC',
         "LIST FROM #project WHERE status = 'active' SORT file.mtime DESC LIMIT 10",
-        'TABLE file.name, status FROM "Projects" WHERE contains(file.tags, "work")',
+        'TABLE count() FROM "" GROUP BY file.extension   // 计数：各扩展名文件数（全 md 即单组=全库总数）',
+        'TABLE length(rows) FROM "" GROUP BY file.folder  // 各文件夹文件数',
       ],
     },
   ],
@@ -92,6 +93,6 @@
     supports_block_ref: true,
     embed_distinguishes_asset: true,
     case_sensitive: false,
-    dql_subset: ["LIST", "TABLE", "FROM", "WHERE", "SORT", "LIMIT"],
+    dql_subset: ["LIST", "TABLE", "FROM", "WHERE", "GROUP BY", "FLATTEN", "SORT", "LIMIT", "count()"],
   },
 }
