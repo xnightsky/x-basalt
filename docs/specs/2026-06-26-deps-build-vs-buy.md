@@ -1,3 +1,15 @@
+---
+timestamp: 2026-06-30T00:01:23Z
+sha256: ade12994513d6512e670f8cd37313d061186df20cf74f56197fd79f8ac021599
+type: spec
+title: 决策：依赖与「自建 vs 用库」边界
+description: 各模块第三方依赖与自建边界的 ADR 决策
+tags:
+  - spec
+  - deps
+  - adr
+  - x-basalt
+---
 # 决策：依赖与「自建 vs 用库」边界（x-basalt）
 
 > 日期：2026-06-26 · 状态：决策记录（ADR 性质），待用户拍板选型
@@ -20,14 +32,14 @@
 
 `AGENTS.md`「项目硬约束」逐条对照：
 
-| 约束 | 禁止的 | **没有禁止的** |
-|---|---|---|
-| 1 | `import ... from 'obsidian'` / obsidian npm 包 / 其类型 | 任何**纯 remark 生态**插件（不引 obsidian） |
-| 2 | `obsidian://` URI 协议 | —— |
-| 3 | `obsidian-dataview` 的 **Evaluator / Executor** | 参考其 AST 类型；**自建执行层** |
-| 4 | Electron / Puppeteer / Playwright | —— |
-| 5 | 文件操作只用 `fs` / `chokidar` | —— |
-| 6 | 隐式字段假设外部缓存 | SQLite JOIN 实时计算 |
+| 约束 | 禁止的                                                  | **没有禁止的**                              |
+| ---- | ------------------------------------------------------- | ------------------------------------------- |
+| 1    | `import ... from 'obsidian'` / obsidian npm 包 / 其类型 | 任何**纯 remark 生态**插件（不引 obsidian） |
+| 2    | `obsidian://` URI 协议                                  | ——                                          |
+| 3    | `obsidian-dataview` 的 **Evaluator / Executor**         | 参考其 AST 类型；**自建执行层**             |
+| 4    | Electron / Puppeteer / Playwright                       | ——                                          |
+| 5    | 文件操作只用 `fs` / `chokidar`                          | ——                                          |
+| 6    | 隐式字段假设外部缓存                                    | SQLite JOIN 实时计算                        |
 
 **关键：硬约束从未禁止 `remark-obsidian-md`、`@flowershow/remark-wiki-link`、`unified`、`gray-matter` 这类纯 npm 库。** 而技术栈表又写明「Obsidian 专有语法 = **自建提取**，`@flowershow/remark-wiki-link` 仅作语法参考」。所以：
 
@@ -46,11 +58,11 @@
 
 把项目拆成三层，分别判断「该买（组装现成）还是该建（自研）」：
 
-| 层 | 有无现成纯 npm 方案 | 建议 | 理由 |
-|---|---|---|---|
-| **解析层**<br>wikilink/embed/callout/highlight/frontmatter | ✅ 有（见 §4 矩阵） | **可买/组装** | 纯 remark 插件不碰 Obsidian；自建 = 重复造轮 + 现有实现有边界 bug |
-| **索引层**<br>Vault 扫描 / 反向链接倒排 / SQLite | ❌ 无「Vault 级索引」现成包 | **必须建** | 没有现成方案；这是合理的自研 |
-| **DQL 执行层**<br>DQL → 求值 | ⚠️ 官方绑 Obsidian；社区只有子集 | **必须建 / 基于子集做深** | 官方 Evaluator 依赖运行时；**这是项目真正的技术价值所在** |
+| 层                                                         | 有无现成纯 npm 方案              | 建议                      | 理由                                                              |
+| ---------------------------------------------------------- | -------------------------------- | ------------------------- | ----------------------------------------------------------------- |
+| **解析层**<br>wikilink/embed/callout/highlight/frontmatter | ✅ 有（见 §4 矩阵）              | **可买/组装**             | 纯 remark 插件不碰 Obsidian；自建 = 重复造轮 + 现有实现有边界 bug |
+| **索引层**<br>Vault 扫描 / 反向链接倒排 / SQLite           | ❌ 无「Vault 级索引」现成包      | **必须建**                | 没有现成方案；这是合理的自研                                      |
+| **DQL 执行层**<br>DQL → 求值                               | ⚠️ 官方绑 Obsidian；社区只有子集 | **必须建 / 基于子集做深** | 官方 Evaluator 依赖运行时；**这是项目真正的技术价值所在**         |
 
 **推论**：内核（索引 + DQL 执行）的自研是对的、有价值的，应当**做深**；解析层的自研是**可省的重复劳动**，可换成熟插件，把精力让给内核。这与「做深内核、冲代表作」的方向一致。
 
@@ -58,14 +70,14 @@
 
 ✅ = 本次 `registry.npmjs.org/<pkg>/latest` 实测确认；⚠️ = 存在但能力声明待核实。
 
-| 包 | 版本 | 自述能力 | 依赖 Obsidian 运行时？ | 状态 |
-|---|---|---|---|---|
-| `@flowershow/remark-wiki-link` | 4.0.0 | 解析/渲染 wiki 链接（尤 Obsidian 风格） | 否 | ✅ 存在 |
-| `@portaljs/remark-wiki-link` | 1.2.0 | 解析/渲染 wiki 链接（尤 Obsidian 风格） | 否 | ✅ 存在 |
-| `remark-obsidian-md` | 1.1.0 | wiki links + **callouts** + **highlights**（keywords: wiki-links/callouts/alerts；repo: adrianoaraujods/remark-obsidian-md） | 否 | ✅ 存在；embed/tag/task 覆盖 ⚠️待核实 |
-| `gray-matter` | 4.0.3 | frontmatter（YAML） | 否 | ✅ 已在用 |
-| `obsidian-dataview` | npm 包 | 发布 DQL 的 TS 类型 + `getAPI()`；**执行依赖 `app.metadataCache`（运行中的 Obsidian）** | **是（执行层）** | ✅ 机制确认：无法 headless 求值 |
-| `@oomkapwn/enquire-mcp` | 3.10.1 | 自述「给 AI agent 持久长期记忆、后端是本地 Obsidian vault」的 MCP server | 否 | ⚠️ 存在已确认；**DQL 子集查询能力待核实**（自述非 Dataview 引擎） |
+| 包                             | 版本   | 自述能力                                                                                                                     | 依赖 Obsidian 运行时？ | 状态                                                              |
+| ------------------------------ | ------ | ---------------------------------------------------------------------------------------------------------------------------- | ---------------------- | ----------------------------------------------------------------- |
+| `@flowershow/remark-wiki-link` | 4.0.0  | 解析/渲染 wiki 链接（尤 Obsidian 风格）                                                                                      | 否                     | ✅ 存在                                                           |
+| `@portaljs/remark-wiki-link`   | 1.2.0  | 解析/渲染 wiki 链接（尤 Obsidian 风格）                                                                                      | 否                     | ✅ 存在                                                           |
+| `remark-obsidian-md`           | 1.1.0  | wiki links + **callouts** + **highlights**（keywords: wiki-links/callouts/alerts；repo: adrianoaraujods/remark-obsidian-md） | 否                     | ✅ 存在；embed/tag/task 覆盖 ⚠️待核实                             |
+| `gray-matter`                  | 4.0.3  | frontmatter（YAML）                                                                                                          | 否                     | ✅ 已在用                                                         |
+| `obsidian-dataview`            | npm 包 | 发布 DQL 的 TS 类型 + `getAPI()`；**执行依赖 `app.metadataCache`（运行中的 Obsidian）**                                      | **是（执行层）**       | ✅ 机制确认：无法 headless 求值                                   |
+| `@oomkapwn/enquire-mcp`        | 3.10.1 | 自述「给 AI agent 持久长期记忆、后端是本地 Obsidian vault」的 MCP server                                                     | 否                     | ⚠️ 存在已确认；**DQL 子集查询能力待核实**（自述非 Dataview 引擎） |
 
 ### 待核实清单（不得当事实写入实现依据）
 

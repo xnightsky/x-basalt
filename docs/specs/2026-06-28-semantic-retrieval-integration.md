@@ -3,14 +3,14 @@ type: design
 title: 语义/全文检索融入设计评估（FTS5 + 可选 embedding）
 description: 评估把 qmd 式检索融入 x-basalt：FTS5 全文（core、无 AI、中文 trigram）为主，embedding 向量为最小可选 AI；含借鉴取舍
 tags:
-  - search
-  - fts5
-  - embedding
-  - optional-ai
-  - design
-timestamp: 2026-06-28T09:36:34Z
-sha256: b497324a8a1aa180b6b4df6f98094c889f4419ac8ea069ce32af30e6ed52e8b4
+  - spec
+  - semantic
+  - retrieval
+  - x-basalt
+timestamp: 2026-06-29T23:59:11Z
+sha256: c30eba5c37da36d9c7b33fab9dc9dc9bf29070772228503b2a132571bddfb448
 ---
+
 # 设计评估：语义/全文检索融入（qmd 调研）—— FTS5 为核、embedding 为可选 AI
 
 > 日期：2026-06-28 · 类型：设计评估（**非开工**，只论"将来若做，怎么做才立得住"）
@@ -71,12 +71,12 @@ sha256: b497324a8a1aa180b6b4df6f98094c889f4419ac8ea069ce32af30e6ed52e8b4
 
 **FTS5 默认 `unicode61` 分词器不切 CJK**（中文无空格分隔，整段会被当一个 token，几乎搜不出）。这是中文 vault 的硬坎。评估：
 
-| 方案 | 依赖 | 中文效果 | 离线 |
-|---|---|---|---|
-| `unicode61`（默认） | 无 | ❌ 几乎不可用 | ✅ |
-| **`trigram`（FTS5 内置三元组）** | **无**（SQLite 自带） | ✅ 子串匹配，中文可用 | ✅ |
-| `icu` 分词器 | 需 ICU 构建 | ✅ 好 | ⚠️ better-sqlite3 预编译不含 ICU |
-| 外部分词（jieba 等）预切再存 | 加 npm/原生依赖 | ✅ 最好 | ✅ 但加依赖 |
+| 方案                             | 依赖                  | 中文效果              | 离线                             |
+| -------------------------------- | --------------------- | --------------------- | -------------------------------- |
+| `unicode61`（默认）              | 无                    | ❌ 几乎不可用         | ✅                               |
+| **`trigram`（FTS5 内置三元组）** | **无**（SQLite 自带） | ✅ 子串匹配，中文可用 | ✅                               |
+| `icu` 分词器                     | 需 ICU 构建           | ✅ 好                 | ⚠️ better-sqlite3 预编译不含 ICU |
+| 外部分词（jieba 等）预切再存     | 加 npm/原生依赖       | ✅ 最好               | ✅ 但加依赖                      |
 
 **推荐 `trigram`**：FTS5 内置、零依赖、纯离线，对中文做三元组子串匹配即可用，完美贴合 x-basalt"零重依赖"身份。代价是索引体积变大、不支持词级 BM25 精排（但作为"按内容找候选 + 交给 chat/用户筛"足够）。
 
@@ -100,26 +100,26 @@ sha256: b497324a8a1aa180b6b4df6f98094c889f4419ac8ea069ce32af30e6ed52e8b4
 这是把"语义"做轻的关键认知（与 chat spec 配合）：
 
 - **① 大半"AI 检索步骤"可外包给 chat 的 LLM**，x-basalt 自己不跑模型：
-  - *query expansion*：让 chat 的 LLM 把"分布式一致性"扩成 `CAP / 强一致 / quorum` 等词丢给 FTS5。
-  - *HyDE*：LLM 先写假想答案，再抽词查 FTS5。
-  - *rerank*：LLM 读 FTS5 候选自己重排。
-  → qmd 用本地 LLM 干的这三件，在 x-basalt 这边由调用方（Claude Code / chat 的 provider）顺手做，**无需在引擎内嵌模型**。
+  - _query expansion_：让 chat 的 LLM 把"分布式一致性"扩成 `CAP / 强一致 / quorum` 等词丢给 FTS5。
+  - _HyDE_：LLM 先写假想答案，再抽词查 FTS5。
+  - _rerank_：LLM 读 FTS5 候选自己重排。
+    → qmd 用本地 LLM 干的这三件，在 x-basalt 这边由调用方（Claude Code / chat 的 provider）顺手做，**无需在引擎内嵌模型**。
 - **② 唯一不可外包 = embedding**：它是对全库的批处理，不是对话里能顺手做的事。这正是 §5 可选层存在的理由。
 - **诚实边界（FTS5 召回上限）**：agent 只能重排"FTS5 捞得到"的东西。一篇笔记若与所有查询词**零词面重叠**，FTS5 永不吐出，agent 也无从重排——**这种"概念相关但用词不沾边"的召回，只有 ② 向量能救**。所以：日常找笔记 ① 足够；要"穷尽概念相关"才需要 ②。
 
 ## 7. qmd 借鉴点取舍（哪些抄、哪些不抄）
 
-| qmd 能力 | 取舍 | 理由 |
-|---|---|---|
-| FTS5 全文检索 | ✅ **抄**（core） | 补"查正文"空洞，纯离线零模型 |
-| CJK 归一化版本号（`fts_cjk_normalized_version`） | ✅ **抄**（迁移安全） | 分词策略变更时安全重建 |
-| content-hash 内容寻址（避免重算） | 🟡 **仅 embedding 层抄** | 对"贵"的 embedding 才划算；FTS 重算便宜不需要 |
-| `sqlite-vec` 向量存储 | 🟡 **可选层用** | 接口后、默认关 |
-| 本地 GGUF 模型 + `node-llama-cpp` | ❌ **不抄** | 拖模型 + 推理运行时，破坏离线轻量身份 |
-| HyDE / query expansion / LLM rerank | ❌ **不内嵌**（外包给 chat 的 LLM，§6①） | 引擎内嵌模型违背身份；调用方天然是 LLM |
-| AST-aware / smart chunking | ❌ **不抄** | 纯为 embedding 切块服务，不切块用不上 |
-| 软删除 + 内容寻址去重 | ❌ **不抄** | 解决"避免重复 embedding"成本，x-basalt 硬删更简单 |
-| docid（6 位内容哈希做 ID） | ❌ **不抄** | Obsidian 原生身份（path+wikilink+block-id）已覆盖 |
+| qmd 能力                                         | 取舍                                     | 理由                                              |
+| ------------------------------------------------ | ---------------------------------------- | ------------------------------------------------- |
+| FTS5 全文检索                                    | ✅ **抄**（core）                        | 补"查正文"空洞，纯离线零模型                      |
+| CJK 归一化版本号（`fts_cjk_normalized_version`） | ✅ **抄**（迁移安全）                    | 分词策略变更时安全重建                            |
+| content-hash 内容寻址（避免重算）                | 🟡 **仅 embedding 层抄**                 | 对"贵"的 embedding 才划算；FTS 重算便宜不需要     |
+| `sqlite-vec` 向量存储                            | 🟡 **可选层用**                          | 接口后、默认关                                    |
+| 本地 GGUF 模型 + `node-llama-cpp`                | ❌ **不抄**                              | 拖模型 + 推理运行时，破坏离线轻量身份             |
+| HyDE / query expansion / LLM rerank              | ❌ **不内嵌**（外包给 chat 的 LLM，§6①） | 引擎内嵌模型违背身份；调用方天然是 LLM            |
+| AST-aware / smart chunking                       | ❌ **不抄**                              | 纯为 embedding 切块服务，不切块用不上             |
+| 软删除 + 内容寻址去重                            | ❌ **不抄**                              | 解决"避免重复 embedding"成本，x-basalt 硬删更简单 |
+| docid（6 位内容哈希做 ID）                       | ❌ **不抄**                              | Obsidian 原生身份（path+wikilink+block-id）已覆盖 |
 
 ## 8. 与 chat spec 的接口
 
@@ -130,13 +130,13 @@ sha256: b497324a8a1aa180b6b4df6f98094c889f4419ac8ea069ce32af30e6ed52e8b4
 
 **工作量**
 
-| 部件 | 现状 | 工作量 |
-|---|---|---|
-| FTS5 虚表 + 同步 | `files.content` 已存、写边界单一 | 小：建虚表 + 在 insert/delete 挂同步 |
-| trigram 中文分词 | 无 | 极小：建表参数 + 版本号 |
-| 全文查询命令面 | `query` 已有骨架 | 小-中：加谓词或 `search` 子命令 |
-| embedding 接口 + sqlite-vec | 无 | 中：provider 接口 + 可选扩展加载 + 哈希门控 |
-| 向量召回/融合 | 无 | 中：检索 + 与 FTS 结果融合（可简单加权，不必上 RRF） |
+| 部件                        | 现状                             | 工作量                                               |
+| --------------------------- | -------------------------------- | ---------------------------------------------------- |
+| FTS5 虚表 + 同步            | `files.content` 已存、写边界单一 | 小：建虚表 + 在 insert/delete 挂同步                 |
+| trigram 中文分词            | 无                               | 极小：建表参数 + 版本号                              |
+| 全文查询命令面              | `query` 已有骨架                 | 小-中：加谓词或 `search` 子命令                      |
+| embedding 接口 + sqlite-vec | 无                               | 中：provider 接口 + 可选扩展加载 + 哈希门控          |
+| 向量召回/融合               | 无                               | 中：检索 + 与 FTS 结果融合（可简单加权，不必上 RRF） |
 
 **风险**
 

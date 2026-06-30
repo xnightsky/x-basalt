@@ -1,3 +1,15 @@
+---
+timestamp: 2026-06-30T00:01:23Z
+sha256: b6ed8f861dde474b3fdfc6150a77054ac3ad9d23d04bc88f7a35b04ecf698f1a
+type: plan
+title: 元数据写侧 Phase 2：normalize（frontmatter 归一）
+description: frontmatter normalize 归一规则的实现计划
+tags:
+  - plan
+  - meta
+  - normalize
+  - x-basalt
+---
 # 元数据写侧 Phase 2：normalize（frontmatter 归一）
 
 > 日期：2026-06-28 · 主题：在 meta 写侧地基上加「归一/标准化」——`meta normalize`

@@ -1,3 +1,15 @@
+---
+timestamp: 2026-06-30T00:01:23Z
+sha256: 9e2a52653bc7790c690c9cfd75b517415726b84f8e62e313abee35fe5023bb4f
+type: research
+title: 元数据策略（profile）调研：derive 功能设计依据
+description: OKF/Obsidian/SSG 元数据惯例调研与 profile derive 设计依据
+tags:
+  - research
+  - meta
+  - profile
+  - x-basalt
+---
 # 元数据策略（profile）调研：derive 功能设计依据
 
 > 日期：2026-06-28 · 来源：deep-research run `wf_d56251ed-15e`（5 角度 fan-out + 对抗式核验，23 源 / 113 声明 / 25 核验 / 18 confirmed）
@@ -13,17 +25,17 @@
 
 ## 自动补 vs 人工（核验过）
 
-| 可自动推导 | 规则 / 坑 |
-|---|---|
-| `title` | 文件名去扩展名、分隔符→空格、首字母大写（OKF 明文允许从文件名派生）。**坑**：CJK/多语言文件名分词与大小写无通用规则，需显式策略 |
-| `created` | `fs.stat().birthtime`。**坑**：部分 Linux 文件系统 birthtime 不可靠 → 回退 `mtime` |
-| `modified`/`updatedDate`/`timestamp` | `fs.stat().mtime` |
-| `slug` | 文件名去扩展名、保连字符 |
-| `sha256` | 仅对**正文**（闭合 `---` 之后）hash，用于 drift 检测（社区实践，无 spec 级权威，medium 置信）|
-| `wordcount`/`reading_time` | 正文字数 |
-| `aliases` | 可把文件名作初始项 |
-| `backlinks`/`outlinks` | x-basalt 索引已能算（但写回会与索引重复，谨慎）|
-| **必须人工** | `description`（agent 判相关性的入口，需语义理解）、`author`、`category`/`type`、`status`、`resource` |
+| 可自动推导                           | 规则 / 坑                                                                                                                       |
+| ------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------- |
+| `title`                              | 文件名去扩展名、分隔符→空格、首字母大写（OKF 明文允许从文件名派生）。**坑**：CJK/多语言文件名分词与大小写无通用规则，需显式策略 |
+| `created`                            | `fs.stat().birthtime`。**坑**：部分 Linux 文件系统 birthtime 不可靠 → 回退 `mtime`                                              |
+| `modified`/`updatedDate`/`timestamp` | `fs.stat().mtime`                                                                                                               |
+| `slug`                               | 文件名去扩展名、保连字符                                                                                                        |
+| `sha256`                             | 仅对**正文**（闭合 `---` 之后）hash，用于 drift 检测（社区实践，无 spec 级权威，medium 置信）                                   |
+| `wordcount`/`reading_time`           | 正文字数                                                                                                                        |
+| `aliases`                            | 可把文件名作初始项                                                                                                              |
+| `backlinks`/`outlinks`               | x-basalt 索引已能算（但写回会与索引重复，谨慎）                                                                                 |
+| **必须人工**                         | `description`（agent 判相关性的入口，需语义理解）、`author`、`category`/`type`、`status`、`resource`                            |
 
 ## 体系冲突（profile 必须显式标注，不可调和）
 
@@ -36,40 +48,40 @@
 
 ### A. `llm-wiki`（基于 OKF v0.1）— LLM/agent 导向（你的头号需求）
 
-| 字段 | 角色 | 类型 | 自动补 |
-|---|---|---|---|
-| `type` | **必填（唯一）** | string | 人工 / 按文件夹规则 |
-| `title` | 推荐 | string | ✅ 文件名 |
-| `description` | 推荐（agent 相关性入口）| string 单句 | ❌ 人工 |
-| `resource` | 推荐 | url | ❌ 人工 |
-| `tags` | 推荐 | list | 半自动 |
-| `timestamp` | 推荐 | datetime(ISO 串) | ✅ fs mtime |
-| `sha256`（扩展）| 可选 | string | ✅ 正文 hash（drift）|
+| 字段             | 角色                     | 类型             | 自动补                |
+| ---------------- | ------------------------ | ---------------- | --------------------- |
+| `type`           | **必填（唯一）**         | string           | 人工 / 按文件夹规则   |
+| `title`          | 推荐                     | string           | ✅ 文件名             |
+| `description`    | 推荐（agent 相关性入口） | string 单句      | ❌ 人工               |
+| `resource`       | 推荐                     | url              | ❌ 人工               |
+| `tags`           | 推荐                     | list             | 半自动                |
+| `timestamp`      | 推荐                     | datetime(ISO 串) | ✅ fs mtime           |
+| `sha256`（扩展） | 可选                     | string           | ✅ 正文 hash（drift） |
 
 > OKF 仍是 **Draft（2026-05）**，profile 文件需**版本锁定**、随 spec 演进。
 
 ### B. `ssg-blog`（基于 Astro content collections）— 发布博客导向
 
-| 字段 | 角色 | 类型 | 自动补 |
-|---|---|---|---|
-| `title` | 必填（锚点）| string | ✅ 文件名（初值）|
-| `pubDate` | 必填 | date(ISO) | ✅ birthtime（回退 mtime）|
-| `description` | 必填 | string | ❌ 人工 |
-| `updatedDate` | 可选 | date(ISO) | ✅ mtime |
-| `draft` | 可选 | bool | 默认 `false` |
-| `tags` | 可选 | list | — |
-| `slug` | 可选 | string | ✅ 文件名 |
+| 字段          | 角色         | 类型      | 自动补                     |
+| ------------- | ------------ | --------- | -------------------------- |
+| `title`       | 必填（锚点） | string    | ✅ 文件名（初值）          |
+| `pubDate`     | 必填         | date(ISO) | ✅ birthtime（回退 mtime） |
+| `description` | 必填         | string    | ❌ 人工                    |
+| `updatedDate` | 可选         | date(ISO) | ✅ mtime                   |
+| `draft`       | 可选         | bool      | 默认 `false`               |
+| `tags`        | 可选         | list      | —                          |
+| `slug`        | 可选         | string    | ✅ 文件名                  |
 
 ### C. `pkm-note`（基于 Obsidian 官方 + 社区惯例）— 笔记导向
 
-| 字段 | 角色 | 类型 | 自动补 |
-|---|---|---|---|
-| `tags` | 核心 | list | — |
-| `aliases` | 核心 | list | ✅ 文件名（初值）|
-| `cssclasses` | 可选 | list | — |
-| `created` | 可选 | datetime(ISO 串) | ✅ birthtime |
-| `modified` | 可选 | datetime(ISO 串) | ✅ mtime |
-| `status` | 可选 | enum | ❌ 人工 |
+| 字段         | 角色 | 类型             | 自动补            |
+| ------------ | ---- | ---------------- | ----------------- |
+| `tags`       | 核心 | list             | —                 |
+| `aliases`    | 核心 | list             | ✅ 文件名（初值） |
+| `cssclasses` | 可选 | list             | —                 |
+| `created`    | 可选 | datetime(ISO 串) | ✅ birthtime      |
+| `modified`   | 可选 | datetime(ISO 串) | ✅ mtime          |
+| `status`     | 可选 | enum             | ❌ 人工           |
 
 > Obsidian 官方核心 property 仅 `tags/aliases/cssclasses`（List）；`description/publish/permalink/image/cover` 属 Obsidian Publish 扩展，非核心。Dendron 已停维（2023），仅作格式反例（Unix 时间戳）参考。
 

@@ -1,3 +1,15 @@
+---
+timestamp: 2026-06-30T00:01:23Z
+sha256: 7bf0b9140816161f1bdd540d7ffcbb2a746e9ee0fab014ccbe723dc8cff60361
+type: research
+title: 调研：Obsidian 规范与依赖核实
+description: Obsidian Markdown 规范与 npm 依赖可行性的调研核实
+tags:
+  - research
+  - obsidian
+  - deps
+  - x-basalt
+---
 # 调研：Obsidian 规范与依赖核实
 
 > 日期：2026-06-25
@@ -5,17 +17,17 @@
 
 ## 1. 依赖核实（npm，2026-06-25 实测）
 
-| 包 | 最新版本 | 结论 |
-|---|---|---|
-| better-sqlite3 | 12.11.1 | Node 24 有预编译二进制，无需本地编译（Windows 友好）。**注意：pnpm v10 默认拦截依赖构建脚本**，须在 `package.json` 加 `pnpm.onlyBuiltDependencies: ["better-sqlite3"]` 放行，否则拉不到 prebuilt。 |
-| @flowershow/remark-wiki-link | 4.0.0 | 存在，但定位是「渲染期把 wikilink 转 HTML」，**不直接吐出 heading/block/embed 结构**。仅作语法参考，不作为解析真相源。 |
-| chokidar | 5.0.0 | 可用，ESM。 |
-| commander | 15.0.0 | 可用，ESM。 |
-| unified / remark-parse | 11.0.5 / 11.0.0 | 纯 ESM——**强制本项目用 ESM**（`"type": "module"`）。 |
-| gray-matter | 4.0.3 | 可用（CJS，default import）。 |
-| zod | 4.4.3 | 可用。 |
-| json5 | 2.2.3 | 可用（skill 文件格式）。 |
-| node:sqlite（内置） | Node 24 可用 | 作为零安装兜底参考；当前**仍按 spec 用 better-sqlite3**。 |
+| 包                           | 最新版本        | 结论                                                                                                                                                                                               |
+| ---------------------------- | --------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| better-sqlite3               | 12.11.1         | Node 24 有预编译二进制，无需本地编译（Windows 友好）。**注意：pnpm v10 默认拦截依赖构建脚本**，须在 `package.json` 加 `pnpm.onlyBuiltDependencies: ["better-sqlite3"]` 放行，否则拉不到 prebuilt。 |
+| @flowershow/remark-wiki-link | 4.0.0           | 存在，但定位是「渲染期把 wikilink 转 HTML」，**不直接吐出 heading/block/embed 结构**。仅作语法参考，不作为解析真相源。                                                                             |
+| chokidar                     | 5.0.0           | 可用，ESM。                                                                                                                                                                                        |
+| commander                    | 15.0.0          | 可用，ESM。                                                                                                                                                                                        |
+| unified / remark-parse       | 11.0.5 / 11.0.0 | 纯 ESM——**强制本项目用 ESM**（`"type": "module"`）。                                                                                                                                               |
+| gray-matter                  | 4.0.3           | 可用（CJS，default import）。                                                                                                                                                                      |
+| zod                          | 4.4.3           | 可用。                                                                                                                                                                                             |
+| json5                        | 2.2.3           | 可用（skill 文件格式）。                                                                                                                                                                           |
+| node:sqlite（内置）          | Node 24 可用    | 作为零安装兜底参考；当前**仍按 spec 用 better-sqlite3**。                                                                                                                                          |
 
 > **[2026-06-26 偏差标注]** 本表所列 `unified` / `remark-parse` / `@flowershow/remark-wiki-link` / `zod` 在 `src/**` 实测 import 次数 = 0（已成死依赖，解析全为手写字符串）。「该买该建」的重新评估见 [`../specs/2026-06-26-deps-build-vs-buy.md`](../specs/2026-06-26-deps-build-vs-buy.md)；另核实到 `@portaljs/remark-wiki-link@1.2.0`、`remark-obsidian-md@1.1.0`（含 callout/highlight）可作解析层备选。
 
@@ -26,6 +38,7 @@
 > 这是 parser 必须精确编码的文法。每条均标注是否有边界 case。详细规则同步进 `skills-def/biz-obsidian-spec`。
 
 ### 2.1 Wikilink / Embed
+
 - `[[Note]]`：基础链接。
 - `[[Note|Alias]]`：带显示别名。
 - `[[Folder/Note]]`：带路径。
@@ -36,30 +49,36 @@
 - **去重**：同一文件内重复 wikilink 只记录一次（按规范化后的 target+anchor 去重）。
 
 ### 2.2 Frontmatter
+
 - 文件**顶部** `---` 与 `---` 之间的 YAML。仅当文件第一行为 `---` 时生效。
 - `tags:` 可为数组或单值；`tags: [a, b]` / `tags:\n  - a`。
 - 由 gray-matter 解析，提取为键值对，整体以 JSON 存 `files.frontmatter`。
 
 ### 2.3 Tags
+
 - 行内 `#tag`、嵌套 `#parent/child`。
 - 边界：`#` 前**不能是 word 字符（字母/数字/下划线）**——比初稿「行首或空白」更贴近 Obsidian，允许 `标签：#moc` 这类 CJK 标点后的标签生效，同时排除 `word#x` / `123#x` / wikilink 锚点 `Concepts#heading`（2026-06-25 阶段 1 据样例修订）；纯数字 `#123` 不算标签（须含至少一个字母/下划线）；代码块 / 行内代码内的 `#` 不算（MVP 先不剔除代码块，列为已知近似）。
 - frontmatter `tags` 也并入标签索引（`in_frontmatter = 1`）。
 - 归一化：DB 存**不带 `#`** 的标签文本；`FROM #a` 命中嵌套子标签 `#a/b`（前缀匹配，Obsidian 行为）。
 
 ### 2.4 Callouts
+
 - `> [!type] Title` 起始，type 含 `note/tip/warning/danger/info/success/question/quote/...`。
 - 折叠：`> [!type]+ Title`（默认展开）/ `> [!type]- Title`（默认折叠）→ `foldable = true`。
 - content 为后续 `>` 引用行聚合。
 
 ### 2.5 Highlight
+
 - `==highlighted==` → `{ type: 'highlight', content }`。
 
 ### 2.6 Task
+
 - `- [ ]` 未完成 / `- [x]` 完成 / `- [-]` 取消 / `- [?]` 等自定义单字符状态。
 - status 取方括号内字符（空格记为 `' '`）。
 - `due_date`：从 task 文本正则提取 `\d{4}-\d{2}-\d{2}`（YYYY-MM-DD），无则 null。
 
 ### 2.7 Block Reference
+
 - 行尾 `^block-id`（定义）→ `{ type: 'blockRef', id }`，并入 `blocks` 表。
 - `[[Note#^block-id]]`（引用）由 wikilink 解析携带 `blockId`。
 
@@ -77,25 +96,28 @@ GROUP BY <expr>  ·  FLATTEN <arrayField>  ·  WITHOUT ID
 SORT <field> [ASC|DESC] (, <field> [ASC|DESC])* # 多键
 LIMIT <number>
 ```
+
 - 操作符：`= != < > <= >=`、`AND/OR/NOT`、括号。
 - 函数：`contains/icontains/startswith/endswith`、`regexmatch(field,"pat")`；内置标量 `date(today)/date(now)`、`lower/upper`、`length`、`round`。
 - **仍非目标（报错不静默）**：FROM and/or 多源、CALENDAR、DataviewJS、未知字段/函数、聚合列排序、负 LIMIT、`length()` 外的数值表达式运算。
 
 ### 3.2 隐式字段完整性分析（含假设）
+
 Dataview 官方隐式字段很多，本项目只保证下列子集，其余**显式列为非目标**：
 
-| 字段 | 来源 | MVP 支持度 |
-|---|---|---|
-| `file.name/path/folder/extension` | `files` 表直接列 | ✅ 完整 |
-| `file.size/mtime/ctime` | `files` 表直接列 | ✅ 完整（数值/时间比较） |
-| `file.tags` | `tags` 表聚合数组 | ✅ `contains(file.tags, "#x")` |
-| `file.inlinks` | `links` 表反向 JOIN | ⚠️ 数组用于显示 + `contains`；数值比较为 stretch |
-| `file.outlinks` | `links` 表正向 JOIN（含 embed） | ⚠️ 同上 |
-| `file.tasks` | `tasks` 表关联 | ✅ `TASK` 查询返回任务行 + `length(file.tasks)` 计数；task 字段级过滤为后续 |
-| frontmatter 标量字段（如 `status`） | `json_extract(files.frontmatter, …)` | ✅ 标量比较 + 数组 `contains` |
-| `file.day/cday/mday/link/etags/aliases/...` | — | ❌ 非目标（MVP 不实现） |
+| 字段                                        | 来源                                 | MVP 支持度                                                                  |
+| ------------------------------------------- | ------------------------------------ | --------------------------------------------------------------------------- |
+| `file.name/path/folder/extension`           | `files` 表直接列                     | ✅ 完整                                                                     |
+| `file.size/mtime/ctime`                     | `files` 表直接列                     | ✅ 完整（数值/时间比较）                                                    |
+| `file.tags`                                 | `tags` 表聚合数组                    | ✅ `contains(file.tags, "#x")`                                              |
+| `file.inlinks`                              | `links` 表反向 JOIN                  | ⚠️ 数组用于显示 + `contains`；数值比较为 stretch                            |
+| `file.outlinks`                             | `links` 表正向 JOIN（含 embed）      | ⚠️ 同上                                                                     |
+| `file.tasks`                                | `tasks` 表关联                       | ✅ `TASK` 查询返回任务行 + `length(file.tasks)` 计数；task 字段级过滤为后续 |
+| frontmatter 标量字段（如 `status`）         | `json_extract(files.frontmatter, …)` | ✅ 标量比较 + 数组 `contains`                                               |
+| `file.day/cday/mday/link/etags/aliases/...` | —                                    | ❌ 非目标（MVP 不实现）                                                     |
 
 ### 3.3 关键假设（不确定项，显式列明而非含糊）
+
 1. **链接解析（路径感知，S3.2）**：qualified 链接 `[[Dir/Note]]`（target 含 `/`）按 `path_key`（全路径去 `.md`、POSIX、小写）精确匹配，消除同名异目录串味；bare 链接 `[[Note]]` 按 basename（去 `.md`、大小写不敏感）回退，同名多个时全列（Obsidian「最短唯一路径」的 MVP 近似，待精化）。索引落 `files.path_key` 与 `links.target_path_key`（bare 链接为 NULL）支撑。
 2. **embed 计入 outlinks**（`is_embed = 1`），与 Obsidian 一致。
 3. **日期比较**：task `due_date` 与 frontmatter 日期按 ISO 字符串字典序比较（与日期序一致），不做时区处理。
@@ -104,6 +126,7 @@ Dataview 官方隐式字段很多，本项目只保证下列子集，其余**显
 6. **大小写**：链接/标签匹配默认大小写不敏感（Obsidian 行为）。
 
 ## 4. 模块边界自检（防越界）
+
 - parser 纯函数：只吃字符串、吐结构；不碰 fs / DB / SQL。
 - indexer：唯一写 SQLite 的地方；不内联 DQL。
 - query：只读 DB；不直接读 `.md` 文件。

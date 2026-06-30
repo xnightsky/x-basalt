@@ -1,3 +1,14 @@
+---
+timestamp: 2026-06-30T00:01:23Z
+sha256: 1b2e0c00d2662b57ad295c89adfe6e89c7b0ab5991aeb0e929bcdd14a113fb44
+type: plan
+title: 变更编排器 P0 实现计划（change orchestration）
+description: run/scan/watch 变更编排管道 P0 实现计划
+tags:
+  - plan
+  - orchestrator
+  - x-basalt
+---
 # 变更编排器 P0 实现计划（change orchestration）
 
 > **For agentic workers:** 用 TDD（先 red 后 green）逐子步实现；步骤用 `- [ ]` 跟踪。
@@ -24,16 +35,16 @@
 
 ## 范围切分
 
-| 部件 | 本计划 | 说明 |
-|---|---|---|
-| 类型 + 去重折叠（L2/L3） | **P0-A** | 纯函数，重测试 |
-| 堆积（debounce+maxWait） | **P0-B** | 注入时钟，可测 |
-| 路由（match/glob + where(dql)） | **P0-C** | 纯过滤 + 复用 query |
-| 动作契约 + 内建动作（index/normalize/parse，写动作 dry-run） | **P0-D** | 包装现有层 |
-| 执行引擎（pipe/limit/onBusy/timeout/onError/报告/优雅退出/防回环） | **P0-E** | 有状态核心 |
-| 源适配（scan/手动/watch → 事件流） | **P0-F** | 复用 indexer |
-| 配置 pipelines 段 + CLI 接线 + 端到端 | **P0-G** | 收口 |
-| P1/P2（背压/缓存/DAG/写动作落盘/检查点…） | roadmap | 见 spec §12，各自再开计划 |
+| 部件                                                               | 本计划   | 说明                      |
+| ------------------------------------------------------------------ | -------- | ------------------------- |
+| 类型 + 去重折叠（L2/L3）                                           | **P0-A** | 纯函数，重测试            |
+| 堆积（debounce+maxWait）                                           | **P0-B** | 注入时钟，可测            |
+| 路由（match/glob + where(dql)）                                    | **P0-C** | 纯过滤 + 复用 query       |
+| 动作契约 + 内建动作（index/normalize/parse，写动作 dry-run）       | **P0-D** | 包装现有层                |
+| 执行引擎（pipe/limit/onBusy/timeout/onError/报告/优雅退出/防回环） | **P0-E** | 有状态核心                |
+| 源适配（scan/手动/watch → 事件流）                                 | **P0-F** | 复用 indexer              |
+| 配置 pipelines 段 + CLI 接线 + 端到端                              | **P0-G** | 收口                      |
+| P1/P2（背压/缓存/DAG/写动作落盘/检查点…）                          | roadmap  | 见 spec §12，各自再开计划 |
 
 ---
 
@@ -63,33 +74,50 @@ tests/orchestrator-*.test.ts   各部件单测 + 端到端。
 
 ```ts
 export type EventType = "add" | "change" | "unlink";
-export interface ChangeEvent { path: string; type: EventType; mtime?: number; size?: number; }
+export interface ChangeEvent {
+  path: string;
+  type: EventType;
+  mtime?: number;
+  size?: number;
+}
 
 export interface ActionContext {
   vaultPath: string;
-  indexer: VaultIndexer;          // 复用现有
-  engine?: DataviewEngine;        // 路由/查询用，可选
+  indexer: VaultIndexer; // 复用现有
+  engine?: DataviewEngine; // 路由/查询用，可选
   dryRun: boolean;
 }
-export interface ActionResult { action: string; path: string; changed: boolean; skipped: boolean; error?: string; }
+export interface ActionResult {
+  action: string;
+  path: string;
+  changed: boolean;
+  skipped: boolean;
+  error?: string;
+}
 export interface Action {
   name: string;
-  write: boolean;                 // 是否写 .md（决定 dry-run 闸）
+  write: boolean; // 是否写 .md（决定 dry-run 闸）
   run(ev: ChangeEvent, ctx: ActionContext): Promise<ActionResult>;
 }
 
 export interface PipelineConfig {
-  on?: EventType[];               // 事件类型过滤；缺省全部
-  paths?: string[];               // glob 入口过滤
-  where?: string;                 // DQL 语义路由
+  on?: EventType[]; // 事件类型过滤；缺省全部
+  paths?: string[]; // glob 入口过滤
+  where?: string; // DQL 语义路由
   debounce?: { wait: number; maxWait: number };
-  concurrency?: number;           // 默认 4
-  onBusy?: "queue" | "restart" | "ignore";   // 默认 queue
-  onError?: "continue" | "stop";  // 默认 continue
-  dryRun?: boolean;               // 写动作；默认 true
-  actions: string[];              // 内建动作名序列
+  concurrency?: number; // 默认 4
+  onBusy?: "queue" | "restart" | "ignore"; // 默认 queue
+  onError?: "continue" | "stop"; // 默认 continue
+  dryRun?: boolean; // 写动作；默认 true
+  actions: string[]; // 内建动作名序列
 }
-export interface RunReport { total: number; changed: number; skipped: number; failed: ActionResult[]; dryRun: boolean; }
+export interface RunReport {
+  total: number;
+  changed: number;
+  skipped: number;
+  failed: ActionResult[];
+  dryRun: boolean;
+}
 ```
 
 ---
@@ -176,7 +204,7 @@ export interface RunReport { total: number; changed: number; skipped: number; fa
     - **优雅退出**：stop() 停止接新批 → await 当前批跑完 → 关 watcher/DB。
     - **索引新鲜度**：watch/手动流在 where 之前先跑 index 动作落库，使 where 看到新鲜索引（spec §6.4）。
   - 验收：scan 源端到端跑 index 管道后库内一致；写动作产生的变更不二次触发（自产生集生效）；stop() 后无新批执行、当前批完成；where 在 index 之后路由（断言新鲜）。
-  - 证据：`pnpm test tests/orchestrator-engine.test.ts`。前置：CO-E*、CO-F1。
+  - 证据：`pnpm test tests/orchestrator-engine.test.ts`。前置：CO-E\*、CO-F1。
 
 - [ ] **CO-F3 commit**：`feat(orchestrator): 源适配+引擎组装+防回环+优雅退出`。
 

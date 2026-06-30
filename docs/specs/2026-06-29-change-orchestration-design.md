@@ -3,14 +3,14 @@ type: design
 title: 变更编排器设计评估（统一 watch/scan/手动 三源的声明式维护管线）
 description: 评估把 watch/scan/migrate 统一为一个声明式「变更编排器」：五段流水线（源→堆积→去重→路由→执行）+ 全维度地图 + P0 骨架 + 实现分阶段；含 migrate 三方调研归档（结论：不单独立项，降级为编排动作）
 tags:
-  - orchestration
-  - watch
-  - pipeline
-  - migrate
+  - spec
+  - orchestrator
   - design
-timestamp: 2026-06-29T00:51:33Z
-sha256: 05600dc1ec06ed8a9c1ccfc0fd04c8e911f7d6d3586fb0ba5e02c698145cfc1c
+  - x-basalt
+timestamp: 2026-06-29T23:59:11Z
+sha256: 54e58598055d53b7fed6611fd09e3dbd8df818b1474214b7faf78a90b6e6c8fb
 ---
+
 # 设计评估：变更编排器（change orchestration）—— 统一 watch / scan / 手动 三源的声明式维护管线
 
 > 日期：2026-06-29 · 类型：设计评估（**非开工**，只论"将来若做，怎么做才立得住"）
@@ -100,106 +100,113 @@ sha256: 05600dc1ec06ed8a9c1ccfc0fd04c8e911f7d6d3586fb0ba5e02c698145cfc1c
 
 **前端（源进入堆积前）**
 
-| 维度 | 含义 | 取舍 |
-|---|---|---|
-| 初始运行 | watch 启动先全量 scan 建基线 | 🟢 |
-| 事件类型过滤/分流 | create/modify/delete 驱动不同动作 | 🟢【watch 已分 add/change/unlink，未驱动动作】 |
-| 入口过滤 | 路径/glob、`.gitignore`、临时文件、符号链接不穿透 | 🟢【隐藏目录已滤；符号链接默认穿透**未关**】 |
-| 手动触发 | 手动跑一次（调试/批量改造入口） | 🟡 |
-| 定时/空闲/阈值触发 | cron / on-idle / 累积 N 个 | ⚪（业界几乎无实现） |
+| 维度               | 含义                                              | 取舍                                           |
+| ------------------ | ------------------------------------------------- | ---------------------------------------------- |
+| 初始运行           | watch 启动先全量 scan 建基线                      | 🟢                                             |
+| 事件类型过滤/分流  | create/modify/delete 驱动不同动作                 | 🟢【watch 已分 add/change/unlink，未驱动动作】 |
+| 入口过滤           | 路径/glob、`.gitignore`、临时文件、符号链接不穿透 | 🟢【隐藏目录已滤；符号链接默认穿透**未关**】   |
+| 手动触发           | 手动跑一次（调试/批量改造入口）                   | 🟡                                             |
+| 定时/空闲/阈值触发 | cron / on-idle / 累积 N 个                        | ⚪（业界几乎无实现）                           |
 
 **② 堆积**
 
-| 维度 | 含义 | 取舍 |
-|---|---|---|
-| debounce（时间窗） | 静默 N ms 触发，folds burst | 🟢 |
-| **max-wait 上限** | 持续编辑时强制 flush，**防 debounce 饿死** | 🟢 |
-| settle-time | 等文件大小稳定 | 🟡【chokidar `awaitWriteFinish` 已是单文件版】 |
-| throttle / 固定窗 / 采样 | 其它窗口策略 | ⚪ |
+| 维度                     | 含义                                       | 取舍                                           |
+| ------------------------ | ------------------------------------------ | ---------------------------------------------- |
+| debounce（时间窗）       | 静默 N ms 触发，folds burst                | 🟢                                             |
+| **max-wait 上限**        | 持续编辑时强制 flush，**防 debounce 饿死** | 🟢                                             |
+| settle-time              | 等文件大小稳定                             | 🟡【chokidar `awaitWriteFinish` 已是单文件版】 |
+| throttle / 固定窗 / 采样 | 其它窗口策略                               | ⚪                                             |
 
 **③ 去重（谱系 L0–L5）**
 
-| 层级 | 语义 | 取舍 |
-|---|---|---|
-| L2 路径折叠(LWW) | 窗口内同路径留最新 | 🟢 |
-| **L3 事件类型折叠** | `create+delete→抵消`、`create+update→create` | 🟢 |
-| L4 内容 hash 去重 | 内容没变不触发 | 🟡【`scan --rehash` 已是】 |
-| L5 执行层幂等键 | `path+mtime`/hash 兜底，重启不重复 | ⚪ |
-| L0 无去重 / L1 相邻去重 | — | ✗（不够）/ ⚪ |
+| 层级                    | 语义                                         | 取舍                       |
+| ----------------------- | -------------------------------------------- | -------------------------- |
+| L2 路径折叠(LWW)        | 窗口内同路径留最新                           | 🟢                         |
+| **L3 事件类型折叠**     | `create+delete→抵消`、`create+update→create` | 🟢                         |
+| L4 内容 hash 去重       | 内容没变不触发                               | 🟡【`scan --rehash` 已是】 |
+| L5 执行层幂等键         | `path+mtime`/hash 兜底，重启不重复           | ⚪                         |
+| L0 无去重 / L1 相邻去重 | —                                            | ✗（不够）/ ⚪              |
 
 **④ 路由 / 选择**
 
-| 维度 | 含义 | 取舍 |
-|---|---|---|
+| 维度                  | 含义                                 | 取舍               |
+| --------------------- | ------------------------------------ | ------------------ |
 | **DQL 语义路由(N:M)** | 标签/反链/缺字段/日期条件 → 动作子集 | 🟢（独有优势落点） |
-| 条件分支 | 不同文件类型走不同动作 | 🟡 |
-| 依赖 DAG / 扇出扇入 | 动作图、并行+汇聚 | ⚪（串行够用） |
-| 图选择器（上下游） | 沿 wikilink 引用图传播 | ⚪ |
+| 条件分支              | 不同文件类型走不同动作               | 🟡                 |
+| 依赖 DAG / 扇出扇入   | 动作图、并行+汇聚                    | ⚪（串行够用）     |
+| 图选择器（上下游）    | 沿 wikilink 引用图传播               | ⚪                 |
 
 **⑤ 执行**
 
-| 维度 | 含义 | 取舍 |
-|---|---|---|
-| 有界并发 | `concurrency=N`，防瞬起百进程 | 🟢 |
-| **重启/中断语义** | 新批来时正在跑的：排队/杀重来/忙时丢/不动 | 🟢（默认有界并发+排队合并） |
-| 超时 | 单任务卡死兜底 | 🟢 |
-| 失败策略 | fail-fast vs continue | 🟢【单文件失败跳过=continue 雏形】 |
-| dry-run | 写动作默认预览 | 🟢【meta 已支持】 |
-| 优雅退出 | 跑完当前批再退，防半写损坏 | 🟢 |
-| 背压 | 队列满暂停消费，防 OOM | 🟡 |
-| 缓存/跳过 | 动作输入没变就跳过 | 🟡 |
-| 检查点/续跑 | 崩溃重启不漏 | 🟡【scan 断点续=天然版本】 |
-| 重试退避 | 瞬态失败重试 | ⚪（纯本地意义有限） |
-| 补偿/回滚 | 多步部分失败清理 | ⚪（简化版） |
+| 维度              | 含义                                      | 取舍                               |
+| ----------------- | ----------------------------------------- | ---------------------------------- |
+| 有界并发          | `concurrency=N`，防瞬起百进程             | 🟢                                 |
+| **重启/中断语义** | 新批来时正在跑的：排队/杀重来/忙时丢/不动 | 🟢（默认有界并发+排队合并）        |
+| 超时              | 单任务卡死兜底                            | 🟢                                 |
+| 失败策略          | fail-fast vs continue                     | 🟢【单文件失败跳过=continue 雏形】 |
+| dry-run           | 写动作默认预览                            | 🟢【meta 已支持】                  |
+| 优雅退出          | 跑完当前批再退，防半写损坏                | 🟢                                 |
+| 背压              | 队列满暂停消费，防 OOM                    | 🟡                                 |
+| 缓存/跳过         | 动作输入没变就跳过                        | 🟡                                 |
+| 检查点/续跑       | 崩溃重启不漏                              | 🟡【scan 断点续=天然版本】         |
+| 重试退避          | 瞬态失败重试                              | ⚪（纯本地意义有限）               |
+| 补偿/回滚         | 多步部分失败清理                          | ⚪（简化版）                       |
 
 **后端（执行之后）**
 
-| 维度 | 含义 | 取舍 |
-|---|---|---|
-| 结构化报告 | 改/跳/失败计数 + JSON | 🟢 |
-| 失败告警/钩子 | 桌面通知 / webhook | 🟡 |
-| 配置热重载 | 改管道不重启 | ⚪ |
+| 维度          | 含义                  | 取舍 |
+| ------------- | --------------------- | ---- |
+| 结构化报告    | 改/跳/失败计数 + JSON | 🟢   |
+| 失败告警/钩子 | 桌面通知 / webhook    | 🟡   |
+| 配置热重载    | 改管道不重启          | ⚪   |
 
 **单机一律不做（✗）**：watermark、event-time/processing-time 区分、Kafka log compaction、exactly-once（2PC）、Flink credit 背压、分布式快照、消息总线、Temporal/工作流服务、远程共享缓存、隐式依赖推导。这些是分布式专属，单机用 `Map` / SQLite / `p-limit` / `Promise.race` 即得同等语义。
 
 ## 6. P0 骨架定义（每段的接口 / 语义 / 失败 / 幂等）
 
 ### 6.1 源（Source）
+
 统一产出 `ChangeEvent { path, type: add|change|unlink, mtime?, size? }` 流。
+
 - `watch`：chokidar → 事件流；启动前先跑一次 scan 建基线（初始运行）。
 - `scan`：`computeDiff` 的 added/modified/deleted 投影成同构 `ChangeEvent[]`（一次性有界流）。
 - `手动`：DQL 查询结果或文件列表 → 投影成 `type=change` 的 `ChangeEvent[]`。
 - **失败语义**：源错误降级为 warn 不崩（沿用现有 `onError`）。
 
 ### 6.2 堆积（Accumulate）
+
 - 入参：事件流；出参：`ChangeEvent[]` 批。
 - 语义：trailing-edge debounce `wait` ms；自第一个事件起超过 `maxWait` ms 强制 flush（防饿死）。`scan`/`手动`源是有界批，跳过堆积直接整批下传。
 - 幂等：纯函数式累积，无副作用。
 
 ### 6.3 去重（Dedup）
+
 - 按 `path_key` 归并（L2 LWW：留窗口内最新 mtime 的事件）。
 - 叠加 L3 折叠规则表：
 
-| 窗口内序列 | 折叠结果 |
-|---|---|
-| add → change(×N) | add |
-| change(×N) | change |
-| add → unlink | **抵消（丢弃，不触发动作）** |
-| change → unlink | unlink |
-| unlink → add | change |
+| 窗口内序列       | 折叠结果                     |
+| ---------------- | ---------------------------- |
+| add → change(×N) | add                          |
+| change(×N)       | change                       |
+| add → unlink     | **抵消（丢弃，不触发动作）** |
+| change → unlink  | unlink                       |
+| unlink → add     | change                       |
 
 - 幂等：同一批重复跑结果相同。
 
 ### 6.4 路由（Route）
+
 - 入参：去重批 + 管道声明的 `on`（事件类型）/ `where`（DQL）/ `paths`（glob）。
 - 语义：先用便宜的事件类型/glob 过滤（不查库）；再用 DQL 做语义路由。
 - **一致性纪律（关键）**：DQL 读的是**索引**，而写动作改的是 `.md`。故 watch 流中 `index` 动作必须排在写动作**之前**先把本批变更落库，使后续 DQL 路由看到的是新鲜索引；`手动`源若依赖 DQL，先确保用户已 `scan`（或编排器在选择前自动增量 scan 一次）。**绝不在陈旧索引上路由写动作。**
 - 失败：DQL 语法/字段错 → 该管道拒跑并报错（不静默空选）。
 
 ### 6.5 管道动作（Pipeline action）
+
 每个动作实现统一契约（见 §7）。链内默认**串行**（顺序即依赖）；P0 不引入 DAG。
 
 ### 6.6 执行（Run）
+
 - 有界并发 `concurrency=N`（默认保守，如 4；同步的 better-sqlite3 写动作天然串行，并发主要作用于读盘/解析）。
 - **重启语义 `onBusy`**：`queue`（默认，排队并对同文件合并）/ `restart`（弃旧重跑）/ `ignore`（忙时丢弃新批）。
 - `timeout` 单动作超时（`Promise.race + AbortController`）。
@@ -210,14 +217,14 @@ sha256: 05600dc1ec06ed8a9c1ccfc0fd04c8e911f7d6d3586fb0ba5e02c698145cfc1c
 
 ## 7. 动作清单（内建强类型动词）
 
-| 动作 | 读/写 | 输入 | 幂等 | 失败语义 | 需新鲜索引 |
-|---|---|---|---|---|---|
-| `index` | 写 DB | 单文件/批 | 是（先删后插） | 跳过+warn | — |
-| `normalize` | 写 .md | 单文件 | 是（无变化不落盘） | 拒非法YAML、跳过+warn | 否 |
-| `apply <profile>` | 写 .md | 单文件 | 是（top-up） | 同上 | 否 |
-| `set/unset/rename` | 写 .md | 单文件 | rename 遇冲突需 `--if-exists` 策略 | 跳过+warn | 否 |
-| `parse` | 只读 | 单文件 | 是 | 跳过+warn | — |
-| `shell <cmd>`（逃生口） | 任意 | `{file}` 占位 | 不保证 | 上报 stderr | — |
+| 动作                    | 读/写  | 输入          | 幂等                               | 失败语义              | 需新鲜索引 |
+| ----------------------- | ------ | ------------- | ---------------------------------- | --------------------- | ---------- |
+| `index`                 | 写 DB  | 单文件/批     | 是（先删后插）                     | 跳过+warn             | —          |
+| `normalize`             | 写 .md | 单文件        | 是（无变化不落盘）                 | 拒非法YAML、跳过+warn | 否         |
+| `apply <profile>`       | 写 .md | 单文件        | 是（top-up）                       | 同上                  | 否         |
+| `set/unset/rename`      | 写 .md | 单文件        | rename 遇冲突需 `--if-exists` 策略 | 跳过+warn             | 否         |
+| `parse`                 | 只读   | 单文件        | 是                                 | 跳过+warn             | —          |
+| `shell <cmd>`（逃生口） | 任意   | `{file}` 占位 | 不保证                             | 上报 stderr           | —          |
 
 - **写动作分级**：`index`/`parse` 读侧直接放行；`normalize`/`apply`/`set...` 默认 dry-run + 确认闸。
 - **`rename` 的批量冲突**：现有 `renameMeta` 遇目标键已存在是抛错；批量场景需 `--if-exists skip|overwrite|merge`，否则一个冲突=整批多文件失败。
@@ -231,17 +238,18 @@ sha256: 05600dc1ec06ed8a9c1ccfc0fd04c8e911f7d6d3586fb0ba5e02c698145cfc1c
 
 **管道定义**（归属"管道"；命令行 `--pipe k=v` 可重复 ⟷ 配置段 `pipelines.<name>` 一一对应）：
 
-| `--pipe` key | 值 | 含义 | 配置段 key |
-|---|---|---|---|
-| `use` | name | 从配置 `pipelines.<name>` 加载作基底（**"从配置读取"降为次级参数**，不是独立 flag） | （引用入口） |
-| `actions` | a,b,c | 动作链（必填） | `actions` |
-| `where` | DQL | 按 DQL 选文件（手动源 / 语义筛） | `where` |
-| `paths` | glob | 路径过滤（glob） | `paths` |
-| `on` | add,change | 事件类型过滤 | `on` |
-| `concurrency` | N | 并发上限 | `concurrency` |
-| `debounce` | wait,maxWait | 堆积窗（watch 用） | `debounce` |
+| `--pipe` key  | 值           | 含义                                                                                | 配置段 key    |
+| ------------- | ------------ | ----------------------------------------------------------------------------------- | ------------- |
+| `use`         | name         | 从配置 `pipelines.<name>` 加载作基底（**"从配置读取"降为次级参数**，不是独立 flag） | （引用入口）  |
+| `actions`     | a,b,c        | 动作链（必填）                                                                      | `actions`     |
+| `where`       | DQL          | 按 DQL 选文件（手动源 / 语义筛）                                                    | `where`       |
+| `paths`       | glob         | 路径过滤（glob）                                                                    | `paths`       |
+| `on`          | add,change   | 事件类型过滤                                                                        | `on`          |
+| `concurrency` | N            | 并发上限                                                                            | `concurrency` |
+| `debounce`    | wait,maxWait | 堆积窗（watch 用）                                                                  | `debounce`    |
 
 **运行环境**（顶层 flag，与管道无关）：`--vault` `--db` `--json` `--apply`。
+
 - `--apply` = 运行时落盘闸，覆盖管道 `dryRun` 默认（"这次要不要落盘"是运行时决定，不属管道定义）。
 
 **解析**：收集所有 `--pipe k=v` → 若含 `use=name` 先加载配置基底 → 其余 k=v 覆盖 → 得 `PipelineConfig`。唯一一个 `--pipe` 参数，配置引用（`use`）与内联字段平级；命令行可逐行翻成配置、反之亦然。
@@ -264,13 +272,13 @@ x-basalt watch --pipe use=maintain --apply                                      
 # .x-basalt/config
 pipelines:
   maintain:
-    actions: [index, normalize]              # 必填
+    actions: [index, normalize] # 必填
     where: "contains(file.tags, 'pkm')"
     on: [add, change]
     paths: ["pkm/**"]
     debounce: { wait: 300, maxWait: 3000 }
     concurrency: 4
-    dryRun: true                             # 默认预览；命令行 --apply 覆盖
+    dryRun: true # 默认预览；命令行 --apply 覆盖
 ```
 
 ### 8.3 原生管道（stdin）—— 与 `--pipe` 正交的独立设计
@@ -324,6 +332,7 @@ x-basalt query "LIST FROM #pkm" --json | jq -r '.rows[]["file.path"]' \
 ## 13. 触发条件（何时才值得开工）
 
 满足其一即可立计划（对齐 dogfood "等真实需求"纪律）：
+
 1. dogfood 中反复出现"改完一批笔记后要手动 `scan` + 逐个 `apply/normalize`"的重复劳动 → 先做**手动源 + 只读/dry-run 管道**。
 2. 出现"希望编辑时自动维护索引/元数据"的常驻需求，且能接受"写动作默认 dry-run、显式开写" → 做 **watch 源 + P0 骨架**。
 3. 在此之前：仅存档本评估；TODO 把 `watch pipeline` 与 `migrate` 两项合并重定位为"变更编排器（有评估背书）"。**不写实现代码。**
@@ -334,48 +343,48 @@ x-basalt query "LIST FROM #pkm" --json | jq -r '.rows[]["file.path"]' \
 
 ### 14.1 源算子（source）
 
-| 算子 | 语义 | 现代体系出处 | 引入对 x-basalt 的影响 | 取舍 |
-|---|---|---|---|---|
-| `watch` | chokidar 实时事件流源 | RxJS `fromEvent` / watchexec | 执行层须从 fire-and-forget 升级为有状态消费者 | 🟢【现有 watcher，无下游管线】 |
-| `scan` | FS↔DB diff 快照源（一次性有界） | dbt `state:modified` / turbo `--affected` | 复用 `computeDiff`；天然免疫惊群 | 🟢【现有】 |
-| `select(dql\|files)` | 手动源：DQL 结果或文件列表 | 数据集查询源 | query 引擎从"只读查询出口"扩为"编排源" | 🟢 |
+| 算子                 | 语义                            | 现代体系出处                              | 引入对 x-basalt 的影响                        | 取舍                           |
+| -------------------- | ------------------------------- | ----------------------------------------- | --------------------------------------------- | ------------------------------ |
+| `watch`              | chokidar 实时事件流源           | RxJS `fromEvent` / watchexec              | 执行层须从 fire-and-forget 升级为有状态消费者 | 🟢【现有 watcher，无下游管线】 |
+| `scan`               | FS↔DB diff 快照源（一次性有界） | dbt `state:modified` / turbo `--affected` | 复用 `computeDiff`；天然免疫惊群              | 🟢【现有】                     |
+| `select(dql\|files)` | 手动源：DQL 结果或文件列表      | 数据集查询源                              | query 引擎从"只读查询出口"扩为"编排源"        | 🟢                             |
 
 ### 14.2 堆积算子（accumulate）
 
-| 算子 | 语义 | 现代体系出处 | 引入对 x-basalt 的影响 | 取舍 |
-|---|---|---|---|---|
-| `debounce(wait, maxWait)` | 防抖 + 强制 flush 上限 | RxJS `debounceTime`（无 maxWait）/ Lodash `debounce({maxWait})` / watchman settle | 堆积层须维护双计时器；决定触发延迟与"饿死"防护 | 🟢 |
-| `settle(ms)` | 文件稳定窗（等大小稳定） | watchman `settle` / chokidar `awaitWriteFinish` | 把单文件稳定窗提升为批级 | 🟡【现有单文件版】 |
+| 算子                      | 语义                     | 现代体系出处                                                                      | 引入对 x-basalt 的影响                         | 取舍               |
+| ------------------------- | ------------------------ | --------------------------------------------------------------------------------- | ---------------------------------------------- | ------------------ |
+| `debounce(wait, maxWait)` | 防抖 + 强制 flush 上限   | RxJS `debounceTime`（无 maxWait）/ Lodash `debounce({maxWait})` / watchman settle | 堆积层须维护双计时器；决定触发延迟与"饿死"防护 | 🟢                 |
+| `settle(ms)`              | 文件稳定窗（等大小稳定） | watchman `settle` / chokidar `awaitWriteFinish`                                   | 把单文件稳定窗提升为批级                       | 🟡【现有单文件版】 |
 
 ### 14.3 去重算子（dedup）
 
-| 算子 | 语义 | 现代体系出处 | 引入对 x-basalt 的影响 | 取舍 |
-|---|---|---|---|---|
-| `coalesce(byPath)` | 路径折叠 LWW（L2） | Kafka log compaction（单机简化）/ RxJS `groupBy`+`scan` | 去重层须维护 `path→event` 状态 Map | 🟢 |
-| `foldEvents` | 事件类型折叠（L3，`add+unlink→抵消`） | @parcel/watcher C++ 折叠规则 | 纯逻辑规则表；消除临时文件白触发 | 🟢 |
-| `distinctByHash` | 内容 hash 去重（L4） | RxJS `distinctUntilChanged(byHash)` | 复用 `--rehash`/`sha256-body` | 🟡【现有 rehash】 |
-| `idempotencyKey` | `path+mtime`/hash 兜底（L5） | Temporal idempotency key | SQLite UNIQUE 兜底，重启不重复执行 | ⚪ |
+| 算子               | 语义                                  | 现代体系出处                                            | 引入对 x-basalt 的影响             | 取舍              |
+| ------------------ | ------------------------------------- | ------------------------------------------------------- | ---------------------------------- | ----------------- |
+| `coalesce(byPath)` | 路径折叠 LWW（L2）                    | Kafka log compaction（单机简化）/ RxJS `groupBy`+`scan` | 去重层须维护 `path→event` 状态 Map | 🟢                |
+| `foldEvents`       | 事件类型折叠（L3，`add+unlink→抵消`） | @parcel/watcher C++ 折叠规则                            | 纯逻辑规则表；消除临时文件白触发   | 🟢                |
+| `distinctByHash`   | 内容 hash 去重（L4）                  | RxJS `distinctUntilChanged(byHash)`                     | 复用 `--rehash`/`sha256-body`      | 🟡【现有 rehash】 |
+| `idempotencyKey`   | `path+mtime`/hash 兜底（L5）          | Temporal idempotency key                                | SQLite UNIQUE 兜底，重启不重复执行 | ⚪                |
 
 ### 14.4 路由算子（route）
 
-| 算子 | 语义 | 现代体系出处 | 引入对 x-basalt 的影响 | 取舍 |
-|---|---|---|---|---|
-| `match(types)` / `glob(pat)` | 事件类型 / 路径过滤 | RxJS `filter` | 便宜过滤先行（不查库） | 🟢【隐藏目录已滤】 |
-| `where(dql)` | 语义谓词选择（N:M） | dbt selector / Obsidian Bases filter | **DQL 复用为路由谓词**，使"索引新鲜度"成为编排不变量（§6.4） | 🟢 |
-| `branch(cond → actions)` | 条件分支（不同文件走不同动作） | Airflow BranchOperator | 管道从线性变有条件 | 🟡 |
+| 算子                         | 语义                           | 现代体系出处                         | 引入对 x-basalt 的影响                                       | 取舍               |
+| ---------------------------- | ------------------------------ | ------------------------------------ | ------------------------------------------------------------ | ------------------ |
+| `match(types)` / `glob(pat)` | 事件类型 / 路径过滤            | RxJS `filter`                        | 便宜过滤先行（不查库）                                       | 🟢【隐藏目录已滤】 |
+| `where(dql)`                 | 语义谓词选择（N:M）            | dbt selector / Obsidian Bases filter | **DQL 复用为路由谓词**，使"索引新鲜度"成为编排不变量（§6.4） | 🟢                 |
+| `branch(cond → actions)`     | 条件分支（不同文件走不同动作） | Airflow BranchOperator               | 管道从线性变有条件                                           | 🟡                 |
 
 ### 14.5 执行算子（run）
 
-| 算子 | 语义 | 现代体系出处 | 引入对 x-basalt 的影响 | 取舍 |
-|---|---|---|---|---|
-| `pipe(...actions)` | 串行动作链（顺序即依赖） | RxJS `pipe` / gulp `series` | 管道基本组合子 | 🟢 |
-| `limit(N)` | 有界并发 | RxJS `mergeMap(_, N)` / p-limit / Airflow pool | 防瞬起百进程；同步 SQLite 写天然串行 | 🟢 |
-| `onBusy(queue\|restart\|ignore)` | 重启/中断语义 | RxJS `concatMap` / `switchMap` / `exhaustMap` | **最关键算子**：执行层升为任务状态机 | 🟢 |
-| `timeout(ms)` | 单动作超时 | RxJS `timeout` / `Promise.race`+`AbortController` | 防卡死兜底 | 🟢 |
-| `onError(continue\|stop)` | 失败策略 | RxJS `catchError` / turbo `--continue` | 复用"单文件失败跳过+warn"雏形 | 🟢 |
-| `dryRun` | 写动作预览（安全闸） | x-basalt 独有强约束 | 写动作默认开；§9 命门防护 | 🟢【meta 已支持】 |
-| `parallel(...actions)` | 并行动作（DAG 雏形） | gulp `parallel` / `Promise.all` | 引入动作图 | ⚪ |
-| `retry(n, backoff)` | 重试退避 | RxJS `retry` / Temporal RetryPolicy | 对外部调用有意义，纯本地小 | ⚪ |
+| 算子                             | 语义                     | 现代体系出处                                      | 引入对 x-basalt 的影响               | 取舍              |
+| -------------------------------- | ------------------------ | ------------------------------------------------- | ------------------------------------ | ----------------- |
+| `pipe(...actions)`               | 串行动作链（顺序即依赖） | RxJS `pipe` / gulp `series`                       | 管道基本组合子                       | 🟢                |
+| `limit(N)`                       | 有界并发                 | RxJS `mergeMap(_, N)` / p-limit / Airflow pool    | 防瞬起百进程；同步 SQLite 写天然串行 | 🟢                |
+| `onBusy(queue\|restart\|ignore)` | 重启/中断语义            | RxJS `concatMap` / `switchMap` / `exhaustMap`     | **最关键算子**：执行层升为任务状态机 | 🟢                |
+| `timeout(ms)`                    | 单动作超时               | RxJS `timeout` / `Promise.race`+`AbortController` | 防卡死兜底                           | 🟢                |
+| `onError(continue\|stop)`        | 失败策略                 | RxJS `catchError` / turbo `--continue`            | 复用"单文件失败跳过+warn"雏形        | 🟢                |
+| `dryRun`                         | 写动作预览（安全闸）     | x-basalt 独有强约束                               | 写动作默认开；§9 命门防护            | 🟢【meta 已支持】 |
+| `parallel(...actions)`           | 并行动作（DAG 雏形）     | gulp `parallel` / `Promise.all`                   | 引入动作图                           | ⚪                |
+| `retry(n, backoff)`              | 重试退避                 | RxJS `retry` / Temporal RetryPolicy               | 对外部调用有意义，纯本地小           | ⚪                |
 
 ### 14.6 动作算子（action，被编排的内建动词）
 

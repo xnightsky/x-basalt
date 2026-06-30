@@ -1,3 +1,15 @@
+---
+timestamp: 2026-06-30T00:01:23Z
+sha256: 258eb0b681505af72fdb6a8a2fc9f8b8e07044c7acfa0be5357d185062ff77ba
+type: plan
+title: 阶段 2 下钻：DQL 内核做深 · 原子子步
+description: DQL 内核扩展与做深的原子实现子步与验收
+tags:
+  - plan
+  - dql
+  - query
+  - x-basalt
+---
 # 阶段 2 下钻：DQL 内核做深 · 原子子步（x-basalt 代表作核心）
 
 > 日期：2026-06-26 · 父计划：[`2026-06-26-execution-roadmap.md`](2026-06-26-execution-roadmap.md) 阶段 2

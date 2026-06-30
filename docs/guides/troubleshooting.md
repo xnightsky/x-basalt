@@ -1,3 +1,14 @@
+---
+timestamp: 2026-06-30T00:01:23Z
+sha256: 476f084bcd5268a3b282de251c6c8f0a5ea5cdc810c5e1ce3e6b7a62adb6c60d
+type: guide
+title: 故障排查与已知限制 · x-basalt
+description: 常见错误、环境限制与排查步骤
+tags:
+  - guide
+  - troubleshooting
+  - x-basalt
+---
 # 故障排查与已知限制 · x-basalt
 
 > 本章列出常见报错的定位方法，以及设计层面的已知近似与边界。  
@@ -18,39 +29,39 @@
 
 ### 1.1 运行时错误
 
-| 现象（错误输出） | 原因 | 处理 |
-|---|---|---|
-| `✗ unable to open database file` | `--db` 指向的 SQLite 文件不存在；`query`/`scan` 不会自动建空库（`fileMustExist` 保护） | 先跑 `index <vault> --db <path>` 建库；之后 `query`/`scan` 才能打开 |
-| `✗ 不支持的查询字段: file.day` | 引用了子集以外的隐式字段（`file.day`/`cday`/`mday`/`link`/`etags`/`aliases` 等） | 查阅 [DQL 查询 · 隐式字段映射](querying-dql.md)，换用受支持字段；字段如确需要请提 Issue |
-| `✗ DQL 语法错误 (位置 N): <原因>` | DQL 语句不符合子集文法；`位置 N` 为字符偏移（从 0 计） | 从位置 N 向前检查：多余括号、缺失引号、关键字拼错、使用了不支持的从句（如 `TASK`/`CALENDAR`/多字段 `SORT`）；详见 [DQL 查询 · 文法](querying-dql.md) |
+| 现象（错误输出）                              | 原因                                                                                   | 处理                                                                                                                                                      |
+| --------------------------------------------- | -------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `✗ unable to open database file`              | `--db` 指向的 SQLite 文件不存在；`query`/`scan` 不会自动建空库（`fileMustExist` 保护） | 先跑 `index <vault> --db <path>` 建库；之后 `query`/`scan` 才能打开                                                                                       |
+| `✗ 不支持的查询字段: file.day`                | 引用了子集以外的隐式字段（`file.day`/`cday`/`mday`/`link`/`etags`/`aliases` 等）       | 查阅 [DQL 查询 · 隐式字段映射](querying-dql.md)，换用受支持字段；字段如确需要请提 Issue                                                                   |
+| `✗ DQL 语法错误 (位置 N): <原因>`             | DQL 语句不符合子集文法；`位置 N` 为字符偏移（从 0 计）                                 | 从位置 N 向前检查：多余括号、缺失引号、关键字拼错、使用了不支持的从句（如 `TASK`/`CALENDAR`/多字段 `SORT`）；详见 [DQL 查询 · 文法](querying-dql.md)      |
 | `✗ 需要 <vault> 参数或在配置文件中设置 vault` | `index`/`watch`/`scan` 没传 vault 位置参数，且配置文件与 `X_BASALT_DIR` 均未设 `vault` | 任选一：① 命令行直接传 `<vault>`；② 配置文件写 `vault: ./my-vault`；③ 设环境变量 `X_BASALT_DIR` 指向 `.x-basalt/` 所在目录；详见 [配置](configuration.md) |
-| `✗ 未召回到与 "…" 相关的 skill` | 关键字未命中任何 skill 的 `name` 或 `triggers` | 换用更宽泛的词（如 `wikilink`→`link`、`dataview`→`dql`）；`x-basalt skills list` 查看全部可用 skill |
-| `✗ on-change 失败：<原因>` | `watch` 的 `--on-change` 命令本身报错 | 单独在 Shell 里跑该命令排查；确认 `{file}` 占位符拼写正确 |
+| `✗ 未召回到与 "…" 相关的 skill`               | 关键字未命中任何 skill 的 `name` 或 `triggers`                                         | 换用更宽泛的词（如 `wikilink`→`link`、`dataview`→`dql`）；`x-basalt skills list` 查看全部可用 skill                                                       |
+| `✗ on-change 失败：<原因>`                    | `watch` 的 `--on-change` 命令本身报错                                                  | 单独在 Shell 里跑该命令排查；确认 `{file}` 占位符拼写正确                                                                                                 |
 
 ### 1.2 安装与全局命令
 
-| 现象 | 原因 | 处理 |
-|---|---|---|
-| `pnpm install` 卡住或报 better-sqlite3 构建失败 | pnpm v10 默认拦截所有原生模块的构建脚本（安全策略） | 本仓库已在 `package.json` 的 `pnpm.onlyBuiltDependencies` 中放行 `better-sqlite3`，**务必用 `pnpm install`**（不要用 `npm install` 或 `yarn`，会绕过放行配置导致重复问题） |
-| 终端找不到 `x-basalt` 全局命令 | 未挂载到全局 PATH，或使用了不建 shim 的链接方式 | 在仓库根运行 **`npm link`**（不要用 `pnpm link --global`，pnpm v10 对 bin-only 包不生成 shim）；链接后 `x-basalt --version` 验证 |
-| 改了源码后全局 `x-basalt` 仍跑旧版本 | 全局命令执行的是 `dist/cli.js`（`package.json bin` 指向 `dist/`），TypeScript 源码修改不会自动生效 | 每次改完源码后跑 **`pnpm build`**，再调用全局命令；开发调试建议改用 `pnpm cli -- <args>` 直接跑 TS 源，免去构建步骤 |
-| `Error: The module … was compiled against a different Node.js version` | better-sqlite3 预编译二进制与当前 Node.js 版本不匹配 | 确认 Node.js ≥ 22（`node -v`）；切换版本后重跑 `pnpm install` 让 better-sqlite3 重新编译 |
+| 现象                                                                   | 原因                                                                                               | 处理                                                                                                                                                                       |
+| ---------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `pnpm install` 卡住或报 better-sqlite3 构建失败                        | pnpm v10 默认拦截所有原生模块的构建脚本（安全策略）                                                | 本仓库已在 `package.json` 的 `pnpm.onlyBuiltDependencies` 中放行 `better-sqlite3`，**务必用 `pnpm install`**（不要用 `npm install` 或 `yarn`，会绕过放行配置导致重复问题） |
+| 终端找不到 `x-basalt` 全局命令                                         | 未挂载到全局 PATH，或使用了不建 shim 的链接方式                                                    | 在仓库根运行 **`npm link`**（不要用 `pnpm link --global`，pnpm v10 对 bin-only 包不生成 shim）；链接后 `x-basalt --version` 验证                                           |
+| 改了源码后全局 `x-basalt` 仍跑旧版本                                   | 全局命令执行的是 `dist/cli.js`（`package.json bin` 指向 `dist/`），TypeScript 源码修改不会自动生效 | 每次改完源码后跑 **`pnpm build`**，再调用全局命令；开发调试建议改用 `pnpm cli -- <args>` 直接跑 TS 源，免去构建步骤                                                        |
+| `Error: The module … was compiled against a different Node.js version` | better-sqlite3 预编译二进制与当前 Node.js 版本不匹配                                               | 确认 Node.js ≥ 22（`node -v`）；切换版本后重跑 `pnpm install` 让 better-sqlite3 重新编译                                                                                   |
 
 ### 1.3 Shell 引号与特殊字符
 
-| 现象 | 原因 | 处理 |
-|---|---|---|
+| 现象                                                      | 原因                                                                                         | 处理                                                                                                     |
+| --------------------------------------------------------- | -------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------- |
 | PowerShell 下 `FROM "Projects"` 报意外字符 `\` 或参数截断 | PowerShell 对双引号内的 `\"` 转义不稳定，且会将外层双引号剥离，导致 DQL 里的 `"folder"` 变形 | **用单引号包整条 DQL，内部保留普通双引号**：`x-basalt query 'TABLE status FROM "Projects"'`；不要写 `\"` |
-| Bash/zsh 下 `#tag` 被 Shell 注释掉 | Shell 将 `#` 识别为注释起点 | 同样用单引号包整条 DQL：`'LIST FROM #project'` |
+| Bash/zsh 下 `#tag` 被 Shell 注释掉                        | Shell 将 `#` 识别为注释起点                                                                  | 同样用单引号包整条 DQL：`'LIST FROM #project'`                                                           |
 
 ### 1.4 `watch` / `scan` 不生效
 
-| 现象 | 原因 | 处理 |
-|---|---|---|
-| `watch` 文件改动后索引不更新 | 修改的文件不满足监听条件：非 `.md`、位于 `.obsidian/` 或以 `.` 开头的隐藏目录 | 确认文件扩展名为 `.md`、路径不含 `.obsidian/` 或其他隐藏前缀目录 |
-| 保存后立刻查询但结果还是旧的 | chokidar 有约 100 ms 的稳定窗口（debounce），保存到索引写完有短暂延迟 | 等待约 100–200 ms 再查；持续写入时可能延后更长 |
-| 没有常驻进程但希望定期更新索引 | `watch` 需要常驻前台；无进程管理器时不适合 | 改用 `scan` 命令按需触发（支持 `--rehash` 精确对比、`--dry-run` 预览）；详见 [索引与同步](indexing-and-sync.md) |
-| `scan` 漏报已改动的文件 | 默认以 `mtime + size` 判断变化，时间戳精度不足或文件大小未变时可能误判未变 | 加 `--rehash` 按内容哈希对比（较慢但准确）；详见 [索引与同步](indexing-and-sync.md) |
+| 现象                           | 原因                                                                          | 处理                                                                                                            |
+| ------------------------------ | ----------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------- |
+| `watch` 文件改动后索引不更新   | 修改的文件不满足监听条件：非 `.md`、位于 `.obsidian/` 或以 `.` 开头的隐藏目录 | 确认文件扩展名为 `.md`、路径不含 `.obsidian/` 或其他隐藏前缀目录                                                |
+| 保存后立刻查询但结果还是旧的   | chokidar 有约 100 ms 的稳定窗口（debounce），保存到索引写完有短暂延迟         | 等待约 100–200 ms 再查；持续写入时可能延后更长                                                                  |
+| 没有常驻进程但希望定期更新索引 | `watch` 需要常驻前台；无进程管理器时不适合                                    | 改用 `scan` 命令按需触发（支持 `--rehash` 精确对比、`--dry-run` 预览）；详见 [索引与同步](indexing-and-sync.md) |
+| `scan` 漏报已改动的文件        | 默认以 `mtime + size` 判断变化，时间戳精度不足或文件大小未变时可能误判未变    | 加 `--rehash` 按内容哈希对比（较慢但准确）；详见 [索引与同步](indexing-and-sync.md)                             |
 
 ---
 
@@ -58,15 +69,15 @@
 
 下表列出当前版本设计上的已知边界，均属**有意近似**（而非 bug），每项注明绕过方法。
 
-| 限制项 | 说明 | 绕过 / 建议 |
-|---|---|---|
-| **frontmatter 日期精确等值** | `YYYY-MM-DD` 字符串被 gray-matter / YAML 解析为 JavaScript `Date`，以 ISO 8601 字符串（`2025-01-01T00:00:00.000Z`）存入 SQLite。`= '2025-01-01'` 精确等值**不命中** | 改用范围比较：`due >= '2025-01-01' AND due < '2025-01-02'`；或用前缀函数：`startswith(due, '2025-01-01')`；或用 `date(today)` 等 SQLite 日期函数（见 [DQL 查询](querying-dql.md)） |
-| **代码块内 wikilink / task 仍被提取** | 围栏代码块（```` ``` ````/`~~~`）与行内代码内的 `#tag`、`==高亮==` 已正确剔除（不误识）；但代码块内的 `[[wikilink]]` 与 `- [ ] task` 暂仍按普通正文提取 | 代码示例中含 wikilink/task 语法时，结果集可能包含「代码里的假链接」；暂无绕过，纳入已知近似跟踪 |
-| **bare 链接的同名歧义** | `[[Note]]` 按 basename（大小写不敏感）全匹配——若 Vault 内有多个同名文件（`Dir1/Note.md`、`Dir2/Note.md`），`FROM [[Note]]` 会将**所有**指向任意同名文件的反向链接都列入，结果可能超出预期 | 改用 qualified 路径 `[[Dir/Note]]`（含 `/`，走 `target_path_key` 精确匹配）；详见 [索引与同步 · 链接解析](indexing-and-sync.md) |
-| **`file.tasks` 仅显示，不可过滤** | `TABLE file.tasks` 可展示任务数组（`{status, text, due}`），但不支持 `WHERE file.tasks.status = 'x'` 等按 task 子字段过滤，属设计非目标 | 用 DQL 之外的脚本层处理（取结果后在 Node/jq 里二次过滤）；详见 [DQL 查询 · 非目标](querying-dql.md) |
-| **`--format yaml` 极简序列化** | `parse --format yaml` 的 YAML 输出仅供人读展示；frontmatter 日期以 ISO 串输出，非标准 YAML `!!timestamp`；不应用于机器解析 | 机器消费请用 `--format json`（默认） |
-| **`scan` mtime+size 的漏判窗口** | 默认变更检测依赖 `mtime + size`：若文件内容改变但大小与时间戳碰巧相同（如原地覆写），会误判为未变 | 高精度场景加 `--rehash` 按内容哈希对比；详见 [索引与同步](indexing-and-sync.md) |
-| **多字段 SORT、FROM 布尔组合** | `SORT field1, field2`、`FROM #a AND "Folder"` 等超出子集文法范围，执行时报 `✗ DQL 语法错误` | 在结果层（JSON 输出 + jq/脚本）做二次排序与过滤；子集扩展计划见 Roadmap |
+| 限制项                                | 说明                                                                                                                                                                                      | 绕过 / 建议                                                                                                                                                                        |
+| ------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **frontmatter 日期精确等值**          | `YYYY-MM-DD` 字符串被 gray-matter / YAML 解析为 JavaScript `Date`，以 ISO 8601 字符串（`2025-01-01T00:00:00.000Z`）存入 SQLite。`= '2025-01-01'` 精确等值**不命中**                       | 改用范围比较：`due >= '2025-01-01' AND due < '2025-01-02'`；或用前缀函数：`startswith(due, '2025-01-01')`；或用 `date(today)` 等 SQLite 日期函数（见 [DQL 查询](querying-dql.md)） |
+| **代码块内 wikilink / task 仍被提取** | 围栏代码块（` ``` `/`~~~`）与行内代码内的 `#tag`、`==高亮==` 已正确剔除（不误识）；但代码块内的 `[[wikilink]]` 与 `- [ ] task` 暂仍按普通正文提取                                         | 代码示例中含 wikilink/task 语法时，结果集可能包含「代码里的假链接」；暂无绕过，纳入已知近似跟踪                                                                                    |
+| **bare 链接的同名歧义**               | `[[Note]]` 按 basename（大小写不敏感）全匹配——若 Vault 内有多个同名文件（`Dir1/Note.md`、`Dir2/Note.md`），`FROM [[Note]]` 会将**所有**指向任意同名文件的反向链接都列入，结果可能超出预期 | 改用 qualified 路径 `[[Dir/Note]]`（含 `/`，走 `target_path_key` 精确匹配）；详见 [索引与同步 · 链接解析](indexing-and-sync.md)                                                    |
+| **`file.tasks` 仅显示，不可过滤**     | `TABLE file.tasks` 可展示任务数组（`{status, text, due}`），但不支持 `WHERE file.tasks.status = 'x'` 等按 task 子字段过滤，属设计非目标                                                   | 用 DQL 之外的脚本层处理（取结果后在 Node/jq 里二次过滤）；详见 [DQL 查询 · 非目标](querying-dql.md)                                                                                |
+| **`--format yaml` 极简序列化**        | `parse --format yaml` 的 YAML 输出仅供人读展示；frontmatter 日期以 ISO 串输出，非标准 YAML `!!timestamp`；不应用于机器解析                                                                | 机器消费请用 `--format json`（默认）                                                                                                                                               |
+| **`scan` mtime+size 的漏判窗口**      | 默认变更检测依赖 `mtime + size`：若文件内容改变但大小与时间戳碰巧相同（如原地覆写），会误判为未变                                                                                         | 高精度场景加 `--rehash` 按内容哈希对比；详见 [索引与同步](indexing-and-sync.md)                                                                                                    |
+| **多字段 SORT、FROM 布尔组合**        | `SORT field1, field2`、`FROM #a AND "Folder"` 等超出子集文法范围，执行时报 `✗ DQL 语法错误`                                                                                               | 在结果层（JSON 输出 + jq/脚本）做二次排序与过滤；子集扩展计划见 Roadmap                                                                                                            |
 
 ---
 

@@ -1,3 +1,15 @@
+---
+timestamp: 2026-06-30T00:01:23Z
+sha256: 3642d5c92699172d7a364c398da27e4fb0a64d72cd11c1965b1a4d08639313fa
+type: guide
+title: 解析层覆盖的 Obsidian 语法
+description: parser 层支持的 wikilink/tag/callout/task 等 Obsidian 专有语法边界
+tags:
+  - guide
+  - parser
+  - obsidian
+  - x-basalt
+---
 # 解析层覆盖的 Obsidian 语法
 
 > 章节归属：[使用指南索引 →](usage.md) · 同级章节：[installation.md](installation.md) · [commands.md](commands.md) · [querying-dql.md](querying-dql.md) · [indexing-and-sync.md](indexing-and-sync.md) · [configuration.md](configuration.md) · [ai-and-skills.md](ai-and-skills.md) · [troubleshooting.md](troubleshooting.md)
@@ -37,14 +49,14 @@ parseFrontmatter  →  extractWikilinks  →  maskCode（代码区掩码）
 
 ### 完整列表
 
-| 节点 | 触发语法 | 字段 |
-|---|---|---|
-| `wikilink` | `[[Note]]` / `[[Note\|Alias]]` / `[[F/Note]]` / `[[Note#Heading]]` / `[[Note#^block-id]]`，前缀 `!` 为 embed | `target, alias?, heading?, blockId?, embed` |
-| `tag` | 行内 `#tag` / 嵌套 `#a/b/c` | `value`（不带 `#`） |
-| `callout` | `> [!type] Title` + 后续 `>` 行，`+`/`-` 折叠标记 | `calloutType, title, foldable, content` |
-| `task` | `- [x] text` / `- [ ] text` / `- [-] text` / `- [?] text`（任意单字符状态） | `status, text, line` |
-| `highlight` | `==text==` | `content` |
-| `blockRef` | 行尾 `^block-id` 定义 | `id, line` |
+| 节点        | 触发语法                                                                                                     | 字段                                        |
+| ----------- | ------------------------------------------------------------------------------------------------------------ | ------------------------------------------- |
+| `wikilink`  | `[[Note]]` / `[[Note\|Alias]]` / `[[F/Note]]` / `[[Note#Heading]]` / `[[Note#^block-id]]`，前缀 `!` 为 embed | `target, alias?, heading?, blockId?, embed` |
+| `tag`       | 行内 `#tag` / 嵌套 `#a/b/c`                                                                                  | `value`（不带 `#`）                         |
+| `callout`   | `> [!type] Title` + 后续 `>` 行，`+`/`-` 折叠标记                                                            | `calloutType, title, foldable, content`     |
+| `task`      | `- [x] text` / `- [ ] text` / `- [-] text` / `- [?] text`（任意单字符状态）                                  | `status, text, line`                        |
+| `highlight` | `==text==`                                                                                                   | `content`                                   |
+| `blockRef`  | 行尾 `^block-id` 定义                                                                                        | `id, line`                                  |
 
 `task`/`blockRef` 的 `line` 是**1-based 正文行号**（已剥离 frontmatter 后的正文），indexer 据此回填数据库的 `line_number` 列。
 
@@ -54,15 +66,15 @@ parseFrontmatter  →  extractWikilinks  →  maskCode（代码区掩码）
 
 **支持形态**：
 
-| 写法 | 说明 |
-|---|---|
-| `[[Note]]` | 普通笔记链接 |
-| `[[Note\|Alias]]` | 带别名 |
-| `[[Folder/Note]]` | 带路径前缀 |
-| `[[Note#Heading]]` | 锚点 heading |
-| `[[Note#^block-id]]` | 锚点 block 引用 |
-| `[[Folder/Note#Heading\|Alias]]` | 组合形式 |
-| `![[...]]` | embed（嵌入，资源 vs 笔记由 `utils/path.isAssetEmbed` 区分） |
+| 写法                             | 说明                                                         |
+| -------------------------------- | ------------------------------------------------------------ |
+| `[[Note]]`                       | 普通笔记链接                                                 |
+| `[[Note\|Alias]]`                | 带别名                                                       |
+| `[[Folder/Note]]`                | 带路径前缀                                                   |
+| `[[Note#Heading]]`               | 锚点 heading                                                 |
+| `[[Note#^block-id]]`             | 锚点 block 引用                                              |
+| `[[Folder/Note#Heading\|Alias]]` | 组合形式                                                     |
+| `![[...]]`                       | embed（嵌入，资源 vs 笔记由 `utils/path.isAssetEmbed` 区分） |
 
 **解析顺序**：`target` → （`#heading` 或 `#^blockId`）→ `|alias`。`#^` **优先识别为 blockId**，单 `#` 为 heading。
 
@@ -84,13 +96,13 @@ x-basalt parse note.md --format json
 
 **识别规则**（对标 Obsidian 官方行为）：
 
-| 情形 | 是否识别为 tag |
-|---|---|
-| `#moc` · `#project/alpha` | ✓ |
-| 标签：`#moc`（CJK 标点后） | ✓ |
-| `word#x` · `123#x` · `Concepts#heading` | ✗（`#` 前为 word 字符） |
-| `#123`（纯数字） | ✗（须含至少一个字母或下划线） |
-| 行内代码 / 围栏代码块内的 `#` | ✗（代码区掩码已剔除） |
+| 情形                                    | 是否识别为 tag                |
+| --------------------------------------- | ----------------------------- |
+| `#moc` · `#project/alpha`               | ✓                             |
+| 标签：`#moc`（CJK 标点后）              | ✓                             |
+| `word#x` · `123#x` · `Concepts#heading` | ✗（`#` 前为 word 字符）       |
+| `#123`（纯数字）                        | ✗（须含至少一个字母或下划线） |
+| 行内代码 / 围栏代码块内的 `#`           | ✗（代码区掩码已剔除）         |
 
 精确规则：`#` 前**不能是**字母、数字、下划线（Unicode `\p{L}\p{N}_`），由此排除 wikilink 锚点（`[[Note#heading]]`）被误当标签，同时允许 CJK 标点后紧接的标签。
 
@@ -112,12 +124,12 @@ x-basalt parse note.md --format json
 > 内容
 ```
 
-| 字段 | 说明 |
-|---|---|
-| `calloutType` | `[!type]` 内容，**归一化为小写**（`INFO` → `info`） |
-| `title` | `[!type]` 后的标题文本（可为空） |
-| `foldable` | `+` 或 `-` 折叠标记存在时为 `true`，无标记为 `false` |
-| `content` | 后续连续 `>` 行聚合，去掉前缀 `> ` |
+| 字段          | 说明                                                 |
+| ------------- | ---------------------------------------------------- |
+| `calloutType` | `[!type]` 内容，**归一化为小写**（`INFO` → `info`）  |
+| `title`       | `[!type]` 后的标题文本（可为空）                     |
+| `foldable`    | `+` 或 `-` 折叠标记存在时为 `true`，无标记为 `false` |
+| `content`     | 后续连续 `>` 行聚合，去掉前缀 `> `                   |
 
 ---
 
@@ -171,6 +183,7 @@ title: 我的笔记
 tags: [project, active]
 status: in-progress
 ---
+
 正文从这里开始
 ```
 
@@ -178,12 +191,12 @@ status: in-progress
 
 ## 已知近似（简表）
 
-| 近似项 | 当前行为 | 影响 |
-|---|---|---|
-| 代码块内的 `[[wikilink]]` | 仍按正文提取，不剔除 | 代码示例中的链接会进 links 表 |
-| 代码块内的 `- [ ] task` | 仍按正文提取，不剔除 | 代码块内任务会进 tasks 表 |
-| 同名 basename 链接歧义 | 取索引中首个匹配（近似） | 多文件同名时可能指向错误文件；路径感知解析详见 [indexing-and-sync.md](indexing-and-sync.md) |
-| 大小写 | 链接 / 标签匹配默认大小写不敏感 | 与 Obsidian 官方行为一致 |
+| 近似项                    | 当前行为                        | 影响                                                                                        |
+| ------------------------- | ------------------------------- | ------------------------------------------------------------------------------------------- |
+| 代码块内的 `[[wikilink]]` | 仍按正文提取，不剔除            | 代码示例中的链接会进 links 表                                                               |
+| 代码块内的 `- [ ] task`   | 仍按正文提取，不剔除            | 代码块内任务会进 tasks 表                                                                   |
+| 同名 basename 链接歧义    | 取索引中首个匹配（近似）        | 多文件同名时可能指向错误文件；路径感知解析详见 [indexing-and-sync.md](indexing-and-sync.md) |
+| 大小写                    | 链接 / 标签匹配默认大小写不敏感 | 与 Obsidian 官方行为一致                                                                    |
 
 ---
 

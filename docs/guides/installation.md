@@ -1,3 +1,14 @@
+---
+timestamp: 2026-06-30T00:01:23Z
+sha256: e7ce76770201c552195e5c24113771fe7324b06cb3490d9f6683742252d337ab
+type: guide
+title: 安装与运行 · x-basalt
+description: Node/pnpm 安装、编译、全局 link 与开发态 cli 运行
+tags:
+  - guide
+  - install
+  - x-basalt
+---
 # 安装与运行 · x-basalt
 
 > 本页覆盖：环境要求 → 从源码构建 → 三种运行方式 → `npm link` 全局安装 → 验证。
@@ -7,9 +18,9 @@
 
 ## 环境要求
 
-| 项目 | 要求 |
-|---|---|
-| Node.js | **≥ 22**（开发用 24.x；`package.json` `engines` 字段强制声明） |
+| 项目     | 要求                                                             |
+| -------- | ---------------------------------------------------------------- |
+| Node.js  | **≥ 22**（开发用 24.x；`package.json` `engines` 字段强制声明）   |
 | 包管理器 | **pnpm**（项目锁版本 `pnpm@10.33.0`，`packageManager` 字段声明） |
 
 检查版本：
@@ -33,20 +44,20 @@ pnpm install
 pnpm run build
 ```
 
-| 步骤 | 说明 |
-|---|---|
-| `pnpm install` | 安装所有依赖，同时本地编译 `better-sqlite3`（C++ 原生模块）。已在 `package.json` 的 `pnpm.onlyBuiltDependencies` 放行——pnpm v10 默认拦截原生构建脚本，不放行会报错无法装上。 |
-| `pnpm run build` | 调用 `tsc`，将 `src/` 编译输出到 `dist/`；产出 `dist/cli.js`（顶部含 `#!/usr/bin/env node` shebang，可直接执行）。 |
+| 步骤             | 说明                                                                                                                                                                         |
+| ---------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `pnpm install`   | 安装所有依赖，同时本地编译 `better-sqlite3`（C++ 原生模块）。已在 `package.json` 的 `pnpm.onlyBuiltDependencies` 放行——pnpm v10 默认拦截原生构建脚本，不放行会报错无法装上。 |
+| `pnpm run build` | 调用 `tsc`，将 `src/` 编译输出到 `dist/`；产出 `dist/cli.js`（顶部含 `#!/usr/bin/env node` shebang，可直接执行）。                                                           |
 
 ---
 
 ## 三种运行方式
 
-| 方式 | 命令形式 | 前提 |
-|---|---|---|
-| **A 全局命令** | `x-basalt <command>` | 先用 `npm link` 全局安装（见下节） |
-| **B 直接跑产物** | `node dist/cli.js <command>` | 已执行 `pnpm run build` |
-| **C 开发态（免构建）** | `pnpm run cli -- <command>` | 无需构建，`tsx` 直接运行 `.ts` 源码 |
+| 方式                   | 命令形式                     | 前提                                |
+| ---------------------- | ---------------------------- | ----------------------------------- |
+| **A 全局命令**         | `x-basalt <command>`         | 先用 `npm link` 全局安装（见下节）  |
+| **B 直接跑产物**       | `node dist/cli.js <command>` | 已执行 `pnpm run build`             |
+| **C 开发态（免构建）** | `pnpm run cli -- <command>`  | 无需构建，`tsx` 直接运行 `.ts` 源码 |
 
 > `--` 是 pnpm 的透传参数分隔符。`pnpm run cli -- parse note.md` 中，`parse note.md` 才是传给 CLI 的参数；省略 `--` 会导致参数被 pnpm 自身消费而出错。
 
@@ -106,10 +117,10 @@ x-basalt --help      # 列出全部 6 条命令：parse / index / scan / query /
 
 装好后，按需阅读对应章节：
 
-| 目标 | 章节 |
-|---|---|
-| 6 条命令的参数详解 | [commands.md](commands.md) |
-| DQL 查询文法与隐式字段 | [querying-dql.md](querying-dql.md) |
-| 索引构建与增量同步 | [indexing-and-sync.md](indexing-and-sync.md) |
-| 免去重复传参的配置文件 | [configuration.md](configuration.md) |
-| 全部章节总览 | [usage.md](usage.md) |
+| 目标                   | 章节                                         |
+| ---------------------- | -------------------------------------------- |
+| 6 条命令的参数详解     | [commands.md](commands.md)                   |
+| DQL 查询文法与隐式字段 | [querying-dql.md](querying-dql.md)           |
+| 索引构建与增量同步     | [indexing-and-sync.md](indexing-and-sync.md) |
+| 免去重复传参的配置文件 | [configuration.md](configuration.md)         |
+| 全部章节总览           | [usage.md](usage.md)                         |

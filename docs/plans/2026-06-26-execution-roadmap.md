@@ -1,3 +1,14 @@
+---
+timestamp: 2026-06-30T00:01:23Z
+sha256: 0a47cf4eb58b89f9ba4386053101fd8fb10ad184e1f2762dd31164c22ece86af
+type: plan
+title: 可执行路线图：全模块收口 + 做深内核
+description: x-basalt 全模块收口与 DQL 内核做深的可执行路线图
+tags:
+  - plan
+  - roadmap
+  - x-basalt
+---
 # 可执行路线图：全模块收口 + 做深内核（x-basalt → 可信 1.0）
 
 > 日期：2026-06-26 · 类型：大型执行计划（跨全部 5 个一级模块）
@@ -9,15 +20,15 @@
 
 ## 已定决策（本路线图的前提）
 
-| 决策 | 取值 | 影响 |
-|---|---|---|
-| Node 基线 | **`engines.node >=22`** | 解锁 chevrotain（DQL 文法）、`node:sqlite`；消除 better-sqlite3 12 / chokidar 5 冲突 |
-| 执行范围 | **全模块一起收口** | 6 阶段覆盖 parser/indexer/query/skill/cli + 工程 |
-| 解析层 | **组装**（remark 生态）+ 自建收敛 tag/task/blockRef/due_date | 停止手撸全量解析 |
-| DQL 引擎 | **纯自研做深**（文法工具重写 + 补全子集 + 覆盖矩阵 + 测试） | 代表作核心 |
-| 许可证 | 只用宽松证；GPL/AGPL/未声明禁用 | 见许可证政策指南 |
-| **规范对标** | **严格对标官方 Obsidian/Dataview；自定义口径与官方无冲突时以官方为准** | 落到 `biz-obsidian-spec`/`biz-dql-subset` 真相源 |
-| **范围外（不做）** | **DataviewJS（`dataviewjs` 代码块执行任意 JS）** | 需运行时执行任意 JS 访问 dv API，超范围且有安全问题；明确不做 |
+| 决策               | 取值                                                                   | 影响                                                                                 |
+| ------------------ | ---------------------------------------------------------------------- | ------------------------------------------------------------------------------------ |
+| Node 基线          | **`engines.node >=22`**                                                | 解锁 chevrotain（DQL 文法）、`node:sqlite`；消除 better-sqlite3 12 / chokidar 5 冲突 |
+| 执行范围           | **全模块一起收口**                                                     | 6 阶段覆盖 parser/indexer/query/skill/cli + 工程                                     |
+| 解析层             | **组装**（remark 生态）+ 自建收敛 tag/task/blockRef/due_date           | 停止手撸全量解析                                                                     |
+| DQL 引擎           | **纯自研做深**（文法工具重写 + 补全子集 + 覆盖矩阵 + 测试）            | 代表作核心                                                                           |
+| 许可证             | 只用宽松证；GPL/AGPL/未声明禁用                                        | 见许可证政策指南                                                                     |
+| **规范对标**       | **严格对标官方 Obsidian/Dataview；自定义口径与官方无冲突时以官方为准** | 落到 `biz-obsidian-spec`/`biz-dql-subset` 真相源                                     |
+| **范围外（不做）** | **DataviewJS（`dataviewjs` 代码块执行任意 JS）**                       | 需运行时执行任意 JS 访问 dv API，超范围且有安全问题；明确不做                        |
 
 ## 全局执行约定
 
@@ -255,14 +266,14 @@ S0 → {S1, S2, S3, S4 可并行起步}；S2（DQL）是关键路径与最大投
 
 环境：`node -v` = v24.14.1（满足 `engines.node >=22`）；`pnpm -v` = 10.33.0。
 
-| 子步 | 命令 | 结果 |
-|---|---|---|
-| S0.1 | `package.json` engines `>=18`→`>=22`；`AGENTS.md` 技术栈 Node 18+→22+；tsconfig 维持 `target ES2022 / lib ES2023`（Node22+ 适配，无需改） | ✅ |
-| S0.1/S0.3 | `pnpm install` | exit 0，移除 `zod 4.4.3`；锁文件 `grep -c zod`=0 |
-| S0.2 | `package.json` test → `node --import tsx --test "tests/**/*.test.ts"`；建临时 `tests/_smoke.test.ts` 验证 | glob 自动发现，测试数 52→53；删除后恢复 |
-| S0.3 | 移除 `src/**` 零 import 的 `zod`（package.json + AGENTS 技术栈表） | typecheck/test 全绿 |
-| S0.4 | `pnpm licenses list` | 全量宽松证：MIT 103 / ISC 7 / BSD 4 / Apache-2.0 4；**零 GPL/AGPL/MPL/未声明** |
-| S0.5 | `pnpm run typecheck` / `pnpm test` / `pnpm run lint` / `pnpm run build` | 四项均 exit 0；测试 52 pass / 0 fail |
+| 子步      | 命令                                                                                                                                      | 结果                                                                           |
+| --------- | ----------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------ |
+| S0.1      | `package.json` engines `>=18`→`>=22`；`AGENTS.md` 技术栈 Node 18+→22+；tsconfig 维持 `target ES2022 / lib ES2023`（Node22+ 适配，无需改） | ✅                                                                             |
+| S0.1/S0.3 | `pnpm install`                                                                                                                            | exit 0，移除 `zod 4.4.3`；锁文件 `grep -c zod`=0                               |
+| S0.2      | `package.json` test → `node --import tsx --test "tests/**/*.test.ts"`；建临时 `tests/_smoke.test.ts` 验证                                 | glob 自动发现，测试数 52→53；删除后恢复                                        |
+| S0.3      | 移除 `src/**` 零 import 的 `zod`（package.json + AGENTS 技术栈表）                                                                        | typecheck/test 全绿                                                            |
+| S0.4      | `pnpm licenses list`                                                                                                                      | 全量宽松证：MIT 103 / ISC 7 / BSD 4 / Apache-2.0 4；**零 GPL/AGPL/MPL/未声明** |
+| S0.5      | `pnpm run typecheck` / `pnpm test` / `pnpm run lint` / `pnpm run build`                                                                   | 四项均 exit 0；测试 52 pass / 0 fail                                           |
 
 门禁基线快照（回归基准）：typecheck=0，test=52 pass/0 fail，lint=0，build=0。
 保留依赖中 `unified`/`remark-parse`/`@flowershow/remark-wiki-link` 仍零 import，按 S0.3 决策留到阶段 1 决定去留。

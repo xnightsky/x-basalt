@@ -1,3 +1,14 @@
+---
+timestamp: 2026-06-30T00:01:23Z
+sha256: c2a08985a02ac3148aec29e3120ecbca9e524bcaeb10c2ff954fb33847c6b80d
+type: guide
+title: 配置与基目录 · x-basalt
+description: x-basalt 配置文件查找顺序、键说明与 X_BASALT_DIR 基目录
+tags:
+  - guide
+  - config
+  - x-basalt
+---
 # 配置与基目录 · x-basalt
 
 > 本章说明如何把稳定的默认值（Vault 路径、索引路径等）写入配置文件，
@@ -26,16 +37,16 @@ x-basalt index
 
 配置加载使用 **cosmiconfig**，采用 `project` 策略——从当前工作目录**逐级向上**查找，首个命中的文件生效（不合并同级）。查找顺序（优先级从高到低）：
 
-| 优先级 | 路径（相对 cwd 或其上级） | 格式 |
-|---|---|---|
-| 1 | `.x-basalt/config.yaml` | YAML |
-| 2 | `.x-basalt/config.yml` | YAML |
-| 3 | `.x-basalt/config.json5` | JSON5 |
-| 4 | `.x-basalt/config.json` | JSON5 |
-| 5 | `.x-basalt.yaml` | YAML |
-| 6 | `.x-basalt.yml` | YAML |
-| 7 | `.x-basalt.json5` | JSON5 |
-| 8 | `.x-basalt.json` | JSON5 |
+| 优先级 | 路径（相对 cwd 或其上级） | 格式  |
+| ------ | ------------------------- | ----- |
+| 1      | `.x-basalt/config.yaml`   | YAML  |
+| 2      | `.x-basalt/config.yml`    | YAML  |
+| 3      | `.x-basalt/config.json5`  | JSON5 |
+| 4      | `.x-basalt/config.json`   | JSON5 |
+| 5      | `.x-basalt.yaml`          | YAML  |
+| 6      | `.x-basalt.yml`           | YAML  |
+| 7      | `.x-basalt.json5`         | JSON5 |
+| 8      | `.x-basalt.json`          | JSON5 |
 
 **隐藏目录形式（`.x-basalt/config.*`）优先于扁平文件形式（`.x-basalt.*`）**；同形式内 `yaml > yml > json5 > json`。
 
@@ -76,14 +87,14 @@ echo 'export X_BASALT_DIR="/home/user/vault-state/.x-basalt"' >> ~/.bashrc
 
 标量键**均可选**、**值须为字符串**（未知键与非字符串值静默丢弃）；`pipelines` 是唯一的**结构化对象**键（变更编排器，见下）。
 
-| 键 | 对应 CLI 参数 | 说明 |
-|---|---|---|
-| `vault` | `index`/`scan`/`watch` 的 `<vault>` 位置参数 | 默认 Vault 根目录；配好后可省略位置参数 |
-| `db` | `--db <path>` | 默认 SQLite 索引文件路径 |
-| `skillPath` | 等价 `OBSIDIAN_SKILL_PATH` 环境变量 | 默认 skill 目录 |
-| `format` | `parse --format` | 默认输出格式，`json` 或 `yaml` |
-| `onChange` | `watch --on-change` | 默认变更命令模板（`{file}` 占位） |
-| `pipelines` | `--pipe use=<name>`（run/scan/watch 共用） | **结构化对象**：命名管道快照（`name → {actions, where, on, paths, concurrency, dryRun}`）。**命令行 `--pipe k=v` 与之一一对应**——命令行是规范落地、配置段是加速。见 [commands.md `run`](commands.md#run--变更编排管道) |
+| 键          | 对应 CLI 参数                                | 说明                                                                                                                                                                                                                   |
+| ----------- | -------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `vault`     | `index`/`scan`/`watch` 的 `<vault>` 位置参数 | 默认 Vault 根目录；配好后可省略位置参数                                                                                                                                                                                |
+| `db`        | `--db <path>`                                | 默认 SQLite 索引文件路径                                                                                                                                                                                               |
+| `skillPath` | 等价 `OBSIDIAN_SKILL_PATH` 环境变量          | 默认 skill 目录                                                                                                                                                                                                        |
+| `format`    | `parse --format`                             | 默认输出格式，`json` 或 `yaml`                                                                                                                                                                                         |
+| `onChange`  | `watch --on-change`                          | 默认变更命令模板（`{file}` 占位）                                                                                                                                                                                      |
+| `pipelines` | `--pipe use=<name>`（run/scan/watch 共用）   | **结构化对象**：命名管道快照（`name → {actions, where, on, paths, concurrency, dryRun}`）。**命令行 `--pipe k=v` 与之一一对应**——命令行是规范落地、配置段是加速。见 [commands.md `run`](commands.md#run--变更编排管道) |
 
 ---
 
@@ -118,7 +129,8 @@ echo 'export X_BASALT_DIR="/home/user/vault-state/.x-basalt"' >> ~/.bashrc
 
 ```yaml
 vault: ./my-vault
-db: ./.x-basalt/index.db   # 可省略（等于默认值）
+db: ./.x-basalt/index.db # 可省略（等于默认值）
+
 
 # skillPath: ./team-skills  # 可选
 # format: yaml              # parse 默认 json

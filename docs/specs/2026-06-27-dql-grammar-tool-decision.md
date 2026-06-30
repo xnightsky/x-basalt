@@ -1,3 +1,15 @@
+---
+timestamp: 2026-06-30T00:01:23Z
+sha256: 8f094827587c2781a2daebd0c6cf44580956f7a83831eaa298af0493ca6c45a3
+type: spec
+title: DQL 文法工具选型决策：chevrotain
+description: DQL parser 选用 chevrotain 的 spike 结论与决策
+tags:
+  - spec
+  - dql
+  - chevrotain
+  - x-basalt
+---
 # DQL 文法工具选型决策：chevrotain（S2.1 spike 结论）
 
 > 日期：2026-06-27 · 类型：选型决策（ADR 性质）
@@ -20,14 +32,14 @@ LIST FROM #x WHERE a = 1 AND contains(file.tags,"y") SORT b DESC LIMIT 5
 
 ## 实证评估矩阵
 
-| 维度 | chevrotain 12.0.0 | peggy 5.1.0 |
-|---|---|---|
-| ESM/NodeNext 接入 | ✅ `import { createToken, Lexer, EmbeddedActionsParser }` 直接可用 | ✅ `import peggy` 默认导入可用 |
-| 解析样例 → AST | ✅ 正确（修两处后） | ✅ 正确（一次通过） |
-| **TS 类型体验** | ✅ **纯 TS**；AST 经 `RULE` 回调返回类型端到端 typed，`parse()` 直接产 typed `Dql` | ⚠️ 文法是**字符串 DSL**（无 TS 检查 / IDE 支持）；生成的 `parse(input): any`（实测 `peg.d.ts:1113`），AST 全靠手动 `as` 断言 |
-| 错误定位 | ✅ offset+line+期望 token；LL 不回溯，位置贴近真实错误点（样例报 **offset 22**：SORT 后期望 Identifier） | ✅ offset+line+col+**期望集更丰富**；但 PEG 回溯使位置漂移（把 `LIMIT` 当字段名 → 报到下游 **offset 28** 的 `5`） |
-| 错误恢复 | ✅ 内建多错误收集（`parser.errors[]` 数组） | ⚠️ 首个错误即抛 |
-| 构建步骤 | ✅ 无（运行时 self-analysis） | ✅ 无（运行时 `peggy.generate`），生产可预编译为 .js |
+| 维度              | chevrotain 12.0.0                                                                                        | peggy 5.1.0                                                                                                                  |
+| ----------------- | -------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------- |
+| ESM/NodeNext 接入 | ✅ `import { createToken, Lexer, EmbeddedActionsParser }` 直接可用                                       | ✅ `import peggy` 默认导入可用                                                                                               |
+| 解析样例 → AST    | ✅ 正确（修两处后）                                                                                      | ✅ 正确（一次通过）                                                                                                          |
+| **TS 类型体验**   | ✅ **纯 TS**；AST 经 `RULE` 回调返回类型端到端 typed，`parse()` 直接产 typed `Dql`                       | ⚠️ 文法是**字符串 DSL**（无 TS 检查 / IDE 支持）；生成的 `parse(input): any`（实测 `peg.d.ts:1113`），AST 全靠手动 `as` 断言 |
+| 错误定位          | ✅ offset+line+期望 token；LL 不回溯，位置贴近真实错误点（样例报 **offset 22**：SORT 后期望 Identifier） | ✅ offset+line+col+**期望集更丰富**；但 PEG 回溯使位置漂移（把 `LIMIT` 当字段名 → 报到下游 **offset 28** 的 `5`）            |
+| 错误恢复          | ✅ 内建多错误收集（`parser.errors[]` 数组）                                                              | ⚠️ 首个错误即抛                                                                                                              |
+| 构建步骤          | ✅ 无（运行时 self-analysis）                                                                            | ✅ 无（运行时 `peggy.generate`），生产可预编译为 .js                                                                         |
 
 ## 选 chevrotain 的理由（按权重）
 

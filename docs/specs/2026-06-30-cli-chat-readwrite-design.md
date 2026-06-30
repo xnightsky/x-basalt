@@ -3,14 +3,15 @@ type: design
 title: CLI chat（读+写）可落地实现设计
 description: x-basalt CLI chat 首版实现设计：Vercel ai SDK 适配 AI_GATEWAY_*、读+写工具面（含编排器一次性批量）、逐动作确认安全闸、最小可选 AI 隔离纪律、pi 四段交接
 tags:
+  - spec
   - chat
   - ai
-  - optional-ai
   - design
-  - read-write
-timestamp: 2026-06-29T17:37:49Z
-sha256: cd949ea1a0eb1cd00648368b8cc576fe32d63da178f28f2f1ef8f5c299a0e987
+  - x-basalt
+timestamp: 2026-06-29T23:59:11Z
+sha256: 1a63c5ec23494db528ecba68b25dfe28b29a139567e53ac4696cdddc3b25d181
 ---
+
 # 设计：CLI chat（读+写，自然语言驱动 vault）—— 可落地实现设计
 
 > 日期：2026-06-30 · 类型：实现设计（specs/，**开工前的架构契约**，非评估）
@@ -39,14 +40,14 @@ sha256: cd949ea1a0eb1cd00648368b8cc576fe32d63da178f28f2f1ef8f5c299a0e987
 
 ## 2. 范围
 
-| 维度 | 本轮做 | 本轮不做 |
-|---|---|---|
-| 读 | query(DQL) / parse / scan / meta get / skills recall | —— |
-| 写·单文件 | meta set / unset / rename / normalize / apply | —— |
-| 写·批量 | 编排器**一次性** runScan / runManual（apply/set/unset/rename/normalize/index） | `orch.watch` 常驻 daemon |
-| 形态 | 单发 `chat "<NL>"` + REPL `chat` | —— |
-| 检索 | 结构化任务（DQL/meta/scan/skill） | FTS5「按正文找」（推后，依赖检索后端 spec） |
-| 出口 | 自驱 chat | MCP 出口（另议） |
+| 维度      | 本轮做                                                                         | 本轮不做                                    |
+| --------- | ------------------------------------------------------------------------------ | ------------------------------------------- |
+| 读        | query(DQL) / parse / scan / meta get / skills recall                           | ——                                          |
+| 写·单文件 | meta set / unset / rename / normalize / apply                                  | ——                                          |
+| 写·批量   | 编排器**一次性** runScan / runManual（apply/set/unset/rename/normalize/index） | `orch.watch` 常驻 daemon                    |
+| 形态      | 单发 `chat "<NL>"` + REPL `chat`                                               | ——                                          |
+| 检索      | 结构化任务（DQL/meta/scan/skill）                                              | FTS5「按正文找」（推后，依赖检索后端 spec） |
+| 出口      | 自驱 chat                                                                      | MCP 出口（另议）                            |
 
 ## 3. 模块布局（全部隔离在 `src/chat/`，懒加载）
 
@@ -67,11 +68,11 @@ src/chat/
 
 ### 4.1 `AI_GATEWAY_*` 映射（完全兼容 agent-browser）
 
-| 来源（优先级高→低） | 落到 SDK | 默认 |
-|---|---|---|
-| `--model <name>` ＞ `AI_GATEWAY_MODEL` | `model` | `anthropic/claude-sonnet-4.6` |
-| `AI_GATEWAY_API_KEY`（必填，无则禁用） | `createGateway({ apiKey })` | 无（缺 = 禁用） |
-| `AI_GATEWAY_URL`（可选） | `createGateway({ baseURL })` ／ 本地端点用 `createOpenAICompatible({ baseURL })` | Vercel AI Gateway 默认 |
+| 来源（优先级高→低）                    | 落到 SDK                                                                         | 默认                          |
+| -------------------------------------- | -------------------------------------------------------------------------------- | ----------------------------- |
+| `--model <name>` ＞ `AI_GATEWAY_MODEL` | `model`                                                                          | `anthropic/claude-sonnet-4.6` |
+| `AI_GATEWAY_API_KEY`（必填，无则禁用） | `createGateway({ apiKey })`                                                      | 无（缺 = 禁用）               |
+| `AI_GATEWAY_URL`（可选）               | `createGateway({ baseURL })` ／ 本地端点用 `createOpenAICompatible({ baseURL })` | Vercel AI Gateway 默认        |
 
 > 已核实：`AI_GATEWAY_API_KEY` 是 Vercel Gateway 原生环境变量，与 agent-browser/父文档 §7 逐字一致；`createGateway({ apiKey, baseURL })` 支持自定义 baseURL。来源：ai-sdk.dev Gateway provider 文档 + Vercel AI Gateway 鉴权文档。
 
@@ -94,24 +95,24 @@ src/chat/
 
 ### 5.1 读工具（带 execute，结果经 safety 截断+边界包裹后喂回）
 
-| tool | input schema | 落地 |
-|---|---|---|
-| `query` | `{ dql: string }` | `new DataviewEngine(dbPath).query(dql)` |
-| `parse` | `{ file: string }` | `new VaultParser().parse(read(file))` |
-| `scan` | `{ rehash?: boolean }` | `indexer.scan({ rehash, dryRun:true })` 差异报告 |
-| `meta_get` | `{ file: string, key?: string }` | `readMeta(file, key)` |
-| `skills_recall` | `{ keyword: string }` | `new SkillRecall(...).recall(keyword)` |
+| tool            | input schema                     | 落地                                             |
+| --------------- | -------------------------------- | ------------------------------------------------ |
+| `query`         | `{ dql: string }`                | `new DataviewEngine(dbPath).query(dql)`          |
+| `parse`         | `{ file: string }`               | `new VaultParser().parse(read(file))`            |
+| `scan`          | `{ rehash?: boolean }`           | `indexer.scan({ rehash, dryRun:true })` 差异报告 |
+| `meta_get`      | `{ file: string, key?: string }` | `readMeta(file, key)`                            |
+| `skills_recall` | `{ keyword: string }`            | `new SkillRecall(...).recall(keyword)`           |
 
 ### 5.2 写工具（execute 直接落盘，无确认闸）
 
-| tool | input schema | 落地（直接以非 dry-run 跑既有原语，原子写） |
-|---|---|---|
-| `meta_set` | `{ file, key, value, type? }` | `editMeta(file, d=>setMeta(d,key,coerce(value,type)))` |
-| `meta_unset` | `{ file, key }` | `editMeta(file, d=>unsetMeta(d,key))` |
-| `meta_rename` | `{ file, oldKey, newKey }` | `editMeta(file, d=>renameMeta(d,oldKey,newKey))` |
-| `meta_normalize` | `{ file, sortKeys? }` | `editMeta(file, d=>normalizeDoc(d,{sortKeys}))` |
-| `meta_apply` | `{ profile, file, sets?, refreshDerived? }` | `applyProfile(file, profile, {sets,refreshDerived})` |
-| `pipeline_run` | `{ actions: string[], where?, paths?, ifExists?, concurrency? }` | `Orchestrator.runManual({where}) ／ runScan()`，**批量** |
+| tool             | input schema                                                     | 落地（直接以非 dry-run 跑既有原语，原子写）              |
+| ---------------- | ---------------------------------------------------------------- | -------------------------------------------------------- |
+| `meta_set`       | `{ file, key, value, type? }`                                    | `editMeta(file, d=>setMeta(d,key,coerce(value,type)))`   |
+| `meta_unset`     | `{ file, key }`                                                  | `editMeta(file, d=>unsetMeta(d,key))`                    |
+| `meta_rename`    | `{ file, oldKey, newKey }`                                       | `editMeta(file, d=>renameMeta(d,oldKey,newKey))`         |
+| `meta_normalize` | `{ file, sortKeys? }`                                            | `editMeta(file, d=>normalizeDoc(d,{sortKeys}))`          |
+| `meta_apply`     | `{ profile, file, sets?, refreshDerived? }`                      | `applyProfile(file, profile, {sets,refreshDerived})`     |
+| `pipeline_run`   | `{ actions: string[], where?, paths?, ifExists?, concurrency? }` | `Orchestrator.runManual({where}) ／ runScan()`，**批量** |
 
 - **单文件 vs 批量两路并存（用户拍板）**：模型按任务选——「改这个文件」走 `meta_*`；「对一批笔记做 X」走 `pipeline_run`（编排器）。
 - **直接落盘、无确认**：写工具 `execute` 直接以非 dry-run 调原语落盘并返回结果摘要。安全性靠 ① 既有**原子写**（tmp+rename，kill 中途不损坏文件）② 用户可 **Ctrl+C 中断**在途循环 ③ git 是用户兜底。不再先 dry-run 预览再确认。
@@ -120,25 +121,41 @@ src/chat/
 
 ```ts
 // provider.ts
-interface ProviderConfig { apiKey: string; model: string; baseURL?: string }
-function resolveProvider(env, modelFlag?: string): ProviderConfig | { error: "no-key" }
-async function createModel(cfg: ProviderConfig): Promise<LanguageModel>   // 动态 import
+interface ProviderConfig {
+  apiKey: string;
+  model: string;
+  baseURL?: string;
+}
+function resolveProvider(env, modelFlag?: string): ProviderConfig | { error: "no-key" };
+async function createModel(cfg: ProviderConfig): Promise<LanguageModel>; // 动态 import
 
 // tools.ts（写工具直接落盘，无 confirm 入参）
-interface ToolContext { dbPath: string; vaultPath: string }
-function buildTools(ctx: ToolContext, safety: Safety): ToolSet
+interface ToolContext {
+  dbPath: string;
+  vaultPath: string;
+}
+function buildTools(ctx: ToolContext, safety: Safety): ToolSet;
 
 // safety.ts
-interface Safety { wrap(content: string): string; truncate(content: string): string }
-function makeSafety(opts: { nonce: string; maxChars: number }): Safety
+interface Safety {
+  wrap(content: string): string;
+  truncate(content: string): string;
+}
+function makeSafety(opts: { nonce: string; maxChars: number }): Safety;
 
 // loop.ts（abortSignal 支持 Ctrl+C 中断）
-interface LoopDeps { model: LanguageModel; tools: ToolSet; maxSteps: number; onEvent(e): void; abortSignal?: AbortSignal }
-async function runLoop(messages: Message[], deps: LoopDeps): Promise<Message[]>
+interface LoopDeps {
+  model: LanguageModel;
+  tools: ToolSet;
+  maxSteps: number;
+  onEvent(e): void;
+  abortSignal?: AbortSignal;
+}
+async function runLoop(messages: Message[], deps: LoopDeps): Promise<Message[]>;
 
 // index.ts
-async function runOnce(input: string, opts): Promise<number>   // 返回 exit code
-async function runRepl(opts): Promise<number>
+async function runOnce(input: string, opts): Promise<number>; // 返回 exit code
+async function runRepl(opts): Promise<number>;
 ```
 
 ## 6. agentic 循环（段②）
@@ -180,12 +197,12 @@ async function runRepl(opts): Promise<number>
 
 每段独立跑受影响边界的 `lint`+`typecheck`+`test`、`git diff` 逐文件复核（不轻信 pi 自报）、提交在 main。
 
-| 段 | 内容 | 产出 | 验收 |
-|---|---|---|---|
-| ① | provider 适配 + 配置加载 + no-key 行为 + optionalDeps 接线 + 许可证核验 | `provider.ts`、package.json | 有 key 能拿到 model；无 key 友好退出；核心命令不受 optionalDeps 影响 |
-| ② | 防注入/截断 safety（叶子，无 SDK 依赖） | `safety.ts` | 边界包裹+截断生效 |
-| ③ | 工具面 schema（写工具直接落盘）+ agentic 循环（abortSignal）+ mock-provider 循环测试 | `tools.ts`、`loop.ts` | Mock 模型跑通多步读+写；写工具直接落盘；中断生效 |
-| ④ | 单发 + REPL + cli.ts chat 分支 + SIGINT→abort + 隔离守门 | `index.ts`、`repl.ts`、`cli.ts` | 单发翻译执行退出；REPL 累积历史；Ctrl+C 中断；无 key 友好退出 |
+| 段  | 内容                                                                                 | 产出                            | 验收                                                                 |
+| --- | ------------------------------------------------------------------------------------ | ------------------------------- | -------------------------------------------------------------------- |
+| ①   | provider 适配 + 配置加载 + no-key 行为 + optionalDeps 接线 + 许可证核验              | `provider.ts`、package.json     | 有 key 能拿到 model；无 key 友好退出；核心命令不受 optionalDeps 影响 |
+| ②   | 防注入/截断 safety（叶子，无 SDK 依赖）                                              | `safety.ts`                     | 边界包裹+截断生效                                                    |
+| ③   | 工具面 schema（写工具直接落盘）+ agentic 循环（abortSignal）+ mock-provider 循环测试 | `tools.ts`、`loop.ts`           | Mock 模型跑通多步读+写；写工具直接落盘；中断生效                     |
+| ④   | 单发 + REPL + cli.ts chat 分支 + SIGINT→abort + 隔离守门                             | `index.ts`、`repl.ts`、`cli.ts` | 单发翻译执行退出；REPL 累积历史；Ctrl+C 中断；无 key 友好退出        |
 
 > 变更：已删除原「确认闸」段。`confirm.ts` 不存在；写工具不接 `ConfirmFn`。`safety.ts` 提前为段②叶子。
 

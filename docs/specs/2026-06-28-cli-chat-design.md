@@ -3,14 +3,15 @@ type: design
 title: CLI chat（自然语言驱动 vault）设计评估
 description: 评估 x-basalt 将来若做 CLI chat 的可落地设计：对标 agent-browser、最小可选 AI、AI_GATEWAY_* 配置兼容、写动作安全闸
 tags:
+  - spec
   - chat
   - ai
-  - optional-ai
   - design
-  - agent-browser
-timestamp: 2026-06-28T09:33:57Z
-sha256: 41eafa44ae0ebb5fb5ffc4e2807c032ba73ec370f888689384daaa38cf7883c3
+  - x-basalt
+timestamp: 2026-06-29T23:59:11Z
+sha256: f68003dcff5bb3b246f7016d4025299c8a770e185c3b653ca698667354e505ed
 ---
+
 # 设计评估：CLI chat（自然语言驱动 vault）—— 对标 agent-browser，最小可选 AI
 
 > 日期：2026-06-28 · 类型：设计评估（**非开工**，只论"将来若做，怎么做才立得住"）
@@ -43,13 +44,13 @@ sha256: 41eafa44ae0ebb5fb5ffc4e2807c032ba73ec370f888689384daaa38cf7883c3
 
 实查 `vercel-labs/agent-browser` 后，提炼出 5 条可直接迁移的设计：
 
-| # | agent-browser 的做法 | 迁移到 x-basalt |
-|---|---|---|
-| 1 | chat 的"工具" = CLI 本来就有的命令（`open`/`click`/`snapshot`…，定义在 `mcp.rs`），不为 AI 另造能力 | chat 的工具面 = 现有原语子集（`query`/`scan`/`meta get`… + 写动作），不新增 vault 能力 |
-| 2 | 两模式：`chat "<指令>"` 单发即退；`chat` 进 REPL（quit/exit/q 退出） | 同形：`x-basalt chat "<指令>"` + `x-basalt chat` REPL |
-| 3 | **plan→act→observe** 循环：NL→翻成原语→执行→把结果喂回→修正 | 同环：NL→选 query/meta→执行→把行/diff 喂回→下一步 |
-| 4 | LLM 完全可选、env/flag 可配（`AI_GATEWAY_*` + `--model`），无 key 即禁用 | 同：env + `--model` 配 provider，无配置即禁用（§7） |
-| 5 | 安全闸：`--confirm-actions` 对破坏性类别要批准；非 TTY 自动拒；60s 超时拒；内容边界防注入；输出截断防爆上下文 | 同：写 `.md` 的 meta 动作走确认/dry-run；非 TTY 拒；查询结果截断（§6） |
+| #   | agent-browser 的做法                                                                                          | 迁移到 x-basalt                                                                        |
+| --- | ------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------- |
+| 1   | chat 的"工具" = CLI 本来就有的命令（`open`/`click`/`snapshot`…，定义在 `mcp.rs`），不为 AI 另造能力           | chat 的工具面 = 现有原语子集（`query`/`scan`/`meta get`… + 写动作），不新增 vault 能力 |
+| 2   | 两模式：`chat "<指令>"` 单发即退；`chat` 进 REPL（quit/exit/q 退出）                                          | 同形：`x-basalt chat "<指令>"` + `x-basalt chat` REPL                                  |
+| 3   | **plan→act→observe** 循环：NL→翻成原语→执行→把结果喂回→修正                                                   | 同环：NL→选 query/meta→执行→把行/diff 喂回→下一步                                      |
+| 4   | LLM 完全可选、env/flag 可配（`AI_GATEWAY_*` + `--model`），无 key 即禁用                                      | 同：env + `--model` 配 provider，无配置即禁用（§7）                                    |
+| 5   | 安全闸：`--confirm-actions` 对破坏性类别要批准；非 TTY 自动拒；60s 超时拒；内容边界防注入；输出截断防爆上下文 | 同：写 `.md` 的 meta 动作走确认/dry-run；非 TTY 拒；查询结果截断（§6）                 |
 
 **关键洞察**：x-basalt 本就以 skill 被外部 agent（Claude Code）驱动——那是"外部 AI 出口"。`chat` 只是补一个**自驱出口**，让不在 agent 会话里的用户也能在终端用自然语言操作 vault。两个出口共享同一套原语。
 
@@ -132,14 +133,14 @@ export AI_GATEWAY_URL=https://ai-gateway.vercel.sh           # 可选，默认 V
 
 把"今天就能做"与"需新增"标清，证明可落地、也圈出真实成本：
 
-| 部件 | 现状 | 工作量 |
-|---|---|---|
-| 工具面（原语） | **已存在**：query/scan/meta/skills/parse 命令实现齐全 | 极小：包一层 tool-call schema |
-| plan→act→observe 循环 | 无 | 中：一个标准 agent 循环（~1 个模块） |
-| provider 适配（`AI_GATEWAY_*`，§7） | 无 | 小：OpenAI 兼容客户端 + 配置加载（复用 cosmiconfig） |
-| 写动作确认闸 | meta 有原子写；无确认/dry-run 交互 | 小-中：加 diff 预览 + TTY 确认 |
-| REPL | 无 | 小：readline 循环 |
-| 防注入/截断 | 无 | 小：边界包裹 + 长度裁剪 |
+| 部件                                | 现状                                                  | 工作量                                               |
+| ----------------------------------- | ----------------------------------------------------- | ---------------------------------------------------- |
+| 工具面（原语）                      | **已存在**：query/scan/meta/skills/parse 命令实现齐全 | 极小：包一层 tool-call schema                        |
+| plan→act→observe 循环               | 无                                                    | 中：一个标准 agent 循环（~1 个模块）                 |
+| provider 适配（`AI_GATEWAY_*`，§7） | 无                                                    | 小：OpenAI 兼容客户端 + 配置加载（复用 cosmiconfig） |
+| 写动作确认闸                        | meta 有原子写；无确认/dry-run 交互                    | 小-中：加 diff 预览 + TTY 确认                       |
+| REPL                                | 无                                                    | 小：readline 循环                                    |
+| 防注入/截断                         | 无                                                    | 小：边界包裹 + 长度裁剪                              |
 
 **"按内容找"依赖**：chat 的核心价值之一是自然语言找笔记，但纯 DQL 查不了正文——这要 [检索后端 spec](2026-06-28-semantic-retrieval-integration.md) 的 FTS5 先落地。故两份文档是组合关系：chat 是前端，FTS5/语义检索是它最重要的一个后端动作。**chat 不依赖语义检索也能做结构化任务，但有了它才完整。**
 

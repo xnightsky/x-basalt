@@ -3,12 +3,14 @@ type: decision
 title: 先 dogfood 还是先开源（发布时机评估）
 description: 评估 x-basalt 先继续 dogfood 还是先开源，给出时间盒推荐与开源前 checklist
 tags:
-  - decision
+  - spec
   - release
-  - adr
-timestamp: 2026-06-28T02:57:10Z
-sha256: fc79478060a6eacbc8e9466506f7fc4d6adcc3c1a533ba3674aaf9fe630fb3b6
+  - dogfood
+  - x-basalt
+timestamp: 2026-06-29T23:59:10Z
+sha256: e4f6b6618b303169cf8df7118593d1529662c6aeba6a9c63b1ebcae96b8f17b0
 ---
+
 # 决策评估：先继续 dogfood 还是先开源
 
 > 日期：2026-06-28　类型：决策/ADR（发布时机）
@@ -32,19 +34,20 @@ sha256: fc79478060a6eacbc8e9466506f7fc4d6adcc3c1a533ba3674aaf9fe630fb3b6
 
 ## 两方案利弊矩阵
 
-| 维度 | 先继续 dogfood | 先开源 |
-|---|---|---|
-| API 稳定性 | ✅ 写侧能在真实使用中定型，避免发布后改 API 失信 | ⚠️ 写侧几天大，过早冻结预期，后续改动代价高 |
-| 反馈来源 | ⚠️ 单人 dogfood 有盲区，覆盖面窄 | ✅ 更早拿到多样真实用户反馈（正是 backlog 在等的「真实需求」） |
-| 作品可见性 | ❌ 一直隐形，无 star/曝光 | ✅ 可被发现，代表作的简历价值兑现 |
-| 维护负担 | ✅ 精力全投产品，无 issue/PR 支持面 | ⚠️ 单人维护要扛 issue/PR/社区沟通 |
-| 完成度观感 | ✅ 能以「我每天在用」的姿态发布，第一印象更稳 | ⚠️ 可见「在动荡中」，易招过早的功能争论 |
-| 法务/规范 | — | ✅ MIT + 开源前检查政策已就绪，地基已打好 |
-| 机会成本 | ⚠️「再用用看」无退出标准易无限拖延 | ✅ 避免完美主义拖延 |
+| 维度       | 先继续 dogfood                                   | 先开源                                                         |
+| ---------- | ------------------------------------------------ | -------------------------------------------------------------- |
+| API 稳定性 | ✅ 写侧能在真实使用中定型，避免发布后改 API 失信 | ⚠️ 写侧几天大，过早冻结预期，后续改动代价高                    |
+| 反馈来源   | ⚠️ 单人 dogfood 有盲区，覆盖面窄                 | ✅ 更早拿到多样真实用户反馈（正是 backlog 在等的「真实需求」） |
+| 作品可见性 | ❌ 一直隐形，无 star/曝光                        | ✅ 可被发现，代表作的简历价值兑现                              |
+| 维护负担   | ✅ 精力全投产品，无 issue/PR 支持面              | ⚠️ 单人维护要扛 issue/PR/社区沟通                              |
+| 完成度观感 | ✅ 能以「我每天在用」的姿态发布，第一印象更稳    | ⚠️ 可见「在动荡中」，易招过早的功能争论                        |
+| 法务/规范  | —                                                | ✅ MIT + 开源前检查政策已就绪，地基已打好                      |
+| 机会成本   | ⚠️「再用用看」无退出标准易无限拖延               | ✅ 避免完美主义拖延                                            |
 
 ## 现状盘点（开源就绪度，基于仓库实查）
 
 **已就绪**：
+
 - 核心读侧 + 写侧均落地，**272 测试绿**；`prepublishOnly` 质量门（typecheck + test + build）已配。
 - `README.md`（价值主张/命令表/安装/快速上手/指南链接）、`LICENSE`（MIT）、`CHANGELOG.md` 齐全。
 - `package.json`：`bin` / `files` 白名单 / `description` / `engines>=22` / `packageManager` 均配好，非 private。
@@ -52,6 +55,7 @@ sha256: fc79478060a6eacbc8e9466506f7fc4d6adcc3c1a533ba3674aaf9fe630fb3b6
 - 许可证声明 + 开源前检查政策已落地（97fe800）；脱敏政策（禁本机绝对路径）在 `AGENTS.md`。
 
 **开源前的真实缺口**：
+
 1. **README 命令表缺 `meta`**——刚完成的写侧（get/set/unset/rename/normalize/profile/apply）公开门面里看不到，是最该先补的文档债。
 2. **无 CI**（仓库无 `.github/workflows/`）——公开仓库普遍期望 push/PR 自动跑测试，否则「272 绿」对外不可见、不可信。
 3. **`package.json` 无 `repository` 字段**，且尚无公开 GitHub 远端。
@@ -60,6 +64,7 @@ sha256: fc79478060a6eacbc8e9466506f7fc4d6adcc3c1a533ba3674aaf9fe630fb3b6
 ## 推荐执行：时间盒 dogfood + 并行备料
 
 **阶段 A（现在起 ≈2–4 周）：写侧 dogfood**
+
 - 拿自己的真实 Vault，每天用 `meta set/normalize/apply`（三套 profile）维护元数据，记录卡点/想改的 API/缺的能力。
 - 退出标准（满足即进入开源）：
   - [ ] 每个 meta 子命令在真实库里各跑过几十次，无想改的签名/行为。
@@ -67,6 +72,7 @@ sha256: fc79478060a6eacbc8e9466506f7fc4d6adcc3c1a533ba3674aaf9fe630fb3b6
   - [ ] backlog 三方向至少明确「首发是否包含」——建议**首发只含已完成能力，migrate/lint/watch-pipeline 留作 roadmap**，不阻塞发布。
 
 **阶段 B（与 A 并行，几小时工作量）：开源前 checklist 备齐**
+
 - [ ] README 命令表补 `meta` 行 + 写侧快速上手示例（apply 一个 profile 的完整片段）。
 - [ ] 加最小 CI：`.github/workflows/ci.yml`，在 push/PR 跑 `pnpm install && pnpm run typecheck && pnpm test`（Node 22/24 矩阵，放行 better-sqlite3 构建）。
 - [ ] `package.json` 补 `repository` / `homepage` / `bugs` 字段，加 `keywords`（obsidian/dataview/markdown/cli…）。
@@ -75,6 +81,7 @@ sha256: fc79478060a6eacbc8e9466506f7fc4d6adcc3c1a533ba3674aaf9fe630fb3b6
 - [ ] （可选）`CONTRIBUTING.md` + issue 模板；README 加一句「单人维护、按兴趣推进」设预期。
 
 **阶段 C：开源**
+
 - 满足 A 退出标准 + B 全勾 → 公开仓库（+ 可选 npm publish）。届时能以「我每天在用、核心有测试有 CI、架构文档齐全」的姿态发布。
 
 ## 主要风险

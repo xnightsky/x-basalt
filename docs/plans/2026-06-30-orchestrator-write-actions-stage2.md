@@ -1,3 +1,14 @@
+---
+timestamp: 2026-06-30T00:01:23Z
+sha256: ffa2a2caa71168fd66469d8046718648c6af45030359bf9a55440e0f4c1810bb
+type: plan
+title: 变更编排器 P1 写动作 —— CLI if-exists 解析 + 集成测试 + 文档同步
+description: 编排器 P1 写动作 if-exists 与集成测试段 2/2 实现计划
+tags:
+  - plan
+  - orchestrator
+  - x-basalt
+---
 # 变更编排器 P1 写动作 —— CLI if-exists 解析 + 集成测试 + 文档同步（段 2/2）
 
 > **For agentic workers:** 严格 TDD（先 red 后 green）逐子步实现；步骤用 `- [ ]` 跟踪。  
@@ -21,13 +32,13 @@
 
 ## 范围切分
 
-| 部件 | 本段 | 说明 |
-|---|---|---|
-| CLI `resolvePipeline` 解析 `if-exists` | **S2-1** | 校验 + 透传；三命令 help 串补 `/if-exists` |
-| `config.ts` 透传检查 | **S2-2** | 若 YAML→对象无白名单则无需改动 |
-| 写动作 run() 集成测试 | **S2-3** | `tests/orchestrator-actions.test.ts` 补 apply/set/unset/rename/ifExists/unlink |
-| CLI 端到端测试 | **S2-4** | `tests/orchestrator-cli.test.ts` 补 dry-run/apply/rename/if-exists/非法值 |
-| 文档同步 | **S2-5** | `docs/guides/commands.md` + `skills-def/x-basalt/SKILL.md` |
+| 部件                                   | 本段     | 说明                                                                           |
+| -------------------------------------- | -------- | ------------------------------------------------------------------------------ |
+| CLI `resolvePipeline` 解析 `if-exists` | **S2-1** | 校验 + 透传；三命令 help 串补 `/if-exists`                                     |
+| `config.ts` 透传检查                   | **S2-2** | 若 YAML→对象无白名单则无需改动                                                 |
+| 写动作 run() 集成测试                  | **S2-3** | `tests/orchestrator-actions.test.ts` 补 apply/set/unset/rename/ifExists/unlink |
+| CLI 端到端测试                         | **S2-4** | `tests/orchestrator-cli.test.ts` 补 dry-run/apply/rename/if-exists/非法值      |
+| 文档同步                               | **S2-5** | `docs/guides/commands.md` + `skills-def/x-basalt/SKILL.md`                     |
 
 ---
 
