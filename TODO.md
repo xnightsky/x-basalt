@@ -18,6 +18,16 @@ dogfood 期决定提前做：自然语言驱动 vault 的 `chat` 子命令（单
 - 交付：pi 起进程逐段实现，编排方编排+独立复核（不轻信 pi 自报）。
 - 设计变更（2026-06-30）：删除写动作逐动作确认；写工具直接落盘，终止靠 Ctrl+C/SIGINT → AbortController。
 
+## 📋 2026-06-30 优化方向调研产出（发现问题 → 落地文档）
+
+本轮「如何优化」会话的诊断与对标调研已全部落地为文档（总入口：[`docs/research/2026-06-30-optimization-overview.md`](docs/research/2026-06-30-optimization-overview.md)）：
+
+- **功能覆盖 gap**（对标官方 Dataview/Obsidian，deep-research 22 确认）：[`docs/research/2026-06-30-feature-gap-vs-dataview-obsidian.md`](docs/research/2026-06-30-feature-gap-vs-dataview-obsidian.md) — inline fields 完全缺失、内置函数覆盖 ~15%、task emoji 多字段缺失、Lambda/动态访问/Inline DQL/GROUP BY swizzling 缺失。
+- **chat 可用性**（对标 agent-browser 三痛点）：[`docs/research/2026-06-30-chat-gap-vs-agent-browser.md`](docs/research/2026-06-30-chat-gap-vs-agent-browser.md) — 工具调用无重试（→失败率高）、撞顶静默停（→轮询到上限停）、缺读正文/全文搜/列笔记。
+- **chat 评估/场景库**（兄弟目录素材库，设计草案，**选址/格式待拍板**）：[`docs/specs/2026-06-30-chat-eval-scenario-library-design.md`](docs/specs/2026-06-30-chat-eval-scenario-library-design.md)。
+
+> 高频刚需缺口（据上述调研，待各自开计划/spec）：**inline fields 提取** · **task emoji 多字段+完成状态** · **内置函数补一批**（default/数组高阶/聚合）· **FTS5 全文检索** · **chat 工具重试+撞顶续作**。FROM 多源 AND/OR 取舍建议复核（官方高频）。
+
 ## 💡 backlog（待 dogfood 暴露真实需求再开，各自写计划/spec）
 
 - **变更编排器 P1 余项 / P2（change orchestration）**：P0 + 统一 `--pipe` + `--apply` + 写动作（apply/set/unset/rename + if-exists）已落地。**P1 余项待续**：背压、缓存跳过、条件分支、检查点续跑、失败告警、内容 hash 去重、**原生管道 stdin（spec §8.3）**、管道 `set` 列表值（现仅标量）。**P2**：DAG/补偿回滚/定时·空闲触发/配置热重载。设计见 [`docs/specs/2026-06-29-change-orchestration-design.md`](docs/specs/2026-06-29-change-orchestration-design.md) §8/§12；**按 dogfood 真实需求再开**。
