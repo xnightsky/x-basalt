@@ -34,7 +34,6 @@ dogfood 期决定提前做：自然语言驱动 vault 的 `chat` 子命令（单
 
 ### DQL 子集（docs dogfood query 验证）
 
-- **`REGEXP` 未实现**：`WHERE title REGEXP "…"` 解析器报 `Expecting LParen but found REGEXP`；与 guides/spec 描述有差距。
 - **`length(rows)` / `count()` 聚合语法不支持**：`TABLE type, length(rows) FROM "" GROUP BY type` 在 `(` 处语法错误；简写 `TABLE type FROM "" GROUP BY type` 可跑。
 - **`TASK WHERE … LIMIT` 组合解析冲突**：`TASK FROM "" WHERE completed = false LIMIT 5` 在 `LIMIT` 处报错；单独 `TASK FROM "" LIMIT n` 正常。
 - **`FLATTEN file.tags` 的 `tag` 列常为 null**：展开后 `tag` 列为 null，实际值落在 `file.tags` 列（输出形态与预期不符）。

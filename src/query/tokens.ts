@@ -52,6 +52,8 @@ export const Flatten = keyword("Flatten", "flatten");
 export const Without = keyword("Without", "without");
 /** `ID` 关键字，与 `Without` 组合为 `WITHOUT ID`（隐藏默认 file.link 列）。 */
 export const Id = keyword("Id", "id");
+/** `REGEXP` 中缀操作符（Dataview 语法：`field REGEXP "pattern"`）。 */
+export const Regexp = keyword("Regexp", "regexp");
 
 // === Obsidian 规范来源: 标签体取 Unicode 字母/数字/下划线/连字符/斜杠（嵌套）===
 // chevrotain 对带 u flag 的 \p{} unicode pattern 在首字符优化阶段失配（spike + S2.3 实测），
@@ -125,6 +127,7 @@ export const allTokens = [
   Flatten,
   Without,
   Id,
+  Regexp,
   Null,
   Tag,
   WikiLink,

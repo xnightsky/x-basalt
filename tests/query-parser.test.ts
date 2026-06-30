@@ -253,6 +253,12 @@ test("parser WHERE：函数调用 contains/regexmatch", () => {
     field: "file.name",
     arg: "^A",
   });
+  assert.deepEqual(parseDql('LIST WHERE file.name REGEXP "^A"').where, {
+    kind: "call",
+    fn: "regexmatch",
+    field: "file.name",
+    arg: "^A",
+  });
 });
 
 test("S2.17 parser：scalar 函数 length(field) op value → compare 带 fn", () => {

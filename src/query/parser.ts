@@ -30,6 +30,7 @@ import {
   NumberLiteral,
   Op,
   Or,
+  Regexp,
   RParen,
   Sort,
   StringLiteral,
@@ -300,32 +301,58 @@ class DqlChevParser extends EmbeddedActionsParser {
             },
             {
               ALT: () => {
-                const opTok = this.CONSUME(Op);
                 return this.OR2<WhereExpr>([
                   {
-                    // field = null / != null → isnull（S2.15）。
+                    // field REGEXP "pattern" → regexmatch(field, pattern)（Dataview 中缀语法）。
                     ALT: () => {
-                      this.CONSUME(Null);
-                      return this.ACTION((): WhereExpr => {
-                        const op = opTok.image;
-                        if (op !== "=" && op !== "!=") {
-                          throw new DqlSyntaxError("null 仅支持 = / != 比较", opTok.startOffset);
-                        }
-                        return { kind: "isnull", field: headTok.image, negated: op === "!=" };
-                      });
+                      this.CONSUME(Regexp);
+                      const arg = this.SUBRULE2(this.callArg);
+                      return {
+                        kind: "call",
+                        fn: "regexmatch",
+                        field: headTok.image,
+                        arg,
+                      };
                     },
                   },
                   {
                     ALT: () => {
-                      const value = this.SUBRULE(this.compareValue);
-                      return this.ACTION(
-                        (): WhereExpr => ({
-                          kind: "compare",
-                          field: headTok.image,
-                          op: opTok.image as CompareOp,
-                          value,
-                        }),
-                      );
+                      const opTok = this.CONSUME(Op);
+                      return this.OR3<WhereExpr>([
+                        {
+                          // field = null / != null → isnull（S2.15）。
+                          ALT: () => {
+                            this.CONSUME(Null);
+                            return this.ACTION((): WhereExpr => {
+                              const op = opTok.image;
+                              if (op !== "=" && op !== "!=") {
+                                throw new DqlSyntaxError(
+                                  "null 仅支持 = / != 比较",
+                                  opTok.startOffset,
+                                );
+                              }
+                              return {
+                                kind: "isnull",
+                                field: headTok.image,
+                                negated: op === "!=",
+                              };
+                            });
+                          },
+                        },
+                        {
+                          ALT: () => {
+                            const value = this.SUBRULE(this.compareValue);
+                            return this.ACTION(
+                              (): WhereExpr => ({
+                                kind: "compare",
+                                field: headTok.image,
+                                op: opTok.image as CompareOp,
+                                value,
+                              }),
+                            );
+                          },
+                        },
+                      ]);
                     },
                   },
                 ]);
