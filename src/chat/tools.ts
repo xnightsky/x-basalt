@@ -23,6 +23,7 @@ import { VaultParser } from "../parser/index.js";
 import { DataviewEngine } from "../query/index.js";
 import { SkillRecall } from "../skill/index.js";
 import type { Safety } from "./safety.js";
+import { resolveVaultLayout } from "../utils/path.js";
 
 export interface ToolContext {
   dbPath: string;
@@ -37,6 +38,9 @@ function observe(safety: Safety, v: unknown): string {
 }
 
 export function buildTools(ctx: ToolContext, safety: Safety): ToolSet {
+  const layout = resolveVaultLayout(ctx.vaultPath);
+  const toAbs = (file: string): string => layout.toAbs(file);
+
   return {
     // ---- 读工具（带 execute，自动跑）----
     query: tool({
@@ -64,7 +68,7 @@ export function buildTools(ctx: ToolContext, safety: Safety): ToolSet {
         required: ["file"],
         additionalProperties: false,
       }),
-      execute: ({ file }) => observe(safety, new VaultParser().parse(readFileSync(file, "utf8"))),
+      execute: ({ file }) => observe(safety, new VaultParser().parse(readFileSync(toAbs(file), "utf8"))),
     }),
     scan: tool({
       description: "对比文件系统与索引，报告新增/改动/删除（不写库）。",
@@ -92,7 +96,7 @@ export function buildTools(ctx: ToolContext, safety: Safety): ToolSet {
         required: ["file"],
         additionalProperties: false,
       }),
-      execute: ({ file, key }) => observe(safety, readMeta(file, key) ?? null),
+      execute: ({ file, key }) => observe(safety, readMeta(toAbs(file), key) ?? null),
     }),
     skills_recall: tool({
       description: "按关键字模糊召回 Obsidian/DQL 规范与 CLI 说明书。",
@@ -122,7 +126,7 @@ export function buildTools(ctx: ToolContext, safety: Safety): ToolSet {
       }),
       execute: ({ file, key, value, type }) => {
         const typed = coerceValue(value, (type ?? "auto") as MetaScalarType);
-        const r = editMeta(file, (d) => setMeta(d, key, typed), { dryRun: false });
+        const r = editMeta(toAbs(file), (d) => setMeta(d, key, typed), { dryRun: false });
         return r.changed ? `✓ set ${key} → ${file}` : `· 无变化：${file}`;
       },
     }),
@@ -135,7 +139,7 @@ export function buildTools(ctx: ToolContext, safety: Safety): ToolSet {
         additionalProperties: false,
       }),
       execute: ({ file, key }) => {
-        const r = editMeta(file, (d) => unsetMeta(d, key), { dryRun: false });
+        const r = editMeta(toAbs(file), (d) => unsetMeta(d, key), { dryRun: false });
         return r.changed ? `✓ unset ${key} → ${file}` : `· 无变化：${file}`;
       },
     }),
@@ -152,7 +156,7 @@ export function buildTools(ctx: ToolContext, safety: Safety): ToolSet {
         additionalProperties: false,
       }),
       execute: ({ file, oldKey, newKey }) => {
-        const r = editMeta(file, (d) => renameMeta(d, oldKey, newKey), { dryRun: false });
+        const r = editMeta(toAbs(file), (d) => renameMeta(d, oldKey, newKey), { dryRun: false });
         return r.changed ? `✓ rename ${oldKey}→${newKey} → ${file}` : `· 无变化：${file}`;
       },
     }),
@@ -166,7 +170,7 @@ export function buildTools(ctx: ToolContext, safety: Safety): ToolSet {
       }),
       execute: ({ file, sortKeys }) => {
         const r = editMeta(
-          file,
+          toAbs(file),
           (d) => {
             normalizeDoc(d, { sortKeys: sortKeys ?? false });
           },
@@ -194,7 +198,7 @@ export function buildTools(ctx: ToolContext, safety: Safety): ToolSet {
         additionalProperties: false,
       }),
       execute: ({ profile, file, sets, refreshDerived }) => {
-        const r = applyProfile(file, profile, { sets, refreshDerived, dryRun: false });
+        const r = applyProfile(toAbs(file), profile, { sets, refreshDerived, dryRun: false });
         return observe(safety, {
           filled: r.filled,
           overridden: r.overridden,
@@ -229,7 +233,7 @@ export function buildTools(ctx: ToolContext, safety: Safety): ToolSet {
         const cfg: PipelineConfig = {
           actions,
           where,
-          paths,
+          paths: paths?.map(toAbs),
           ifExists: (ifExists as PipelineConfig["ifExists"]) ?? "skip",
           concurrency: concurrency ?? 4,
           onBusy: "queue",
