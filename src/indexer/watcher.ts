@@ -1,5 +1,5 @@
 import chokidar from "chokidar";
-import { basename } from "node:path";
+import { basename, resolve } from "node:path";
 
 // === 自建实现: chokidar 监听封装。跳过 .obsidian/ 与隐藏文件，仅关心 .md ===
 //
@@ -51,9 +51,12 @@ function isMarkdown(p: string): boolean {
  * Then 仅在最后一次写操作稳定后触发一次 onChange，避免索引读到半写文件
  */
 export function startWatch(vaultPath: string, handlers: WatchHandlers): () => void {
-  const watcher = chokidar.watch(vaultPath, {
+  const root = resolve(vaultPath);
+  const watcher = chokidar.watch(root, {
     ignored: (p: string) => isHidden(p),
     ignoreInitial: true,
+    // 回调一律用绝对路径，避免相对 watch 根时回报 cwd 相对路径导致索引 join 歧义。
+    absolute: true,
     // stabilityThreshold 100ms：覆盖主流编辑器保存节奏，防止半写触发；pollInterval 20ms 平衡检测延迟与 CPU 开销。
     awaitWriteFinish: { stabilityThreshold: 100, pollInterval: 20 },
   });

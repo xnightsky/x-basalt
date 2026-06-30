@@ -47,6 +47,13 @@ function required<T>(value: T | undefined, message: string): T {
   return value;
 }
 
+/** 去掉 argv 中紧挨子命令前的字面量 `--`（pnpm run cli -- watch 等场景会误传入）。 */
+function normalizeArgv(argv: readonly string[]): string[] {
+  const out = [...argv];
+  while (out[2] === "--") out.splice(2, 1);
+  return out;
+}
+
 /** 汇报一次 meta 写操作结果：dry-run 打印将写入的完整内容到 stdout；否则打印 ✓/无变化摘要。 */
 function reportEdit(r: EditResult, label: string): void {
   if (r.dryRun) {
@@ -627,7 +634,7 @@ program
     },
   );
 
-program.parseAsync(process.argv).catch((err: unknown) => {
+program.parseAsync(normalizeArgv(process.argv)).catch((err: unknown) => {
   console.error(`✗ ${(err as Error).message}`);
   process.exitCode = 1;
 });

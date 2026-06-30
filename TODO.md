@@ -27,3 +27,23 @@ dogfood 期决定提前做：自然语言驱动 vault 的 `chat` 子命令（单
 - **语义/全文检索（S3.5）**：FTS5 全文（core、无 AI、中文 trigram）补"查正文"空洞；embedding 向量做成最小可选 AI（接口后、默认关、FTS5 兜底）。**有评估背书**：[`docs/specs/2026-06-28-semantic-retrieval-integration.md`](docs/specs/2026-06-28-semantic-retrieval-integration.md)。FTS5 优先级高于 embedding；**现在不做**，触发条件见 spec。
 - ~~**CLI chat（可选 AI · 远期）**~~：已提为执行中，见上「🚧 执行中：CLI chat（读+写）」。范围调整为读+写同做、不待 FTS5（结构化先行）。
 - **可选增强**（按需再定）：S3.4 kysely 收编 DQL→SQL。
+
+## 🐛 bug（后续修复）
+
+> 来源：2026-06-30 以 `docs/` 为 Vault 的 dogfood CLI 验证（`pnpm run cli` / `npx tsx src/cli.ts`）。存在 = 待修；修完删条目或标 ✅。
+
+### watch / CLI 接线
+
+- **watch `--on-change` Windows 引号/空格**：含空格的 shell 模板（如 `cmd /c echo WATCH:{file}`）在 Windows 下易被拆成多个 argv，commander 报 `too many arguments`。**待查**：CLI 是否应要求整段模板用引号包一层，或文档明确 Windows 转义口径。
+
+### chat
+
+- **REPL 管道输入结束报 `readline was closed`**：`echo '…' | x-basalt chat` 能出答案，但进程退出前抛 `✗ readline was closed`（非 0 体验）。复现：PowerShell 管道单轮 REPL。
+
+### DQL 子集（docs dogfood query 验证）
+
+- **`REGEXP` 未实现**：`WHERE title REGEXP "…"` 解析器报 `Expecting LParen but found REGEXP`；与 guides/spec 描述有差距。
+- **`length(rows)` / `count()` 聚合语法不支持**：`TABLE type, length(rows) FROM "" GROUP BY type` 在 `(` 处语法错误；简写 `TABLE type FROM "" GROUP BY type` 可跑。
+- **`TASK WHERE … LIMIT` 组合解析冲突**：`TASK FROM "" WHERE completed = false LIMIT 5` 在 `LIMIT` 处报错；单独 `TASK FROM "" LIMIT n` 正常。
+- **`FLATTEN file.tags` 的 `tag` 列常为 null**：展开后 `tag` 列为 null，实际值落在 `file.tags` 列（输出形态与预期不符）。
+- **`FROM ""` 语义易混**：`LIST FROM ""` 仅 1 条（vault 根层？），`LIST FROM "guides"` 为 10 条；空串 FROM 与「全库」直觉不一致，需文档或实现统一。

@@ -2,7 +2,7 @@ import Database from "better-sqlite3";
 import type { Database as Db, Statement } from "better-sqlite3";
 import { mkdirSync } from "node:fs";
 import { readdir, readFile, stat } from "node:fs/promises";
-import { basename, dirname, extname, isAbsolute, join, relative } from "node:path";
+import { basename, dirname, extname, isAbsolute, join, relative, resolve, sep } from "node:path";
 import { parseFrontmatter } from "../parser/frontmatter.js";
 import { VaultParser } from "../parser/index.js";
 import { linkKey, pathKey, toPosix } from "../utils/path.js";
@@ -157,7 +157,9 @@ export class VaultIndexer {
   };
 
   constructor(opts: IndexerOptions) {
-    this.vaultPath = opts.vaultPath;
+    // 始终用绝对路径作为 vault 根：相对路径 + chokidar 回调可能回报 cwd 相对路径（如 docs\file.md），
+    // 若 vault 仍为相对值，toAbsolute 会 join(vault, path) 双重拼接 → ENOENT。
+    this.vaultPath = resolve(opts.vaultPath);
     // 确保索引文件父目录存在：默认 db 放隐藏目录 .x-basalt/，首次可能尚未创建。
     // better-sqlite3 只建文件不建目录；:memory: 无文件，跳过。
     if (opts.dbPath !== ":memory:") mkdirSync(dirname(opts.dbPath), { recursive: true });
@@ -466,9 +468,13 @@ export class VaultIndexer {
     this.db.close();
   }
 
-  /** 把任意输入路径解析为绝对路径（相对路径按 vaultPath 解析）。 */
+  /** 把任意输入路径解析为绝对路径（相对路径按 vaultPath 解析；兼容 cwd 已含 vault 前缀的路径）。 */
   private toAbsolute(filePath: string): string {
-    return isAbsolute(filePath) ? filePath : join(this.vaultPath, filePath);
+    if (isAbsolute(filePath)) return filePath;
+    const fromCwd = resolve(filePath);
+    const vaultPrefix = this.vaultPath + sep;
+    if (fromCwd.startsWith(vaultPrefix) || fromCwd === this.vaultPath) return fromCwd;
+    return join(this.vaultPath, filePath);
   }
 
   /** 把任意输入路径归一化为相对 Vault 根的 POSIX 路径（索引内的主键形态）。 */

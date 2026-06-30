@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import Database from "better-sqlite3";
-import { mkdtempSync, rmSync } from "node:fs";
+import { mkdtempSync, mkdirSync, rmSync } from "node:fs";
 import { rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -181,5 +181,46 @@ test("watch 增量：add / change / unlink 实时维护索引（S3.1）", async 
     assert.ok(await waitFor(() => count("SELECT COUNT(*) c FROM files") === 1), "unlink 应移除 B");
   } finally {
     idx.close();
+  }
+});
+
+test("watch 相对 vault 路径：chokidar 回报 cwd 相对路径时不双重拼接", async () => {
+  const base = mkdtempSync(join(tmpdir(), "x-basalt-rel-watch-"));
+  tmpDirs.push(base);
+  const vaultDir = join(base, "vault");
+  mkdirSync(vaultDir, { recursive: true });
+  await writeFile(join(vaultDir, "A.md"), "# A\n");
+
+  const dbPath = freshDbPath();
+  const origCwd = process.cwd();
+  try {
+    process.chdir(base);
+    const idx = new VaultIndexer({ vaultPath: "vault", dbPath });
+    await idx.rebuild();
+
+    const count = (sql: string): number => {
+      const rdb = openReadonly(dbPath);
+      const c = (rdb.prepare(sql).get() as { c: number }).c;
+      rdb.close();
+      return c;
+    };
+    assert.equal(count("SELECT COUNT(*) c FROM files"), 1);
+
+    let ready = false;
+    idx.watch(undefined, () => {
+      ready = true;
+    });
+    assert.ok(await waitFor(() => ready, 3000), "chokidar 应进入 ready");
+    try {
+      await writeFile(join(vaultDir, "B.md"), "# B\n");
+      assert.ok(
+        await waitFor(() => count("SELECT COUNT(*) c FROM files") === 2),
+        "相对 vault 下 add 应索引 B（不应 docs/docs 双重拼接）",
+      );
+    } finally {
+      idx.close();
+    }
+  } finally {
+    process.chdir(origCwd);
   }
 });
