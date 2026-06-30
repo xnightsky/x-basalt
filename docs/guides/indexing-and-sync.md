@@ -1,6 +1,6 @@
 ---
-timestamp: 2026-06-30T00:01:23Z
-sha256: 0c759a45cb116d7bd5a06aab1fc5c62f36c9bd1274c463f19200663aacfab058
+timestamp: 2026-06-30T03:21:44Z
+sha256: 77884e9a406aa1c13b24f0c52d7877e7f8f927dcb9f873761c2ed49de0dc7304
 type: guide
 title: 索引与同步 · x-basalt
 description: index/scan/watch 三种索引模式的行为、取舍与数据模型
@@ -40,7 +40,7 @@ tags:
 ### 2.1 命令接口
 
 ```
-x-basalt scan [vault] [--db <path>] [--rehash] [--dry-run] [--json]
+x-basalt scan [vault...] [--db <path>] [--rehash] [--dry-run] [--json]
 ```
 
 | 选项          | 默认                 | 说明                                                       |
@@ -141,7 +141,7 @@ indexer.close();
 ## 3. `index`：全量重建
 
 ```
-x-basalt index [vault] [--db <path>] [--watch]
+x-basalt index [vault...] [--db <path>] [--watch]
 ```
 
 | 行为           | 说明                                                                                               |
@@ -158,7 +158,7 @@ x-basalt index [vault] [--db <path>] [--watch]
 ## 4. `watch`：实时监听
 
 ```
-x-basalt watch [vault] [--db <path>] [--on-change <cmd>]
+x-basalt watch [vault...] [--db <path>] [--on-change <cmd>]
 ```
 
 启动时先全量 `rebuild()`，随后进入 chokidar 监听循环（前台运行，`Ctrl+C` 退出）。
@@ -187,7 +187,7 @@ x-basalt watch ./my-vault --db ./my-vault.db --on-change "node run-query.js {fil
 
 | 列            | 类型        | 说明                                                                                          |
 | ------------- | ----------- | --------------------------------------------------------------------------------------------- |
-| `path`        | TEXT UNIQUE | 相对 Vault 根的 POSIX 路径，含扩展名，如 `projects/alpha.md`；文件主键                        |
+| `path`        | TEXT UNIQUE | 文件主键（POSIX，含扩展名）。**单根** vault = 相对该根，如 `projects/alpha.md`；**多根** vault = `<根目录名>/<相对该根>`，如 `docs/alpha.md`（各根目录名作命名空间，互不撞键）          |
 | `name`        | TEXT        | 文件名无扩展名，如 `alpha`                                                                    |
 | `name_key`    | TEXT        | `name` 的小写形式；bare 链接 `[[Note]]` 的 basename 大小写不敏感解析键                        |
 | `path_key`    | TEXT        | 全路径去扩展名小写，如 `projects/alpha`；qualified 链接精确解析键（S3.2，消除同名异目录串味） |

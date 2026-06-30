@@ -1,8 +1,6 @@
-import { relative } from "node:path";
 import type { VaultIndexer } from "../indexer/index.js";
 import { startWatch } from "../indexer/watcher.js";
 import type { DataviewEngine } from "../query/index.js";
-import { toPosix } from "../utils/path.js";
 import { selectByDql } from "./route.js";
 import type { ChangeEvent } from "./types.js";
 
@@ -39,15 +37,18 @@ export function manualSourceFromDql(engine: DataviewEngine, dql: string): Change
  * watch 源：底层 chokidar 事件流（不经 indexer.update——落库由管道 index 动作做，避免双重索引）。
  * 把绝对路径投影为相对 POSIX 路径事件，推给 onEvent（通常接堆积器）。
  *
+ * @param roots - 实际监听的 vault 根集合（单个或多个）
+ * @param toKey - 绝对路径 → 索引主键（与 indexer 同一 VaultLayout，多根=根名命名空间，无公共祖先 base）
  * @returns 停止监听的函数（供优雅退出调用）
  */
 export function watchSource(
-  vaultPath: string,
+  roots: string | string[],
+  toKey: (abs: string) => string,
   onEvent: (ev: ChangeEvent) => void,
   onReady?: () => void,
 ): () => void {
-  const toRel = (abs: string): string => toPosix(relative(vaultPath, abs));
-  return startWatch(vaultPath, {
+  const toRel = (abs: string): string => toKey(abs);
+  return startWatch(roots, {
     onAdd: (p) => onEvent({ path: toRel(p), type: "add" }),
     onChange: (p) => onEvent({ path: toRel(p), type: "change" }),
     onUnlink: (p) => onEvent({ path: toRel(p), type: "unlink" }),

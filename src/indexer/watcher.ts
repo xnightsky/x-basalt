@@ -33,10 +33,10 @@ function isMarkdown(p: string): boolean {
 }
 
 /**
- * 启动对 Vault 目录的监听，返回停止函数。
+ * 启动对一个或多个 Vault 根目录的监听，返回停止函数。
  * 仅就 `.md` 触发回调，忽略 `.obsidian/` 与隐藏文件；`ignoreInitial` 避免启动时把存量文件当新增。
  *
- * @param vaultPath - Vault 根目录
+ * @param roots - Vault 根目录（单个或多个；chokidar 支持监听数组）
  * @param handlers - add/change/unlink 回调
  * @returns 调用以停止监听
  *
@@ -50,9 +50,9 @@ function isMarkdown(p: string): boolean {
  * When 100ms 稳定窗口内仍有写操作
  * Then 仅在最后一次写操作稳定后触发一次 onChange，避免索引读到半写文件
  */
-export function startWatch(vaultPath: string, handlers: WatchHandlers): () => void {
-  const root = resolve(vaultPath);
-  const watcher = chokidar.watch(root, {
+export function startWatch(roots: string | string[], handlers: WatchHandlers): () => void {
+  const paths = (Array.isArray(roots) ? roots : [roots]).map((r) => resolve(r));
+  const watcher = chokidar.watch(paths, {
     ignored: (p: string) => isHidden(p),
     ignoreInitial: true,
     // watch 根已 resolve 为绝对路径；chokidar 回调通常为绝对路径（v5 类型无 absolute 选项）。

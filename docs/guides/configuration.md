@@ -1,6 +1,6 @@
 ---
-timestamp: 2026-06-30T00:01:23Z
-sha256: c2a08985a02ac3148aec29e3120ecbca9e524bcaeb10c2ff954fb33847c6b80d
+timestamp: 2026-06-30T03:21:41Z
+sha256: 7508c2868631163a2aca0ca3f2c585c3959eee02ae4324000e13b965d43f4dd7
 type: guide
 title: 配置与基目录 · x-basalt
 description: x-basalt 配置文件查找顺序、键说明与 X_BASALT_DIR 基目录
@@ -85,11 +85,11 @@ echo 'export X_BASALT_DIR="/home/user/vault-state/.x-basalt"' >> ~/.bashrc
 
 ## 4. 可配置项
 
-标量键**均可选**、**值须为字符串**（未知键与非字符串值静默丢弃）；`pipelines` 是唯一的**结构化对象**键（变更编排器，见下）。
+标量键**均可选**、**值须为字符串**（`vault` 额外支持**字符串列表 = 多目录**；未知键与非字符串值静默丢弃）；`pipelines` 是唯一的**结构化对象**键（变更编排器，见下）。
 
 | 键          | 对应 CLI 参数                                | 说明                                                                                                                                                                                                                   |
 | ----------- | -------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `vault`     | `index`/`scan`/`watch` 的 `<vault>` 位置参数 | 默认 Vault 根目录；配好后可省略位置参数                                                                                                                                                                                |
+| `vault`     | `index`/`scan`/`watch` 的 `[vault...]` 位置参数 | 默认 Vault 根；**支持单目录（字符串）或多目录（字符串列表）**；配好后可省略位置参数。多根索引其并集，主键以各根目录名作命名空间（见 §6.5）                                                                                                                                                                                |
 | `db`        | `--db <path>`                                | 默认 SQLite 索引文件路径                                                                                                                                                                                               |
 | `skillPath` | 等价 `OBSIDIAN_SKILL_PATH` 环境变量          | 默认 skill 目录                                                                                                                                                                                                        |
 | `format`    | `parse --format`                             | 默认输出格式，`json` 或 `yaml`                                                                                                                                                                                         |
@@ -178,6 +178,20 @@ $env:X_BASALT_DIR = "D:\basalt-state"
 x-basalt index ./my-vault    # 索引写入 D:\basalt-state\index.db；配置从 D:\basalt-state\config.yaml 读
 x-basalt query "LIST FROM #project"   # db 默认即 D:\basalt-state\index.db
 ```
+
+### 6.5 多目录（多 Vault 根）
+
+`vault` 可写成**字符串列表**，索引多个目录的**并集**——主键以**各根目录名**作命名空间（`docs/…`、`notes/…`），互不覆盖，且与根之间的物理距离无关（不退化成近乎绝对的长路径）：
+
+```yaml
+vault:
+  - ./docs
+  - ./notes
+```
+
+等价 CLI：`x-basalt index ./docs ./notes`，或重复 `--vault`（`run`/`chat`）。
+
+> **约束**：多根的**目录名（basename）须互不相同**（用作命名空间，冲突即报错）。单目录仍写字符串即可（主键为相对该根的路径，无命名空间前缀，与历史一致）。
 
 ---
 

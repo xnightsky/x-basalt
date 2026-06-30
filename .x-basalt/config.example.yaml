@@ -13,7 +13,13 @@
 # db: .x-basalt/index.db
 
 # 默认 Vault 根（index/watch 可省略 <vault> 位置参数）。
-vault: ./my-vault
+# 相对路径以 CLI 运行目录（通常仓库根）为基：./docs 即 {repo}/docs。
+vault: ./docs
+# 也支持多目录（列表）：索引这些目录的并集；主键以它们的公共祖先为基、天然命名空间隔离、互不覆盖。
+# CLI 等价写法：index ./docs ./notes，或重复 --vault ./docs --vault ./notes。
+#   vault:
+#     - ./docs
+#     - ./notes
 
 # 默认 skill 目录（等价环境变量 OBSIDIAN_SKILL_PATH）。
 # skillPath: ./team-skills

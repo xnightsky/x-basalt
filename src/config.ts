@@ -17,8 +17,8 @@ import type { PipelineConfig } from "./orchestrator/types.js";
 export interface BasaltConfig {
   /** 默认 SQLite 索引路径（对应 --db） */
   db?: string;
-  /** 默认 Vault 根（对应 index/watch 的 <vault> 与 query 的 --vault） */
-  vault?: string;
+  /** 默认 Vault 根（对应 index/watch 的 <vault> 与 query 的 --vault）；支持单目录或多目录列表。 */
+  vault?: string | string[];
   /** 默认 skill 目录（等价 OBSIDIAN_SKILL_PATH；设置后经 SkillRecall 优先生效） */
   skillPath?: string;
   /** 默认输出格式 json|yaml（对应 parse 的 --format） */
@@ -85,13 +85,43 @@ export function parsePipelines(raw: unknown): Record<string, PipelineConfig> {
   return out;
 }
 
-/** 仅挑出已知的字符串键 + pipelines 段；忽略未知键与非字符串值。 */
+/**
+ * vault 取值：字符串原样；字符串数组过滤掉非串项；空 / 非串 / 空数组 → undefined（被忽略）。
+ *
+ * @behavior
+ * Given vault 为字符串
+ * When pickVault
+ * Then 原样返回（单目录）
+ *
+ * @behavior
+ * Given vault 为数组（可能含非字符串项）
+ * When pickVault
+ * Then 过滤掉非字符串项返回字符串列表；过滤后为空则返回 undefined（被丢弃）
+ *
+ * @behavior
+ * Given vault 为非字符串非数组（如数字 / 对象）
+ * When pickVault
+ * Then 返回 undefined（被忽略，不写入配置）
+ */
+function pickVault(v: unknown): string | string[] | undefined {
+  if (typeof v === "string") return v;
+  if (Array.isArray(v)) {
+    const list = v.filter((x): x is string => typeof x === "string");
+    return list.length > 0 ? list : undefined;
+  }
+  return undefined;
+}
+
+/** 仅挑出已知的字符串键（vault 另支持字符串数组）+ pipelines 段；忽略未知键与非字符串值。 */
 function pickConfig(obj: Record<string, unknown>): BasaltConfig {
   const out: BasaltConfig = {};
   for (const k of KEYS) {
+    if (k === "vault") continue; // vault 支持 string | string[]，下方单独挑
     const v = obj[k];
     if (typeof v === "string") out[k] = v;
   }
+  const vault = pickVault(obj.vault);
+  if (vault !== undefined) out.vault = vault;
   if (obj.pipelines !== undefined) out.pipelines = parsePipelines(obj.pipelines);
   return out;
 }

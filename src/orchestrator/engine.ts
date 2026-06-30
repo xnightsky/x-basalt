@@ -7,6 +7,7 @@ import { matchEvent, selectByDql } from "./route.js";
 import { manualSourceFromDql, manualSourceFromPaths, scanSource, watchSource } from "./sources.js";
 import type { ActionContext, ChangeEvent, PipelineConfig, RunReport } from "./types.js";
 import { runPipeline } from "./run.js";
+import { resolveVaultLayout, type VaultLayout } from "../utils/path.js";
 
 // === 自建实现: 编排引擎（组装五段 + 防回环 + 优雅退出）===
 //
@@ -29,12 +30,13 @@ export function isSelfWrite(
 }
 
 export interface OrchestratorOptions {
-  vaultPath: string;
+  vaultPath: string | string[];
   dbPath: string;
 }
 
 export class Orchestrator {
-  private readonly vaultPath: string;
+  /** vault 物理布局：监听的根集合 + 主键↔绝对路径互转（按根命名空间，无公共祖先 base）。 */
+  private readonly layout: VaultLayout;
   private readonly dbPath: string;
   private readonly indexer: VaultIndexer;
   /** 自产生写记录：path → 落盘时刻（ms）。watch 据此跳过回环事件。 */
@@ -48,7 +50,8 @@ export class Orchestrator {
   private closed = false;
 
   constructor(opts: OrchestratorOptions) {
-    this.vaultPath = opts.vaultPath;
+    // 与 indexer 同源布局：watch 用 layout.roots，动作经 ctx.indexer.toAbsolute 还原绝对路径，键方案一致。
+    this.layout = resolveVaultLayout(opts.vaultPath);
     this.dbPath = opts.dbPath;
     this.indexer = new VaultIndexer({ vaultPath: opts.vaultPath, dbPath: opts.dbPath });
   }
@@ -83,7 +86,6 @@ export class Orchestrator {
 
     const actions = pipeline.actions.map(parseAction);
     const ctx: ActionContext = {
-      vaultPath: this.vaultPath,
       indexer: this.indexer,
       dryRun: pipeline.dryRun ?? true, // 写动作默认 dry-run（spec §6.6）
       ifExists: pipeline.ifExists ?? "skip",
@@ -128,7 +130,8 @@ export class Orchestrator {
     const maxWait = pipeline.debounce?.maxWait ?? 3000;
     this.accumulator = new Accumulator({ wait, maxWait });
     this.stopWatch = watchSource(
-      this.vaultPath,
+      this.layout.roots,
+      this.layout.toKey,
       (ev) => {
         // 防回环：跳过刚由写动作自产生的变更（消费后清除该记录）。
         if (isSelfWrite(this.selfWritten, ev, Date.now(), SELF_WRITE_WINDOW)) {

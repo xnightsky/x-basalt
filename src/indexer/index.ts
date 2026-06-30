@@ -2,10 +2,10 @@ import Database from "better-sqlite3";
 import type { Database as Db, Statement } from "better-sqlite3";
 import { mkdirSync } from "node:fs";
 import { readdir, readFile, stat } from "node:fs/promises";
-import { basename, dirname, extname, isAbsolute, join, relative, resolve, sep } from "node:path";
+import { basename, dirname, extname, join } from "node:path";
 import { parseFrontmatter } from "../parser/frontmatter.js";
 import { VaultParser } from "../parser/index.js";
-import { linkKey, pathKey, toPosix } from "../utils/path.js";
+import { linkKey, pathKey, resolveVaultLayout, type VaultLayout } from "../utils/path.js";
 import { createSchema } from "./schema.js";
 import { startWatch } from "./watcher.js";
 
@@ -17,8 +17,8 @@ import { startWatch } from "./watcher.js";
 
 /** 索引器构造选项。 */
 export interface IndexerOptions {
-  /** Vault 根目录 */
-  vaultPath: string;
+  /** Vault 根目录：单目录字符串或多目录列表（多目录索引其并集）。 */
+  vaultPath: string | string[];
   /** SQLite 索引文件路径 */
   dbPath: string;
 }
@@ -136,7 +136,8 @@ async function collectMarkdownFiles(root: string): Promise<string[]> {
 }
 
 export class VaultIndexer {
-  private readonly vaultPath: string;
+  /** vault 物理布局：遍历/监听的根集合 + 主键↔绝对路径互转（按根命名空间，无公共祖先 base）。 */
+  private readonly layout: VaultLayout;
   private readonly db: Db;
   private readonly parser = new VaultParser();
   private stopWatch: (() => void) | null = null;
@@ -157,9 +158,9 @@ export class VaultIndexer {
   };
 
   constructor(opts: IndexerOptions) {
-    // 始终用绝对路径作为 vault 根：相对路径 + chokidar 回调可能回报 cwd 相对路径（如 docs\file.md），
-    // 若 vault 仍为相对值，toAbsolute 会 join(vault, path) 双重拼接 → ENOENT。
-    this.vaultPath = resolve(opts.vaultPath);
+    // 始终用绝对路径：相对路径 + chokidar 回调可能回报 cwd 相对路径（如 docs\file.md），
+    // 主键归一交给 layout（已对每个根 resolve；单根=相对该根，多根=根名命名空间，无公共祖先 base）。
+    this.layout = resolveVaultLayout(opts.vaultPath);
     // 确保索引文件父目录存在：默认 db 放隐藏目录 .x-basalt/，首次可能尚未创建。
     // better-sqlite3 只建文件不建目录；:memory: 无文件，跳过。
     if (opts.dbPath !== ":memory:") mkdirSync(dirname(opts.dbPath), { recursive: true });
@@ -196,6 +197,12 @@ export class VaultIndexer {
     };
   }
 
+  /** 遍历所有根收集 `.md`（多根并发）；根已剔子根、通常无重叠，仍按绝对路径去重保险。 */
+  private async collectAllMarkdown(): Promise<string[]> {
+    const per = await Promise.all(this.layout.roots.map((r) => collectMarkdownFiles(r)));
+    return [...new Set(per.flat())];
+  }
+
   /**
    * 全量扫描 Vault 下所有 `.md` 重建索引（流式分批，S3.3）。
    *
@@ -216,7 +223,7 @@ export class VaultIndexer {
    * Then 跳过该文件并 warn，其余照常入库（单文件失败不中断全量）
    */
   async rebuild(): Promise<void> {
-    const files = await collectMarkdownFiles(this.vaultPath);
+    const files = await this.collectAllMarkdown();
     // 手动事务跨 await：better-sqlite3 的 db.transaction() 仅接同步函数，无法在其中 await 读盘，
     // 故用裸 BEGIN/COMMIT/ROLLBACK 在分批异步读取之间保持同一事务（原子 + 流式）。
     this.db.exec("BEGIN");
@@ -255,11 +262,11 @@ export class VaultIndexer {
   private async computeDiff(
     rehash: boolean,
   ): Promise<{ added: string[]; modified: string[]; deleted: string[]; unchanged: number }> {
-    const absFiles = await collectMarkdownFiles(this.vaultPath);
+    const absFiles = await this.collectAllMarkdown();
     const fsMap = new Map<string, { mtime: number; size: number }>();
     for (const abs of absFiles) {
       const st = await stat(abs);
-      fsMap.set(toPosix(relative(this.vaultPath, abs)), {
+      fsMap.set(this.layout.toKey(abs), {
         mtime: Math.floor(st.mtimeMs),
         size: st.size,
       });
@@ -443,7 +450,7 @@ export class VaultIndexer {
         .then(() => onEvent?.(event, p))
         .catch((e) => console.warn(`⚠ 索引${event === "add" ? "新增" : "更新"}失败 ${p}：${e}`));
     };
-    this.stopWatch = startWatch(this.vaultPath, {
+    this.stopWatch = startWatch(this.layout.roots, {
       onAdd: (p) => onWrite("add", p),
       onChange: (p) => onWrite("change", p),
       onUnlink: (p) => {
@@ -468,26 +475,21 @@ export class VaultIndexer {
     this.db.close();
   }
 
-  /** 把任意输入路径解析为绝对路径（相对路径按 vaultPath 解析；兼容 cwd 已含 vault 前缀的路径）。 */
-  private toAbsolute(filePath: string): string {
-    if (isAbsolute(filePath)) return filePath;
-    const fromCwd = resolve(filePath);
-    const vaultPrefix = this.vaultPath + sep;
-    if (fromCwd.startsWith(vaultPrefix) || fromCwd === this.vaultPath) return fromCwd;
-    return join(this.vaultPath, filePath);
+  /** 把任意输入路径解析为绝对路径（主键 / cwd 相对 / 绝对皆可）。公开：供编排器动作还原 .md 绝对路径。 */
+  toAbsolute(filePath: string): string {
+    return this.layout.toAbs(filePath);
   }
 
-  /** 把任意输入路径归一化为相对 Vault 根的 POSIX 路径（索引内的主键形态）。 */
+  /** 把任意输入路径归一化为索引主键（POSIX；单根=相对根，多根=根名命名空间）。 */
   private toRelative(filePath: string): string {
-    const abs = this.toAbsolute(filePath);
-    return toPosix(relative(this.vaultPath, abs));
+    return this.layout.toKey(this.layout.toAbs(filePath));
   }
 
   /** 读取并解析单文件，组装成可直接落库的 FilePayload。 */
   private async buildPayload(absPath: string): Promise<FilePayload> {
     const content = await readFile(absPath, "utf8");
     const st = await stat(absPath);
-    const rel = toPosix(relative(this.vaultPath, absPath));
+    const rel = this.layout.toKey(absPath);
 
     const ext = extname(rel);
     const name = basename(rel, ext);

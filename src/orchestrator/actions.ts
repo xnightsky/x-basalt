@@ -1,4 +1,3 @@
-import { join } from "node:path";
 import { readFileSync } from "node:fs";
 import {
   applyProfile,
@@ -49,7 +48,7 @@ const normalizeAction: Action = {
     if (ev.type === "unlink") {
       return { action: "normalize", path: ev.path, changed: false, skipped: true };
     }
-    const abs = join(ctx.vaultPath, ev.path);
+    const abs = ctx.indexer.toAbsolute(ev.path);
     const r = editMeta(abs, (d) => void normalizeDoc(d), { dryRun: ctx.dryRun });
     // dryRun → 未落盘记 skipped；非 dryRun 且有字节变化才记 changed。
     const changed = r.changed && !r.dryRun;
@@ -71,7 +70,7 @@ const parseOnlyAction: Action = {
     if (ev.type === "unlink") {
       return { action: "parse", path: ev.path, changed: false, skipped: true };
     }
-    const abs = join(ctx.vaultPath, ev.path);
+    const abs = ctx.indexer.toAbsolute(ev.path);
     parser.parse(readFileSync(abs, "utf8")); // 抛错即解析失败，由执行层捕获记 failed
     return { action: "parse", path: ev.path, changed: false, skipped: false };
   },
@@ -85,7 +84,7 @@ function applyActionOf(profile: string): Action {
     async run(ev, ctx) {
       if (ev.type === "unlink")
         return { action: "apply", path: ev.path, changed: false, skipped: true };
-      const abs = join(ctx.vaultPath, ev.path);
+      const abs = ctx.indexer.toAbsolute(ev.path);
       const r = applyProfile(abs, profile, { dryRun: ctx.dryRun });
       const changed = r.changed && !r.dryRun;
       if (changed) ctx.onWrite?.(ev.path);
@@ -102,7 +101,7 @@ function setActionOf(key: string, rawValue: string): Action {
     async run(ev, ctx) {
       if (ev.type === "unlink")
         return { action: "set", path: ev.path, changed: false, skipped: true };
-      const abs = join(ctx.vaultPath, ev.path);
+      const abs = ctx.indexer.toAbsolute(ev.path);
       const r = editMeta(abs, (d) => setMeta(d, key, coerceValue(rawValue, "auto")), {
         dryRun: ctx.dryRun,
       });
@@ -121,7 +120,7 @@ function unsetActionOf(key: string): Action {
     async run(ev, ctx) {
       if (ev.type === "unlink")
         return { action: "unset", path: ev.path, changed: false, skipped: true };
-      const abs = join(ctx.vaultPath, ev.path);
+      const abs = ctx.indexer.toAbsolute(ev.path);
       const r = editMeta(abs, (d) => unsetMeta(d, key), { dryRun: ctx.dryRun });
       const changed = r.changed && !r.dryRun;
       if (changed) ctx.onWrite?.(ev.path);
@@ -138,7 +137,7 @@ function renameActionOf(oldKey: string, newKey: string): Action {
     async run(ev, ctx) {
       if (ev.type === "unlink")
         return { action: "rename", path: ev.path, changed: false, skipped: true };
-      const abs = join(ctx.vaultPath, ev.path);
+      const abs = ctx.indexer.toAbsolute(ev.path);
       const r = editMeta(abs, (d) => applyRenamePolicy(d, oldKey, newKey, ctx.ifExists ?? "skip"), {
         dryRun: ctx.dryRun,
       });

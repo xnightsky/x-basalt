@@ -11,6 +11,7 @@ import {
   scanSource,
   watchSource,
 } from "../src/orchestrator/sources.js";
+import { resolveVaultLayout } from "../src/utils/path.js";
 import type { ChangeEvent } from "../src/orchestrator/types.js";
 
 // === CO-F1 源适配（scan/手动/watch → ChangeEvent）===
@@ -93,8 +94,10 @@ test("CO-F1 Given 启动监听后新建文件 When watchSource Then 收到 add �
   const evs: ChangeEvent[] = [];
   let stop: (() => void) | undefined;
   await new Promise<void>((resolve) => {
+    const layout = resolveVaultLayout(dir);
     stop = watchSource(
-      dir,
+      layout.roots,
+      layout.toKey,
       (e) => evs.push(e),
       () => resolve(),
     );

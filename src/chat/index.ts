@@ -13,7 +13,7 @@ export interface ChatOptions {
   model?: string;
   maxSteps: number;
   dbPath: string;
-  vaultPath: string;
+  vaultPath: string | string[];
   skillPath?: string;
 }
 

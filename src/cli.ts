@@ -47,6 +47,31 @@ function required<T>(value: T | undefined, message: string): T {
   return value;
 }
 
+/** commander 累积器：把可重复的 `--vault <path>` 收进数组（多根 vault）。 */
+function collectVault(v: string, prev: string[]): string[] {
+  return [...prev, v];
+}
+
+/**
+ * 解析 vault 输入：CLI 多值（位置参数或重复 --vault）优先、回退配置；空则统一 ✗ 报错（复用 required 文案）。
+ * 返回 string（单根，保持单值日志/向后兼容）或 string[]（多根）。
+ */
+function requireVault(
+  cli: string[] | undefined,
+  cfg: string | string[] | undefined,
+  message: string,
+): string | string[] {
+  const picked = cli && cli.length > 0 ? cli : cfg;
+  const list = picked === undefined ? [] : Array.isArray(picked) ? picked : [picked];
+  required(list.length > 0 ? list : undefined, message);
+  return list.length === 1 ? (list[0] as string) : list;
+}
+
+/** vault 值用于日志显示（多根用 , 连接）。 */
+function fmtVault(v: string | string[]): string {
+  return Array.isArray(v) ? v.join(", ") : v;
+}
+
 /** 合并 `--flag value part2 part3` 为 `--flag` + 单值（commander 的 `<cmd>` 只吃一 token，含空格 shell 会被拆参）。 */
 function mergeSpacedOptionValue(argv: string[], flag: string): void {
   for (let i = 0; i < argv.length; i++) {
@@ -231,15 +256,15 @@ program
 program
   .command("index")
   .description("构建 / 更新 Vault 索引")
-  .argument("[vault]", "Vault 目录（可省略，回退配置 vault）")
+  .argument("[vault...]", "Vault 目录（可多个；省略则回退配置 vault）")
   .option("--watch", "启用文件监听增量更新", false)
   .option("--db <path>", "SQLite 索引文件路径（默认 .x-basalt/index.db，可由配置 db 覆盖）")
-  .action(async (vault: string | undefined, opts: { watch: boolean; db?: string }) => {
-    const vaultPath = required(vault ?? config.vault, "需要 <vault> 参数或在配置文件中设置 vault");
+  .action(async (vaults: string[], opts: { watch: boolean; db?: string }) => {
+    const vaultPath = requireVault(vaults, config.vault, "需要 <vault> 参数或在配置文件中设置 vault");
     const dbPath = opts.db ?? config.db ?? DEFAULT_DB;
     const indexer = new VaultIndexer({ vaultPath, dbPath });
     await indexer.rebuild();
-    console.log(`✓ 已索引 ${vaultPath} → ${dbPath}`);
+    console.log(`✓ 已索引 ${fmtVault(vaultPath)} → ${dbPath}`);
     if (opts.watch) {
       indexer.watch((event, file) => console.log(`· ${event} ${file}`));
       console.log("监听中… 按 Ctrl+C 退出。");
@@ -253,7 +278,7 @@ program
   .description(
     "按需增量重索引：diff 文件系统 vs 索引，只重扫新增/改动/删除的文件（无需常驻 watch）",
   )
-  .argument("[vault]", "Vault 目录（可省略，回退配置 vault）")
+  .argument("[vault...]", "Vault 目录（可多个；省略则回退配置 vault）")
   .option("--db <path>", "SQLite 索引文件路径（默认 .x-basalt/index.db，可由配置 db 覆盖）")
   .option("--rehash", "按内容对比检测变化（慢但稳），默认 mtime+size", false)
   .option("--dry-run", "只报告差异，不写库（供触发前预览）", false)
@@ -267,7 +292,7 @@ program
   .option("--apply", "管道写动作落盘（默认 dry-run；仅 --pipe 时有效）", false)
   .action(
     async (
-      vault: string | undefined,
+      vaults: string[],
       opts: {
         db?: string;
         rehash: boolean;
@@ -277,8 +302,9 @@ program
         apply: boolean;
       },
     ) => {
-      const vaultPath = required(
-        vault ?? config.vault,
+      const vaultPath = requireVault(
+        vaults,
+        config.vault,
         "需要 <vault> 参数或在配置文件中设置 vault",
       );
       const dbPath = opts.db ?? config.db ?? DEFAULT_DB;
@@ -301,7 +327,7 @@ program
         } else {
           const tag = opts.dryRun ? "（dry-run 未写入）" : "";
           console.log(
-            `✓ scan ${vaultPath}${tag}：+${report.added.length} 新增 ~${report.modified.length} 改动 -${report.deleted.length} 删除（${report.unchanged} 未变跳过）`,
+            `✓ scan ${fmtVault(vaultPath)}${tag}：+${report.added.length} 新增 ~${report.modified.length} 改动 -${report.deleted.length} 删除（${report.unchanged} 未变跳过）`,
           );
         }
       } finally {
@@ -524,19 +550,25 @@ program
     [] as string[],
   )
   .option("--apply", "写动作落盘（默认 dry-run 只预览）", false)
-  .option("--vault <path>", "Vault 目录（可回退配置 vault）")
+  .option(
+    "--vault <path>",
+    "Vault 目录（可多个，重复 --vault；可回退配置 vault）",
+    collectVault,
+    [] as string[],
+  )
   .option("--db <path>", "SQLite 索引路径（默认 .x-basalt/index.db，可由配置 db 覆盖）")
   .option("--json", "结构化报告输出", false)
   .action(
     async (opts: {
       pipe: string[];
       apply: boolean;
-      vault?: string;
+      vault: string[];
       db?: string;
       json: boolean;
     }) => {
-      const vaultPath = required(
-        opts.vault ?? config.vault,
+      const vaultPath = requireVault(
+        opts.vault,
+        config.vault,
         "需要 --vault 参数或在配置文件中设置 vault",
       );
       const dbPath = opts.db ?? config.db ?? DEFAULT_DB;
@@ -559,7 +591,7 @@ program
 program
   .command("watch")
   .description("监听模式：索引 + 文件变更实时输出")
-  .argument("[vault]", "Vault 目录（可省略，回退配置 vault）")
+  .argument("[vault...]", "Vault 目录（可多个；省略则回退配置 vault）")
   .option("--db <path>", "SQLite 索引文件路径（默认 .x-basalt/index.db，可由配置 db 覆盖）")
   .option("--on-change <cmd>", "变更时执行的命令模板（{file} 占位；可由配置 onChange 提供）")
   .option(
@@ -571,11 +603,12 @@ program
   .option("--apply", "管道写动作落盘（默认 dry-run；常驻自动改文件，慎用）", false)
   .action(
     async (
-      vault: string | undefined,
+      vaults: string[],
       opts: { db?: string; onChange?: string; pipe: string[]; apply: boolean },
     ) => {
-      const vaultPath = required(
-        vault ?? config.vault,
+      const vaultPath = requireVault(
+        vaults,
+        config.vault,
         "需要 <vault> 参数或在配置文件中设置 vault",
       );
       const dbPath = opts.db ?? config.db ?? DEFAULT_DB;
@@ -597,7 +630,7 @@ program
       const onChange = opts.onChange ?? config.onChange;
       const indexer = new VaultIndexer({ vaultPath, dbPath });
       await indexer.rebuild();
-      console.log(`✓ 已索引 ${vaultPath} → ${dbPath}，开始监听… 按 Ctrl+C 退出。`);
+      console.log(`✓ 已索引 ${fmtVault(vaultPath)} → ${dbPath}，开始监听… 按 Ctrl+C 退出。`);
       indexer.watch((event, file) => {
         console.log(`· ${event} ${file}`);
         // on-change 命令模板：{file} 占位替换为变更文件路径，经 shell 执行。
@@ -620,11 +653,16 @@ program
   .option("--model <name>", "覆盖 AI_GATEWAY_MODEL")
   .option("--max-steps <n>", "agentic 最大步数", "12")
   .option("--db <path>", "SQLite 索引路径（默认 .x-basalt/index.db，可由配置 db 覆盖）")
-  .option("--vault <path>", "Vault 目录（可回退配置 vault）")
+  .option(
+    "--vault <path>",
+    "Vault 目录（可多个，重复 --vault；可回退配置 vault）",
+    collectVault,
+    [] as string[],
+  )
   .action(
     async (
       input: string | undefined,
-      opts: { model?: string; maxSteps: string; db?: string; vault?: string },
+      opts: { model?: string; maxSteps: string; db?: string; vault: string[] },
     ) => {
       // 先检查 AI key：无 key 直接友好退出，避免先报 "需要 --vault" 造成误导。
       // provider.ts 无 AI SDK 顶层依赖，可安全懒加载；真正触达 SDK 的 index.ts 仍延后到本分支有 key 之后。
@@ -636,8 +674,9 @@ program
         return;
       }
       const dbPath = opts.db ?? config.db ?? DEFAULT_DB;
-      const vaultPath = required(
-        opts.vault ?? config.vault,
+      const vaultPath = requireVault(
+        opts.vault,
+        config.vault,
         "需要 --vault 参数或在配置文件中设置 vault",
       );
       const chatOpts = {

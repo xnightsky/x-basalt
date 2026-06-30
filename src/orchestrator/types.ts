@@ -13,7 +13,7 @@ export type EventType = "add" | "change" | "unlink";
 
 /** 统一变更事件：三种「源」（watch/scan/手动）都归一为此结构后进入管线。 */
 export interface ChangeEvent {
-  /** 相对 Vault 根的 POSIX 路径（索引主键形态）。 */
+  /** 相对 base 的 POSIX 路径（索引主键形态；多根 vault 时 base = 各根公共祖先）。 */
   path: string;
   type: EventType;
   /** 文件 mtime（ms）；unlink 或手动源可缺省。用于 LWW 折叠取最新。 */
@@ -24,8 +24,9 @@ export interface ChangeEvent {
 
 /** 动作执行上下文：编排器把现有四层能力注入给动作。 */
 export interface ActionContext {
-  vaultPath: string;
-  /** 索引器（index 动作用；也是 meta 写后刷新索引的入口）。 */
+  /** @deprecated 不再使用：写动作改经 {@link ActionContext.indexer}.toAbsolute(ev.path) 还原绝对路径（按根命名空间，避免公共祖先 base 膨胀）。 */
+  vaultPath?: string;
+  /** 索引器（index 动作用；也是写动作还原 .md 绝对路径 + meta 写后刷新索引的入口）。 */
   indexer: VaultIndexer;
   /** 查询引擎（where 路由 / 需要查库的动作用），可选。 */
   engine?: DataviewEngine;

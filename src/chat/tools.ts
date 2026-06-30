@@ -26,7 +26,7 @@ import type { Safety } from "./safety.js";
 
 export interface ToolContext {
   dbPath: string;
-  vaultPath: string;
+  vaultPath: string | string[];
   skillPath?: string;
 }
 
