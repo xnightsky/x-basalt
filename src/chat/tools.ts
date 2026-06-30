@@ -23,6 +23,7 @@ import { VaultParser } from "../parser/index.js";
 import { DataviewEngine } from "../query/index.js";
 import { SkillRecall } from "../skill/index.js";
 import type { Safety } from "./safety.js";
+import { wrapToolErrors } from "./tool-errors.js";
 import { resolveVaultLayout } from "../utils/path.js";
 
 export interface ToolContext {
@@ -90,7 +91,8 @@ export function buildTools(ctx: ToolContext, safety: Safety): ToolSet {
   const layout = resolveVaultLayout(ctx.vaultPath);
   const toAbs = (file: string): string => layout.toAbs(file);
 
-  return {
+  // 末尾过 wrapToolErrors：工具失败统一分类、包成「带换策略建议」的结构化错误回灌模型（详见 tool-errors.ts）。
+  return wrapToolErrors({
     // ---- 读工具（带 execute，自动跑）----
     query: tool({
       description:
@@ -324,5 +326,5 @@ export function buildTools(ctx: ToolContext, safety: Safety): ToolSet {
         }
       },
     }),
-  };
+  });
 }

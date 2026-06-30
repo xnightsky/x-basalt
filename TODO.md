@@ -26,7 +26,28 @@ dogfood 期决定提前做：自然语言驱动 vault 的 `chat` 子命令（单
 - **chat 可用性**（对标 agent-browser 三痛点）：[`docs/research/2026-06-30-chat-gap-vs-agent-browser.md`](docs/research/2026-06-30-chat-gap-vs-agent-browser.md) — 工具调用无重试（→失败率高）、撞顶静默停（→轮询到上限停）、缺读正文/全文搜/列笔记。
 - **chat 评估/场景库**（兄弟目录素材库，设计草案，**选址/格式待拍板**）：[`docs/specs/2026-06-30-chat-eval-scenario-library-design.md`](docs/specs/2026-06-30-chat-eval-scenario-library-design.md)。
 
-> 高频刚需缺口（据上述调研，待各自开计划/spec）：**inline fields 提取** · **task emoji 多字段+完成状态** · **内置函数补一批**（default/数组高阶/聚合）· **FTS5 全文检索** · **chat 工具重试+撞顶续作**。FROM 多源 AND/OR 取舍建议复核（官方高频）。
+> 高频刚需缺口（据上述调研，待各自开计划/spec）：**inline fields 提取** · **task emoji 多字段+完成状态** · **内置函数补一批**（default/数组高阶/聚合）· **FTS5 全文检索** · ~~chat 工具重试+撞顶续作~~（已落地为「结构化错误+换策略引导」+「撞顶续跑」，见下 ✅）。FROM 多源 AND/OR 取舍建议复核（官方高频）。
+
+## 🟡 进行中（2026-07-01）：chat 对话打磨（B 止血 P0 + 可玩化）
+
+**验证方式改为「手玩」**：AI agent 行为质量在场景库（C 线）落地前没法靠自动化判定——本次**删除了为 chat 新增的 AI 行为单测**（tool-errors / repl / loop-exhausted / tools-dql 集成），保留会话前就有的确定性测试（safety / provider / isolation / loop 主路径 / tools 主路径）。production 代码保留，靠 `docs/guides/chat.md` 指引**亲手玩**来验证。
+
+**已落地（production，typecheck/build 通过；逻辑确定但 agent 效果未验证）**：
+- **工具错误结构化 + 换策略引导（非机械重试）**：`src/chat/tool-errors.ts` 分类底层错误（DQL→dql / 库未建 `SQLITE_CANTOPEN`→not-found / `ENOENT`→not-found / 瞬时→transient），包成「[工具失败·类] 原因 + 换策略建议」回灌；SYSTEM_PROMPT 加「失败换写法/角度（A≠B）、别硬试同一操作」。**方向修正**：原 §2.1「工具重试」改为「结构化 + 引导换策略」——chat 读多写少、工具皆一次性独立调用（无会话读写事务），机械精准重试无土壤（详见 memory `chat-retry-as-strategy-not-precision`）。
+- **撞顶区分 + REPL 续跑**：`loop.ts` 返回 `stopReason`（done/exhausted，按末步是否仍 `toolCalls` 判）；exhausted 显式提示、REPL 输入「继续」用现有上下文续跑；默认步数 12→20。
+- **REPL 可玩化（最小实现，无 TUI 框架）**：启动横幅、`help` 速查、`examples`/`例子` 列可玩示例指令（含一条故意写错 DQL 观察自纠）、撞顶提示符引导、退出语。
+- **文档**：新增 [`docs/guides/chat.md`](docs/guides/chat.md)（怎么玩：前置/建索引/试这些/看什么/限制）；`commands.md` 补 `chat` 条目+目录。
+
+### 🐞 未做 / 缺陷（待续，按优先级）
+
+- **[阻断验证] 没有场景库 → chat 效果无法量化回归**：成功率/撞顶率/自纠是否真改善，全靠手玩主观判断。**这是当前最大缺口**，对应 C 线（[`docs/specs/2026-06-30-chat-eval-scenario-library-design.md`](docs/specs/2026-06-30-chat-eval-scenario-library-design.md)），需先拍板**选址 + 格式**（§3 待定项）。
+- **[开放设计] chat 是否需要真正的「读写机制」未调研**：现工具皆一次性独立调用，无会话级事务 / 读写状态协调（如读后写一致性、批内回滚）。用户明确未调研——独立开放项，需先调研再决定要不要做。
+- **[已部分验] 机制端到端已用 mock 自验**（2026-07-01）：① 工具失败→结构化错误在轮内送达模型、可据以自纠 ✓；② 撞顶 `exhausted` + 「继续」续跑（消息累积）✓；③ REPL 命令派发 + 横幅/help/examples 文本 ✓。**仍未验**：真 provider 下的流式输出与 `Ctrl+C` 中断手感、以及 **LLM 答案质量**（需真 key + 场景库，非自验可达——见上 [阻断验证]）。
+- **[收尾·大半已结，2026-07-01]** ~~`usage.md` 加 chat 链接~~ ✅、~~`chat.md` 补 frontmatter（已用 x-basalt `meta apply llm-wiki` dogfood，含 `--refresh-derived` 刷 sha256）~~ ✅、~~plan 勾选~~ ✅（Phase 3/4 标完成，仅留「有 key dogfood」未勾）、~~chat.md/commands.md 示例去 `--vault`/`--db` 噪声~~ ✅（配 config 后裸跑，用户反馈）。**仍欠**：有 key 真实 dogfood（单发+REPL+写入+pipeline+Ctrl+C）未跑（需真 key）。
+- **[缺陷] 撞顶判定真 provider 未验**：`stopReason` 靠 `step.toolCalls` 非空判，仅在 mock 验证过形状；真实 provider 下「最后一步既出文本又留 toolCall」等边界未实测。
+- **[缺陷] 默认 maxSteps=20 是拍的**：未经场景库实测校准（grounding 1-2 步 + 任务步的真实分布未知）。
+- **[缺陷] 错误分类启发式有限**：`tool-errors.ts` 对非 `DqlSyntaxError` 来源的错误靠中文/英文 message 关键字兜底，可能漏判（落到 unknown 给泛建议）；写侧 `SQLITE_BUSY` 兜底重试**未做**（按取舍故意不做，需要时再加极简单次重试）。
+- **[能力缺口] 仍缺 read_note / list / 全文搜**：答不了「读整篇正文」「列出有哪些笔记」「哪篇正文提到 X」（chat-gap §2.3 / P1-P2，FTS5 见 backlog）。
 
 ## 💡 backlog（待 dogfood 暴露真实需求再开，各自写计划/spec）
 

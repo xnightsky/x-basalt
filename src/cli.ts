@@ -667,7 +667,7 @@ program
   .description("自然语言驱动 vault（可选 AI；需 AI_GATEWAY_API_KEY，无则禁用，不影响其他命令）")
   .argument("[input]", "自然语言指令（省略则进 REPL）")
   .option("--model <name>", "覆盖 AI_GATEWAY_MODEL")
-  .option("--max-steps <n>", "agentic 最大步数", "12")
+  .option("--max-steps <n>", "agentic 最大步数（撞顶不再静默停：单发提示、REPL 可「继续」续跑）", "20")
   .option("--db <path>", "SQLite 索引路径（默认 .x-basalt/index.db，可由配置 db 覆盖）")
   .option(
     "--vault <path>",

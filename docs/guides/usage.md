@@ -1,6 +1,6 @@
 ---
-timestamp: 2026-06-30T00:01:23Z
-sha256: cd72c4da19092fd2dffddeda15b05791220ceb67a08d1cc54e1878bc00269751
+timestamp: 2026-06-30T23:27:23Z
+sha256: fe1dfc75bc5fcf2633d49551aa061b25dd3fde0a39adef96317334272004fd43
 type: guide
 title: 使用指南 · x-basalt（教程总目录）
 description: 面向使用者的教程总目录与分章导航
@@ -62,12 +62,13 @@ x-basalt skills recall wikilink
 | 章节                                 | 内容                                                                                                                   |
 | ------------------------------------ | ---------------------------------------------------------------------------------------------------------------------- |
 | [安装与运行](installation.md)        | 要求（Node ≥ 22）、从源码构建、**全局安装（npm link）**、三种运行方式、改源码后重编译                                  |
-| [命令参考](commands.md)              | 7 个命令逐项：`parse` / `index` / `scan` / `query` / `skills` / `meta` / `watch`（签名、选项、默认、示例）             |
+| [命令参考](commands.md)              | 9 个命令逐项：`parse` / `index` / `scan` / `query` / `skills` / `meta` / `watch` / `run` / `chat`（签名、选项、默认、示例） |
 | [DQL 查询指南](querying-dql.md)      | 完整 Dataview 子集文法（LIST/TABLE/TASK + WHERE + GROUP BY/FLATTEN/WITHOUT ID + 多键 SORT + 函数）、隐式字段、报错口径 |
 | [索引与同步](indexing-and-sync.md)   | `index` vs `scan` vs `watch` 何时用；scan 深入（mtime/`--rehash`/`--dry-run`/分批断点续）；5 表数据模型；路径感知链接  |
 | [配置与基目录](configuration.md)     | 配置文件（cosmiconfig 向上查找、yaml/json5）、可配置项、**`X_BASALT_DIR`**、优先级                                     |
 | [Obsidian 语法](obsidian-syntax.md)  | `parse` 覆盖的 6 类节点字段与边界、代码区掩码、已知近似                                                                |
 | [与 AI 协作](ai-and-skills.md)       | `skills recall` 自助召回（Fuse.js）、**全局 `x-basalt` 使用技能**（教 AI 用 CLI）、三类「skill」之别                   |
+| [chat 怎么玩](chat.md)               | 用自然语言驱动 vault 的可选-AI `chat`（单发 + REPL）：前置 / 建索引 / 试哪些指令 / 玩时看什么（工具可见·撞顶续跑·失败换策略）/ 限制 |
 | [故障排查与限制](troubleshooting.md) | 常见报错→处理、已知限制与近似                                                                                          |
 
 ---

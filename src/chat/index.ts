@@ -27,7 +27,8 @@ export const SYSTEM_PROMPT =
   "能力之外（如按正文全文检索）老实说做不到，别臆造或假装。" +
   "所有工具都是一次性的：不存在也不要尝试任何常驻/监听/watch（会永不返回、挂死本对话）。" +
   "回答简洁。" +
-  "query 返回 0 行先分辨是「库未建/无此类笔记」还是「DQL 写错」，别反复改语法瞎试。";
+  "query 返回 0 行先分辨是「库未建/无此类笔记」还是「DQL 写错」，别反复改语法瞎试。" +
+  "工具失败时先读错误里的分类与建议，换个写法/字段/工具/角度再试（A 方案不行换 B），别对同一操作反复微调硬试。";
 
 /** 单行预览上限（字符）。 */
 const PREVIEW_MAX = 200;
@@ -69,9 +70,10 @@ function fmtError(err: unknown): string {
 }
 
 /**
- * 流式渲染：文本直出；工具调用显示入参、结果显示输出预览、出错显示错误；收尾打「· 完成」收口标记。
- * 此前只为 tool-call 打一行无入参提示、丢弃 tool-result/tool-error、finish 仅换行——
- * 用户侧表现为「调用没有 input/output、阶段性结束无任何提示」，本函数即修复点。
+ * 流式渲染：文本直出；工具调用显示入参、结果显示输出预览、出错显示错误；收尾据 stopReason 区分提示。
+ * 此前只为 tool-call 打一行无入参提示、丢弃 tool-result/tool-error、finish 仅打「· 完成」——
+ * 用户侧表现为「调用没有 input/output、撞步数顶却像自然结束」，本函数即修复点。
+ * exhausted（撞 maxSteps 顶、模型还想继续）下显式提示「未完成、可续/可加步数」，不再静默假装收工。
  */
 export function renderEvent(e: LoopEvent): void {
   switch (e.type) {
@@ -90,7 +92,13 @@ export function renderEvent(e: LoopEvent): void {
       process.stdout.write(`  ✗ ${e.toolName} 出错：${fmtError(e.error)}\n`);
       break;
     case "finish":
-      process.stdout.write("\n· 完成\n");
+      if (e.stopReason === "exhausted") {
+        process.stdout.write(
+          "\n⚠ 已达步数上限、任务可能未完成——REPL 中输入「继续」可接着跑；单发可重试时加大 --max-steps。\n",
+        );
+      } else {
+        process.stdout.write("\n· 完成\n");
+      }
       break;
   }
 }
@@ -157,9 +165,9 @@ export async function runOnce(input: string, opts: ChatOptions): Promise<number>
   }
 }
 
-/** REPL：委托 repl.ts（累积历史、SIGINT 中断当前轮）。 */
+/** REPL：委托 repl.ts（累积历史、SIGINT 中断当前轮）。model 名透传给横幅展示。 */
 export async function runRepl(opts: ChatOptions): Promise<number> {
   const s = await setup(opts);
   if (!s) return 1;
-  return repl(s.model, s.tools, opts, { system: SYSTEM_PROMPT, onEvent: renderEvent });
+  return repl(s.model, s.tools, opts, { system: SYSTEM_PROMPT, onEvent: renderEvent, model: opts.model });
 }

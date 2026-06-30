@@ -1,6 +1,6 @@
 ---
-timestamp: 2026-06-30T10:50:37Z
-sha256: 144baf5d193325e638268621cadc2b34b08b3039a0449a70e48be14919f97009
+timestamp: 2026-06-30T23:25:53Z
+sha256: 322e0305140b567eb25ef25dfa38b3c9409b4121bfd254bd210461f36c3cf9bc
 type: guide
 title: 命令参考 · x-basalt
 description: x-basalt CLI 全部子命令的参数、输出形态与示例
@@ -27,6 +27,7 @@ tags:
 6. [`meta`](#meta--读改-frontmatter)
 7. [`watch`](#watch--常驻监听)
 8. [`run`](#run--变更编排管道)
+9. [`chat`](#chat--自然语言驱动可选-ai)
 
 ---
 
@@ -467,6 +468,40 @@ pipelines:
 ```
 
 > 三命令共享 `--pipe`，命令只决定「源」：[`scan`](#scan--增量重索引)（diff）/ [`watch`](#watch--常驻监听)（事件）/ `run`（默认 scan）。原生管道（stdin）是与 `--pipe` 正交的独立设计，后续可组装。
+
+---
+
+## `chat` — 自然语言驱动（可选 AI）
+
+```
+x-basalt chat [input] [--model <name>] [--max-steps <n>] [--vault <path>]... [--db <path>]
+```
+
+用自然语言驱动 vault：给 `[input]` 走**单发**（翻译→执行→输出→退出），省略则进 **REPL**（多轮、累积上下文）。底层把既有读写原语（query / parse / scan / meta_* / skills / pipeline_run）包成工具，模型自行多步调用；**写动作直接落盘**（无确认闸，靠 `Ctrl+C` 中断 + 原子写兜底）。
+
+> **可选 AI**：需 `AI_GATEWAY_API_KEY`（兼容 `AI_GATEWAY_*`）；**无 key 时本命令友好退出、不影响其他命令**。内核零 AI，仅本命令懒加载 `ai` SDK。
+
+| 参数/选项          | 默认                       | 说明                                                                          |
+| ------------------ | -------------------------- | ----------------------------------------------------------------------------- |
+| `[input]`          | —                          | 自然语言指令；省略且 TTY → 进 REPL；省略且有管道输入 → 读 stdin 走单发         |
+| `--model <name>`   | 配置 / `AI_GATEWAY_MODEL`  | 覆盖模型名                                                                     |
+| `--max-steps <n>`  | `20`                       | agentic 最大步数；**撞顶不再静默停**——单发提示、REPL 可输入「继续」续跑       |
+| `--vault` / `--db` | 同其他命令（回退配置）     | 库目录 / 索引路径                                                              |
+
+REPL 内命令：`help` 用法 · `examples` 可玩示例 · `继续` 撞顶续跑 · `quit`/`exit`/`q` 退出；`Ctrl+C` 中断当前轮。
+
+**怎么玩 / 上手**：见 [chat.md](chat.md)（前置、建索引、试这些、玩时看什么、限制）。
+
+**示例**
+
+```bash
+export AI_GATEWAY_API_KEY=...           # 先配 key
+x-basalt index                          # 先建索引（vault 取配置，库默认 .x-basalt/index.db）
+x-basalt chat                           # 进 REPL，输入 examples 看示例
+x-basalt chat "这个库有多少篇笔记？"      # 单发
+```
+
+> 上例假设已配 `.x-basalt/config.yaml`（`vault` 等）；没配就给各命令补 `--vault <path>`（库不在默认位置再加 `--db <path>`）。
 
 ---
 

@@ -4,6 +4,14 @@
 // 流式回显推理与每步动作（无确认闸下的可观测兜底）；abortSignal 接 Ctrl+C；stopWhen 限步防失控。
 import { stepCountIs, streamText, type ModelMessage, type ToolSet } from "ai";
 
+/**
+ * 循环停止原因：
+ * - done：模型自然收尾（finishReason==='stop'，话说完了）；
+ * - exhausted：撞 maxSteps 顶时模型还想继续调工具（finishReason==='tool-calls'），即「话说一半被截断」。
+ * 区分二者是为了不再「撞顶静默停」——exhausted 下提示用户、REPL 可续跑。
+ */
+export type StopReason = "done" | "exhausted";
+
 export interface LoopEvent {
   type: "text" | "tool-call" | "tool-result" | "tool-error" | "finish";
   text?: string;
@@ -14,6 +22,14 @@ export interface LoopEvent {
   output?: unknown;
   /** tool-error：execute 抛出的错误（SDK 捕获后以 tool-error part 下发，此前被整段丢弃）。 */
   error?: unknown;
+  /** finish：本轮停止原因，供渲染层区分「· 完成」与「⚠ 撞步数顶、可续」。 */
+  stopReason?: StopReason;
+}
+
+/** runLoop 返回：累积后的消息 + 停止原因（供 REPL 决定是否支持「继续」续跑）。 */
+export interface LoopResult {
+  messages: ModelMessage[];
+  stopReason: StopReason;
 }
 
 export interface LoopDeps {
@@ -36,9 +52,10 @@ export interface LoopDeps {
  *
  * @behavior Given 模型发 tool-call When 跑 Then 对应 tool.execute 执行、结果自动喂回模型续推
  * @behavior Given abortSignal 已 abort When 跑 Then 中断（streamText 抛 AbortError，调用方吞掉）
- * @behavior Given 达到 maxSteps When 跑 Then stopWhen 终止
+ * @behavior Given 达到 maxSteps 且模型还想调工具 When 跑 Then 停并返回 stopReason='exhausted'
+ * @behavior Given 模型自然收尾 When 跑 Then 返回 stopReason='done'
  */
-export async function runLoop(messages: ModelMessage[], deps: LoopDeps): Promise<ModelMessage[]> {
+export async function runLoop(messages: ModelMessage[], deps: LoopDeps): Promise<LoopResult> {
   // 已在入口外被 abort：直接中断，避免调模型/执行工具（streamText 对预 abort 的处理
   // 仍会先调一次 doStream，故在调用前显式拦截）。
   if (deps.abortSignal?.aborted) {
@@ -69,7 +86,14 @@ export async function runLoop(messages: ModelMessage[], deps: LoopDeps): Promise
       deps.onEvent({ type: "tool-error", toolName: part.toolName, error: part.error });
     }
   }
-  deps.onEvent({ type: "finish" });
+  // 区分自然完成 vs 撞步数顶：步数已达 maxSteps 且最后一步仍在调工具（toolCalls 非空＝模型还想继续动作，
+  // 只是被 stopWhen 截断）→ exhausted；否则 done。不用 finishReason 判定——它在 mock/部分 provider 下
+  // 聚合为 'other' 不可靠，而 step.toolCalls 是 provider 无关的「还想动作」信号。
+  const steps = await result.steps;
+  const stillActing = (steps.at(-1)?.toolCalls?.length ?? 0) > 0;
+  const exhausted = steps.length >= deps.maxSteps && stillActing;
+  const stopReason: StopReason = exhausted ? "exhausted" : "done";
+  deps.onEvent({ type: "finish", stopReason });
   const response = await result.response;
-  return [...messages, ...(response.messages as ModelMessage[])];
+  return { messages: [...messages, ...(response.messages as ModelMessage[])], stopReason };
 }
