@@ -316,6 +316,11 @@ test("parser 新子句：WITHOUT ID / GROUP BY / FLATTEN", () => {
   assert.equal(parseDql("TABLE WITHOUT ID status").withoutId, true);
   assert.deepEqual(parseDql("LIST GROUP BY status").groupBy, { expr: "status" });
   assert.deepEqual(parseDql("LIST FLATTEN file.tags").flatten, { field: "file.tags" });
+  assert.deepEqual(parseDql('TABLE type, length(rows) FROM "" GROUP BY type').fields, [
+    "type",
+    "length(rows)",
+  ]);
+  assert.deepEqual(parseDql('TABLE type, count() FROM "" GROUP BY type').fields, ["type", "count()"]);
 });
 
 test("parser 综合：完整样例句", () => {

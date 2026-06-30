@@ -160,6 +160,15 @@ test("S2.18 GROUP BY：分组键 + rows 聚合列 + GROUP BY 子句", () => {
   assert.equal(c.columns.find((x) => x.name === "rows")?.json, true);
 });
 
+test("S2.18 GROUP BY TABLE：length(rows) / count() 聚合列", () => {
+  const c = generateSql(parseDql('TABLE type, length(rows) FROM "" GROUP BY type'));
+  assert.match(c.sql, /COUNT\(DISTINCT f\.path\)/);
+  assert.deepEqual(c.columns.map((x) => x.name), ["type", "length(rows)"]);
+  const c2 = generateSql(parseDql('TABLE type, count() FROM "" GROUP BY type'));
+  assert.match(c2.sql, /COUNT\(DISTINCT f\.path\)/);
+  assert.deepEqual(c2.columns.map((x) => x.name), ["type", "count()"]);
+});
+
 test("S2.19 FLATTEN：json_each 展开 + 展开值列", () => {
   const c = generateSql(parseDql("LIST FLATTEN file.tags"));
   assert.match(c.sql, /, json_each\(.*\) AS _flat/);

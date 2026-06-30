@@ -117,10 +117,10 @@ class DqlChevParser extends EmbeddedActionsParser {
     });
 
     // 字段列表：仅 TABLE 有意义；位于 WITHOUT ID 之后（对齐 Dataview `TABLE WITHOUT ID f1, f2`）。
-    // LIST/TASK 后通常无 Identifier，MANY_SEP 解析 0 个；非空时在末尾 ACTION 校验报错。
+    // 支持 length(rows) / count() 等 GROUP BY 聚合列表达式。
     this.MANY_SEP({
       SEP: Comma,
-      DEF: () => fields.push(this.CONSUME(Identifier).image),
+      DEF: () => fields.push(this.SUBRULE(this.tableField)),
     });
 
     let from: DqlSource | undefined;
@@ -174,6 +174,29 @@ class DqlChevParser extends EmbeddedActionsParser {
       }
       return { type, fields, from, where, groupBy, flatten, withoutId, sort, limit };
     });
+  });
+
+  /** TABLE 列：普通字段名，或 GROUP BY 聚合表达式 length(rows) / count()。 */
+  tableField = this.RULE("tableField", (): string => {
+    return this.OR<string>([
+      {
+        ALT: () => {
+          const fnTok = this.CONSUME(Identifier);
+          this.CONSUME(LParen);
+          const argTok = this.OPTION(() => this.CONSUME1(Identifier));
+          this.CONSUME(RParen);
+          return this.ACTION((): string => {
+            const fn = fnTok.image.toLowerCase();
+            if (fn === "count" && argTok === undefined) return "count()";
+            if (argTok === undefined) {
+              throw new DqlSyntaxError(`${fnTok.image}() 需要参数`, fnTok.startOffset);
+            }
+            return `${fn}(${argTok.image.toLowerCase()})`;
+          });
+        },
+      },
+      { ALT: () => this.CONSUME2(Identifier).image },
+    ]);
   });
 
   /** FROM 来源：#tag / "folder" / [[link]]。 */

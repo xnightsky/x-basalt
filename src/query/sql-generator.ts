@@ -22,6 +22,18 @@ export interface CompiledSql {
   type: QueryType;
 }
 
+/** GROUP BY 聚合列：length(rows) / count() → 组内文件数；rows → 路径数组。 */
+function compileGroupAggregate(field: string): { sql: string; json: boolean } | null {
+  const f = field.trim();
+  if (/^length\(rows\)$/i.test(f) || /^count\(\)$/i.test(f)) {
+    return { sql: "COUNT(DISTINCT f.path)", json: false };
+  }
+  if (/^rows$/i.test(f)) {
+    return { sql: "json_group_array(DISTINCT f.path)", json: true };
+  }
+  return null;
+}
+
 /** files 表直接列字段映射。 */
 const FILE_COLUMNS: Record<string, string> = {
   "file.name": "f.name",
@@ -329,15 +341,28 @@ export function generateSql(query: DqlQuery): CompiledSql {
     fromClause += `, json_each(${fexpr}) AS _flat`;
   }
 
-  // S2.18 GROUP BY：分组键 + 该组文件聚合(rows)；否则常规 LIST/TABLE 列（含 S2.20 WITHOUT ID）。
+  // S2.18 GROUP BY：分组键 + 请求列（含 length(rows)/count()/rows 聚合）；无显式列时默认分组键 + rows。
   let groupBySql = "";
   if (query.groupBy) {
     const { expr: gexpr } = fieldToSql(query.groupBy.expr);
-    columns.push({ name: query.groupBy.expr, json: false });
-    selectParts.push(`${gexpr} AS ${quoteAlias(query.groupBy.expr)}`);
-    columns.push({ name: "rows", json: true });
-    selectParts.push(`json_group_array(DISTINCT f.path) AS ${quoteAlias("rows")}`);
     groupBySql = ` GROUP BY ${gexpr}`;
+    const tableFields =
+      query.type === "TABLE" && query.fields.length > 0
+        ? query.fields
+        : [query.groupBy.expr, "rows"];
+    for (const f of tableFields) {
+      if (seen.has(f)) continue;
+      seen.add(f);
+      const agg = compileGroupAggregate(f);
+      if (agg) {
+        columns.push({ name: f, json: agg.json });
+        selectParts.push(`${agg.sql} AS ${quoteAlias(f)}`);
+        continue;
+      }
+      const { expr, json } = fieldToSql(f);
+      columns.push({ name: f, json });
+      selectParts.push(`${expr} AS ${quoteAlias(f)}`);
+    }
   } else {
     if (query.type === "LIST") {
       if (!query.withoutId) addCol("file.name");
