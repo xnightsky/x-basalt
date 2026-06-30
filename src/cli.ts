@@ -646,8 +646,15 @@ program
         skillPath: config.skillPath,
       };
       // 懒加载：只有确认有 key 后才触达 src/chat（及其 AI SDK 依赖）。
-      const { runOnce, runRepl } = await import("./chat/index.js");
-      process.exitCode = input ? await runOnce(input, chatOpts) : await runRepl(chatOpts);
+      const { runOnce, runRepl, readPipedStdin } = await import("./chat/index.js");
+      let prompt = input?.trim() ?? "";
+      if (!prompt && !process.stdin.isTTY) prompt = await readPipedStdin();
+      if (!prompt && !process.stdin.isTTY) {
+        console.error("✗ chat 未提供输入");
+        process.exitCode = 1;
+        return;
+      }
+      process.exitCode = prompt ? await runOnce(prompt, chatOpts) : await runRepl(chatOpts);
     },
   );
 

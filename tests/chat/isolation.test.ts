@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { execFileSync } from "node:child_process";
+import { execFileSync, spawnSync } from "node:child_process";
 import { platform } from "node:os";
 
 function run(args: string[]) {
@@ -36,4 +36,22 @@ test("无 key：chat 友好退出（码非 0，无栈）", () => {
   assert.notEqual(r.code, 0);
   assert.match(r.stderr, /未配置 AI/);
   assert.doesNotMatch(r.stderr, /at .*\(.*:\d+:\d+\)/); // 无 stack trace
+});
+
+test("无 key：chat 管道输入走 runOnce 路径，不触发 readline closed", () => {
+  const e = { ...process.env };
+  delete e.AI_GATEWAY_API_KEY;
+  const isWin = platform() === "win32";
+  const cmd = isWin ? "cmd" : "pnpm";
+  const cmdArgs = isWin
+    ? ["/c", "pnpm", "exec", "tsx", "src/cli.ts", "chat", "--vault", "docs"]
+    : ["exec", "tsx", "src/cli.ts", "chat", "--vault", "docs"];
+  const r = spawnSync(cmd, cmdArgs, {
+    env: e,
+    input: "读取 title\n",
+    encoding: "utf8",
+  });
+  assert.notEqual(r.status, 0);
+  assert.match(r.stderr ?? "", /未配置 AI/);
+  assert.doesNotMatch(`${r.stderr ?? ""}${r.stdout ?? ""}`, /readline was closed/i);
 });

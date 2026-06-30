@@ -32,6 +32,13 @@ export function renderEvent(e: LoopEvent): void {
   else if (e.type === "finish") process.stdout.write("\n");
 }
 
+/** 非 TTY stdin（管道）时读入整段输入，供 cli 走 runOnce 而非 readline REPL。 */
+export async function readPipedStdin(): Promise<string> {
+  const chunks: Buffer[] = [];
+  for await (const chunk of process.stdin) chunks.push(chunk as Buffer);
+  return Buffer.concat(chunks).toString("utf8").trim();
+}
+
 /** 装配 model + tools；无 key/未装依赖 → 打印指引返回 null（消费者退出非 0）。 */
 async function setup(
   opts: ChatOptions,
