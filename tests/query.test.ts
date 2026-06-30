@@ -151,7 +151,7 @@ test("S2.21 端到端 TASK：返回任务行（status/text/file）", () => {
 
 test("S2.22 隐式字段全集：file.* 各字段可查且类型正确", () => {
   const r = engine.query(
-    'TABLE file.folder, file.extension, file.size, file.mtime, file.ctime, file.outlinks, file.tasks ' +
+    "TABLE file.folder, file.extension, file.size, file.mtime, file.ctime, file.outlinks, file.tasks " +
       "FROM \"Projects\" WHERE file.name = 'Alpha'",
   );
   const row = r.rows[0];

@@ -24,23 +24,23 @@ x-basalt scan <vault>                  # 之后：增量重扫，只处理新增
 
 ## 命令速查
 
-| 命令 | 作用 | 关键选项 |
-|---|---|---|
-| `parse <file>` | 单文件 → AST（wikilink/tag/task/callout/highlight/blockRef + frontmatter） | `--format json\|yaml` |
-| `index [vault]` | 全量建/重建索引 | `--db <path>` · `--watch`(常驻监听) |
-| `scan [vault]` | **按需增量重索引**：diff 文件系统 vs 库，只重扫变化的 | `--rehash`(按内容比，稳但慢) · `--dry-run`(只报告不写) · `--json` · `--pipe k=v`(走管道) |
-| `query "<dql>"` | 执行 DQL 查询，输出 `{type,columns,rows}` | `--db <path>` |
-| `meta get <file> [key]` | 读 frontmatter（缺 key 读全部，缺失键输出 null） | `--format json\|yaml` |
-| `meta set/unset/rename <file> ...` | 改单个属性（set 增改 / unset 删 / rename 改键名） | `--type` · `--dry-run` |
-| `meta normalize <file>` | **无约定纯标准化**：tags 列表化/去#/去重/单数键迁移 | `--sort-keys` · `--dry-run` |
-| `meta profile list / show <name>` | 列出 / 查看元数据策略（profile）的规范+模板 | — |
-| `meta apply <profile> <file>` | **按策略补全**：机械补时间/哈希 + `--set` 补语义 + 自动标准化 | `--set k=v`(可重复) · `--refresh-derived`(重算 mtime/sha256) · `--dry-run` |
-| `skills get <name>` | 按名取整篇规范（`obsidian-base-spec` / `x-basalt`） | `--all` · `--json` |
-| `skills recall <kw>` | 模糊召回规范详情（容拼写错、相关性排序） | `--json` |
-| `skills list` / `skills path` | 列出可召回规范 / 打印数据目录 | `--json` |
-| `watch [vault]` | 常驻监听增量更新（有守护进程时用；否则首选 `scan`） | `--db` · `--on-change <cmd>`(`{file}` 占位) · `--pipe k=v`/`--apply`(走管道) |
-| `run` | **变更编排管道**：源→去重→路由→动作链（index/normalize/parse/apply/set/unset/rename） | `--pipe k=v`(可重复，含 `if-exists`) · `--apply`(写动作落盘) |
-| `chat ["<NL>"]` | **可选 AI**：自然语言驱动既有原语（单发/REPL）；无 key 则禁用、不影响其他命令 | `--model` · `--max-steps` · 需 env `AI_GATEWAY_API_KEY` |
+| 命令                               | 作用                                                                                  | 关键选项                                                                                 |
+| ---------------------------------- | ------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------- |
+| `parse <file>`                     | 单文件 → AST（wikilink/tag/task/callout/highlight/blockRef + frontmatter）            | `--format json\|yaml`                                                                    |
+| `index [vault]`                    | 全量建/重建索引                                                                       | `--db <path>` · `--watch`(常驻监听)                                                      |
+| `scan [vault]`                     | **按需增量重索引**：diff 文件系统 vs 库，只重扫变化的                                 | `--rehash`(按内容比，稳但慢) · `--dry-run`(只报告不写) · `--json` · `--pipe k=v`(走管道) |
+| `query "<dql>"`                    | 执行 DQL 查询，输出 `{type,columns,rows}`                                             | `--db <path>`                                                                            |
+| `meta get <file> [key]`            | 读 frontmatter（缺 key 读全部，缺失键输出 null）                                      | `--format json\|yaml`                                                                    |
+| `meta set/unset/rename <file> ...` | 改单个属性（set 增改 / unset 删 / rename 改键名）                                     | `--type` · `--dry-run`                                                                   |
+| `meta normalize <file>`            | **无约定纯标准化**：tags 列表化/去#/去重/单数键迁移                                   | `--sort-keys` · `--dry-run`                                                              |
+| `meta profile list / show <name>`  | 列出 / 查看元数据策略（profile）的规范+模板                                           | —                                                                                        |
+| `meta apply <profile> <file>`      | **按策略补全**：机械补时间/哈希 + `--set` 补语义 + 自动标准化                         | `--set k=v`(可重复) · `--refresh-derived`(重算 mtime/sha256) · `--dry-run`               |
+| `skills get <name>`                | 按名取整篇规范（`obsidian-base-spec` / `x-basalt`）                                   | `--all` · `--json`                                                                       |
+| `skills recall <kw>`               | 模糊召回规范详情（容拼写错、相关性排序）                                              | `--json`                                                                                 |
+| `skills list` / `skills path`      | 列出可召回规范 / 打印数据目录                                                         | `--json`                                                                                 |
+| `watch [vault]`                    | 常驻监听增量更新（有守护进程时用；否则首选 `scan`）                                   | `--db` · `--on-change <cmd>`(`{file}` 占位) · `--pipe k=v`/`--apply`(走管道)             |
+| `run`                              | **变更编排管道**：源→去重→路由→动作链（index/normalize/parse/apply/set/unset/rename） | `--pipe k=v`(可重复，含 `if-exists`) · `--apply`(写动作落盘)                             |
+| `chat ["<NL>"]`                    | **可选 AI**：自然语言驱动既有原语（单发/REPL）；无 key 则禁用、不影响其他命令         | `--model` · `--max-steps` · 需 env `AI_GATEWAY_API_KEY`                                  |
 
 ## 变更编排管道（`run` / `scan --pipe` / `watch --pipe`）
 

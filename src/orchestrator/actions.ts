@@ -83,7 +83,8 @@ function applyActionOf(profile: string): Action {
     name: "apply",
     write: true,
     async run(ev, ctx) {
-      if (ev.type === "unlink") return { action: "apply", path: ev.path, changed: false, skipped: true };
+      if (ev.type === "unlink")
+        return { action: "apply", path: ev.path, changed: false, skipped: true };
       const abs = join(ctx.vaultPath, ev.path);
       const r = applyProfile(abs, profile, { dryRun: ctx.dryRun });
       const changed = r.changed && !r.dryRun;
@@ -99,9 +100,12 @@ function setActionOf(key: string, rawValue: string): Action {
     name: "set",
     write: true,
     async run(ev, ctx) {
-      if (ev.type === "unlink") return { action: "set", path: ev.path, changed: false, skipped: true };
+      if (ev.type === "unlink")
+        return { action: "set", path: ev.path, changed: false, skipped: true };
       const abs = join(ctx.vaultPath, ev.path);
-      const r = editMeta(abs, (d) => setMeta(d, key, coerceValue(rawValue, "auto")), { dryRun: ctx.dryRun });
+      const r = editMeta(abs, (d) => setMeta(d, key, coerceValue(rawValue, "auto")), {
+        dryRun: ctx.dryRun,
+      });
       const changed = r.changed && !r.dryRun;
       if (changed) ctx.onWrite?.(ev.path);
       return { action: "set", path: ev.path, changed, skipped: r.dryRun };
@@ -115,7 +119,8 @@ function unsetActionOf(key: string): Action {
     name: "unset",
     write: true,
     async run(ev, ctx) {
-      if (ev.type === "unlink") return { action: "unset", path: ev.path, changed: false, skipped: true };
+      if (ev.type === "unlink")
+        return { action: "unset", path: ev.path, changed: false, skipped: true };
       const abs = join(ctx.vaultPath, ev.path);
       const r = editMeta(abs, (d) => unsetMeta(d, key), { dryRun: ctx.dryRun });
       const changed = r.changed && !r.dryRun;
@@ -131,7 +136,8 @@ function renameActionOf(oldKey: string, newKey: string): Action {
     name: "rename",
     write: true,
     async run(ev, ctx) {
-      if (ev.type === "unlink") return { action: "rename", path: ev.path, changed: false, skipped: true };
+      if (ev.type === "unlink")
+        return { action: "rename", path: ev.path, changed: false, skipped: true };
       const abs = join(ctx.vaultPath, ev.path);
       const r = editMeta(abs, (d) => applyRenamePolicy(d, oldKey, newKey, ctx.ifExists ?? "skip"), {
         dryRun: ctx.dryRun,
@@ -242,6 +248,8 @@ export function parseAction(token: string): Action {
       if (args.length !== 2) throw new Error(`rename 需 old new 两个键名：rename <old> <new>`);
       return renameActionOf(args[0]!, args[1]!);
     default:
-      throw new Error(`未知动作 "${verb}"，可用：index, normalize, parse, apply, set, unset, rename`);
+      throw new Error(
+        `未知动作 "${verb}"，可用：index, normalize, parse, apply, set, unset, rename`,
+      );
   }
 }

@@ -6,14 +6,14 @@
 
 ## 能做什么
 
-| 命令 | 作用 |
-|---|---|
+| 命令    | 作用                                                                                  |
+| ------- | ------------------------------------------------------------------------------------- |
 | `parse` | 单个 `.md` → 标准化 AST（wikilink/tag/callout/task/highlight/blockRef + frontmatter） |
-| `index` | 全量扫描 Vault → 单文件 SQLite 索引 |
-| `scan` | **按需增量重索引**：diff 文件系统 vs 库，只重扫新增/改动/删除（无需常驻进程） |
-| `query` | 自建 Dataview（DQL）子集 → 参数化 SQL → JSON 结果 |
-| `skill` | 加载规范知识库，Fuse.js 模糊召回 Obsidian / DQL 语法 |
-| `watch` | chokidar 常驻监听，实时增量更新 + 变更联动命令 |
+| `index` | 全量扫描 Vault → 单文件 SQLite 索引                                                   |
+| `scan`  | **按需增量重索引**：diff 文件系统 vs 库，只重扫新增/改动/删除（无需常驻进程）         |
+| `query` | 自建 Dataview（DQL）子集 → 参数化 SQL → JSON 结果                                     |
+| `skill` | 加载规范知识库，Fuse.js 模糊召回 Obsidian / DQL 语法                                  |
+| `watch` | chokidar 常驻监听，实时增量更新 + 变更联动命令                                        |
 
 ## 安装
 

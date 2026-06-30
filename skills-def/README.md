@@ -6,11 +6,11 @@
 
 ## 现有 skill
 
-| skill | 用途 | 召回时机 |
-|---|---|---|
-| `biz-obsidian-spec` | Obsidian Markdown 精确文法与边界 | 实现/审查 `src/parser/**` |
-| `biz-dql-subset` | DQL 子集文法 + AST→SQL 映射 + 隐式字段语义 | 实现/审查 `src/query/**`、`src/indexer/schema.ts` |
-| `biz-code-comments` | 中文注释 / JSDoc / 模块头 / 跨模块不变量 / 规范来源分界 | 写或审查任意源码注释时 |
+| skill               | 用途                                                    | 召回时机                                          |
+| ------------------- | ------------------------------------------------------- | ------------------------------------------------- |
+| `biz-obsidian-spec` | Obsidian Markdown 精确文法与边界                        | 实现/审查 `src/parser/**`                         |
+| `biz-dql-subset`    | DQL 子集文法 + AST→SQL 映射 + 隐式字段语义              | 实现/审查 `src/query/**`、`src/indexer/schema.ts` |
+| `biz-code-comments` | 中文注释 / JSDoc / 模块头 / 跨模块不变量 / 规范来源分界 | 写或审查任意源码注释时                            |
 
 ## 约定
 

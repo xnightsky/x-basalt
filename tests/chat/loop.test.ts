@@ -41,7 +41,12 @@ function makeMockModel() {
       // 第一步：调用 echo
       {
         stream: convertArrayToReadableStream([
-          { type: "tool-call", toolCallId: "tc1", toolName: "echo", input: JSON.stringify({ x: "hi" }) },
+          {
+            type: "tool-call",
+            toolCallId: "tc1",
+            toolName: "echo",
+            input: JSON.stringify({ x: "hi" }),
+          },
           { type: "finish", usage: USAGE, finishReason: "tool-calls" },
         ]),
       },
@@ -91,15 +96,12 @@ test("runLoop：abortSignal 预先 abort → 不执行工具即返回", async ()
   const ac = new AbortController();
   ac.abort();
   const model = makeMockModel();
-  await runLoop(
-    [{ role: "user", content: "x" }],
-    {
-      model,
-      tools: probeTools(calls),
-      maxSteps: 5,
-      onEvent: () => {},
-      abortSignal: ac.signal,
-    },
-  ).catch(() => {});
+  await runLoop([{ role: "user", content: "x" }], {
+    model,
+    tools: probeTools(calls),
+    maxSteps: 5,
+    onEvent: () => {},
+    abortSignal: ac.signal,
+  }).catch(() => {});
   assert.deepEqual(calls, []);
 });

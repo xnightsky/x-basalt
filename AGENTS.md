@@ -37,19 +37,19 @@
 
 ## 技术栈
 
-| 用途 | 选型 |
-|---|---|
-| Runtime / 语言 | Node.js 22+（开发用 24.x）+ TypeScript 5.x（ESM / NodeNext） |
-| CLI | commander |
+| 用途                         | 选型                                                                                                         |
+| ---------------------------- | ------------------------------------------------------------------------------------------------------------ |
+| Runtime / 语言               | Node.js 22+（开发用 24.x）+ TypeScript 5.x（ESM / NodeNext）                                                 |
+| CLI                          | commander                                                                                                    |
 | Obsidian 专有语法 / 基础解析 | **自建提取**（wikilink/embed/callout/highlight/task/blockRef），纯正则、不建完整 mdast、无第三方 wikilink 库 |
-| Frontmatter | gray-matter |
-| 文件监听 | chokidar |
-| 索引存储 | better-sqlite3（单文件 SQLite，同步 API） |
-| Skill 文件格式 | json5 |
-| Skill 召回匹配 | fuse.js（模糊搜索 + 相关性排序，容拼写错） |
-| 配置加载 | cosmiconfig（向上搜索 `.x-basalt/config.*`）+ yaml（YAML 解析/序列化） |
-| 测试 | Node 原生 Test Runner（`node:test`）+ `assert` |
-| Lint / Format | oxlint + oxfmt（oxc 工具链） |
+| Frontmatter                  | gray-matter                                                                                                  |
+| 文件监听                     | chokidar                                                                                                     |
+| 索引存储                     | better-sqlite3（单文件 SQLite，同步 API）                                                                    |
+| Skill 文件格式               | json5                                                                                                        |
+| Skill 召回匹配               | fuse.js（模糊搜索 + 相关性排序，容拼写错）                                                                   |
+| 配置加载                     | cosmiconfig（向上搜索 `.x-basalt/config.*`）+ yaml（YAML 解析/序列化）                                       |
+| 测试                         | Node 原生 Test Runner（`node:test`）+ `assert`                                                               |
+| Lint / Format                | oxlint + oxfmt（oxc 工具链）                                                                                 |
 
 ## 目录结构
 

@@ -595,23 +595,37 @@ program
   .option("--max-steps <n>", "agentic 最大步数", "12")
   .option("--db <path>", "SQLite 索引路径（默认 .x-basalt/index.db，可由配置 db 覆盖）")
   .option("--vault <path>", "Vault 目录（可回退配置 vault）")
-  .action(async (input: string | undefined, opts: { model?: string; maxSteps: string; db?: string; vault?: string }) => {
-    // 先检查 AI key：无 key 直接友好退出，避免先报 "需要 --vault" 造成误导。
-    // provider.ts 无 AI SDK 顶层依赖，可安全懒加载；真正触达 SDK 的 index.ts 仍延后到本分支有 key 之后。
-    const { resolveProvider, NO_KEY_MESSAGE } = await import("./chat/provider.js");
-    const res = resolveProvider(process.env, opts.model);
-    if ("error" in res) {
-      console.error(NO_KEY_MESSAGE);
-      process.exitCode = 1;
-      return;
-    }
-    const dbPath = opts.db ?? config.db ?? DEFAULT_DB;
-    const vaultPath = required(opts.vault ?? config.vault, "需要 --vault 参数或在配置文件中设置 vault");
-    const chatOpts = { model: opts.model, maxSteps: Number(opts.maxSteps), dbPath, vaultPath, skillPath: config.skillPath };
-    // 懒加载：只有确认有 key 后才触达 src/chat（及其 AI SDK 依赖）。
-    const { runOnce, runRepl } = await import("./chat/index.js");
-    process.exitCode = input ? await runOnce(input, chatOpts) : await runRepl(chatOpts);
-  });
+  .action(
+    async (
+      input: string | undefined,
+      opts: { model?: string; maxSteps: string; db?: string; vault?: string },
+    ) => {
+      // 先检查 AI key：无 key 直接友好退出，避免先报 "需要 --vault" 造成误导。
+      // provider.ts 无 AI SDK 顶层依赖，可安全懒加载；真正触达 SDK 的 index.ts 仍延后到本分支有 key 之后。
+      const { resolveProvider, NO_KEY_MESSAGE } = await import("./chat/provider.js");
+      const res = resolveProvider(process.env, opts.model);
+      if ("error" in res) {
+        console.error(NO_KEY_MESSAGE);
+        process.exitCode = 1;
+        return;
+      }
+      const dbPath = opts.db ?? config.db ?? DEFAULT_DB;
+      const vaultPath = required(
+        opts.vault ?? config.vault,
+        "需要 --vault 参数或在配置文件中设置 vault",
+      );
+      const chatOpts = {
+        model: opts.model,
+        maxSteps: Number(opts.maxSteps),
+        dbPath,
+        vaultPath,
+        skillPath: config.skillPath,
+      };
+      // 懒加载：只有确认有 key 后才触达 src/chat（及其 AI SDK 依赖）。
+      const { runOnce, runRepl } = await import("./chat/index.js");
+      process.exitCode = input ? await runOnce(input, chatOpts) : await runRepl(chatOpts);
+    },
+  );
 
 program.parseAsync(process.argv).catch((err: unknown) => {
   console.error(`✗ ${(err as Error).message}`);

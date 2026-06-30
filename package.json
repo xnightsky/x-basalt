@@ -2,7 +2,16 @@
   "name": "x-basalt",
   "version": "0.1.0",
   "description": "纯 Node.js CLI：零依赖 Obsidian 运行时，解析 / 索引 / 查询（Dataview 子集）/ Skill 召回 Obsidian Vault",
-  "type": "module",
+  "keywords": [
+    "cli",
+    "dataview",
+    "markdown",
+    "obsidian",
+    "sqlite",
+    "wikilink"
+  ],
+  "license": "MIT",
+  "author": "xnightsky",
   "bin": {
     "x-basalt": "dist/cli.js"
   },
@@ -13,10 +22,7 @@
     "CHANGELOG.md",
     "LICENSE"
   ],
-  "engines": {
-    "node": ">=22"
-  },
-  "packageManager": "pnpm@10.33.0",
+  "type": "module",
   "scripts": {
     "build": "tsc",
     "typecheck": "tsc --noEmit",
@@ -31,21 +37,6 @@
     "skills:install:global": "node scripts/install-skills.mjs --global",
     "prepare": "node scripts/setup-hooks.mjs",
     "prepublishOnly": "pnpm run typecheck && pnpm test && pnpm run build"
-  },
-  "keywords": [
-    "obsidian",
-    "markdown",
-    "dataview",
-    "cli",
-    "sqlite",
-    "wikilink"
-  ],
-  "license": "MIT",
-  "author": "xnightsky",
-  "pnpm": {
-    "onlyBuiltDependencies": [
-      "better-sqlite3"
-    ]
   },
   "dependencies": {
     "better-sqlite3": "^12.11.1",
@@ -69,5 +60,14 @@
   "optionalDependencies": {
     "@ai-sdk/openai-compatible": "^3.0.1",
     "ai": "^7.0.6"
+  },
+  "engines": {
+    "node": ">=22"
+  },
+  "packageManager": "pnpm@10.33.0",
+  "pnpm": {
+    "onlyBuiltDependencies": [
+      "better-sqlite3"
+    ]
   }
 }

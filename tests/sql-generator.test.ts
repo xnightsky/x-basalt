@@ -12,7 +12,10 @@ test("S2.9 LIKE 通配符转义：contains 含 % 字面匹配 + ESCAPE", () => {
   const c = generateSql(parseDql('LIST WHERE contains(title, "50%")'));
   // % 必须转义为字面并带 ESCAPE 子句，否则 LIKE 把 % 当任意匹配。
   assert.match(c.sql, /LIKE \? ESCAPE '\\'/);
-  assert.ok(c.params.includes("%50\\%%"), `params 应含转义后的 %50\\%%，实际: ${JSON.stringify(c.params)}`);
+  assert.ok(
+    c.params.includes("%50\\%%"),
+    `params 应含转义后的 %50\\%%，实际: ${JSON.stringify(c.params)}`,
+  );
 });
 
 test("S2.9 startswith/endswith 转义下划线", () => {
@@ -32,7 +35,10 @@ test("S2.9 icontains 转义 + 大小写不敏感（标量字段）", () => {
 test("S2.9 反斜杠本身也被转义", () => {
   const c = generateSql(parseDql('LIST WHERE contains(title, "a\\\\b")'));
   // 输入字面值 a\b → 转义为 a\\b（ESCAPE 字符 \ 自身需转义）。
-  assert.ok(c.params.some((p) => String(p).includes("a\\\\b")), JSON.stringify(c.params));
+  assert.ok(
+    c.params.some((p) => String(p).includes("a\\\\b")),
+    JSON.stringify(c.params),
+  );
 });
 
 test("全部用户输入走参数占位符（无字面拼接）", () => {
@@ -188,12 +194,21 @@ test("S2.17 lower/upper 包裹比较左操作数", () => {
 });
 
 test("S2.17 length：数组字段用 json_array_length、标量用 LENGTH", () => {
-  assert.match(generateSql(parseDql("LIST WHERE length(file.tasks) > 0")).sql, /json_array_length\(.*\) > \?/s);
-  assert.match(generateSql(parseDql("LIST WHERE length(file.name) > 3")).sql, /LENGTH\(f\.name\) > \?/);
+  assert.match(
+    generateSql(parseDql("LIST WHERE length(file.tasks) > 0")).sql,
+    /json_array_length\(.*\) > \?/s,
+  );
+  assert.match(
+    generateSql(parseDql("LIST WHERE length(file.name) > 3")).sql,
+    /LENGTH\(f\.name\) > \?/,
+  );
 });
 
 test("S2.17 round", () => {
-  assert.match(generateSql(parseDql("LIST WHERE round(file.size) >= 100")).sql, /ROUND\(f\.size\) >= \?/);
+  assert.match(
+    generateSql(parseDql("LIST WHERE round(file.size) >= 100")).sql,
+    /ROUND\(f\.size\) >= \?/,
+  );
 });
 
 test("S2.17 date(today)/date(now) 求值为 ISO 串作右值（参数化）", () => {

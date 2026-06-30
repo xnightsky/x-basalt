@@ -36,7 +36,11 @@ export const NO_KEY_MESSAGE =
 export function resolveProvider(env: NodeJS.ProcessEnv, modelFlag?: string): ProviderResolution {
   const apiKey = env.AI_GATEWAY_API_KEY;
   if (!apiKey) return { error: "no-key" };
-  return { apiKey, model: modelFlag ?? env.AI_GATEWAY_MODEL ?? DEFAULT_MODEL, baseURL: env.AI_GATEWAY_URL };
+  return {
+    apiKey,
+    model: modelFlag ?? env.AI_GATEWAY_MODEL ?? DEFAULT_MODEL,
+    baseURL: env.AI_GATEWAY_URL,
+  };
 }
 
 /**

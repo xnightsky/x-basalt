@@ -253,9 +253,16 @@ class DqlChevParser extends EmbeddedActionsParser {
                   const fn = headTok.image.toLowerCase();
                   if (SCALAR_FNS.has(fn)) {
                     if (predArg !== undefined) {
-                      throw new DqlSyntaxError(`${headTok.image}() 仅接一个参数`, headTok.startOffset);
+                      throw new DqlSyntaxError(
+                        `${headTok.image}() 仅接一个参数`,
+                        headTok.startOffset,
+                      );
                     }
-                    if (scalarOp === undefined || scalarVal === undefined || !COMPARE_OPS.has(scalarOp)) {
+                    if (
+                      scalarOp === undefined ||
+                      scalarVal === undefined ||
+                      !COMPARE_OPS.has(scalarOp)
+                    ) {
                       throw new DqlSyntaxError(
                         `${headTok.image}(x) 须用于比较，如 length(x) > 0`,
                         headTok.startOffset,

@@ -41,14 +41,14 @@ LIMIT <number>
 
 ## 隐式字段映射
 
-| 字段 | SQL 来源 |
-|---|---|
-| `file.name/path/folder/extension/size/mtime/ctime` | `files` 表列（folder 由 path 推导） |
-| `file.tags` | `tags` 表聚合；`contains(file.tags, "#x")` → JOIN tags WHERE tag = 'x' |
-| `file.inlinks` | `links` 表反向，**路径感知（S3.2）**：qualified 链接（target 含 `/`）按 `links.target_path_key = files.path_key` 精确；bare 链接按 `links.target_key = files.name_key`（basename 回退）。消除同名异目录串味 |
-| `file.outlinks` | `links` 表正向：`links.source = files.path`（含 embed）；`contains(file.outlinks,"X")` 同样路径感知：X 含 `/` 按 `target_path_key`，否则 `target_key` |
-| `file.tasks` | `tasks` 表关联；`TASK` 查询返回任务行、`length(file.tasks)` 计数；task 字段级过滤为后续（非本轮） |
-| frontmatter 标量（如 `status`） | `json_extract(files.frontmatter, '$.status')` |
+| 字段                                               | SQL 来源                                                                                                                                                                                                    |
+| -------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `file.name/path/folder/extension/size/mtime/ctime` | `files` 表列（folder 由 path 推导）                                                                                                                                                                         |
+| `file.tags`                                        | `tags` 表聚合；`contains(file.tags, "#x")` → JOIN tags WHERE tag = 'x'                                                                                                                                      |
+| `file.inlinks`                                     | `links` 表反向，**路径感知（S3.2）**：qualified 链接（target 含 `/`）按 `links.target_path_key = files.path_key` 精确；bare 链接按 `links.target_key = files.name_key`（basename 回退）。消除同名异目录串味 |
+| `file.outlinks`                                    | `links` 表正向：`links.source = files.path`（含 embed）；`contains(file.outlinks,"X")` 同样路径感知：X 含 `/` 按 `target_path_key`，否则 `target_key`                                                       |
+| `file.tasks`                                       | `tasks` 表关联；`TASK` 查询返回任务行、`length(file.tasks)` 计数；task 字段级过滤为后续（非本轮）                                                                                                           |
+| frontmatter 标量（如 `status`）                    | `json_extract(files.frontmatter, '$.status')`                                                                                                                                                               |
 
 **硬约束**：inlinks/outlinks 等**无物化视图**，一律查询期 JOIN 实时计算（对应 `AGENTS.md` 硬约束第 6 条）。
 

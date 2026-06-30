@@ -9,9 +9,15 @@ function run(args: string[]) {
   // Windows 下 pnpm 是 .cmd，execFileSync 直接 spawn "pnpm" 会 ENOENT，需走 cmd /c。
   const isWin = platform() === "win32";
   const cmd = isWin ? "cmd" : "pnpm";
-  const cmdArgs = isWin ? ["/c", "pnpm", "exec", "tsx", "src/cli.ts", ...args] : ["exec", "tsx", "src/cli.ts", ...args];
+  const cmdArgs = isWin
+    ? ["/c", "pnpm", "exec", "tsx", "src/cli.ts", ...args]
+    : ["exec", "tsx", "src/cli.ts", ...args];
   try {
-    const stdout = execFileSync(cmd, cmdArgs, { env: e, encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] });
+    const stdout = execFileSync(cmd, cmdArgs, {
+      env: e,
+      encoding: "utf8",
+      stdio: ["ignore", "pipe", "pipe"],
+    });
     return { code: 0, stdout, stderr: "" };
   } catch (err) {
     const e2 = err as { status: number; stdout: string; stderr: string };

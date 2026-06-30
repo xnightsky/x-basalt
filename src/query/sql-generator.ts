@@ -224,7 +224,8 @@ function compileCall(expr: Extract<WhereExpr, { kind: "call" }>): {
   if (fn === "startswith") {
     return { sql: `(${fe} LIKE ? ESCAPE '\\')`, params: [`${escapeLike(arg)}%`] };
   }
-  if (fn === "endswith") return { sql: `(${fe} LIKE ? ESCAPE '\\')`, params: [`%${escapeLike(arg)}`] };
+  if (fn === "endswith")
+    return { sql: `(${fe} LIKE ? ESCAPE '\\')`, params: [`%${escapeLike(arg)}`] };
   throw new Error(`不支持的函数: ${fn as string}`);
 }
 

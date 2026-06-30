@@ -33,7 +33,9 @@ export function renderEvent(e: LoopEvent): void {
 }
 
 /** 装配 model + tools；无 key/未装依赖 → 打印指引返回 null（消费者退出非 0）。 */
-async function setup(opts: ChatOptions): Promise<{ model: unknown; tools: ReturnType<typeof buildTools> } | null> {
+async function setup(
+  opts: ChatOptions,
+): Promise<{ model: unknown; tools: ReturnType<typeof buildTools> } | null> {
   const res = resolveProvider(process.env, opts.model);
   if ("error" in res) {
     console.error(NO_KEY_MESSAGE);
@@ -47,7 +49,10 @@ async function setup(opts: ChatOptions): Promise<{ model: unknown; tools: Return
     return null;
   }
   const safety = makeSafety();
-  const tools = buildTools({ dbPath: opts.dbPath, vaultPath: opts.vaultPath, skillPath: opts.skillPath }, safety);
+  const tools = buildTools(
+    { dbPath: opts.dbPath, vaultPath: opts.vaultPath, skillPath: opts.skillPath },
+    safety,
+  );
   return { model, tools };
 }
 

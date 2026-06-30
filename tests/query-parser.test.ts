@@ -29,7 +29,16 @@ test("查询头关键字 LIST/TABLE/TASK 各自识别", () => {
 
 test("子句关键字 FROM/WHERE/SORT/LIMIT/ASC/DESC/AND/OR/NOT/NULL", () => {
   assert.deepEqual(kinds("FROM WHERE SORT LIMIT ASC DESC AND OR NOT NULL"), [
-    "From", "Where", "Sort", "Limit", "Asc", "Desc", "And", "Or", "Not", "Null",
+    "From",
+    "Where",
+    "Sort",
+    "Limit",
+    "Asc",
+    "Desc",
+    "And",
+    "Or",
+    "Not",
+    "Null",
   ]);
 });
 
@@ -106,10 +115,25 @@ test("空白被跳过，不产出 token", () => {
 test("完整样例句的 token 序列", () => {
   const dql = `LIST FROM #x WHERE a = 1 AND contains(file.tags,"y") SORT b DESC LIMIT 5`;
   assert.deepEqual(kinds(dql), [
-    "List", "From", "Tag", "Where",
-    "Identifier", "Op", "NumberLiteral", "And",
-    "Identifier", "LParen", "Identifier", "Comma", "StringLiteral", "RParen",
-    "Sort", "Identifier", "Desc", "Limit", "NumberLiteral",
+    "List",
+    "From",
+    "Tag",
+    "Where",
+    "Identifier",
+    "Op",
+    "NumberLiteral",
+    "And",
+    "Identifier",
+    "LParen",
+    "Identifier",
+    "Comma",
+    "StringLiteral",
+    "RParen",
+    "Sort",
+    "Identifier",
+    "Desc",
+    "Limit",
+    "NumberLiteral",
   ]);
 });
 
@@ -131,8 +155,15 @@ test("未闭合字符串报错", () => {
 
 test("parser 头：LIST", () => {
   assert.deepEqual(parseDql("LIST"), {
-    type: "LIST", fields: [], from: undefined, where: undefined,
-    groupBy: undefined, flatten: undefined, withoutId: undefined, sort: undefined, limit: undefined,
+    type: "LIST",
+    fields: [],
+    from: undefined,
+    where: undefined,
+    groupBy: undefined,
+    flatten: undefined,
+    withoutId: undefined,
+    sort: undefined,
+    limit: undefined,
   });
 });
 
@@ -162,10 +193,16 @@ test("parser FROM：#tag / folder / [[link]]", () => {
 
 test("parser WHERE：比较 + 数值/字符串值", () => {
   assert.deepEqual(parseDql("LIST WHERE status = 'active'").where, {
-    kind: "compare", field: "status", op: "=", value: "active",
+    kind: "compare",
+    field: "status",
+    op: "=",
+    value: "active",
   });
   assert.deepEqual(parseDql("LIST WHERE file.size >= 100").where, {
-    kind: "compare", field: "file.size", op: ">=", value: 100,
+    kind: "compare",
+    field: "file.size",
+    op: ">=",
+    value: 100,
   });
 });
 
@@ -188,30 +225,50 @@ test("parser WHERE：括号改变优先级", () => {
   assert.equal((w as { right: { kind: string } }).right.kind, "or");
 });
 
-test("parser 字符串转义解码：\\\" → \" 、\\\\ → \\（S2.8 回归修复）", () => {
+test('parser 字符串转义解码：\\" → " 、\\\\ → \\（S2.8 回归修复）', () => {
   assert.deepEqual(parseDql('LIST WHERE title = "a\\"b"').where, {
-    kind: "compare", field: "title", op: "=", value: 'a"b',
+    kind: "compare",
+    field: "title",
+    op: "=",
+    value: 'a"b',
   });
   assert.deepEqual(parseDql('LIST WHERE title = "a\\\\b"').where, {
-    kind: "compare", field: "title", op: "=", value: "a\\b",
+    kind: "compare",
+    field: "title",
+    op: "=",
+    value: "a\\b",
   });
 });
 
 test("parser WHERE：函数调用 contains/regexmatch", () => {
   assert.deepEqual(parseDql('LIST WHERE contains(file.tags, "x")').where, {
-    kind: "call", fn: "contains", field: "file.tags", arg: "x",
+    kind: "call",
+    fn: "contains",
+    field: "file.tags",
+    arg: "x",
   });
   assert.deepEqual(parseDql('LIST WHERE regexmatch(file.name, "^A")').where, {
-    kind: "call", fn: "regexmatch", field: "file.name", arg: "^A",
+    kind: "call",
+    fn: "regexmatch",
+    field: "file.name",
+    arg: "^A",
   });
 });
 
 test("S2.17 parser：scalar 函数 length(field) op value → compare 带 fn", () => {
   assert.deepEqual(parseDql("LIST WHERE length(file.tasks) > 0").where, {
-    kind: "compare", field: "file.tasks", fn: "length", op: ">", value: 0,
+    kind: "compare",
+    field: "file.tasks",
+    fn: "length",
+    op: ">",
+    value: 0,
   });
   assert.deepEqual(parseDql('LIST WHERE lower(file.name) = "a"').where, {
-    kind: "compare", field: "file.name", fn: "lower", op: "=", value: "a",
+    kind: "compare",
+    field: "file.name",
+    fn: "lower",
+    op: "=",
+    value: "a",
   });
 });
 

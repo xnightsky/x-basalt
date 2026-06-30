@@ -70,7 +70,9 @@ export function buildTools(ctx: ToolContext, safety: Safety): ToolSet {
       description: "对比文件系统与索引，报告新增/改动/删除（不写库）。",
       inputSchema: jsonSchema<{ rehash?: boolean }>({
         type: "object",
-        properties: { rehash: { type: "boolean", description: "按内容对比（慢但稳），默认 mtime+size" } },
+        properties: {
+          rehash: { type: "boolean", description: "按内容对比（慢但稳），默认 mtime+size" },
+        },
         additionalProperties: false,
       }),
       execute: async ({ rehash }) => {
@@ -100,7 +102,8 @@ export function buildTools(ctx: ToolContext, safety: Safety): ToolSet {
         required: ["keyword"],
         additionalProperties: false,
       }),
-      execute: ({ keyword }) => observe(safety, new SkillRecall({ skillPath: ctx.skillPath }).recall(keyword)),
+      execute: ({ keyword }) =>
+        observe(safety, new SkillRecall({ skillPath: ctx.skillPath }).recall(keyword)),
     }),
 
     // ---- 写工具（execute 直接以非 dry-run 落盘，无 confirm）----
@@ -140,7 +143,11 @@ export function buildTools(ctx: ToolContext, safety: Safety): ToolSet {
       description: "重命名某笔记的一个 frontmatter 键（直接写入）。",
       inputSchema: jsonSchema<{ file: string; oldKey: string; newKey: string }>({
         type: "object",
-        properties: { file: { type: "string" }, oldKey: { type: "string" }, newKey: { type: "string" } },
+        properties: {
+          file: { type: "string" },
+          oldKey: { type: "string" },
+          newKey: { type: "string" },
+        },
         required: ["file", "oldKey", "newKey"],
         additionalProperties: false,
       }),
@@ -170,7 +177,12 @@ export function buildTools(ctx: ToolContext, safety: Safety): ToolSet {
     }),
     meta_apply: tool({
       description: "套用元数据 profile：机械预填 + sets 补缺（直接写入）。",
-      inputSchema: jsonSchema<{ profile: string; file: string; sets?: Record<string, string>; refreshDerived?: boolean }>({
+      inputSchema: jsonSchema<{
+        profile: string;
+        file: string;
+        sets?: Record<string, string>;
+        refreshDerived?: boolean;
+      }>({
         type: "object",
         properties: {
           profile: { type: "string" },
@@ -195,7 +207,13 @@ export function buildTools(ctx: ToolContext, safety: Safety): ToolSet {
     pipeline_run: tool({
       description:
         "对一批笔记跑声明式管道（actions: index/normalize/apply/set/unset/rename）。批量直接写入。where 用 DQL 选源，省略则用 scan 差异源。",
-      inputSchema: jsonSchema<{ actions: string[]; where?: string; paths?: string[]; ifExists?: string; concurrency?: number }>({
+      inputSchema: jsonSchema<{
+        actions: string[];
+        where?: string;
+        paths?: string[];
+        ifExists?: string;
+        concurrency?: number;
+      }>({
         type: "object",
         properties: {
           actions: { type: "array", items: { type: "string" } },
@@ -221,7 +239,12 @@ export function buildTools(ctx: ToolContext, safety: Safety): ToolSet {
         const orch = new Orchestrator({ vaultPath: ctx.vaultPath, dbPath: ctx.dbPath });
         try {
           const r = where ? await orch.runManual(cfg, { dql: where }) : await orch.runScan(cfg);
-          return observe(safety, { total: r.total, changed: r.changed, skipped: r.skipped, failed: r.failed });
+          return observe(safety, {
+            total: r.total,
+            changed: r.changed,
+            skipped: r.skipped,
+            failed: r.failed,
+          });
         } finally {
           orch.close();
         }

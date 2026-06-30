@@ -51,7 +51,8 @@ export async function runLoop(messages: ModelMessage[], deps: LoopDeps): Promise
     if (part.type === "text-delta") {
       deps.onEvent({
         type: "text",
-        text: (part as { text?: string; delta?: string }).text ?? (part as { delta?: string }).delta,
+        text:
+          (part as { text?: string; delta?: string }).text ?? (part as { delta?: string }).delta,
       });
     } else if (part.type === "tool-call") {
       deps.onEvent({ type: "tool-call", toolName: part.toolName });
