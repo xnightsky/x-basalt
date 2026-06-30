@@ -94,6 +94,7 @@ index.db*
 .x-basalt.json
 
 # =========== AI ============
+# 本地 AGENTS 规则（不入仓）；示例模板 AGENTS.local.example.md 入仓
 AGENTS.local.md
 .claude/settings.json
 .claude/settings.local.json

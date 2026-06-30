@@ -2,7 +2,8 @@
 
 > 纯 Node.js CLI 工具：零依赖 Obsidian GUI / 运行时，直接通过文件系统操作 Vault，实现 Obsidian 规范的解析、索引、Dataview 子集查询与 Skill 召回。
 > 本文件是项目「全局提示词」主体；`CLAUDE.md` 仅指向本文件。
-> 根目录 `AGENTS.*.md`（如 `AGENTS.ai.md`、`AGENTS.local.md`）与本文件同级并列，会话启动时一并读取；AI / 提交授权等细则以 `AGENTS.ai.md` 为准。
+> 根目录 `AGENTS.*.md`（如 `AGENTS.ai.md`）与本文件同级并列，会话启动时一并读取；AI / 提交授权等细则以 `AGENTS.ai.md` 为准。
+> **本地规则**：`AGENTS.local.md` 与本文件伴随维护但**不入仓**（`.gitignore`）；从 `AGENTS.local.example.md` 复制初始化，仅放本机路径 / 个人偏好 / 临时实验，不得覆盖项目硬约束。
 
 ## 响应与沟通
 
@@ -14,7 +15,7 @@
 
 ## 工作方式
 
-- 进入会话后先在仓库根目录跑 `rg --files --max-depth 0 -g 'AGENTS.md' -g 'AGENTS.*.md'` 定位根规则；只读根目录已存在且与当前宿主/流程直接相关的 `AGENTS.*.md`（含 `AGENTS.ai.md`；`AGENTS.local.md` 若存在则读）。未完成上述最小必要读取前，不得继续探索、计划或实现。
+- 进入会话后先在仓库根目录跑 `rg --files --max-depth 0 -g 'AGENTS.md' -g 'AGENTS.*.md'` 定位根规则；只读根目录已存在且与当前宿主/流程直接相关的 `AGENTS.*.md`（含 `AGENTS.ai.md`；`AGENTS.local.md` 若存在则读，勿读 `AGENTS.local.example.md` 代替本地文件）。未完成上述最小必要读取前，不得继续探索、计划或实现。
 - 先做非破坏性探索，再进入实现。
 - 变更前说明目标、范围、预期影响；若方案需要扩大范围，先说明再继续。
 - 优先用 `rg`（ripgrep）搜索文件与文本；优先非交互式命令。
@@ -121,6 +122,19 @@ docs/         research / specs / plans / guides / architecture / testing（见 d
   - `biz-code-comments`：中文注释 / JSDoc / 模块头 / 跨模块不变量 / 规范来源分界规范，写或审查注释时召回。
 - 新增/修改 skill 后跑 `pnpm run skills:install` 重新安装。
 - 注意区分：`skills-def/` 是**开发侧** AI 召回；`skill-data/` 是**产品运行时** SkillRecall 数据，两者不互相替代。
+
+## 本地规则（AGENTS.local.md）
+
+| 文件 | 入仓 | 用途 |
+| ---- | ---- | ---- |
+| `AGENTS.md` | 是 | 项目共享全局规则（本文件） |
+| `AGENTS.ai.md` | 是 | AI / 提交授权等细则 |
+| `AGENTS.local.example.md` | 是 | 本地规则示例模板 |
+| `AGENTS.local.md` | **否** | 本机实际本地规则（`.gitignore`） |
+
+- 维护 `AGENTS.md` 时，若某条规则**仅对本机/个人有效**，应写入 `AGENTS.local.md`，不要污染共享文件。
+- 新 clone 后：`cp AGENTS.local.example.md AGENTS.local.md`，再填本机路径与偏好。
+- **docs 元数据自举的 CLI 选用**（全局 `x-basalt` vs `pnpm cli --`）写在 `AGENTS.local.md`，共享规则见下文「Docs 维护」。
 
 ## Docs 维护
 
