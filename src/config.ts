@@ -169,7 +169,7 @@ function loadConfigDir(explorer: PublicExplorerSync, dir: string): BasaltConfig 
  *
  * @param cwd - 起始目录，默认 process.cwd()
  * @param globalHome - 全局配置所在 home，默认 homedir()（测试可注入隔离）
- * @param baseDir - 基目录，默认读环境变量 `X_BASALT_DIR`（设了则项目配置从此目录读）
+ * @param baseDir - 基目录（设了则项目配置从此目录读）；调用方如 CLI 可传入 `process.env.X_BASALT_DIR`
  *
  * @behavior
  * Given 设了 X_BASALT_DIR（指向某 .x-basalt 目录）
@@ -194,7 +194,7 @@ function loadConfigDir(explorer: PublicExplorerSync, dir: string): BasaltConfig 
 export function loadConfig(
   cwd: string = process.cwd(),
   globalHome: string = homedir(),
-  baseDir: string | undefined = process.env.X_BASALT_DIR,
+  baseDir?: string,
 ): BasaltConfig {
   const explorer = makeExplorer();
   const globalCfg = loadConfigDir(explorer, join(globalHome, ".x-basalt"));

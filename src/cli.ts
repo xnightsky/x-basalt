@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 import { exec } from "node:child_process";
-import { readFileSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
+import { homedir } from "node:os";
 import { join } from "node:path";
 import { Command } from "commander";
 import { loadConfig } from "./config.js";
@@ -34,7 +35,14 @@ import { renderSkill, renderSkillList, renderSkills } from "./skill/render.js";
 // 本文件只做参数装配与输出格式化，不内联业务逻辑（逻辑在各层并各有单测）。
 
 // 启动时加载一次项目/全局配置；各命令以 `flag ?? config.X ?? 内置默认` 解析，免去重复传参。
-const config = loadConfig();
+// CLI 显式传入 X_BASALT_DIR；若环境变量指向的目录不存在（如测试子进程换了 cwd），
+// 则忽略它，避免外部进程环境污染项目配置发现。
+const envBaseDir = process.env.X_BASALT_DIR;
+const config = loadConfig(
+  process.cwd(),
+  homedir(),
+  envBaseDir && existsSync(envBaseDir) ? envBaseDir : undefined,
+);
 
 // 基目录：env `X_BASALT_DIR` 指定则用它（可把 .x-basalt 整块搬到任意位置），否则就近隐藏目录 `.x-basalt/`。
 const BASE_DIR = process.env.X_BASALT_DIR ?? ".x-basalt";
@@ -260,7 +268,11 @@ program
   .option("--watch", "启用文件监听增量更新", false)
   .option("--db <path>", "SQLite 索引文件路径（默认 .x-basalt/index.db，可由配置 db 覆盖）")
   .action(async (vaults: string[], opts: { watch: boolean; db?: string }) => {
-    const vaultPath = requireVault(vaults, config.vault, "需要 <vault> 参数或在配置文件中设置 vault");
+    const vaultPath = requireVault(
+      vaults,
+      config.vault,
+      "需要 <vault> 参数或在配置文件中设置 vault",
+    );
     const dbPath = opts.db ?? config.db ?? DEFAULT_DB;
     const indexer = new VaultIndexer({ vaultPath, dbPath });
     await indexer.rebuild();
