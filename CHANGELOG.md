@@ -45,5 +45,5 @@
 - skill：JSON5 加载 + 模糊召回，内置 `obsidian-base-spec` 与 `x-basalt-usage` 兜底。
 - cli：commander 五子命令 `parse / index / query / skill / watch`，支持 `--format`、`--watch`、`--on-change`，及项目 / 全局配置文件。
 
-[Unreleased]: https://example.invalid/x-basalt/compare/v0.1.0...HEAD
-[0.1.0]: https://example.invalid/x-basalt/releases/tag/v0.1.0
+[Unreleased]: https://github.com/xnightsky/x-basalt/compare/v0.1.0...HEAD
+[0.1.0]: https://github.com/xnightsky/x-basalt/releases/tag/v0.1.0
