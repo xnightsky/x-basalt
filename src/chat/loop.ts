@@ -5,9 +5,15 @@
 import { stepCountIs, streamText, type ModelMessage, type ToolSet } from "ai";
 
 export interface LoopEvent {
-  type: "text" | "tool-call" | "tool-result" | "finish";
+  type: "text" | "tool-call" | "tool-result" | "tool-error" | "finish";
   text?: string;
   toolName?: string;
+  /** tool-call：模型传入的入参（SDK 已从 JSON 解析为对象）。 */
+  input?: unknown;
+  /** tool-result：execute 的返回值（读工具为 safety 包裹后的字符串）。 */
+  output?: unknown;
+  /** tool-error：execute 抛出的错误（SDK 捕获后以 tool-error part 下发，此前被整段丢弃）。 */
+  error?: unknown;
 }
 
 export interface LoopDeps {
@@ -47,7 +53,8 @@ export async function runLoop(messages: ModelMessage[], deps: LoopDeps): Promise
     abortSignal: deps.abortSignal,
   });
   for await (const part of result.fullStream) {
-    // 注：part 字段名以 ai@7.0.6 为准（text-delta 的 .text/.delta、tool-call 的 .toolName）。
+    // 注：part 字段名以 ai@7.0.x 为准——text-delta 的 .text/.delta、tool-call 的 .toolName/.input、
+    // tool-result 的 .output、tool-error 的 .error。input/output/error 此前被丢弃，是本次可观测性修复点。
     if (part.type === "text-delta") {
       deps.onEvent({
         type: "text",
@@ -55,9 +62,11 @@ export async function runLoop(messages: ModelMessage[], deps: LoopDeps): Promise
           (part as { text?: string; delta?: string }).text ?? (part as { delta?: string }).delta,
       });
     } else if (part.type === "tool-call") {
-      deps.onEvent({ type: "tool-call", toolName: part.toolName });
+      deps.onEvent({ type: "tool-call", toolName: part.toolName, input: part.input });
     } else if (part.type === "tool-result") {
-      deps.onEvent({ type: "tool-result", toolName: part.toolName });
+      deps.onEvent({ type: "tool-result", toolName: part.toolName, output: part.output });
+    } else if (part.type === "tool-error") {
+      deps.onEvent({ type: "tool-error", toolName: part.toolName, error: part.error });
     }
   }
   deps.onEvent({ type: "finish" });

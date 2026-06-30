@@ -89,6 +89,13 @@ test("runLoop：模型发 tool-call → 工具执行 → 结果喂回 → 收尾
   assert.deepEqual(calls, ["hi"]);
   assert.ok(events.some((e) => e.type === "tool-call" && e.toolName === "echo"));
   assert.ok(events.some((e) => e.type === "finish"));
+  // 回归守门：tool-call 必须带 input、tool-result 必须带 output（此前被丢弃，
+  // 导致 chat 里「调用没有 input/output」——本断言锁死可观测性修复）。
+  const call = events.find((e) => e.type === "tool-call");
+  assert.deepEqual(call?.input, { x: "hi" });
+  const result = events.find((e) => e.type === "tool-result");
+  assert.equal(result?.toolName, "echo");
+  assert.equal(result?.output, "观察:hi");
 });
 
 test("runLoop：abortSignal 预先 abort → 不执行工具即返回", async () => {

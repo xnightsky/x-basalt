@@ -25,11 +25,70 @@ export const SYSTEM_PROMPT =
   "结构化查询用 DQL(query)；当前无法按正文全文检索。改一个文件用 meta_*，对一批笔记用 pipeline_run。" +
   "你的所有工具都是一次性的：不存在也不要尝试任何常驻/监听/watch 操作（那会永不返回、把本次对话挂死）；scan 与 pipeline_run 都是跑完即返回的一次性动作。";
 
-/** 流式渲染：文本直出，工具调用打一行提示。 */
+/** 单行预览上限（字符）。 */
+const PREVIEW_MAX = 200;
+
+/** 折叠空白、截断成单行预览，超长附剩余字符数。 */
+function oneLine(s: string, max = PREVIEW_MAX): string {
+  const t = s.replace(/\s+/g, " ").trim();
+  return t.length <= max ? t : `${t.slice(0, max)} …（+${t.length - max} 字符）`;
+}
+
+/** 安全 JSON 化；环引用等失败时退回 String()。 */
+function safeJson(v: unknown): string {
+  try {
+    return JSON.stringify(v) ?? String(v);
+  } catch {
+    return String(v);
+  }
+}
+
+/** tool-call 入参 → 单行 JSON 预览。 */
+function fmtInput(input: unknown): string {
+  if (input == null) return "";
+  return oneLine(typeof input === "string" ? input : safeJson(input));
+}
+
+/** tool-result 结果 → 单行预览：剥掉 safety 的 <<VAULT_DATA>> 边界（仅影响展示，喂回模型的仍是完整内容）。 */
+function fmtOutput(output: unknown): string {
+  const raw = typeof output === "string" ? output : safeJson(output);
+  const inner = raw
+    .replace(/^<<VAULT_DATA [0-9a-f]+>>\n?/, "")
+    .replace(/\n?<<END_VAULT_DATA [0-9a-f]+>>\s*$/, "");
+  return oneLine(inner) || "(空结果)";
+}
+
+/** tool-error 错误 → 单行预览。 */
+function fmtError(err: unknown): string {
+  const msg = err instanceof Error ? err.message : typeof err === "string" ? err : safeJson(err);
+  return oneLine(msg, 300);
+}
+
+/**
+ * 流式渲染：文本直出；工具调用显示入参、结果显示输出预览、出错显示错误；收尾打「· 完成」收口标记。
+ * 此前只为 tool-call 打一行无入参提示、丢弃 tool-result/tool-error、finish 仅换行——
+ * 用户侧表现为「调用没有 input/output、阶段性结束无任何提示」，本函数即修复点。
+ */
 export function renderEvent(e: LoopEvent): void {
-  if (e.type === "text" && e.text) process.stdout.write(e.text);
-  else if (e.type === "tool-call") process.stdout.write(`\n· 调用 ${e.toolName} …\n`);
-  else if (e.type === "finish") process.stdout.write("\n");
+  switch (e.type) {
+    case "text":
+      if (e.text) process.stdout.write(e.text);
+      break;
+    case "tool-call": {
+      const args = fmtInput(e.input);
+      process.stdout.write(`\n· 调用 ${e.toolName}${args ? ` ${args}` : ""} …\n`);
+      break;
+    }
+    case "tool-result":
+      process.stdout.write(`  ↳ ${fmtOutput(e.output)}\n`);
+      break;
+    case "tool-error":
+      process.stdout.write(`  ✗ ${e.toolName} 出错：${fmtError(e.error)}\n`);
+      break;
+    case "finish":
+      process.stdout.write("\n· 完成\n");
+      break;
+  }
 }
 
 /** 非 TTY stdin（管道）时读入整段输入，供 cli 走 runOnce 而非 readline REPL。 */
