@@ -52,7 +52,7 @@ export async function runLoop(messages: ModelMessage[], deps: LoopDeps): Promise
     stopWhen: stepCountIs(deps.maxSteps),
     abortSignal: deps.abortSignal,
   });
-  for await (const part of result.fullStream) {
+  for await (const part of result.stream) {
     // 注：part 字段名以 ai@7.0.x 为准——text-delta 的 .text/.delta、tool-call 的 .toolName/.input、
     // tool-result 的 .output、tool-error 的 .error。input/output/error 此前被丢弃，是本次可观测性修复点。
     if (part.type === "text-delta") {
