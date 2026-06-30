@@ -76,10 +76,12 @@
     },
     {
       pattern: "(LIST|TABLE)\\s+.*?(FROM\\s+.+?)?(WHERE\\s+.+?)?(SORT\\s+.+?)?(LIMIT\\s+\\d+)?",
-      description: 'Dataview DQL 子集：LIST|TABLE <fields> FROM <"folder"|#tag|[[link]]> WHERE <cond> SORT <field> ASC|DESC LIMIT <n>。操作符 = != < > <= >= / contains/icontains/startswith/endswith / AND OR NOT / regexmatch。隐式字段 file.name/path/folder/extension/size/mtime/ctime/tags/inlinks/outlinks/tasks。',
+      description: 'Dataview DQL 子集：LIST|TABLE <fields> [FROM <源>] [WHERE <cond>] [SORT <field> ASC|DESC] [LIMIT <n>]。FROM 可省略，省略或 FROM "" 均表示全库；FROM 源仅三类："folder"(含子文件夹) / #tag(前缀命中子标签) / [[link]](反链)。按 frontmatter 字段筛笔记一律用 WHERE，别把字段名或取值当 #tag 写进 FROM。操作符 = != < > <= >= / contains/icontains/startswith/endswith / AND OR NOT / regexmatch。隐式字段 file.name/path/folder/extension/size/mtime/ctime/tags/inlinks/outlinks/tasks，外加任意 frontmatter 标量字段。',
       examples: [
+        'LIST WHERE type = "moc"',
+        'TABLE file.name, rating FROM "" WHERE rating >= 4 SORT rating DESC',
         "LIST FROM #project WHERE status = 'active' SORT file.mtime DESC LIMIT 10",
-        'TABLE file.name, status FROM "Projects" WHERE contains(file.tags, "#work")',
+        'TABLE file.name, status FROM "Projects" WHERE contains(file.tags, "work")',
       ],
     },
   ],

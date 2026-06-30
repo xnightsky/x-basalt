@@ -44,7 +44,8 @@ export function buildTools(ctx: ToolContext, safety: Safety): ToolSet {
   return {
     // ---- 读工具（带 execute，自动跑）----
     query: tool({
-      description: "执行 Dataview(DQL) 子集查询，返回匹配行。结构化只读，查不了正文。",
+      description:
+        "执行 Dataview(DQL) 子集查询，返回匹配行。结构化只读，查不了正文。构造 DQL 不确定文法时，先 skills_get 取 obsidian-base-spec。",
       inputSchema: jsonSchema<{ dql: string }>({
         type: "object",
         properties: { dql: { type: "string", description: "DQL 查询语句" } },
@@ -109,10 +110,22 @@ export function buildTools(ctx: ToolContext, safety: Safety): ToolSet {
       execute: ({ keyword }) =>
         observe(safety, new SkillRecall({ skillPath: ctx.skillPath }).recall(keyword)),
     }),
+    skills_get: tool({
+      description:
+        "按名读取规范全文（skills_recall 召不回时用此精确读取）。可用：core(x-basalt 能力总览/CLI 用法/DQL 基础/meta·pipeline)、obsidian-base-spec(精确 DQL 文法+frontmatter/tag 提取规则)。",
+      inputSchema: jsonSchema<{ name: string }>({
+        type: "object",
+        properties: { name: { type: "string", description: "skill 名，如 core / obsidian-base-spec" } },
+        required: ["name"],
+        additionalProperties: false,
+      }),
+      execute: ({ name }) =>
+        observe(safety, new SkillRecall({ skillPath: ctx.skillPath }).get(name) ?? `✗ 未找到 skill：${name}`),
+    }),
 
     // ---- 写工具（execute 直接以非 dry-run 落盘，无 confirm）----
     meta_set: tool({
-      description: "设置/更新某笔记的一个 frontmatter 属性（直接写入）。",
+      description: "设置/更新某笔记的一个 frontmatter 属性（直接写入）。值类型/归一规则见 obsidian-base-spec。",
       inputSchema: jsonSchema<{ file: string; key: string; value: string; type?: string }>({
         type: "object",
         properties: {
@@ -180,7 +193,7 @@ export function buildTools(ctx: ToolContext, safety: Safety): ToolSet {
       },
     }),
     meta_apply: tool({
-      description: "套用元数据 profile：机械预填 + sets 补缺（直接写入）。",
+      description: "套用元数据 profile：机械预填 + sets 补缺（直接写入）。profile 语义见 core。",
       inputSchema: jsonSchema<{
         profile: string;
         file: string;
@@ -210,7 +223,7 @@ export function buildTools(ctx: ToolContext, safety: Safety): ToolSet {
     }),
     pipeline_run: tool({
       description:
-        "对一批笔记跑声明式管道（actions: index/normalize/apply/set/unset/rename）。批量直接写入。where 用 DQL 选源，省略则用 scan 差异源。",
+        "对一批笔记跑声明式管道（actions: index/normalize/apply/set/unset/rename）。批量直接写入。where 用 DQL 选源（见 obsidian-base-spec），省略则用 scan 差异源；actions 语义见 core。",
       inputSchema: jsonSchema<{
         actions: string[];
         where?: string;

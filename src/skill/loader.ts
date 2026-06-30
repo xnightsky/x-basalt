@@ -34,10 +34,10 @@ const BUILTIN_DIR = fileURLToPath(new URL("../../skill-data", import.meta.url));
 /**
  * 始终可召回的内置 skill 名：基础规范 + 本 CLI 自我说明书。
  * 即便外部 skill 目录（OBSIDIAN_SKILL_PATH 等）缺失/为空/无效，这两者也兜底补回，
- * 使「CLI 召回自身用法」(`skills get x-basalt`) 与基础规范召回永远可用。
+ * 使「CLI 召回自身用法」(`skills get core`) 与基础规范召回永远可用。
  * 外部目录若自带同名 skill 则不覆盖（允许使用者 shadow）。
  */
-const ALWAYS_AVAILABLE = ["obsidian-base-spec", "x-basalt"];
+const ALWAYS_AVAILABLE = ["obsidian-base-spec", "core"];
 
 /**
  * 解析最终使用的 skill 目录。
@@ -88,7 +88,7 @@ function loadDir(dir: string): SkillDefinition[] {
  * @behavior
  * Given 外部 skill 目录为空、不存在或全部 json5 均解析/校验失败
  * When loadSkills
- * Then obsidian-base-spec 与 x-basalt 仍出现在结果中（内置兜底），使基础召回永远可用
+ * Then obsidian-base-spec 与 core 仍出现在结果中（内置兜底），使基础召回永远可用
  *
  * @behavior
  * Given skill 目录内某个 json5 格式错误或缺少必要字段（name / rules）

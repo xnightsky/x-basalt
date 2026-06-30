@@ -70,8 +70,8 @@ test("CLI 自我说明书可召回（usage/help/命令名/中文触发器）", (
   const recall = new SkillRecall();
   for (const kw of ["usage", "help", "watch", "说明书"]) {
     assert.ok(
-      recall.recall(kw).some((s) => s.name === "x-basalt"),
-      `关键字 ${kw} 应召回 x-basalt`,
+      recall.recall(kw).some((s) => s.name === "core"),
+      `关键字 ${kw} 应召回 core`,
     );
   }
 });
@@ -81,7 +81,7 @@ test("说明书与基础规范在外部空目录下均兜底可召回", () => {
   tmpDirs.push(emptyDir);
   const names = new SkillRecall({ skillPath: emptyDir }).list().map((s) => s.name);
   assert.ok(names.includes("obsidian-base-spec"), "兜底应含基础规范");
-  assert.ok(names.includes("x-basalt"), "兜底应含自我说明书");
+  assert.ok(names.includes("core"), "兜底应含自我说明书");
 });
 
 // === M4.1 召回换 Fuse.js：模糊容错 + 相关性排序（子串匹配做不到的能力）===
@@ -131,7 +131,7 @@ test("get 不存在的名返回 undefined", () => {
 test("all 含两个内置 skill", () => {
   const names = new SkillRecall().all().map((s) => s.name);
   assert.ok(names.includes("obsidian-base-spec"), "应含基础规范");
-  assert.ok(names.includes("x-basalt"), "应含自我说明书");
+  assert.ok(names.includes("core"), "应含自我说明书");
 });
 
 test("resolvedDir 显式 skillPath 时返回该目录", () => {
