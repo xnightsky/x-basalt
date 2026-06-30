@@ -32,10 +32,6 @@ dogfood 期决定提前做：自然语言驱动 vault 的 `chat` 子命令（单
 
 > 来源：2026-06-30 以 `docs/` 为 Vault 的 dogfood CLI 验证（`pnpm run cli` / `npx tsx src/cli.ts`）。存在 = 待修；修完删条目或标 ✅。
 
-### watch / CLI 接线
-
-- **watch `--on-change` Windows 引号/空格**：含空格的 shell 模板（如 `cmd /c echo WATCH:{file}`）在 Windows 下易被拆成多个 argv，commander 报 `too many arguments`。**待查**：CLI 是否应要求整段模板用引号包一层，或文档明确 Windows 转义口径。
-
 ### chat
 
 - **REPL 管道输入结束报 `readline was closed`**：`echo '…' | x-basalt chat` 能出答案，但进程退出前抛 `✗ readline was closed`（非 0 体验）。复现：PowerShell 管道单轮 REPL。

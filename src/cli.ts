@@ -47,10 +47,27 @@ function required<T>(value: T | undefined, message: string): T {
   return value;
 }
 
-/** 去掉 argv 中紧挨子命令前的字面量 `--`（pnpm run cli -- watch 等场景会误传入）。 */
+/** 合并 `--flag value part2 part3` 为 `--flag` + 单值（commander 的 `<cmd>` 只吃一 token，含空格 shell 会被拆参）。 */
+function mergeSpacedOptionValue(argv: string[], flag: string): void {
+  for (let i = 0; i < argv.length; i++) {
+    if (argv[i] !== flag || i + 1 >= argv.length) continue;
+    const first = argv[i + 1];
+    if (first.startsWith("-")) continue;
+    const parts = [first];
+    let j = i + 2;
+    while (j < argv.length && !argv[j].startsWith("--")) {
+      parts.push(argv[j]);
+      j++;
+    }
+    if (parts.length > 1) argv.splice(i + 1, parts.length, parts.join(" "));
+  }
+}
+
+/** 启动前 argv 归一：去误传 `--`、合并含空格的 `--on-change` 等。 */
 function normalizeArgv(argv: readonly string[]): string[] {
   const out = [...argv];
   while (out[2] === "--") out.splice(2, 1);
+  mergeSpacedOptionValue(out, "--on-change");
   return out;
 }
 

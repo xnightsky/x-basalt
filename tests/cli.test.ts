@@ -462,3 +462,42 @@ test("watch 兼容 argv 首参为 --（pnpm run cli -- watch）", async () => {
   if (child.pid) killTree(child.pid);
   assert.ok(ready, `带 leading -- 的 watch 应正常启动，实际 stdout=${out}`);
 });
+
+test("watch --on-change 含空格：未加引号拆参时合并为单条 shell 命令", async () => {
+  const vault = makeVault();
+  const db = join(freshDir(), "w-onchange.db");
+  const onChangeArgs =
+    process.platform === "win32"
+      ? (["--on-change", "cmd", "/c", "echo", "onchange-ok"] as const)
+      : (["--on-change", "echo", "hello", "world"] as const);
+  const child = spawn(process.execPath, [
+    "--import",
+    TSX,
+    CLI,
+    "watch",
+    vault,
+    "--db",
+    db,
+    ...onChangeArgs,
+  ]);
+  child.stdout.setEncoding("utf8");
+  child.stderr.setEncoding("utf8");
+  let out = "";
+  let err = "";
+  const ready = await new Promise<boolean>((resolve) => {
+    const timer = setTimeout(() => resolve(false), 20000);
+    child.stdout.on("data", (d: string) => {
+      out += d;
+      if (out.includes("开始监听")) {
+        clearTimeout(timer);
+        resolve(true);
+      }
+    });
+    child.stderr.on("data", (d: string) => {
+      err += d;
+    });
+  });
+  if (child.pid) killTree(child.pid);
+  assert.ok(ready, `含空格 on-change 应启动监听，stdout=${out} stderr=${err}`);
+  assert.doesNotMatch(err + out, /too many arguments/i);
+});
