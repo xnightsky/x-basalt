@@ -18,6 +18,9 @@ const keyword = (name: string, word: string) =>
 
 /** `null` 字面量关键字 token（用于 `= null` / `!= null`）；须在 Identifier 前定义，否则被 longer_alt 回退吞掉。 */
 export const Null = keyword("Null", "null");
+/** 布尔字面量（TASK WHERE completed = false 等）。 */
+export const True = keyword("True", "true");
+export const False = keyword("False", "false");
 /** `LIST` 查询类型关键字。 */
 export const List = keyword("List", "list");
 /** `TABLE` 查询类型关键字（后接字段列表）。 */
@@ -129,6 +132,8 @@ export const allTokens = [
   Id,
   Regexp,
   Null,
+  True,
+  False,
   Tag,
   WikiLink,
   StringLiteral,

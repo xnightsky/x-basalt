@@ -34,7 +34,5 @@ dogfood 期决定提前做：自然语言驱动 vault 的 `chat` 子命令（单
 
 ### DQL 子集（docs dogfood query 验证）
 
-- **`length(rows)` / `count()` 聚合语法不支持**：`TABLE type, length(rows) FROM "" GROUP BY type` 在 `(` 处语法错误；简写 `TABLE type FROM "" GROUP BY type` 可跑。
-- **`TASK WHERE … LIMIT` 组合解析冲突**：`TASK FROM "" WHERE completed = false LIMIT 5` 在 `LIMIT` 处报错；单独 `TASK FROM "" LIMIT n` 正常。
 - **`FLATTEN file.tags` 的 `tag` 列常为 null**：展开后 `tag` 列为 null，实际值落在 `file.tags` 列（输出形态与预期不符）。
 - **`FROM ""` 语义易混**：`LIST FROM ""` 仅 1 条（vault 根层？），`LIST FROM "guides"` 为 10 条；空串 FROM 与「全库」直觉不一致，需文档或实现统一。

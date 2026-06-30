@@ -37,6 +37,8 @@ import {
   Table,
   Tag,
   Task,
+  True,
+  False,
   Where,
   WikiLink,
   Without,
@@ -397,13 +399,15 @@ class DqlChevParser extends EmbeddedActionsParser {
     ]);
   });
 
-  /** 比较值：数字→number；字符串→字面值；标签→标签体(不含#)；链接→内部；date(today/now)→ISO 串。 */
-  compareValue = this.RULE("compareValue", (): string | number => {
-    return this.OR<string | number>([
+  /** 比较值：数字→number；字符串→字面值；标签→标签体(不含#)；链接→内部；date(today/now)→ISO 串；布尔→true/false。 */
+  compareValue = this.RULE("compareValue", (): string | number | boolean => {
+    return this.OR<string | number | boolean>([
       { ALT: () => Number(this.CONSUME(NumberLiteral).image) },
       { ALT: () => unquote(this.CONSUME(StringLiteral).image) },
       { ALT: () => this.CONSUME(Tag).image.slice(1) },
       { ALT: () => stripWiki(this.CONSUME(WikiLink).image) },
+      { ALT: () => { this.CONSUME(True); return true; } },
+      { ALT: () => { this.CONSUME(False); return false; } },
       {
         // date(today) / date(now)（S2.17）。
         ALT: () => {

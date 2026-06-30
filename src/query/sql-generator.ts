@@ -138,24 +138,35 @@ function scalarFnSql(fn: ScalarFn, fe: string, json: boolean): string {
   }
 }
 
-/** 编译 WHERE 表达式为 SQL 片段 + 参数。 */
-function compileWhere(expr: WhereExpr): { sql: string; params: unknown[] } {
+/** 编译 WHERE 表达式为 SQL 片段 + 参数；TASK 查询时识别 completed 等任务级字段。 */
+function compileWhere(
+  expr: WhereExpr,
+  ctx: { task: boolean } = { task: false },
+): { sql: string; params: unknown[] } {
   switch (expr.kind) {
     case "and": {
-      const l = compileWhere(expr.left);
-      const r = compileWhere(expr.right);
+      const l = compileWhere(expr.left, ctx);
+      const r = compileWhere(expr.right, ctx);
       return { sql: `(${l.sql} AND ${r.sql})`, params: [...l.params, ...r.params] };
     }
     case "or": {
-      const l = compileWhere(expr.left);
-      const r = compileWhere(expr.right);
+      const l = compileWhere(expr.left, ctx);
+      const r = compileWhere(expr.right, ctx);
       return { sql: `(${l.sql} OR ${r.sql})`, params: [...l.params, ...r.params] };
     }
     case "not": {
-      const e = compileWhere(expr.expr);
+      const e = compileWhere(expr.expr, ctx);
       return { sql: `(NOT ${e.sql})`, params: e.params };
     }
     case "compare": {
+      if (ctx.task && expr.field === "completed" && !expr.fn && (expr.op === "=" || expr.op === "!=")) {
+        const wantDone = expr.value === true || expr.value === "true";
+        const isDone = expr.op === "=" ? wantDone : !wantDone;
+        return {
+          sql: isDone ? "(k.status IN ('x', 'X'))" : "(k.status NOT IN ('x', 'X'))",
+          params: [],
+        };
+      }
       const { expr: fe, json } = fieldToSql(expr.field);
       // S2.17：可选标量函数包裹左操作数（lower/upper/length/round）。
       const lhs = expr.fn ? scalarFnSql(expr.fn, fe, json) : fe;
@@ -295,7 +306,7 @@ export function generateSql(query: DqlQuery): CompiledSql {
   }
 
   if (query.where) {
-    const w = compileWhere(query.where);
+    const w = compileWhere(query.where, { task: query.type === "TASK" });
     whereSql.push(w.sql);
     params.push(...w.params);
   }

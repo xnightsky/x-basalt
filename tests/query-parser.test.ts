@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import { DqlSyntaxError } from "../src/query/index.js";
 import { parseDql } from "../src/query/parser.js";
+import { generateSql } from "../src/query/sql-generator.js";
 import { tokenizeDql } from "../src/query/tokens.js";
 
 // === 自建实现: DQL 词法层（chevrotain lexer）单测 ===
@@ -336,4 +337,14 @@ test("parser 语法错误：带位置 DqlSyntaxError", () => {
   assert.throws(() => parseDql("LISTE"), DqlSyntaxError);
   assert.throws(() => parseDql("LIST FROM"), DqlSyntaxError);
   assert.throws(() => parseDql("LIST WHERE a"), DqlSyntaxError);
+});
+
+test("TASK WHERE completed = false LIMIT 可解析并编译", () => {
+  const q = parseDql("TASK WHERE completed = false LIMIT 5");
+  assert.equal(q.type, "TASK");
+  assert.equal(q.limit, 5);
+  const c = generateSql(q);
+  assert.match(c.sql, /k\.status NOT IN/);
+  assert.match(c.sql, /LIMIT \?/);
+  assert.deepEqual(c.params, [5]);
 });

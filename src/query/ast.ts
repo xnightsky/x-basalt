@@ -29,7 +29,7 @@ export type DqlSource =
 export type WhereExpr =
   | { kind: "and" | "or"; left: WhereExpr; right: WhereExpr }
   | { kind: "not"; expr: WhereExpr }
-  | { kind: "compare"; field: string; fn?: ScalarFn; op: CompareOp; value: string | number }
+  | { kind: "compare"; field: string; fn?: ScalarFn; op: CompareOp; value: string | number | boolean }
   | { kind: "isnull"; field: string; negated: boolean }
   | { kind: "call"; fn: StringFn | "regexmatch"; field: string; arg: string };
 
