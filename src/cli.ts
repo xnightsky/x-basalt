@@ -52,11 +52,13 @@ function mergeSpacedOptionValue(argv: string[], flag: string): void {
   for (let i = 0; i < argv.length; i++) {
     if (argv[i] !== flag || i + 1 >= argv.length) continue;
     const first = argv[i + 1];
-    if (first.startsWith("-")) continue;
+    if (first === undefined || first.startsWith("-")) continue;
     const parts = [first];
     let j = i + 2;
-    while (j < argv.length && !argv[j].startsWith("--")) {
-      parts.push(argv[j]);
+    while (j < argv.length) {
+      const tok = argv[j];
+      if (tok === undefined || tok.startsWith("--")) break;
+      parts.push(tok);
       j++;
     }
     if (parts.length > 1) argv.splice(i + 1, parts.length, parts.join(" "));

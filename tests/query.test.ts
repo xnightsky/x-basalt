@@ -140,6 +140,22 @@ test("S2.19 端到端 FLATTEN file.tags：标签展开为多行", () => {
   assert.ok(tags.includes("area/work"));
 });
 
+test("S2.19 端到端 TABLE tag 列：FLATTEN file.tags 时 tag 为展开值", () => {
+  const r = engine.query(
+    'TABLE file.name, tag FROM "Projects" WHERE file.name = \'Alpha\' FLATTEN file.tags',
+  );
+  assert.deepEqual(r.columns, ["file.name", "tag"]);
+  assert.ok(r.rows.length > 0);
+  assert.ok(r.rows.every((row) => typeof row.tag === "string" && row.tag !== null));
+  assert.ok(r.rows.some((row) => (row.tag as string).includes("/")));
+});
+
+test('FROM "" 匹配全库文件', () => {
+  const all = engine.query('LIST FROM ""');
+  const guides = engine.query('LIST FROM "guides"');
+  assert.ok(all.rows.length > guides.rows.length);
+});
+
 test("S2.21 端到端 TASK：返回任务行（status/text/file）", () => {
   const r = engine.query("TASK");
   assert.equal(r.type, "TASK");

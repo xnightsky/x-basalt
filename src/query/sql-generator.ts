@@ -34,6 +34,14 @@ function compileGroupAggregate(field: string): { sql: string; json: boolean } | 
   return null;
 }
 
+/** FLATTEN 展开列的可识别别名（file.tags → file.tags / tags / tag）。 */
+function flattenColumnAliases(field: string): string[] {
+  const leaf = field.includes(".") ? field.slice(field.lastIndexOf(".") + 1) : field;
+  const out = new Set<string>([field, leaf]);
+  if (leaf.endsWith("s") && leaf.length > 1) out.add(leaf.slice(0, -1));
+  return [...out];
+}
+
 /** files 表直接列字段映射。 */
 const FILE_COLUMNS: Record<string, string> = {
   "file.name": "f.name",
@@ -294,9 +302,11 @@ export function generateSql(query: DqlQuery): CompiledSql {
       );
       params.push(query.from.value, `${query.from.value}/%`);
     } else if (query.from.kind === "folder") {
-      // 含子文件夹：folder = X 或 X/ 前缀。
-      whereSql.push("(f.folder = ? OR f.folder LIKE ?)");
-      params.push(query.from.value, `${query.from.value}/%`);
+      // 含子文件夹：folder = X 或 X/ 前缀；"" 表示全库（不加 folder 约束）。
+      if (query.from.value !== "") {
+        whereSql.push("(f.folder = ? OR f.folder LIKE ?)");
+        params.push(query.from.value, `${query.from.value}/%`);
+      }
     } else {
       // FROM [[link]]：指向该 note 的反向链接集合（§3.3#5），路径感知（S3.2）。
       const m = linkTextMatch(query.from.value, "l");
@@ -335,10 +345,16 @@ export function generateSql(query: DqlQuery): CompiledSql {
   const columns: ColumnSpec[] = [];
   const selectParts: string[] = [];
   const seen = new Set<string>();
+  const flattenAliases = query.flatten ? flattenColumnAliases(query.flatten.field) : [];
   const addCol = (name: string): void => {
     // S2.11：列去重——TABLE 默认起头 file.name 与显式字段、重复字段不产生重复列。
     if (seen.has(name)) return;
     seen.add(name);
+    if (query.flatten && flattenAliases.includes(name)) {
+      columns.push({ name, json: false });
+      selectParts.push(`_flat.value AS ${quoteAlias(name)}`);
+      return;
+    }
     const { expr, json } = fieldToSql(name);
     columns.push({ name, json });
     selectParts.push(`${expr} AS ${quoteAlias(name)}`);
@@ -382,10 +398,11 @@ export function generateSql(query: DqlQuery): CompiledSql {
       if (!query.withoutId) addCol("file.name");
       for (const f of query.fields) addCol(f);
     }
-    // FLATTEN 展开值作为该字段的单值列（覆盖原聚合语义，每行一个元素）。
+    // FLATTEN：LIST 默认追加展开列；TABLE 仅当 fields 未覆盖别名时追加 flatten.field。
     if (query.flatten) {
-      columns.push({ name: query.flatten.field, json: false });
-      selectParts.push(`_flat.value AS ${quoteAlias(query.flatten.field)}`);
+      const flatField = query.flatten.field;
+      const aliasUsed = query.fields.some((f) => flattenAliases.includes(f));
+      if (query.type === "LIST" || !aliasUsed) addCol(flatField);
     }
   }
 

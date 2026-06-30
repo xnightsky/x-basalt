@@ -55,8 +55,7 @@ export function startWatch(vaultPath: string, handlers: WatchHandlers): () => vo
   const watcher = chokidar.watch(root, {
     ignored: (p: string) => isHidden(p),
     ignoreInitial: true,
-    // 回调一律用绝对路径，避免相对 watch 根时回报 cwd 相对路径导致索引 join 歧义。
-    absolute: true,
+    // watch 根已 resolve 为绝对路径；chokidar 回调通常为绝对路径（v5 类型无 absolute 选项）。
     // stabilityThreshold 100ms：覆盖主流编辑器保存节奏，防止半写触发；pollInterval 20ms 平衡检测延迟与 CPU 开销。
     awaitWriteFinish: { stabilityThreshold: 100, pollInterval: 20 },
   });

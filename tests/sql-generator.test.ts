@@ -175,6 +175,18 @@ test("S2.19 FLATTEN：json_each 展开 + 展开值列", () => {
   assert.match(c.sql, /_flat\.value AS "file\.tags"/);
 });
 
+test("S2.19 FLATTEN TABLE tag 列绑定展开值", () => {
+  const c = generateSql(parseDql('TABLE file.name, tag FROM #guide FLATTEN file.tags LIMIT 5'));
+  assert.match(c.sql, /_flat\.value AS "tag"/);
+  assert.doesNotMatch(c.sql, /_flat\.value AS "file\.tags"/);
+  assert.deepEqual(c.columns.map((x) => x.name), ["file.name", "tag"]);
+});
+
+test('FROM "" 表示全库（不加 folder 约束）', () => {
+  const c = generateSql(parseDql('LIST FROM ""'));
+  assert.doesNotMatch(c.sql, /f\.folder/);
+});
+
 test("S2.19 FLATTEN 非数组字段报错", () => {
   assert.throws(() => generateSql(parseDql("LIST FLATTEN file.name")), DqlSyntaxError);
 });

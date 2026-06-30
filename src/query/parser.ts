@@ -269,7 +269,7 @@ class DqlChevParser extends EmbeddedActionsParser {
                 this.CONSUME1(RParen);
                 // scalar 函数 fn(field) 后跟 op value（谓词函数无）。
                 let scalarOp: string | undefined;
-                let scalarVal: string | number | undefined;
+                let scalarVal: string | number | boolean | undefined;
                 this.OPTION1(() => {
                   scalarOp = this.CONSUME1(Op).image;
                   scalarVal = this.SUBRULE1(this.compareValue);
