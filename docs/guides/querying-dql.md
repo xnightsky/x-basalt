@@ -189,19 +189,33 @@ x-basalt query 'LIST WHERE regexmatch(file.name, "^20[0-9]{2}-[0-9]{2}")'
 x-basalt query 'LIST WHERE regexmatch(status, "active|pending")'
 ```
 
-### 5.5 null 判断
+### 5.5 判断属性有无（真值 vs null）
+
+**首选：裸字段真值**，对标官方 Dataview `Values.isTruthy()`——缺失 / `null` / `0` / 空串 / 空数组 / 空对象 / `false` 皆为 falsy：
 
 ```
-field = null     →  IS NULL
-field != null    →  IS NOT NULL
+WHERE field      →  有该属性且为「真值」（json_type CASE 复刻 isTruthy）
+WHERE !field     →  没有该属性（缺失）或值为 falsy
 ```
 
-仅支持 `=` 和 `!=`，其他操作符对 null 报错。常用于判断 frontmatter 字段是否存在：
+```bash
+x-basalt query 'LIST WHERE status'          # 有 status（真值）
+x-basalt query 'LIST WHERE !index'          # 没有 index —— 问「多少篇没有 X」用这个
+```
+
+**显式 null 比较**（`= null` / `!= null`）测的是「键是否存在」，仅支持 `=`/`!=`，其他操作符对 null 报错：
+
+```
+field = null     →  IS NULL（缺失或值为 null）
+field != null    →  IS NOT NULL（键存在，含值为 0 / 空串）
+```
 
 ```bash
 x-basalt query 'LIST WHERE due = null'
 x-basalt query 'TABLE status, due WHERE due != null SORT due ASC'
 ```
+
+> **两者的区别**：一篇 `count: 0` 的笔记，`!count` 视为「无」（`0` 是 falsy），而 `count != null` 视为「有」（键存在）。问「有没有意义的值」用 `!field` / `WHERE field`；问「键在不在」用 `= null` / `!= null`。
 
 ### 5.6 日期比较
 

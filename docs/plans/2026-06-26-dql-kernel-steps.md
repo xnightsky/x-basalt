@@ -122,6 +122,7 @@ DQL 子集真相源把当前子集定义为**严格边界**，明确 `TASK/CALEN
 
 - [x] **S2.14 多键 SORT** ✅ 2026-06-27：parser 产多键数组 + sql-gen 多列 ORDER BY（结构 S2.2c/S2.7 就位，本步补单元测）。
 - [x] **S2.15 WHERE null 判断** ✅ 2026-06-27：WhereExpr 加 `isnull` 节点；`= null`/`!= null` → `IS NULL`/`IS NOT NULL`（不参数化 null）；其他比较符 + null 报错。
+- [x] **S2.15b 裸字段真值 / 一元 `!`（isTruthy）** ✅ 2026-07-01：补正官方对标遗漏——词法加 `Bang` token（`!=` 仍归 `Op`）、AST 加 `truthy` 节点、`!field`=`not(truthy)`；`generateSql` 用 `json_type` CASE 复刻官方 `Values.isTruthy()`（null/0/空串/空数组/空对象/false 皆 falsy），与 `= null`/`!= null`（显式 null 比较）语义分离。TDD：token/AST/优先级/SQL-shape/端到端分歧（`flag:0`→`!flag` 无、`!=null` 有）逐项测；全量 428 绿 + 新增 18。设计 + 真相源同步（§7）见 [`../specs/2026-07-01-dql-truthiness-existence-design.md`](../specs/2026-07-01-dql-truthiness-existence-design.md)。
 - [x] **S2.16 WHERE 日期比较** ✅ 2026-06-27：frontmatter 日期按 ISO 字符串字典序比较（= 日期序，无需特殊类型）；数值列 mtime/ctime 直接比较；区间过滤测试。**注**：task `due_date` 提取仍依赖阶段1 S1.3，届时复用本比较路径。
 - [x] **S2.17 函数集完整** ✅ 2026-06-27：contains 家族（已 S2.9/S2.10）+ 内置标量 `lower/upper/length/round` 作比较左操作数（length 数组→json_array_length）+ `date(today)/date(now)` 求值 ISO 串作右值；parser 区分谓词 vs scalar 函数；逐函数单元测 + parser 行为/错误测。
 - [x] **S2.18 GROUP BY** ✅ 2026-06-27：分组键 + `json_group_array(DISTINCT f.path) AS rows` + `GROUP BY`；端到端验证分组聚合。

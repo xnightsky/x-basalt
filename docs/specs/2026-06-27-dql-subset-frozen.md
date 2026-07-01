@@ -37,7 +37,7 @@ tags:
 | 7   | `FROM` and/or 多源                          | ❌ 不做      | goal 范围外；遇到报 `DqlSyntaxError`                                                                                                    |
 | 8   | 比较 `= != < > <= >=`                       | ✅           | 参数化绑定；列来源见隐式字段表                                                                                                          |
 | 9   | `AND / OR / NOT` + 括号                     | ✅           | 递归 WHERE → 嵌套 `AND/OR/NOT (...)`                                                                                                    |
-| 10  | **`field = null` / `!= null`**              | ✅ 本轮      | → `<col> IS NULL` / `IS NOT NULL`（不参数化 null）                                                                                      |
+| 10  | **`field = null` / `!= null`**（显式 null 比较） | ✅ 本轮      | → `<col> IS NULL` / `IS NOT NULL`（不参数化 null）。**非真值判断**：把 `0`/空串视为「有」，与 #25/#26 真值语义不同                       |
 | 11  | **日期比较**（frontmatter 日期 / due_date） | ✅ 本轮      | ISO 字典序：`json_extract(...) >= ?`，绑定 ISO 串                                                                                       |
 | 12  | `contains/icontains/startswith/endswith`    | ✅（补完整） | 标量→LIKE（i\* 加 `lower()` 两侧）；数组字段(tags/inlinks/outlinks)→JOIN 命中；LIKE 通配符 `%_` 转义 + `ESCAPE`                         |
 | 13  | `regexmatch(field,"pat")`                   | ✅（补防护） | 自定义 `REGEXP` 函数；加 pattern 长度上限 + 执行防 ReDoS                                                                                |
@@ -52,6 +52,8 @@ tags:
 | 22  | **`FLATTEN <arrayField>`**                  | ✅ 本轮      | `, json_each(<arraycol>)` 笛卡尔展开为多行；展开值作新列可被 WHERE/SORT 引用                                                            |
 | 23  | `CALENDAR`                                  | ❌ 不做      | goal 范围外                                                                                                                             |
 | 24  | DataviewJS（`dataviewjs` 块）               | ❌ 不做      | goal 范围外（需运行时执行任意 JS，安全问题）                                                                                            |
+| 25  | **一元 `!field` / `!(expr)`**（2026-07-01 补正） | ✅          | 词法 `Bang` token（`!=` 仍归 `Op`）；AST `not(truthy)`；对标官方 `NegatedField`。原「不支持」是遗漏、非有意收窄                          |
+| 26  | **裸字段真值 `WHERE field`**（2026-07-01 补正） | ✅          | AST `truthy` 节点 → `json_type` CASE 复刻 `Values.isTruthy()`（null/0/空串/空数组/空对象/false 皆 falsy）。官方推荐的「有无」惯用法     |
 
 ## 隐式字段映射（沿用真相源，不变）
 
@@ -72,12 +74,14 @@ interface DqlQuery {
   withoutId?: boolean; // 新增
   limit?: number;
 }
-// WhereExpr 增：{ kind:"isnull"; field; negated } | 函数调用扩到内置标量函数
+// WhereExpr 增：{ kind:"isnull"; field; negated } | { kind:"truthy"; field }（2026-07-01 补，`!field`=not(truthy)）| 函数调用扩到内置标量函数
 ```
 
 ## 仍不做（明确报错而非静默）
 
 `FROM` and/or 多源、`CALENDAR`、DataviewJS、`length()` 之外的任意聚合/数值表达式运算（如 `a + b`）—— 超子集一律抛带位置 `DqlSyntaxError`。
+
+> **2026-07-01 修订**：一元 `!` 与裸字段真值（`isTruthy`）此前被遗漏（既非纳入亦未列非目标），现补入为 #25/#26；`= null`/`!= null`（#10）重定位为显式 null 比较。完整设计见 [`2026-07-01-dql-truthiness-existence-design.md`](2026-07-01-dql-truthiness-existence-design.md)。
 
 ## S2.2b 衔接（防分叉纪律）
 

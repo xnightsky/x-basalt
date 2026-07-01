@@ -65,11 +65,12 @@ tags:
 | 能力                                      | 状态 | 证据                                               |
 | ----------------------------------------- | ---- | -------------------------------------------------- |
 | 比较 `=` `!=` `<` `>` `<=` `>=`           | ✅   | sql-generator/query-parser.test                    |
-| `AND` / `OR` / `NOT` / 括号优先级         | ✅   | query-parser.test（优先级用例）                    |
+| `AND` / `OR` / `NOT` / 一元 `!` / 括号优先级 | ✅   | query-parser.test（`!` 优先级用例，S2.15b）        |
 | `contains` / `icontains`                  | ✅   | LIKE 通配符转义（S2.9）+ icontains 大小写（S2.10） |
 | `startswith` / `endswith`                 | ✅   | LIKE 转义（S2.9）                                  |
 | `regexmatch`                              | ✅   | ReDoS 缓解（S2.23）；regexp.test                   |
-| null 判断（`= null` / `!= null`）         | ✅   | S2.15（isnull→IS NULL/IS NOT NULL）                |
+| 裸字段真值 `WHERE field` / `!field`（isTruthy） | ✅   | S2.15b（truthy→json_type CASE；与 =null 语义分离）  |
+| null 判断（`= null` / `!= null`，显式）   | ✅   | S2.15（isnull→IS NULL/IS NOT NULL；非真值判断）     |
 | 日期比较（ISO 字典序）                    | ✅   | S2.16                                              |
 | 内置标量 `lower`/`upper`/`length`/`round` | ✅   | S2.17（length 数组→json_array_length）             |
 | `date(today)` / `date(now)`               | ✅   | S2.17（求值 ISO 串作右值）                         |

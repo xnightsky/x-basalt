@@ -58,3 +58,5 @@ LIST FROM #x WHERE a = 1 AND contains(file.tags,"y") SORT b DESC LIMIT 5
 - chevrotain 已落 `dependencies`（DQL 解析是运行时功能，非 devDep）；**当前零 import**，待 **S2.3** 用它重写 `src/query/tokenizer.ts` + `ast.ts` 的 parser 后真正接入。
 - peggy 已移除（`pnpm remove peggy`）。
 - 工具选定不改变 DQL 子集边界；子集扩展仍走 **S2.2a/S2.2b**（先改 `biz-dql-subset` 真相源 + research §3，再动代码）。
+
+> **2026-07-01 补记（S2.15b）**：文法新增一元 `!`（`Bang` token，置于 `allTokens` 中 `Op` 之后使 `!=` 仍归 `Op`）与「裸字段真值」原子（`primary` 中把尾随 `(`/`REGEXP`/`Op` 裹进 `OPTION`，无尾随即产 `truthy` 节点）。chevrotain 的 LL 前瞻天然区分二者与 follow 集，无歧义、无回溯。印证选型「纯 TS + 无生成步骤」下增量扩文法的低成本。见 [`2026-07-01-dql-truthiness-existence-design.md`](2026-07-01-dql-truthiness-existence-design.md)。
