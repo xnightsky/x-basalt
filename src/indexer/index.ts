@@ -2,7 +2,7 @@ import Database from "better-sqlite3";
 import type { Database as Db, Statement } from "better-sqlite3";
 import { mkdirSync } from "node:fs";
 import { readdir, readFile, stat } from "node:fs/promises";
-import { basename, dirname, extname, join } from "node:path";
+import { basename, dirname, extname, join, posix as posixPath, sep } from "node:path";
 import { parseFrontmatter } from "../parser/frontmatter.js";
 import { VaultParser } from "../parser/index.js";
 import { linkKey, pathKey, resolveVaultLayout, type VaultLayout } from "../utils/path.js";
@@ -23,8 +23,15 @@ export interface IndexerOptions {
   dbPath: string;
 }
 
-/** scan 增量重索引的差异报告（路径均为相对 Vault 的 POSIX 路径）。 */
-export interface ScanReport {
+/** 单个目录桶下的 added/modified/deleted 计数（标量，不含文件名，永不随规模膨胀/截断）。 */
+export interface ScanDirCounts {
+  added: number;
+  modified: number;
+  deleted: number;
+}
+
+/** scan 差异核心字段（路径均为相对 Vault 的 POSIX 路径），scanIter 每批 yield 与最终报告共享。 */
+export interface ScanDiff {
   /** 新增文件（在 FS 不在库） */
   added: string[];
   /** 改动文件（mtime/size 或内容变化） */
@@ -35,8 +42,41 @@ export interface ScanReport {
   unchanged: number;
 }
 
+/** scan 增量重索引的最终报告：{@link ScanDiff} + 按目录聚合。 */
+export interface ScanReport extends ScanDiff {
+  /**
+   * 按目录聚合的标量计数（key = 相对 Vault 的 POSIX 目录路径，根目录下的文件归 `"."`）。
+   * 对治「按子目录统计」误路由到逐文件列举、灌爆 context 撞顶（见 docs/plans/2026-07-02-deterministic-eval-gaps.md）：
+   * 这里只给计数、不给文件名，规模再大也是常数大小。仅在最终报告投影一次（scan()），
+   * scanIter 每批 yield 的 {@link ScanProgress} 不含此字段，避免每批重复聚合。
+   */
+  byDir: Record<string, ScanDirCounts>;
+}
+
+/**
+ * 按目录聚合 added/modified/deleted 三个相对路径列表为标量计数（scan `--by-dir` 用）。
+ * 独立纯函数：不碰 fs/DB，便于单测；多根路径带命名空间前缀（如 `vaultB/notes/A.md`）时
+ * 天然按 `posixPath.dirname` 分到 `vaultB/notes` 桶，根间不会混桶。
+ */
+export function groupByDir(report: {
+  added: string[];
+  modified: string[];
+  deleted: string[];
+}): Record<string, ScanDirCounts> {
+  const byDir: Record<string, ScanDirCounts> = {};
+  const bump = (rel: string, key: keyof ScanDirCounts): void => {
+    const dir = posixPath.dirname(rel);
+    const bucket = (byDir[dir] ??= { added: 0, modified: 0, deleted: 0 });
+    bucket[key]++;
+  };
+  for (const rel of report.added) bump(rel, "added");
+  for (const rel of report.modified) bump(rel, "modified");
+  for (const rel of report.deleted) bump(rel, "deleted");
+  return byDir;
+}
+
 /** scanIter 每批 yield 的累计进度。 */
-export interface ScanProgress extends ScanReport {
+export interface ScanProgress extends ScanDiff {
   /** 还有多少「新增+改动」文件待处理（调用方据此决定是否续跑）。 */
   remaining: number;
 }
@@ -119,6 +159,16 @@ function frontmatterTags(frontmatter: Record<string, unknown>): string[] {
   return out;
 }
 
+/** abs 是否等于或严格位于 root 之下（同分隔符前缀，避免 `/foo-bar` 误判为 `/foo` 的子路径）。 */
+function isUnderRoot(abs: string, root: string): boolean {
+  return abs === root || abs.startsWith(root.endsWith(sep) ? root : root + sep);
+}
+
+/** abs 是否位于 roots 中任意一个之下（缺失根批量判断用）。 */
+function isUnderAnyRoot(abs: string, roots: string[]): boolean {
+  return roots.some((root) => isUnderRoot(abs, root));
+}
+
 /** 递归收集 Vault 下所有 `.md`，跳过隐藏项与 `.obsidian/`（任意以 `.` 开头的目录/文件）。 */
 async function collectMarkdownFiles(root: string): Promise<string[]> {
   const out: string[] = [];
@@ -197,10 +247,54 @@ export class VaultIndexer {
     };
   }
 
-  /** 遍历所有根收集 `.md`（多根并发）；根已剔子根、通常无重叠，仍按绝对路径去重保险。 */
-  private async collectAllMarkdown(): Promise<string[]> {
-    const per = await Promise.all(this.layout.roots.map((r) => collectMarkdownFiles(r)));
-    return [...new Set(per.flat())];
+  /**
+   * 划分 layout.roots 为「当前可达」与「当前缺失」（不存在或非目录）。
+   * 缺失根逐个 warn 并跳过，其余根照常索引；全部根都缺失则抛出清晰错误
+   * ——避免 rebuild/scan 悄悄清空索引却建不出任何新内容。
+   *
+   * 对治场景库 scale/doc-migration-count 坐实的缺口：多根 vault 含尚未创建的目录（如迁移目标）
+   * 时，旧行为是 `readdir` 直接 ENOENT、整条 index/scan 全量失败（见
+   * docs/plans/2026-07-02-deterministic-eval-gaps.md [冲突提示]，并非该场景原描述的"静默接受"）。
+   *
+   * @behavior
+   * Given 多根中一个目录不存在
+   * When rebuild / scan
+   * Then warn 该根并跳过，其余根照常建/扫（不再整体崩 ENOENT）
+   *
+   * @behavior
+   * Given 多根全部不存在
+   * When rebuild / scan
+   * Then 抛出清晰错误（而非静默产出空索引）
+   */
+  private async partitionRoots(): Promise<{ existing: string[]; missing: string[] }> {
+    const ok = await Promise.all(
+      this.layout.roots.map(async (root) => {
+        try {
+          return (await stat(root)).isDirectory();
+        } catch {
+          return false; // 不存在 / 无权限访问等一律按缺失处理
+        }
+      }),
+    );
+    const existing = this.layout.roots.filter((_, i) => ok[i]);
+    const missing = this.layout.roots.filter((_, i) => !ok[i]);
+    for (const root of missing) console.warn(`⚠ 跳过不存在的 vault 根：${root}`);
+    if (existing.length === 0) {
+      throw new Error(`所有 vault 根都不存在：${this.layout.roots.join(", ")}`);
+    }
+    return { existing, missing };
+  }
+
+  /**
+   * 遍历所有根收集 `.md`（多根并发，跳过缺失根，见 {@link partitionRoots}）；
+   * 根已剔子根、通常无重叠，仍按绝对路径去重保险。
+   *
+   * @returns files - 收集到的绝对路径；missingRoots - 本次被跳过的根（供 computeDiff 排除误判删除）
+   */
+  private async collectAllMarkdown(): Promise<{ files: string[]; missingRoots: string[] }> {
+    const { existing, missing } = await this.partitionRoots();
+    const per = await Promise.all(existing.map((r) => collectMarkdownFiles(r)));
+    return { files: [...new Set(per.flat())], missingRoots: missing };
   }
 
   /**
@@ -221,9 +315,16 @@ export class VaultIndexer {
    * Given 重建中途某文件读取/解析抛错
    * When rebuild
    * Then 跳过该文件并 warn，其余照常入库（单文件失败不中断全量）
+   *
+   * @behavior
+   * Given 多根中一个此前已建过索引的根本次不可达
+   * When rebuild
+   * Then warn 该根并跳过；rebuild 是"重置为当前可见 FS 真相"的全量操作，
+   *      该根旧记录不会被保留（与单文件被删的既有语义一致，非缺陷）——
+   *      需要"缺失根旧记录原样保留"的场景应用增量 {@link scan}，见其对应 @behavior
    */
   async rebuild(): Promise<void> {
-    const files = await this.collectAllMarkdown();
+    const { files } = await this.collectAllMarkdown();
     // 手动事务跨 await：better-sqlite3 的 db.transaction() 仅接同步函数，无法在其中 await 读盘，
     // 故用裸 BEGIN/COMMIT/ROLLBACK 在分批异步读取之间保持同一事务（原子 + 流式）。
     this.db.exec("BEGIN");
@@ -258,11 +359,17 @@ export class VaultIndexer {
    *
    * @param rehash - true 按内容对比（读盘 + 比库内 content）；否则按 mtime+size（floored-ms 快判）
    * @returns 新增/改动/删除相对路径（已排序）+ 未变文件数
+   *
+   * @behavior
+   * Given 多根中一个此前已建过索引的根本次不可达（如临时未挂载 / 配置笔误）
+   * When computeDiff（经 scan）
+   * Then 该根旧记录既不判 deleted 也不判 modified/unchanged——原样留在库里、本轮不touch，
+   *      不会被误判成"文件被删"而清空；等根恢复可达后下次 scan 自动回到正常 diff。
+   *      与 {@link rebuild} 的"全量重置"语义刻意不同：增量 scan 的契约是"只同步我看得见的"，
+   *      看不见的根 = 未知态，不是"已确认删除"。
    */
-  private async computeDiff(
-    rehash: boolean,
-  ): Promise<{ added: string[]; modified: string[]; deleted: string[]; unchanged: number }> {
-    const absFiles = await this.collectAllMarkdown();
+  private async computeDiff(rehash: boolean): Promise<ScanDiff> {
+    const { files: absFiles, missingRoots } = await this.collectAllMarkdown();
     const fsMap = new Map<string, { mtime: number; size: number }>();
     for (const abs of absFiles) {
       const st = await stat(abs);
@@ -282,8 +389,12 @@ export class VaultIndexer {
     const modified: string[] = [];
     const deleted: string[] = [];
     let unchanged = 0;
-    // 删除 = 在库不在 FS。
-    for (const path of dbMap.keys()) if (!fsMap.has(path)) deleted.push(path);
+    // 删除 = 在库不在 FS，且不属于本轮缺失的根（见上 @behavior）。
+    for (const path of dbMap.keys()) {
+      if (fsMap.has(path)) continue;
+      if (missingRoots.length > 0 && isUnderAnyRoot(this.layout.toAbs(path), missingRoots)) continue;
+      deleted.push(path);
+    }
     for (const [rel, fs] of fsMap) {
       const db = dbMap.get(rel);
       if (db === undefined) {
@@ -398,14 +509,10 @@ export class VaultIndexer {
   ): Promise<ScanReport> {
     let last: ScanProgress | undefined;
     for await (const p of this.scanIter(opts)) last = p;
-    return last
-      ? {
-          added: last.added,
-          modified: last.modified,
-          deleted: last.deleted,
-          unchanged: last.unchanged,
-        }
+    const report = last
+      ? { added: last.added, modified: last.modified, deleted: last.deleted, unchanged: last.unchanged }
       : { added: [], modified: [], deleted: [], unchanged: 0 };
+    return { ...report, byDir: groupByDir(report) };
   }
 
   /**

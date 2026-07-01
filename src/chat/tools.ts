@@ -48,15 +48,24 @@ function clampSize(v: number | undefined, def: number, max: number): number {
 type ScanKind = "added" | "modified" | "deleted";
 
 /**
- * scan 报告 → 计数永远全（counts，标量、永不截断）+ 变更明细分页（changes）。
- * changes = (added⧺modified⧺deleted) 的窗口 [offset, offset+size)；counts/total 不随分页变化。
+ * scan 报告 → 计数永远全（counts/byDir，标量、永不截断）+ 变更明细分页（changes）。
+ * changes = (added⧺modified⧺deleted) 的窗口 [offset, offset+size)；counts/byDir/total 不随分页变化。
+ * byDir 透传自 VaultIndexer.scan()（见 src/indexer/index.ts groupByDir）：按子目录问「各多少」
+ * 时直接读 byDir，不要靠 changes 分页逐条数——目录数再多也是常数大小，不会撞 maxChars/撞顶。
  */
 function paginateScan(
-  report: { added: string[]; modified: string[]; deleted: string[]; unchanged: number },
+  report: {
+    added: string[];
+    modified: string[];
+    deleted: string[];
+    unchanged: number;
+    byDir: Record<string, { added: number; modified: number; deleted: number }>;
+  },
   offset: number,
   size: number,
 ): {
   counts: { added: number; modified: number; deleted: number; unchanged: number };
+  byDir: Record<string, { added: number; modified: number; deleted: number }>;
   total: number;
   offset: number;
   size: number;
@@ -78,6 +87,7 @@ function paginateScan(
       deleted: report.deleted.length,
       unchanged: report.unchanged,
     },
+    byDir: report.byDir,
     total: flat.length,
     offset: off,
     size,
@@ -128,7 +138,7 @@ export function buildTools(ctx: ToolContext, safety: Safety): ToolSet {
     }),
     scan: tool({
       description:
-        "对比文件系统与索引，报告新增/改动/删除（不写库）。返回 counts（各类计数，标量永不截断——要数量看这里）+ changes（变更明细，分页）+ total/hasMore。size 默认 50（上限 500，0=只回 counts），offset 默认 0；翻页用 offset+=size。",
+        "对比文件系统与索引，报告新增/改动/删除（不写库）。返回 counts（各类总计数，标量永不截断——问总共多少看这里）+ byDir（按子目录标量计数，永不截断——问「每个子目录/每个目录下」各多少看这里，别逐条列 changes 数）+ changes（变更明细，分页）+ total/hasMore。size 默认 50（上限 500，0=只回 counts/byDir），offset 默认 0；翻页用 offset+=size。",
       inputSchema: jsonSchema<{ rehash?: boolean; offset?: number; size?: number }>({
         type: "object",
         properties: {

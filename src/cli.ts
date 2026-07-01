@@ -294,7 +294,12 @@ program
   .option("--db <path>", "SQLite 索引文件路径（默认 .x-basalt/index.db，可由配置 db 覆盖）")
   .option("--rehash", "按内容对比检测变化（慢但稳），默认 mtime+size", false)
   .option("--dry-run", "只报告差异，不写库（供触发前预览）", false)
-  .option("--json", "输出结构化差异报告（默认人读摘要）", false)
+  .option("--json", "输出结构化差异报告（默认人读摘要；始终含 byDir 按目录计数）", false)
+  .option(
+    "--by-dir",
+    "人读模式下追加按目录标量计数明细（只报计数不列文件名，规模再大也不截断）",
+    false,
+  )
   .option(
     "--pipe <kv>",
     "用管道处理 scan 出的变更（key=value 可重复：actions/use/where/on/concurrency/if-exists）",
@@ -310,6 +315,7 @@ program
         rehash: boolean;
         dryRun: boolean;
         json: boolean;
+        byDir: boolean;
         pipe: string[];
         apply: boolean;
       },
@@ -341,6 +347,14 @@ program
           console.log(
             `✓ scan ${fmtVault(vaultPath)}${tag}：+${report.added.length} 新增 ~${report.modified.length} 改动 -${report.deleted.length} 删除（${report.unchanged} 未变跳过）`,
           );
+          if (opts.byDir) {
+            const entries = Object.entries(report.byDir).sort(([a], [b]) => a.localeCompare(b));
+            if (entries.length === 0) {
+              console.log("  （无变更，按目录明细为空）");
+            } else {
+              for (const [dir, c] of entries) console.log(`  ${dir}  +${c.added} ~${c.modified} -${c.deleted}`);
+            }
+          }
         }
       } finally {
         indexer.close();

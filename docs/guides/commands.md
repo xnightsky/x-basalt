@@ -106,7 +106,7 @@ x-basalt index ./my-vault --db ./my-vault.db --watch
 ## `scan` — 增量重索引
 
 ```
-x-basalt scan [vault...] [--db <path>] [--rehash] [--dry-run] [--json] [--pipe k=v]... [--apply]
+x-basalt scan [vault...] [--db <path>] [--rehash] [--dry-run] [--json] [--by-dir] [--pipe k=v]... [--apply]
 ```
 
 **按需增量重索引**：diff 文件系统 vs 索引库，只重扫新增/改动/删除的文件；无需常驻进程，适合定时任务（cron）或 CI 钩子触发。
@@ -117,7 +117,8 @@ x-basalt scan [vault...] [--db <path>] [--rehash] [--dry-run] [--json] [--pipe k
 | `--db <path>`            | `.x-basalt/index.db` / 配置 `db` | SQLite 路径                                                                                                                                                                                                                          |
 | `--rehash`               | `false`                          | 按文件内容 hash 判断变化（慢但稳）；默认用 mtime + size 快速判断                                                                                                                                                                     |
 | `--dry-run`              | `false`                          | 仅报告差异，**不写库**（触发前预览用）                                                                                                                                                                                               |
-| `--json`                 | `false`                          | 输出结构化 JSON 报告；默认打印人读摘要                                                                                                                                                                                               |
+| `--json`                 | `false`                          | 输出结构化 JSON 报告（**始终含 `byDir`**，与 `--by-dir` 无关）；默认打印人读摘要                                                                                                                                                     |
+| `--by-dir`               | `false`                          | 人读模式下追加**按目录标量计数**明细（只报每个目录 added/modified/deleted 的数量，不列文件名——目录再多也不撞 maxChars/撞顶，问「每个子目录各多少」用这个）                                                                          |
 | `--pipe k=v` / `--apply` | —                                | 用**管道**处理 scan 出的变更（替代默认仅 index 落库）：一次性 **scan 源编排**，管道语义同 [`run`](#run--变更编排管道)（`--pipe actions=…` 内联 或 `--pipe use=<name>` 引用配置；`--apply` 才落盘）；输出为管道报告，有失败退出码 `1` |
 
 **输出形态**
@@ -128,7 +129,7 @@ x-basalt scan [vault...] [--db <path>] [--rehash] [--dry-run] [--json] [--pipe k
 ✓ scan <vault>：+N 新增 ~N 改动 -N 删除（N 未变跳过）
 ```
 
-加 `--dry-run` 时摘要追加 `（dry-run 未写入）`。
+加 `--dry-run` 时摘要追加 `（dry-run 未写入）`。加 `--by-dir` 时追加按目录明细行（如 `  guides/advanced  +3 ~1 -0`）。
 
 `--json` 报告：
 
@@ -137,9 +138,16 @@ x-basalt scan [vault...] [--db <path>] [--rehash] [--dry-run] [--json] [--pipe k
   "added": ["Projects/New.md"],
   "modified": ["Daily/2026-06-28.md"],
   "deleted": ["Archive/Old.md"],
-  "unchanged": 142
+  "unchanged": 142,
+  "byDir": {
+    "Projects": { "added": 1, "modified": 0, "deleted": 0 },
+    "Daily": { "added": 0, "modified": 1, "deleted": 0 },
+    "Archive": { "added": 0, "modified": 0, "deleted": 1 }
+  }
 }
 ```
+
+> `byDir`：key 为相对 Vault 的 POSIX 目录路径（根目录下文件归 `"."`），value 为该目录的标量计数——只给数量不给文件名，规模再大也不会撞 maxChars/撞顶（对治「问每个子目录各多少未索引」被误路由到逐文件列举的坑）。多根 vault 按 `<根名>/<相对路径>` 天然分桶，根间不混淆。
 
 **示例**
 
@@ -147,6 +155,7 @@ x-basalt scan [vault...] [--db <path>] [--rehash] [--dry-run] [--json] [--pipe k
 x-basalt scan ./my-vault
 x-basalt scan ./my-vault --dry-run           # 预览差异，不写库
 x-basalt scan ./my-vault --rehash --json     # 精确内容对比，机器可读输出
+x-basalt scan ./my-vault --by-dir            # 人读模式下按目录看明细（不逐文件列举）
 x-basalt scan ./my-vault --pipe use=maintain # scan 出的变更跑管道（一次性编排）
 x-basalt scan ./my-vault --pipe actions=index,normalize --apply # 内联，免配置
 ```

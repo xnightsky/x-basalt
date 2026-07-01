@@ -40,16 +40,17 @@ tags:
 ### 2.1 命令接口
 
 ```
-x-basalt scan [vault...] [--db <path>] [--rehash] [--dry-run] [--json]
+x-basalt scan [vault...] [--db <path>] [--rehash] [--dry-run] [--json] [--by-dir]
 ```
 
-| 选项          | 默认                 | 说明                                                       |
-| ------------- | -------------------- | ---------------------------------------------------------- |
-| `[vault]`     | 配置 `vault`         | Vault 根目录；省略时取配置文件 `vault`，二者皆无则报错     |
-| `--db <path>` | `.x-basalt/index.db` | SQLite 索引文件（父目录自动创建）                          |
-| `--rehash`    | 关                   | 按内容对比检测变更（慢但稳）；缺省用 mtime+size 快判       |
-| `--dry-run`   | 关                   | 只报告差异，**绝不写库**（预览用）                         |
-| `--json`      | 关                   | 结构化输出 `{added,modified,deleted,unchanged}`（AI 消费） |
+| 选项          | 默认                 | 说明                                                                |
+| ------------- | -------------------- | --------------------------------------------------------------------- |
+| `[vault]`     | 配置 `vault`         | Vault 根目录；省略时取配置文件 `vault`，二者皆无则报错                |
+| `--db <path>` | `.x-basalt/index.db` | SQLite 索引文件（父目录自动创建）                                     |
+| `--rehash`    | 关                   | 按内容对比检测变更（慢但稳）；缺省用 mtime+size 快判                  |
+| `--dry-run`   | 关                   | 只报告差异，**绝不写库**（预览用）                                    |
+| `--json`      | 关                   | 结构化输出 `{added,modified,deleted,unchanged,byDir}`（AI 消费）      |
+| `--by-dir`    | 关                   | 人读模式下追加按目录标量计数明细（`--json` 恒含 `byDir`，与此开关无关）|
 
 默认（非 `--json`）输出示例：
 
@@ -105,12 +106,17 @@ x-basalt scan ./my-vault --rehash --json
   "added":     ["新增文件相对 Vault 的 POSIX 路径", ...],
   "modified":  ["改动文件路径", ...],
   "deleted":   ["删除文件路径", ...],
-  "unchanged": 142
+  "unchanged": 142,
+  "byDir": {
+    "Projects": { "added": 1, "modified": 0, "deleted": 0 },
+    ".": { "added": 0, "modified": 1, "deleted": 0 }
+  }
 }
 ```
 
 - `added` / `modified` / `deleted`：`string[]`，已按字母序排序；
-- `unchanged`：`number`，未变文件**计数**（不列名，性能优先）。
+- `unchanged`：`number`，未变文件**计数**（不列名，性能优先）；
+- `byDir`：`Record<目录路径, {added,modified,deleted}>`，按 `path.posix.dirname` 对上面三个数组分桶聚合的**标量计数**——同 `unchanged` 一样只给数量不给文件名，目录再多、库再大也是常数大小，不会撞 AI 工具调用的输出上限。根目录下的文件归 `"."` 桶；多根 vault 因主键带 `<根名>/` 前缀，天然按根分桶、互不混淆。CLI 人读模式配 `--by-dir` 追加同等明细。
 
 ### 2.4 分批处理与断点续扫
 
@@ -136,9 +142,22 @@ for await (const progress of indexer.scanIter({ batchSize: 50 })) {
 indexer.close();
 ```
 
----
+### 2.5 多根 vault：缺失根 warn-and-skip
 
-## 3. `index`：全量重建
+配置 `vault` 为多目录数组时（如 `vault: [./doc, ./docs]`），若其中某个目录**尚不存在**（如迁移目标目录还没建），`index`/`scan`/`run`/`watch` 都会：
+
+- 逐个跳过缺失根，打印 `⚠ 跳过不存在的 vault 根：<绝对路径>`；
+- **其余根照常索引**，不因一个根缺失就整体失败；
+- 若配置的根**全部**不存在，才抛出清晰错误（而非静默产出空索引）。
+
+```bash
+# docs 目录尚未创建（迁移目标），doc 目录正常存在
+x-basalt scan ./doc ./docs
+# ⚠ 跳过不存在的 vault 根：/abs/path/docs
+# ✓ scan：+12 新增 ~0 改动 -0 删除（0 未变跳过）
+```
+
+> **`scan`（增量）与 `index`/`rebuild`（全量重建）对缺失根的处理不对称，是刻意设计**：`scan` 是增量 diff，若某根**此前已建过索引**、本次因临时不可达（如未挂载）而缺失，该根下的旧记录会**原样保留、不被判为「已删除」**——避免一次挂载失败/配置笔误就清空整根历史索引。而 `index`/`rebuild` 语义是「重置为当前可见 FS 真相」，全量操作不保留任何不可达根的旧记录（与单个文件被物理删除后 rebuild 会清除其记录同一语义，不是缺陷）。需要保留旧数据、等根恢复可达后再补齐的场景，用 `scan` 而非 `index`。
 
 ```
 x-basalt index [vault...] [--db <path>] [--watch]

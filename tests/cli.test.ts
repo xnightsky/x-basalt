@@ -137,6 +137,40 @@ test("scan --dry-run：报告差异但不写库（再扫仍报 +1）", () => {
   );
 });
 
+test("scan --json：始终含 byDir 按目录标量计数（不带 --by-dir 也有）", () => {
+  const vault = makeVault();
+  const db = join(freshDir(), "scan.db");
+  run(["index", vault, "--db", db]);
+  mkdirSync(join(vault, "guides"), { recursive: true });
+  writeFileSync(join(vault, "guides", "intro.md"), "# intro\n");
+  const r = run(["scan", vault, "--db", db, "--json"]);
+  assert.equal(r.status, 0, r.stderr);
+  assert.deepEqual(JSON.parse(r.stdout).byDir, { guides: { added: 1, modified: 0, deleted: 0 } });
+});
+
+test("scan --by-dir：人读模式追加按目录明细行（不逐文件列举）", () => {
+  const vault = makeVault();
+  const db = join(freshDir(), "scan.db");
+  run(["index", vault, "--db", db]);
+  mkdirSync(join(vault, "guides"), { recursive: true });
+  writeFileSync(join(vault, "guides", "intro.md"), "# intro\n");
+  const r = run(["scan", vault, "--db", db, "--by-dir"]);
+  assert.equal(r.status, 0, r.stderr);
+  assert.match(r.stdout, /\+1 新增/);
+  assert.match(r.stdout, /guides\s+\+1 ~0 -0/);
+});
+
+test("scan（不带 --by-dir）：人读模式不打印按目录明细", () => {
+  const vault = makeVault();
+  const db = join(freshDir(), "scan.db");
+  run(["index", vault, "--db", db]);
+  mkdirSync(join(vault, "guides"), { recursive: true });
+  writeFileSync(join(vault, "guides", "intro.md"), "# intro\n");
+  const r = run(["scan", vault, "--db", db]);
+  assert.equal(r.status, 0, r.stderr);
+  assert.ok(!/guides\s+\+/.test(r.stdout), "不带 --by-dir 不应输出按目录明细行");
+});
+
 test("query 主路径：经 --db 查共享索引返回命中行", () => {
   const r = run(["query", "LIST WHERE status = 'active'", "--db", sharedDb]);
   assert.equal(r.status, 0, `stderr=${r.stderr}`);

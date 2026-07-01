@@ -167,3 +167,129 @@ test("config：vault 列表过滤非字符串项；全非串则整体丢弃", ()
 test("config：vault 单字符串仍按原样（向后兼容）", () => {
   assert.equal(loadVaultFromConfig("vault: ./single\n"), "./single");
 });
+
+// --- 缺失根 warn-and-skip（对治场景库 scale/doc-migration-count 坐实的缺口）---
+// 旧行为：readdir 对不存在目录抛 ENOENT，整条 rebuild/scan 全量失败（见
+// docs/plans/2026-07-02-deterministic-eval-gaps.md [冲突提示]）。新行为：跳过缺失根 + warn，
+// 其余根照常；全缺才报错。
+
+/** 临时接管 console.warn 收集调用文本，finally 里原样恢复（避免测试间互相污染）。 */
+async function captureWarnings<T>(fn: () => Promise<T>): Promise<{ result: T; warnings: string[] }> {
+  const original = console.warn;
+  const warnings: string[] = [];
+  console.warn = (...args: unknown[]) => {
+    warnings.push(args.map(String).join(" "));
+  };
+  try {
+    const result = await fn();
+    return { result, warnings };
+  } finally {
+    console.warn = original;
+  }
+}
+
+test("多根缺失一个根 When rebuild Then warn 并跳过、其余根照常索引（不再整体 ENOENT 崩）", async () => {
+  const parent = freshDir();
+  const a = join(parent, "docs");
+  const missing = join(parent, "nope");
+  mkdirSync(a);
+  writeFileSync(join(a, "x.md"), "# X\n");
+
+  const dbPath = freshDbPath();
+  const idx = new VaultIndexer({ vaultPath: [a, missing], dbPath });
+  const { warnings } = await captureWarnings(() => idx.rebuild());
+  idx.close();
+
+  assert.deepEqual(filePaths(dbPath), ["docs/x.md"]);
+  assert.ok(
+    warnings.some((w) => w.includes(missing)),
+    `应 warn 缺失根路径，实际: ${warnings.join("|")}`,
+  );
+});
+
+test("多根缺失一个根 When scan（dry-run） Then warn 并跳过、不抛错、报告只含存在根的差异", async () => {
+  const parent = freshDir();
+  const a = join(parent, "docs");
+  const missing = join(parent, "nope");
+  mkdirSync(a);
+  writeFileSync(join(a, "x.md"), "# X\n");
+
+  const dbPath = freshDbPath();
+  const idx = new VaultIndexer({ vaultPath: [a, missing], dbPath });
+  const { result: report, warnings } = await captureWarnings(() => idx.scan({ dryRun: true }));
+  idx.close();
+
+  assert.deepEqual(report.added, ["docs/x.md"]);
+  assert.ok(warnings.some((w) => w.includes(missing)));
+});
+
+test("多根全部缺失 When rebuild Then 抛出清晰错误（而非产出空索引）", async () => {
+  const parent = freshDir();
+  const a = join(parent, "nope1");
+  const b = join(parent, "nope2");
+  const dbPath = freshDbPath();
+  const idx = new VaultIndexer({ vaultPath: [a, b], dbPath });
+  await assert.rejects(() => idx.rebuild(), /所有 vault 根都不存在/);
+  idx.close();
+});
+
+test("单根缺失 When rebuild / scan Then 抛出清晰错误（替代裸 ENOENT）", async () => {
+  const missing = join(freshDir(), "nope");
+  const dbPath = freshDbPath();
+  const idxA = new VaultIndexer({ vaultPath: missing, dbPath });
+  await assert.rejects(() => idxA.rebuild(), /所有 vault 根都不存在/);
+  idxA.close();
+
+  const idxB = new VaultIndexer({ vaultPath: missing, dbPath: freshDbPath() });
+  await assert.rejects(() => idxB.scan({ dryRun: true }), /所有 vault 根都不存在/);
+  idxB.close();
+});
+
+test("此前已索引的根本次不可达 When scan（非 dry-run） Then 其旧记录原样保留、不判 deleted（防误删）", async () => {
+  const parent = freshDir();
+  const a = join(parent, "docs");
+  const b = join(parent, "notes");
+  mkdirSync(a);
+  mkdirSync(b);
+  writeFileSync(join(a, "x.md"), "# X\n");
+  writeFileSync(join(b, "y.md"), "# Y\n");
+
+  const dbPath = freshDbPath();
+  const idx = new VaultIndexer({ vaultPath: [a, b], dbPath });
+  await idx.rebuild();
+  assert.deepEqual(filePaths(dbPath), ["docs/x.md", "notes/y.md"]);
+
+  // notes 根本次"消失"（模拟未挂载 / 瞬时不可达）：物理删掉该目录。
+  rmSync(b, { recursive: true, force: true });
+  const { result: report, warnings } = await captureWarnings(() => idx.scan({}));
+  idx.close();
+
+  assert.deepEqual(report.deleted, [], "缺失根下的旧记录不应被判 deleted");
+  assert.deepEqual(
+    filePaths(dbPath),
+    ["docs/x.md", "notes/y.md"],
+    "库内容应原样保留（未被误判删除清空）",
+  );
+  assert.ok(warnings.some((w) => w.includes(b)));
+});
+
+test("此前已索引的根本次不可达 When rebuild Then 该根旧记录被清（全量重置语义，非缺陷）", async () => {
+  const parent = freshDir();
+  const a = join(parent, "docs");
+  const b = join(parent, "notes");
+  mkdirSync(a);
+  mkdirSync(b);
+  writeFileSync(join(a, "x.md"), "# X\n");
+  writeFileSync(join(b, "y.md"), "# Y\n");
+
+  const dbPath = freshDbPath();
+  const idx = new VaultIndexer({ vaultPath: [a, b], dbPath });
+  await idx.rebuild();
+
+  rmSync(b, { recursive: true, force: true });
+  const { warnings } = await captureWarnings(() => idx.rebuild());
+  idx.close();
+
+  assert.deepEqual(filePaths(dbPath), ["docs/x.md"], "rebuild 是全量重置：缺失根旧记录不保留");
+  assert.ok(warnings.some((w) => w.includes(b)));
+});
