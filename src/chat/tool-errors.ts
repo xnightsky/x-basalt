@@ -33,7 +33,7 @@ const ADVICE: Record<ErrorClass, string> = {
   transient: "可能文件被占用或库忙，稍后再试或缩小批量。",
   "not-found":
     "目标不存在：若是笔记路径，先用 scan/meta_get 确认存在或换路径；若是索引库打不开，先建索引（index/scan）或检查 --db。别对同一目标硬试。",
-  dql: "DQL 文法可能写错：先 skills_get 取 obsidian-base-spec 核对，再换一种写法/字段/条件试，别对同一句反复微调。",
+  dql: "DQL 文法可能写错。常见坑：判属性有无用裸字段真值 `WHERE field` 或 `!field`（对标官方 isTruthy；`= null`/`!= null` 是显式键存在判断，把 0/空串视为「有」）；DQL 无 OFFSET（分页在工具 offset/size 层）。换个写法/字段再试、别对同一句反复微调；仍不确定再 skills_get 取 obsidian-base-spec。",
   invalid: "入参不合法：对照工具 schema 检查参数名与类型，调整后再试。",
   unknown: "换一种工具或思路再试，别重复同一失败操作。",
 };

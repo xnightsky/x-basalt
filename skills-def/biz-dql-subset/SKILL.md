@@ -32,9 +32,10 @@ WITHOUT ID
 LIMIT <number>
 ```
 
-- 操作符：`= != < > <= >=`、`AND/OR/NOT`、括号。
+- 操作符：`= != < > <= >=`、`AND/OR/NOT`、一元 `!`、括号。
 - 字符串谓词函数：`contains/icontains/startswith/endswith`、`regexmatch(field,"pat")`（含 ReDoS 防护）。
-- WHERE 扩展：`field = null` / `!= null`（→ `IS NULL`/`IS NOT NULL`）、日期比较（ISO 字典序）。
+- **真值/存在性（对标官方 `Values.isTruthy()`）**：裸字段 `WHERE field`（`truthy` 节点 → `json_type` CASE：缺失/null/0/空串/空数组/空对象/false 皆 falsy）；`!field` = `not(truthy)`（词法 `Bang` token，`!=` 仍归 `Op`）。**与 `= null` 语义不同**：`field != null`（→ `IS NOT NULL`）把 `0`/空串视为「有」，`!field` 视为「无」——问「有没有 X」用 `!field`/`WHERE field`，问「键是否存在」用 `= null`/`!= null`。
+- WHERE 扩展：`field = null` / `!= null`（→ `IS NULL`/`IS NOT NULL`，**显式 null 比较，非真值判断**）、日期比较（ISO 字典序）。
 - 内置标量函数：日期 `date(today)`/`date(now)`；字符串 `lower`/`upper`；`length(x)`（字符串长度 / 数组计数）；数值 `round(x[,n])`。
 - TASK：返回任务行（text/status/line/file），FROM/WHERE 做**文件级**过滤；task 内部字段级过滤为后续（非本轮）。
 - **仍非目标（遇到报带位置 `DqlSyntaxError`，不静默）**：FROM and/or 多源、CALENDAR、DataviewJS（`dataviewjs` 块）、未知字段 / 未知函数、对聚合 JSON 列排序、`LIMIT` 负数、`length()` 之外的任意数值表达式运算（如 `a + b`）。

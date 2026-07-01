@@ -76,9 +76,11 @@
     },
     {
       pattern: "(LIST|TABLE)\\s+.*?(FROM\\s+.+?)?(WHERE\\s+.+?)?(GROUP\\s+BY\\s+.+?)?(SORT\\s+.+?)?(LIMIT\\s+\\d+)?",
-      description: 'Dataview DQL 子集：LIST|TABLE <fields> [FROM <源>] [WHERE <cond>] [GROUP BY <field>] [FLATTEN <field>] [SORT <field> ASC|DESC] [LIMIT <n>]。FROM 可省略，省略或 FROM "" 均表示全库；FROM 源仅三类："folder"(含子文件夹) / #tag(前缀命中子标签) / [[link]](反链)。按 frontmatter 字段筛笔记一律用 WHERE，别把字段名或取值当 #tag 写进 FROM。操作符 = != < > <= >= / contains/icontains/startswith/endswith / AND OR NOT / regexmatch。隐式字段 file.name/path/folder/extension/size/mtime/ctime/tags/inlinks/outlinks/tasks，外加任意 frontmatter 标量字段。**计数**：count() / length(rows) 是 GROUP BY 聚合列（按 <field> 分组的文件数），单独 `TABLE count()` 不带 GROUP BY 无效；要全库总数用 `TABLE count() FROM "" GROUP BY file.extension`，或直接读任一 query 结果的 total 字段。DQL 只有 LIMIT、**无 OFFSET**——分页在 CLI `--offset/--size` 或 chat 工具 offset/size 层做，不在 DQL 文法里。',
+      description: 'Dataview DQL 子集：LIST|TABLE <fields> [FROM <源>] [WHERE <cond>] [GROUP BY <field>] [FLATTEN <field>] [SORT <field> ASC|DESC] [LIMIT <n>]。FROM 可省略，省略或 FROM "" 均表示全库；FROM 源仅三类："folder"(含子文件夹) / #tag(前缀命中子标签) / [[link]](反链)。按 frontmatter 字段筛笔记一律用 WHERE，别把字段名或取值当 #tag 写进 FROM。操作符 = != < > <= >= / contains/icontains/startswith/endswith / AND OR NOT / regexmatch。**判断属性有无**：裸字段真值 `WHERE field`（有且为真值，缺失/null/0/空串/空数组 皆 falsy，对标官方 isTruthy）、`!field`（无或为 falsy）；另有显式 null 判断 `field = null` / `!= null`（测「键是否存在」，把 0/空串/空数组视为「有」，与 !field 在 falsy 值上相反——问「有没有 X」默认用 `!field`/`WHERE field`）。隐式字段 file.name/path/folder/extension/size/mtime/ctime/tags/inlinks/outlinks/tasks，外加任意 frontmatter 标量字段。**计数**：count() / length(rows) 是 GROUP BY 聚合列（按 <field> 分组的文件数），单独 `TABLE count()` 不带 GROUP BY 无效；要全库总数用 `TABLE count() FROM "" GROUP BY file.extension`，或直接读任一 query 结果的 total 字段。DQL 只有 LIMIT、**无 OFFSET**——分页在 CLI `--offset/--size` 或 chat 工具 offset/size 层做，不在 DQL 文法里。',
       examples: [
         'LIST WHERE type = "moc"',
+        'LIST WHERE status          // 有 status（真值；缺失/空串/0 不算）',
+        'LIST WHERE !index          // 没有 index（缺失或 falsy）——问「多少篇没有 X」用这个',
         'TABLE file.name, rating FROM "" WHERE rating >= 4 SORT rating DESC',
         "LIST FROM #project WHERE status = 'active' SORT file.mtime DESC LIMIT 10",
         'TABLE count() FROM "" GROUP BY file.extension   // 计数：各扩展名文件数（全 md 即单组=全库总数）',
