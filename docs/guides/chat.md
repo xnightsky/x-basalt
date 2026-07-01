@@ -12,7 +12,7 @@ sha256: 2ebe1be083aaa9994ea4e90a687d837c51da2ca41d12a14ddb4600db2e8accae
 ---
 # chat 怎么玩 · x-basalt
 
-> `chat` 是用**自然语言驱动 vault** 的可选-AI 子命令：你说人话，它自己多步调用 x-basalt 的读写原语（query / parse / read_note / scan / list / meta / skills / pipeline）去办。本篇教你从零跑起来、试哪些指令、玩的时候看什么、注意什么。
+> `chat` 是用**自然语言驱动 vault** 的可选-AI 子命令：你说人话，它自己多步调用 x-basalt 的读写原语（query / parse / read_note / scan / list / search / meta / skills / pipeline）去办。本篇教你从零跑起来、试哪些指令、玩的时候看什么、注意什么。
 >
 > ⚠ 当前是**手玩验证**阶段：AI 行为质量（成功率 / 撞顶率）尚无场景库做量化回归，体验因模型与库而异。这篇就是给你「拿来即玩」用的。
 
@@ -71,6 +71,7 @@ x-basalt chat
   读 <某篇>.md 的 frontmatter 有哪些字段
   读一下 <某篇>.md 的正文，讲了什么
   列出 <某目录>/ 下的笔记
+  哪篇笔记的正文提到「<某关键词>」？（不知道是哪篇，全文检索）
   扫一下有哪些文件还没进索引
 写（会直接改文件，先在测试库上玩）：
   给 <某篇>.md 把 status 设成 done
@@ -92,7 +93,7 @@ x-basalt chat
 
 ## 7. 当前限制 / 注意
 
-- **能读单篇正文，但不能跨库全文搜**：`read_note` 能读某一篇的正文（非 AST、非仅 frontmatter），但没有 FTS5 全文检索（backlog），问「哪篇正文提到 X」（不知道是哪篇、要跨全库搜）它会老实说做不到。
+- **全文检索是子串匹配，非语义搜索**：`search` 走 FTS5 + trigram，按字面子串找（查询至少 3 个字符，中英文皆可），不理解同义词/概念相关；且基于索引快照，新改动要先 `scan`/`index` 才搜得到。
 - **写无确认闸**：写动作直接改文件，靠 `Ctrl+C` 中断 + 原子写兜底，**没有逐动作确认**。别拿重要库直接玩写。
 - **常驻/监听不可用**：chat 工具皆一次性；不存在 watch（会挂死对话），它被系统提示禁止尝试。
 - **效果未量化**：AI 行为质量尚无场景库回归（见 [`../research/2026-06-30-chat-gap-vs-agent-browser.md`](../research/2026-06-30-chat-gap-vs-agent-browser.md) §3）。

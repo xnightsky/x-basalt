@@ -80,6 +80,15 @@ CREATE TABLE IF NOT EXISTS blocks (
   UNIQUE(file_path, block_id)
 );
 CREATE INDEX IF NOT EXISTS idx_blocks_file_path ON blocks(file_path);
+
+-- 通用 KV 配置表：目前仅存 fts_version（FTS5 分词策略版本号，见 indexer/index.ts ensureFts），
+-- 抄 qmd 的版本号迁移模式——分词/归一规则升级时递增版本号，靠此判定需重建 files_fts，避免新旧索引混用。
+-- files_fts 虚表本身不放在此 DDL：其生命周期完全由 ensureFts 按版本号管理（建/重建/回填），
+-- createSchema 是幂等的 IF NOT EXISTS，无法表达"版本不符则先 DROP 再建"，故不适合放这里。
+CREATE TABLE IF NOT EXISTS store_config (
+  key   TEXT PRIMARY KEY,
+  value TEXT NOT NULL
+);
 `;
 
 /**

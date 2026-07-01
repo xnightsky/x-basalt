@@ -133,6 +133,48 @@ interface BlockRow {
 // 兼作文件读取并发上限（批内 Promise.all 并行、批间串行），避免大库 OOM 与 fd 耗尽。
 const REBUILD_BATCH = 100;
 
+// FTS5 分词策略版本号（S3.5 全文检索）：升级 tokenize/归一规则时递增，触发 ensureFts 重建
+// files_fts（抄 qmd 的版本号迁移模式，见 store_config 表注释）。常规 FTS5 表（非 external content，
+// 自存 path/name/content 副本）：rowid 对齐 files.id，删除按 path 过滤即可、无需回查 files.id。
+const FTS_VERSION = "1";
+
+/**
+ * 确保 files_fts 全文索引与当前 {@link FTS_VERSION} 一致，缺失或版本不符则重建（drop + create +
+ * 从 files 全量回填）。覆盖两个场景：① 全新库首次建索引；② 升级前建的旧库（有 files 无 FTS，
+ * 或分词策略要升级）首次以新版本的 indexer 打开。已是当前版本且表存在则不动（开库零额外开销）。
+ *
+ * @behavior
+ * Given 全新库（无 store_config.fts_version、无 files_fts）
+ * When ensureFts
+ * Then 建表并从 files 回填（此时 files 为空，回填结果为空表）
+ *
+ * @behavior
+ * Given 旧库：有 files 表数据、从未建过 files_fts（升级前索引）
+ * When ensureFts（构造 VaultIndexer 即触发，无需显式 rebuild/scan）
+ * Then 建表并从 files 现有数据全量回填，无需重新解析笔记
+ *
+ * @behavior
+ * Given store_config.fts_version 与当前 FTS_VERSION 不符（分词策略已升级）
+ * When ensureFts
+ * Then 先 DROP 旧 files_fts 再重建 + 回填，不与旧分词策略的索引混用
+ */
+function ensureFts(db: Db): void {
+  const row = db.prepare("SELECT value FROM store_config WHERE key = 'fts_version'").get() as
+    | { value: string }
+    | undefined;
+  const tableExists = db
+    .prepare("SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'files_fts'")
+    .get();
+  if (row?.value === FTS_VERSION && tableExists) return;
+
+  db.exec("DROP TABLE IF EXISTS files_fts");
+  db.exec("CREATE VIRTUAL TABLE files_fts USING fts5(path, name, content, tokenize='trigram')");
+  db.exec("INSERT INTO files_fts(rowid, path, name, content) SELECT id, path, name, content FROM files");
+  db.prepare(
+    "INSERT INTO store_config(key, value) VALUES ('fts_version', ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value",
+  ).run(FTS_VERSION);
+}
+
 // === Obsidian 规范来源: task 文本中的到期日按 YYYY-MM-DD 提取（调研 §2.6）===
 const DUE_DATE_RE = /\b(\d{4}-\d{2}-\d{2})\b/;
 // 块锚点定义所在行的行尾 ^id，截取块内容时剥离。
@@ -199,11 +241,13 @@ export class VaultIndexer {
     insertTag: Statement;
     insertTask: Statement;
     insertBlock: Statement;
+    insertFts: Statement;
     delFile: Statement;
     delLinks: Statement;
     delTags: Statement;
     delTasks: Statement;
     delBlocks: Statement;
+    delFts: Statement;
     getContent: Statement;
   };
 
@@ -217,6 +261,8 @@ export class VaultIndexer {
     this.db = new Database(opts.dbPath);
     this.db.pragma("journal_mode = WAL");
     createSchema(this.db);
+    // FTS5 全文索引（S3.5）：缺失/版本不符则（重）建 + 回填，覆盖全新库与升级前的旧库两种场景。
+    ensureFts(this.db);
 
     this.stmts = {
       insertFile: this.db.prepare(
@@ -238,11 +284,17 @@ export class VaultIndexer {
         `INSERT OR REPLACE INTO blocks (file_path, block_id, content, line_number)
          VALUES (@filePath, @blockId, @content, @lineNumber)`,
       ),
+      // rowid 显式对齐 files.id（非 external content 模式，自存一份 path/name/content）。
+      insertFts: this.db.prepare(
+        `INSERT INTO files_fts (rowid, path, name, content) VALUES (?, ?, ?, ?)`,
+      ),
       delFile: this.db.prepare(`DELETE FROM files WHERE path = ?`),
       delLinks: this.db.prepare(`DELETE FROM links WHERE source = ?`),
       delTags: this.db.prepare(`DELETE FROM tags WHERE file_path = ?`),
       delTasks: this.db.prepare(`DELETE FROM tasks WHERE file_path = ?`),
       delBlocks: this.db.prepare(`DELETE FROM blocks WHERE file_path = ?`),
+      // 按 path 删（files_fts 自存 path 列），不依赖 files.id/rowid 回查，与 delFile 顺序无关。
+      delFts: this.db.prepare(`DELETE FROM files_fts WHERE path = ?`),
       getContent: this.db.prepare(`SELECT content FROM files WHERE path = ?`),
     };
   }
@@ -330,7 +382,7 @@ export class VaultIndexer {
     this.db.exec("BEGIN");
     try {
       this.db.exec(
-        "DELETE FROM files; DELETE FROM links; DELETE FROM tags; DELETE FROM tasks; DELETE FROM blocks;",
+        "DELETE FROM files; DELETE FROM links; DELETE FROM tags; DELETE FROM tasks; DELETE FROM blocks; DELETE FROM files_fts;",
       );
       for (let i = 0; i < files.length; i += REBUILD_BATCH) {
         const batch = files.slice(i, i + REBUILD_BATCH);
@@ -681,7 +733,7 @@ export class VaultIndexer {
 
   /** 在当前事务内写入单文件的全部行（调用方负责包事务）。 */
   private insertPayload(p: FilePayload): void {
-    this.stmts.insertFile.run({
+    const info = this.stmts.insertFile.run({
       path: p.path,
       name: p.name,
       nameKey: p.nameKey,
@@ -694,19 +746,22 @@ export class VaultIndexer {
       content: p.content,
       frontmatter: p.frontmatter,
     });
+    // rowid 对齐刚插入的 files.id：便于日后按需 JOIN 回 files（当前 search 不需要，仅对齐语义）。
+    this.stmts.insertFts.run(info.lastInsertRowid, p.path, p.name, p.content);
     for (const l of p.links) this.stmts.insertLink.run(l);
     for (const t of p.tags) this.stmts.insertTag.run(t);
     for (const t of p.tasks) this.stmts.insertTask.run(t);
     for (const b of p.blocks) this.stmts.insertBlock.run(b);
   }
 
-  /** 删除某文件在五表中的全部记录（调用方负责包事务）。 */
+  /** 删除某文件在五表 + files_fts 中的全部记录（调用方负责包事务）。 */
   private deleteByPath(rel: string): void {
     this.stmts.delFile.run(rel);
     this.stmts.delLinks.run(rel);
     this.stmts.delTags.run(rel);
     this.stmts.delTasks.run(rel);
     this.stmts.delBlocks.run(rel);
+    this.stmts.delFts.run(rel);
   }
 }
 

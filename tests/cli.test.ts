@@ -180,6 +180,22 @@ test("query 主路径：经 --db 查共享索引返回命中行", () => {
   assert.equal(res.rows[0]["file.name"], "Note");
 });
 
+test("search 主路径：经 --db 全文检索共享索引正文，返回命中 + 片段", () => {
+  const r = run(["search", "mytag", "--db", sharedDb]);
+  assert.equal(r.status, 0, `stderr=${r.stderr}`);
+  const res = JSON.parse(r.stdout);
+  assert.equal(res.total, 1);
+  assert.equal(res.rows[0].path, "Note.md");
+  assert.match(res.rows[0].snippet, /mytag/);
+});
+
+test("退出码：search 查询过短（< 3 字符）→ 退出 1 且 stderr 提示不合法", () => {
+  const r = run(["search", "ab", "--db", sharedDb]);
+  assert.equal(r.status, 1);
+  assert.match(r.stderr, /✗/);
+  assert.match(r.stderr, /不合法/);
+});
+
 test("skills get / recall / list 主路径：召回内置规范", () => {
   // get 按名取完整（默认 Markdown，含标题）
   const got = run(["skills", "get", "obsidian-base-spec"]);

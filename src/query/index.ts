@@ -19,6 +19,29 @@ export interface ListResult {
   files: { path: string; name: string; folder: string; mtime: number }[];
 }
 
+/** search() 结果：分页元信息同 QueryResult/ListResult 约定。 */
+export interface SearchResult {
+  total: number;
+  offset: number;
+  size?: number;
+  returned: number;
+  hasMore: boolean;
+  rows: { path: string; name: string; snippet: string }[];
+}
+
+/** trigram 子串检索的最短查询长度（分词器至少需要 3 字符才能形成一个 trigram）。 */
+const MIN_FTS_QUERY_LEN = 3;
+
+/**
+ * 把用户原始查询整体转义为 FTS5 MATCH 的字面短语参数（`"` → `""` 并整体加引号）：
+ * 杜绝 FTS5 查询语法（NEAR/OR/列过滤/前缀通配/未闭合引号等）被用户输入意外触发——
+ * 未转义的悬空操作符或未闭合引号会让 SQLite 直接抛语法错误（S3.5 手工验证过）。
+ * trigram 分词器 + 短语查询 = 子串搜索，是 SQLite 官方推荐用法。
+ */
+function escapeFtsPhrase(raw: string): string {
+  return `"${raw.replaceAll('"', '""')}"`;
+}
+
 // === 自建实现: Dataview 子集执行引擎，不依赖 obsidian-dataview 的 Evaluator/Executor ===
 //
 // 上游：cli 的 query 子命令；下游：只读打开索引库，执行 tokenizer→ast→sql 编译出的参数化 SQL。
@@ -160,6 +183,63 @@ export class DataviewEngine {
       opts,
     );
     return { total, offset, size, returned, hasMore, files: rows };
+  }
+
+  /**
+   * 全文检索笔记正文（FTS5 + trigram 子串匹配，覆盖中英文，S3.5）。基于索引快照的 `files_fts`
+   * 虚表（由 indexer 唯一写边界维护，见 indexer/index.ts ensureFts）；若从未用当前版本的
+   * indexer 打开过该库，`files_fts` 可能不存在，此时给出清晰的「先建索引」提示而非裸 SQLite 错误。
+   *
+   * @param query - 原始查询文本（整体转义为字面短语，见 {@link escapeFtsPhrase}；不支持 FTS5 查询语法）
+   * @param opts.offset - 起始偏移（默认 0）
+   * @param opts.size - 本页最大行数；省略 = 不分页
+   * @throws Error 查询 trim 后长度 < 3（trigram 无法形成子串匹配）
+   * @throws Error `files_fts` 不存在（提示先 index/scan 建索引）
+   *
+   * @behavior
+   * Given trim 后长度 < 3 的查询（含空串/纯空白/CJK 2 字）
+   * When search
+   * Then 抛出「不合法」错误并给出最短长度提示，而非静默返回空结果或裸 SQLite 语法错误
+   *
+   * @behavior
+   * Given 含 FTS5 查询语法关键字/未闭合引号/悬空操作符的查询
+   * When search
+   * Then 整体转义为字面短语参与匹配，按字面子串命中，不被解释为查询语法、不抛裸 SQLite 错误
+   */
+  search(query: string, opts: { offset?: number; size?: number } = {}): SearchResult {
+    const trimmed = query.trim();
+    if (trimmed.length < MIN_FTS_QUERY_LEN) {
+      throw new Error(
+        `全文检索查询不合法：至少需要 ${MIN_FTS_QUERY_LEN} 个字符（trigram 子串匹配要求），当前 ${trimmed.length} 个`,
+      );
+    }
+    const phrase = escapeFtsPhrase(trimmed);
+    // 片段截取列 = content（第 2 列，0-based）；ORDER BY 内联在基础 SQL 里，随 paginate 分页窗口保序。
+    const baseSql =
+      "SELECT path AS path, name AS name, snippet(files_fts, 2, '[', ']', ' … ', 16) AS snippet, bm25(files_fts) AS rank " +
+      "FROM files_fts WHERE files_fts MATCH ? ORDER BY rank, path ASC";
+    let paged: ReturnType<typeof this.paginate<{ path: string; name: string; snippet: string; rank: number }>>;
+    try {
+      paged = this.paginate<{ path: string; name: string; snippet: string; rank: number }>(
+        baseSql,
+        [phrase],
+        opts,
+      );
+    } catch (e) {
+      if (e instanceof Error && /no such table:\s*files_fts/i.test(e.message)) {
+        throw new Error("全文索引不存在：请先运行 index 或 scan 建立索引后再试", { cause: e });
+      }
+      throw e;
+    }
+    const rows = paged.rows.map(({ path, name, snippet }) => ({ path, name, snippet }));
+    return {
+      total: paged.total,
+      offset: paged.offset,
+      size: paged.size,
+      returned: paged.returned,
+      hasMore: paged.hasMore,
+      rows,
+    };
   }
 
   /** 关闭数据库连接。 */

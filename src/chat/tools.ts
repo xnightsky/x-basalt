@@ -220,6 +220,28 @@ export function buildTools(ctx: ToolContext, safety: Safety): ToolSet {
         }
       },
     }),
+    search: tool({
+      description:
+        "全文检索笔记正文（FTS5 + trigram 子串匹配，覆盖中英文；用它回答「哪篇笔记提到 X/讲了 X 的笔记」这类不知道具体是哪篇、需要按内容找的请求）。基于索引快照，新改动需先 scan/index 才能看见。query 至少 3 个字符（trigram 子串匹配要求，含 CJK；整体按字面短语匹配，不支持 FTS5 查询语法）。返回 total/returned/hasMore——数总量看 total，不要靠翻页枚举。size 默认 50（上限 500），offset 默认 0；翻页用 offset+=size。",
+      inputSchema: jsonSchema<{ query: string; offset?: number; size?: number }>({
+        type: "object",
+        properties: {
+          query: { type: "string", description: "查询文本，至少 3 个字符" },
+          offset: { type: "number", description: "结果起始偏移，默认 0" },
+          size: { type: "number", description: "本页最大行数，默认 50，上限 500" },
+        },
+        required: ["query"],
+        additionalProperties: false,
+      }),
+      execute: ({ query, offset, size }) => {
+        const engine = new DataviewEngine(ctx.dbPath);
+        try {
+          return observe(safety, engine.search(query, { offset: offset ?? 0, size: clampSize(size, 50, 500) }));
+        } finally {
+          engine.close();
+        }
+      },
+    }),
     meta_get: tool({
       description: "读某笔记的 frontmatter；省略 key 返回整个元数据。",
       inputSchema: jsonSchema<{ file: string; key?: string }>({

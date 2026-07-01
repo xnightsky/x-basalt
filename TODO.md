@@ -23,10 +23,10 @@ dogfood 期决定提前做：自然语言驱动 vault 的 `chat` 子命令（单
 本轮「如何优化」会话的诊断与对标调研已全部落地为文档（总入口：[`docs/research/2026-06-30-optimization-overview.md`](docs/research/2026-06-30-optimization-overview.md)）：
 
 - **功能覆盖 gap**（对标官方 Dataview/Obsidian，deep-research 22 确认）：[`docs/research/2026-06-30-feature-gap-vs-dataview-obsidian.md`](docs/research/2026-06-30-feature-gap-vs-dataview-obsidian.md) — inline fields 完全缺失、内置函数覆盖 ~15%、task emoji 多字段缺失、Lambda/动态访问/Inline DQL/GROUP BY swizzling 缺失。
-- **chat 可用性**（对标 agent-browser 三痛点）：[`docs/research/2026-06-30-chat-gap-vs-agent-browser.md`](docs/research/2026-06-30-chat-gap-vs-agent-browser.md) — 工具调用无重试（→失败率高）、撞顶静默停（→轮询到上限停）、缺读正文/全文搜/列笔记。
+- **chat 可用性**（对标 agent-browser 三痛点）：[`docs/research/2026-06-30-chat-gap-vs-agent-browser.md`](docs/research/2026-06-30-chat-gap-vs-agent-browser.md) — ~~工具调用无重试（→失败率高）、撞顶静默停（→轮询到上限停）、缺读正文/全文搜/列笔记~~ 均已落地（结构化错误+换策略引导、撞顶续跑、`read_note`/`list`/`search` 三工具，见下 ✅）。
 - **chat 评估/场景库**（兄弟目录素材库，设计草案，**选址/格式待拍板**）：[`docs/specs/2026-06-30-chat-eval-scenario-library-design.md`](docs/specs/2026-06-30-chat-eval-scenario-library-design.md)。
 
-> 高频刚需缺口（据上述调研，待各自开计划/spec）：**inline fields 提取** · **task emoji 多字段+完成状态** · **内置函数补一批**（default/数组高阶/聚合）· **FTS5 全文检索** · ~~chat 工具重试+撞顶续作~~（已落地为「结构化错误+换策略引导」+「撞顶续跑」，见下 ✅）。FROM 多源 AND/OR 取舍建议复核（官方高频）。
+> 高频刚需缺口（据上述调研，待各自开计划/spec）：**inline fields 提取** · **task emoji 多字段+完成状态** · **内置函数补一批**（default/数组高阶/聚合）· ~~FTS5 全文检索~~（已落地，见下 ✅）· ~~chat 工具重试+撞顶续作~~（已落地为「结构化错误+换策略引导」+「撞顶续跑」，见下 ✅）。FROM 多源 AND/OR 取舍建议复核（官方高频）。
 
 ## 🟡 进行中（2026-07-01）：chat 对话打磨（B 止血 P0 + 可玩化）
 
@@ -47,7 +47,7 @@ dogfood 期决定提前做：自然语言驱动 vault 的 `chat` 子命令（单
 - **[缺陷] 撞顶判定真 provider 未验**：`stopReason` 靠 `step.toolCalls` 非空判，仅在 mock 验证过形状；真实 provider 下「最后一步既出文本又留 toolCall」等边界未实测。
 - **[缺陷] 默认 maxSteps=20 是拍的**：未经场景库实测校准（grounding 1-2 步 + 任务步的真实分布未知）。
 - **[缺陷] 错误分类启发式有限**：`tool-errors.ts` 对非 `DqlSyntaxError` 来源的错误靠中文/英文 message 关键字兜底，可能漏判（落到 unknown 给泛建议）；写侧 `SQLITE_BUSY` 兜底重试**未做**（按取舍故意不做，需要时再加极简单次重试）。
-- **[能力缺口] 仍缺全文搜（FTS5，P2）**：~~read_note / list（P1）~~ 已落地（2026-07-02，`src/chat/tools.ts` 新增 `read_note`/`list` 两个读工具 + `DataviewEngine.list`/`generateListSql`，答得了「读整篇正文」「列出有哪些笔记」）；「哪篇正文提到 X」仍待 FTS5（chat-gap §2.3，见 backlog S3.5）。
+- ~~**[能力缺口] read_note / list / 全文搜**~~ 已全部落地（2026-07-02）：`read_note`/`list`（P1，`DataviewEngine.list`/`generateListSql`）+ `search`（P2，FTS5 + trigram，`files_fts` 虚表由 indexer 唯一写边界维护、版本号迁移守卫、MATCH 注入防护，`DataviewEngine.search` + CLI `search` 命令 + chat `search` 工具）。答得了「读整篇正文」「列出有哪些笔记」「哪篇正文提到 X」三类此前答不了的请求（chat-gap §2.3 P1+P2）。
 
 ## 💡 backlog（待 dogfood 暴露真实需求再开，各自写计划/spec）
 
@@ -55,6 +55,6 @@ dogfood 期决定提前做：自然语言驱动 vault 的 `chat` 子命令（单
 - **lint（schema 校验）**：按用户 schema 校验属性存在性/类型/取值，报告或修（"修"复用 normalize/set）。需先定 frontmatter schema 格式（JSON Schema 或自创轻量 DSL，对标 `remark-lint-frontmatter-schema`）——长期 API 承诺最重，**最后做**。
 - **更多 profile**：按需扩（加 profile = 加数据；现有 `pkm-note` / `llm-wiki` / `ssg-blog`）。
 - **不做**：type 强制 / 日期格式统一（调研判风险高、格式不确定）。
-- **语义/全文检索（S3.5）**：FTS5 全文（core、无 AI、中文 trigram）补"查正文"空洞；embedding 向量做成最小可选 AI（接口后、默认关、FTS5 兜底）。**有评估背书**：[`docs/specs/2026-06-28-semantic-retrieval-integration.md`](docs/specs/2026-06-28-semantic-retrieval-integration.md)。FTS5 优先级高于 embedding；**现在不做**，触发条件见 spec。
+- ~~**语义/全文检索（S3.5）**~~：FTS5 全文部分（core、无 AI、中文 trigram）**已落地**（2026-07-02，见上「🐞」段）——`files_fts` 虚表 + 版本号迁移守卫 + `DataviewEngine.search`/CLI `search`/chat `search` 工具。**embedding 向量语义检索仍是 backlog**（接口后、默认关、FTS5 兜底，触发条件见 [`docs/specs/2026-06-28-semantic-retrieval-integration.md`](docs/specs/2026-06-28-semantic-retrieval-integration.md) §10：dogfood 中出现"想按正文内容找笔记但 FTS5 子串匹配不够、确有穷尽概念相关刚需"再立计划）。
 - ~~**CLI chat（可选 AI · 远期）**~~：已提为执行中，见上「🚧 执行中：CLI chat（读+写）」。范围调整为读+写同做、不待 FTS5（结构化先行）。
 - **可选增强**（按需再定）：S3.4 kysely 收编 DQL→SQL。

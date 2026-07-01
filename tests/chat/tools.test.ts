@@ -123,3 +123,30 @@ test("read_note：文件不存在 → 结构化 not-found 错误", async () => {
     /\[工具失败·not-found\]/,
   );
 });
+
+test("search：工具全文检索命中笔记正文 + 片段", async () => {
+  const sdir = mkdtempSync(join(tmpdir(), "xb-search-"));
+  writeFileSync(join(sdir, "a.md"), "# a\nmentions distributed systems design\n", "utf8");
+  const idx = new VaultIndexer({ vaultPath: sdir, dbPath: join(sdir, "index.db") });
+  await idx.rebuild();
+  idx.close();
+  const tools = buildTools({ dbPath: join(sdir, "index.db"), vaultPath: sdir }, safety);
+  const json = unwrap(await tools.search.execute!({ query: "distributed" }, {} as never));
+  assert.equal(json.total, 1);
+  assert.equal((json.rows as { path: string }[])[0]?.path, "a.md");
+  rmSync(sdir, { recursive: true, force: true });
+});
+
+test("search：查询过短 → 结构化 invalid 错误", async () => {
+  const sdir = mkdtempSync(join(tmpdir(), "xb-search-short-"));
+  writeFileSync(join(sdir, "a.md"), "# a\n", "utf8");
+  const idx = new VaultIndexer({ vaultPath: sdir, dbPath: join(sdir, "index.db") });
+  await idx.rebuild();
+  idx.close();
+  const tools = buildTools({ dbPath: join(sdir, "index.db"), vaultPath: sdir }, safety);
+  await assert.rejects(
+    tools.search.execute!({ query: "ab" }, {} as never),
+    /\[工具失败·invalid\]/,
+  );
+  rmSync(sdir, { recursive: true, force: true });
+});
