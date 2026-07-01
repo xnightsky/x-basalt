@@ -97,6 +97,13 @@ export const NumberLiteral = createToken({ name: "NumberLiteral", pattern: /-?\d
 /** 比较操作符：多字符（!= <= >=）在正则交替中先于单字符，避免被截断。 */
 export const Op = createToken({ name: "Op", pattern: /!=|<=|>=|=|<|>/ });
 
+/**
+ * 一元逻辑取反 `!`（真值否定，对标官方 Dataview `!field`）。
+ * 必须在 allTokens 中置于 Op 之后：`!=` 由 Op 的多字符交替先吃；孤立 `!`（后随非 `=`）
+ * Op 不匹配、回退到本 token。故仅当 `!` 不构成 `!=` 时才成 Bang。
+ */
+export const Bang = createToken({ name: "Bang", pattern: /!/ });
+
 /** 左括号 token，用于分组条件与函数调用。 */
 export const LParen = createToken({ name: "LParen", pattern: /\(/ });
 /** 右括号 token，与 LParen 配对闭合。 */
@@ -139,6 +146,7 @@ export const allTokens = [
   StringLiteral,
   NumberLiteral,
   Op,
+  Bang,
   LParen,
   RParen,
   Comma,

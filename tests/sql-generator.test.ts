@@ -163,10 +163,16 @@ test("S2.18 GROUP BY：分组键 + rows 聚合列 + GROUP BY 子句", () => {
 test("S2.18 GROUP BY TABLE：length(rows) / count() 聚合列", () => {
   const c = generateSql(parseDql('TABLE type, length(rows) FROM "" GROUP BY type'));
   assert.match(c.sql, /COUNT\(DISTINCT f\.path\)/);
-  assert.deepEqual(c.columns.map((x) => x.name), ["type", "length(rows)"]);
+  assert.deepEqual(
+    c.columns.map((x) => x.name),
+    ["type", "length(rows)"],
+  );
   const c2 = generateSql(parseDql('TABLE type, count() FROM "" GROUP BY type'));
   assert.match(c2.sql, /COUNT\(DISTINCT f\.path\)/);
-  assert.deepEqual(c2.columns.map((x) => x.name), ["type", "count()"]);
+  assert.deepEqual(
+    c2.columns.map((x) => x.name),
+    ["type", "count()"],
+  );
 });
 
 test("S2.19 FLATTEN：json_each 展开 + 展开值列", () => {
@@ -176,10 +182,13 @@ test("S2.19 FLATTEN：json_each 展开 + 展开值列", () => {
 });
 
 test("S2.19 FLATTEN TABLE tag 列绑定展开值", () => {
-  const c = generateSql(parseDql('TABLE file.name, tag FROM #guide FLATTEN file.tags LIMIT 5'));
+  const c = generateSql(parseDql("TABLE file.name, tag FROM #guide FLATTEN file.tags LIMIT 5"));
   assert.match(c.sql, /_flat\.value AS "tag"/);
   assert.doesNotMatch(c.sql, /_flat\.value AS "file\.tags"/);
-  assert.deepEqual(c.columns.map((x) => x.name), ["file.name", "tag"]);
+  assert.deepEqual(
+    c.columns.map((x) => x.name),
+    ["file.name", "tag"],
+  );
 });
 
 test('FROM "" 表示全库（不加 folder 约束）', () => {
@@ -237,4 +246,38 @@ test("S2.17 date(today)/date(now) 求值为 ISO 串作右值（参数化）", ()
   assert.match(String(t.params[0]), /^\d{4}-\d{2}-\d{2}$/);
   const n = generateSql(parseDql("LIST WHERE due >= date(now)"));
   assert.match(String(n.params[0]), /^\d{4}-\d{2}-\d{2}T/);
+});
+
+// === 2026-07-01 S2.15b：truthy → isTruthy SQL，与 = null 语义分离 ===
+
+test("裸字段真值：frontmatter 标量 → json_type CASE（复刻 isTruthy），无参数", () => {
+  const c = generateSql(parseDql("LIST WHERE status"));
+  assert.match(c.sql, /json_type\(f\.frontmatter, '\$\.status'\)/);
+  assert.match(c.sql, /CASE/);
+  assert.match(c.sql, /'array'/); // 覆盖数组分支
+  assert.match(c.sql, /'object'/); // 覆盖对象分支
+  assert.deepEqual(c.params, []);
+});
+
+test("!field → (NOT (CASE ...))", () => {
+  assert.match(generateSql(parseDql("LIST WHERE !status")).sql, /\(NOT \(CASE/);
+});
+
+test("语义分离：field != null 走 IS NOT NULL、不是真值 CASE（0/空串视为有值）", () => {
+  const t = generateSql(parseDql("LIST WHERE status"));
+  const n = generateSql(parseDql("LIST WHERE status != null"));
+  assert.match(n.sql, /IS NOT NULL/);
+  assert.ok(!/CASE/.test(n.sql), "!= null 不应用真值 CASE");
+  assert.ok(/CASE/.test(t.sql), "裸字段真值应用 isTruthy CASE");
+});
+
+test("裸字段真值：聚合数组字段 → json_array_length > 0", () => {
+  assert.match(generateSql(parseDql("LIST WHERE file.tags")).sql, /json_array_length\(.*\) > 0/);
+});
+
+test("裸字段真值：file.* 标量列 → 非空且非空串", () => {
+  assert.match(
+    generateSql(parseDql("LIST WHERE file.name")).sql,
+    /f\.name IS NOT NULL AND f\.name <> ''/,
+  );
 });

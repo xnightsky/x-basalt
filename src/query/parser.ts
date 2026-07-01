@@ -13,6 +13,7 @@ import {
   allTokens,
   And,
   Asc,
+  Bang,
   By,
   Comma,
   Desc,
@@ -233,8 +234,10 @@ class DqlChevParser extends EmbeddedActionsParser {
 
   notExpr = this.RULE("notExpr", (): WhereExpr => {
     let neg = false;
+    // 一元取反前缀：`NOT`（关键字）或 `!`（Bang），二者等价——均包裹后随 primary。
+    // `!field` 由此 + primary 的裸字段真值 ALT 组合为 not(truthy(field))，对标官方 Dataview。
     this.OPTION(() => {
-      this.CONSUME(Not);
+      this.OR([{ ALT: () => this.CONSUME(Not) }, { ALT: () => this.CONSUME(Bang) }]);
       neg = true;
     });
     const inner = this.SUBRULE(this.primary);
@@ -252,138 +255,150 @@ class DqlChevParser extends EmbeddedActionsParser {
         },
       },
       {
-        // Identifier 开头：函数调用 fn(field, arg) 或比较 field op value。
+        // Identifier 开头：函数调用 fn(field, arg) / 比较 field op value（含 = null） / 裸字段真值。
         ALT: () => {
           const headTok = this.CONSUME(Identifier);
-          return this.OR1<WhereExpr>([
-            {
-              ALT: () => {
-                // head(field [, arg])：谓词函数(2参)或 scalar 函数(1参)后跟比较。
-                this.CONSUME1(LParen);
-                const fieldTok = this.CONSUME1(Identifier);
-                let predArg: string | undefined;
-                this.OPTION(() => {
-                  this.CONSUME(Comma);
-                  predArg = this.SUBRULE(this.callArg);
-                });
-                this.CONSUME1(RParen);
-                // scalar 函数 fn(field) 后跟 op value（谓词函数无）。
-                let scalarOp: string | undefined;
-                let scalarVal: string | number | boolean | undefined;
-                this.OPTION1(() => {
-                  scalarOp = this.CONSUME1(Op).image;
-                  scalarVal = this.SUBRULE1(this.compareValue);
-                });
-                // ACTION 包裹：self-analysis 录制阶段不执行，仅实际解析时跑。
-                return this.ACTION((): WhereExpr => {
-                  const fn = headTok.image.toLowerCase();
-                  if (SCALAR_FNS.has(fn)) {
-                    if (predArg !== undefined) {
+          // 尾随 `(` / `REGEXP` / `Op` → 调用 / 中缀 regexp / 比较；三者皆不跟 → 裸字段真值
+          // truthy(field)（对标官方 Dataview `WHERE field`）。follow 集（AND/OR/)/子句关键字/EOF）
+          // 与 `(`/`REGEXP`/`Op` 不冲突，OPTION 前瞻可区分，无歧义。
+          const trailing = this.OPTION2(() =>
+            this.OR1<WhereExpr>([
+              {
+                ALT: () => {
+                  // head(field [, arg])：谓词函数(2参)或 scalar 函数(1参)后跟比较。
+                  this.CONSUME1(LParen);
+                  const fieldTok = this.CONSUME1(Identifier);
+                  let predArg: string | undefined;
+                  this.OPTION(() => {
+                    this.CONSUME(Comma);
+                    predArg = this.SUBRULE(this.callArg);
+                  });
+                  this.CONSUME1(RParen);
+                  // scalar 函数 fn(field) 后跟 op value（谓词函数无）。
+                  let scalarOp: string | undefined;
+                  let scalarVal: string | number | boolean | undefined;
+                  this.OPTION1(() => {
+                    scalarOp = this.CONSUME1(Op).image;
+                    scalarVal = this.SUBRULE1(this.compareValue);
+                  });
+                  // ACTION 包裹：self-analysis 录制阶段不执行，仅实际解析时跑。
+                  return this.ACTION((): WhereExpr => {
+                    const fn = headTok.image.toLowerCase();
+                    if (SCALAR_FNS.has(fn)) {
+                      if (predArg !== undefined) {
+                        throw new DqlSyntaxError(
+                          `${headTok.image}() 仅接一个参数`,
+                          headTok.startOffset,
+                        );
+                      }
+                      if (
+                        scalarOp === undefined ||
+                        scalarVal === undefined ||
+                        !COMPARE_OPS.has(scalarOp)
+                      ) {
+                        throw new DqlSyntaxError(
+                          `${headTok.image}(x) 须用于比较，如 length(x) > 0`,
+                          headTok.startOffset,
+                        );
+                      }
+                      return {
+                        kind: "compare",
+                        field: fieldTok.image,
+                        fn: fn as ScalarFn,
+                        op: scalarOp as CompareOp,
+                        value: scalarVal,
+                      };
+                    }
+                    // 谓词函数（contains 家族 / regexmatch）：须两参、不接尾随比较。
+                    if (fn !== "regexmatch" && !STRING_FNS.has(fn)) {
                       throw new DqlSyntaxError(
-                        `${headTok.image}() 仅接一个参数`,
+                        `不支持的函数: ${headTok.image}`,
                         headTok.startOffset,
                       );
                     }
-                    if (
-                      scalarOp === undefined ||
-                      scalarVal === undefined ||
-                      !COMPARE_OPS.has(scalarOp)
-                    ) {
+                    if (predArg === undefined) {
                       throw new DqlSyntaxError(
-                        `${headTok.image}(x) 须用于比较，如 length(x) > 0`,
+                        `${headTok.image}() 须两个参数`,
+                        headTok.startOffset,
+                      );
+                    }
+                    if (scalarOp !== undefined) {
+                      throw new DqlSyntaxError(
+                        `${headTok.image}() 是谓词，不能再接比较`,
                         headTok.startOffset,
                       );
                     }
                     return {
-                      kind: "compare",
+                      kind: "call",
+                      fn: fn as StringFn | "regexmatch",
                       field: fieldTok.image,
-                      fn: fn as ScalarFn,
-                      op: scalarOp as CompareOp,
-                      value: scalarVal,
+                      arg: predArg,
                     };
-                  }
-                  // 谓词函数（contains 家族 / regexmatch）：须两参、不接尾随比较。
-                  if (fn !== "regexmatch" && !STRING_FNS.has(fn)) {
-                    throw new DqlSyntaxError(`不支持的函数: ${headTok.image}`, headTok.startOffset);
-                  }
-                  if (predArg === undefined) {
-                    throw new DqlSyntaxError(`${headTok.image}() 须两个参数`, headTok.startOffset);
-                  }
-                  if (scalarOp !== undefined) {
-                    throw new DqlSyntaxError(
-                      `${headTok.image}() 是谓词，不能再接比较`,
-                      headTok.startOffset,
-                    );
-                  }
-                  return {
-                    kind: "call",
-                    fn: fn as StringFn | "regexmatch",
-                    field: fieldTok.image,
-                    arg: predArg,
-                  };
-                });
+                  });
+                },
               },
-            },
-            {
-              ALT: () => {
-                return this.OR2<WhereExpr>([
-                  {
-                    // field REGEXP "pattern" → regexmatch(field, pattern)（Dataview 中缀语法）。
-                    ALT: () => {
-                      this.CONSUME(Regexp);
-                      const arg = this.SUBRULE2(this.callArg);
-                      return {
-                        kind: "call",
-                        fn: "regexmatch",
-                        field: headTok.image,
-                        arg,
-                      };
+              {
+                ALT: () => {
+                  return this.OR2<WhereExpr>([
+                    {
+                      // field REGEXP "pattern" → regexmatch(field, pattern)（Dataview 中缀语法）。
+                      ALT: () => {
+                        this.CONSUME(Regexp);
+                        const arg = this.SUBRULE2(this.callArg);
+                        return {
+                          kind: "call",
+                          fn: "regexmatch",
+                          field: headTok.image,
+                          arg,
+                        };
+                      },
                     },
-                  },
-                  {
-                    ALT: () => {
-                      const opTok = this.CONSUME(Op);
-                      return this.OR3<WhereExpr>([
-                        {
-                          // field = null / != null → isnull（S2.15）。
-                          ALT: () => {
-                            this.CONSUME(Null);
-                            return this.ACTION((): WhereExpr => {
-                              const op = opTok.image;
-                              if (op !== "=" && op !== "!=") {
-                                throw new DqlSyntaxError(
-                                  "null 仅支持 = / != 比较",
-                                  opTok.startOffset,
-                                );
-                              }
-                              return {
-                                kind: "isnull",
-                                field: headTok.image,
-                                negated: op === "!=",
-                              };
-                            });
+                    {
+                      ALT: () => {
+                        const opTok = this.CONSUME(Op);
+                        return this.OR3<WhereExpr>([
+                          {
+                            // field = null / != null → isnull（S2.15）。
+                            ALT: () => {
+                              this.CONSUME(Null);
+                              return this.ACTION((): WhereExpr => {
+                                const op = opTok.image;
+                                if (op !== "=" && op !== "!=") {
+                                  throw new DqlSyntaxError(
+                                    "null 仅支持 = / != 比较",
+                                    opTok.startOffset,
+                                  );
+                                }
+                                return {
+                                  kind: "isnull",
+                                  field: headTok.image,
+                                  negated: op === "!=",
+                                };
+                              });
+                            },
                           },
-                        },
-                        {
-                          ALT: () => {
-                            const value = this.SUBRULE(this.compareValue);
-                            return this.ACTION(
-                              (): WhereExpr => ({
-                                kind: "compare",
-                                field: headTok.image,
-                                op: opTok.image as CompareOp,
-                                value,
-                              }),
-                            );
+                          {
+                            ALT: () => {
+                              const value = this.SUBRULE(this.compareValue);
+                              return this.ACTION(
+                                (): WhereExpr => ({
+                                  kind: "compare",
+                                  field: headTok.image,
+                                  op: opTok.image as CompareOp,
+                                  value,
+                                }),
+                              );
+                            },
                           },
-                        },
-                      ]);
+                        ]);
+                      },
                     },
-                  },
-                ]);
+                  ]);
+                },
               },
-            },
-          ]);
+            ]),
+          );
+          return this.ACTION((): WhereExpr => trailing ?? { kind: "truthy", field: headTok.image });
         },
       },
     ]);
@@ -406,8 +421,18 @@ class DqlChevParser extends EmbeddedActionsParser {
       { ALT: () => unquote(this.CONSUME(StringLiteral).image) },
       { ALT: () => this.CONSUME(Tag).image.slice(1) },
       { ALT: () => stripWiki(this.CONSUME(WikiLink).image) },
-      { ALT: () => { this.CONSUME(True); return true; } },
-      { ALT: () => { this.CONSUME(False); return false; } },
+      {
+        ALT: () => {
+          this.CONSUME(True);
+          return true;
+        },
+      },
+      {
+        ALT: () => {
+          this.CONSUME(False);
+          return false;
+        },
+      },
       {
         // date(today) / date(now)（S2.17）。
         ALT: () => {

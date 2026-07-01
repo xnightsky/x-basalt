@@ -21,15 +21,24 @@ export type DqlSource =
 
 /**
  * WHERE 条件表达式（递归 ADT）：
- * - `and`/`or`：二元逻辑组合；`not`：一元取反。
+ * - `and`/`or`：二元逻辑组合；`not`：一元取反（`NOT expr` 或 `!expr`）。
+ * - `truthy`：裸字段真值判断 `WHERE field`，对标官方 Dataview `Values.isTruthy()`（null/0/""/[]/{}/false 皆 falsy）；
+ *   `!field` 即 `not(truthy field)`。与 `isnull` 语义不同：`field != null` 把 `0`/`""` 视为「有」，而 `truthy` 视为 falsy。
  * - `compare`：`field op value`，`fn` 为可选标量函数（lower/upper/length/round）包裹字段后再比较。
- * - `isnull`：`field = null`（`negated=false` → IS NULL）/ `!= null`（`negated=true` → IS NOT NULL）。
+ * - `isnull`：`field = null`（`negated=false` → IS NULL）/ `!= null`（`negated=true` → IS NOT NULL）——显式 null 比较，非真值判断。
  * - `call`：字符串谓词函数（contains/icontains/startswith/endswith/regexmatch），直接产出布尔条件。
  */
 export type WhereExpr =
   | { kind: "and" | "or"; left: WhereExpr; right: WhereExpr }
   | { kind: "not"; expr: WhereExpr }
-  | { kind: "compare"; field: string; fn?: ScalarFn; op: CompareOp; value: string | number | boolean }
+  | { kind: "truthy"; field: string }
+  | {
+      kind: "compare";
+      field: string;
+      fn?: ScalarFn;
+      op: CompareOp;
+      value: string | number | boolean;
+    }
   | { kind: "isnull"; field: string; negated: boolean }
   | { kind: "call"; fn: StringFn | "regexmatch"; field: string; arg: string };
 

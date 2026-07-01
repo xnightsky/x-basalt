@@ -321,7 +321,10 @@ test("parser 新子句：WITHOUT ID / GROUP BY / FLATTEN", () => {
     "type",
     "length(rows)",
   ]);
-  assert.deepEqual(parseDql('TABLE type, count() FROM "" GROUP BY type').fields, ["type", "count()"]);
+  assert.deepEqual(parseDql('TABLE type, count() FROM "" GROUP BY type').fields, [
+    "type",
+    "count()",
+  ]);
 });
 
 test("parser 综合：完整样例句", () => {
@@ -336,7 +339,48 @@ test("parser 综合：完整样例句", () => {
 test("parser 语法错误：带位置 DqlSyntaxError", () => {
   assert.throws(() => parseDql("LISTE"), DqlSyntaxError);
   assert.throws(() => parseDql("LIST FROM"), DqlSyntaxError);
-  assert.throws(() => parseDql("LIST WHERE a"), DqlSyntaxError);
+  // 注：`WHERE a`（裸字段）现为合法真值判断（truthy）、不再报错；空 WHERE 仍报错。
+  assert.throws(() => parseDql("LIST WHERE"), DqlSyntaxError);
+});
+
+// === 2026-07-01 S2.15b：一元 `!` + 裸字段真值（truthy），对标官方 Dataview isTruthy ===
+
+test("词法：孤立 ! 为 Bang，!= 仍为 Op（多字符先吃）", () => {
+  assert.deepEqual(kinds("!index"), ["Bang", "Identifier"]);
+  assert.deepEqual(kinds("a != 1"), ["Identifier", "Op", "NumberLiteral"]);
+  assert.deepEqual(kinds("!="), ["Op"]);
+});
+
+test("裸字段真值：WHERE field → truthy 节点", () => {
+  assert.deepEqual(parseDql("LIST WHERE index").where, { kind: "truthy", field: "index" });
+});
+
+test("一元 !field → not(truthy)；NOT field 等价", () => {
+  const bang = { kind: "not", expr: { kind: "truthy", field: "index" } };
+  assert.deepEqual(parseDql("LIST WHERE !index").where, bang);
+  assert.deepEqual(parseDql("LIST WHERE NOT index").where, bang);
+});
+
+test("! 优先级高于 AND：!a AND b → and(not(truthy a), truthy b)", () => {
+  assert.deepEqual(parseDql("LIST WHERE !a AND b").where, {
+    kind: "and",
+    left: { kind: "not", expr: { kind: "truthy", field: "a" } },
+    right: { kind: "truthy", field: "b" },
+  });
+});
+
+test('!(expr) 取反括号内布尔：!(status = "x") → not(compare)', () => {
+  const q = parseDql('LIST WHERE !(status = "x")');
+  assert.equal(q.where?.kind, "not");
+  assert.equal((q.where as { expr: { kind: string } }).expr.kind, "compare");
+});
+
+test("裸字段真值不干扰 = null（仍为 isnull，显式 null 比较）", () => {
+  assert.deepEqual(parseDql("LIST WHERE index = null").where, {
+    kind: "isnull",
+    field: "index",
+    negated: false,
+  });
 });
 
 test("TASK WHERE completed = false LIMIT 可解析并编译", () => {

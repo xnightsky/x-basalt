@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { mkdtempSync, rmSync } from "node:fs";
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { after, before, test } from "node:test";
@@ -142,7 +142,7 @@ test("S2.19 端到端 FLATTEN file.tags：标签展开为多行", () => {
 
 test("S2.19 端到端 TABLE tag 列：FLATTEN file.tags 时 tag 为展开值", () => {
   const r = engine.query(
-    'TABLE file.name, tag FROM "Projects" WHERE file.name = \'Alpha\' FLATTEN file.tags',
+    "TABLE file.name, tag FROM \"Projects\" WHERE file.name = 'Alpha' FLATTEN file.tags",
   );
   assert.deepEqual(r.columns, ["file.name", "tag"]);
   assert.ok(r.rows.length > 0);
@@ -258,4 +258,43 @@ test("分页：count() GROUP BY 一次取总量（各组求和=全库文件数�
   const groups = engine.query('TABLE count() FROM "" GROUP BY file.extension');
   const sum = groups.rows.reduce((a, row) => a + Number(row["count()"]), 0);
   assert.equal(sum, engine.query('LIST FROM ""').total);
+});
+
+// === 2026-07-01 S2.15b：一元 !/裸字段真值 端到端（对标官方 isTruthy） ===
+
+test("裸字段真值：WHERE status → 有 status 的 3 篇；!status → 缺的 2 篇", () => {
+  const has = engine.query("LIST WHERE status");
+  assert.equal(has.total, 3);
+  assert.deepEqual(has.rows.map((r) => r["file.name"]).toSorted(), ["Alpha", "Beta", "Index"]);
+  const missing = engine.query("LIST WHERE !status");
+  assert.equal(missing.total, 2);
+  assert.deepEqual(missing.rows.map((r) => r["file.name"]).toSorted(), ["2026-06-25", "Concepts"]);
+});
+
+test("本 fixture 无 falsy 值：status != null=3 与 = null=2 与真值一致", () => {
+  assert.equal(engine.query("LIST WHERE status != null").total, 3);
+  assert.equal(engine.query("LIST WHERE status = null").total, 2);
+});
+
+test("真值 vs =null 分歧：present-but-falsy（flag:0）——!flag 视为无、!=null 视为有", async () => {
+  const dir = mkdtempSync(join(tmpdir(), "x-basalt-truthy-"));
+  const vault = join(dir, "vault");
+  mkdirSync(vault, { recursive: true });
+  writeFileSync(join(vault, "on.md"), "---\nflag: true\n---\n# on\n");
+  writeFileSync(join(vault, "zero.md"), "---\nflag: 0\n---\n# zero\n");
+  writeFileSync(join(vault, "none.md"), "---\ntitle: none\n---\n# none\n");
+  const db = join(dir, "i.db");
+  const idx = new VaultIndexer({ vaultPath: vault, dbPath: db });
+  await idx.rebuild();
+  idx.close();
+  const e = new DataviewEngine(db);
+  try {
+    assert.equal(e.query("LIST WHERE flag").total, 1); // 仅 flag:true（0 为 falsy）
+    assert.equal(e.query("LIST WHERE !flag").total, 2); // zero + none
+    assert.equal(e.query("LIST WHERE flag != null").total, 2); // true + 0（0 是「有值」）
+    assert.equal(e.query("LIST WHERE flag = null").total, 1); // 仅 none
+  } finally {
+    e.close();
+    rmSync(dir, { recursive: true, force: true });
+  }
 });

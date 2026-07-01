@@ -146,6 +146,44 @@ function scalarFnSql(fn: ScalarFn, fe: string, json: boolean): string {
   }
 }
 
+/**
+ * 裸字段真值判断 → SQL，复刻官方 Dataview `Values.isTruthy()`：
+ * null（含缺键）/ 数值 0 / 空串 / 空数组 / 空对象 / false 皆 falsy，其余 truthy。
+ * - file.* 标量列：按「非空且非空串」近似（数值列 `= 0` 罕见，设计文档注明近似）。
+ * - 隐式聚合数组（tags/inlinks/outlinks/tasks）：按「元素数 > 0」。
+ * - frontmatter 标量：白名单校验后按 `json_type` 分类（字段名内联进 json path，无注入面，同 fieldToSql 约定）。
+ */
+function truthySql(field: string): string {
+  const direct = FILE_COLUMNS[field];
+  if (direct !== undefined) return `(${direct} IS NOT NULL AND ${direct} <> '')`;
+  if (
+    field === "file.tags" ||
+    field === "file.inlinks" ||
+    field === "file.outlinks" ||
+    field === "file.tasks"
+  ) {
+    const { expr } = fieldToSql(field);
+    return `(json_array_length(${expr}) > 0)`;
+  }
+  if (!/^[A-Za-z0-9_]+$/.test(field)) {
+    throw new DqlSyntaxError(`不支持的查询字段: ${field}`, 0);
+  }
+  const v = `json_extract(f.frontmatter, '$.${field}')`;
+  const t = `json_type(f.frontmatter, '$.${field}')`;
+  return (
+    `(CASE` +
+    ` WHEN ${t} IS NULL THEN 0` +
+    ` WHEN ${t} = 'null' THEN 0` +
+    ` WHEN ${t} = 'true' THEN 1` +
+    ` WHEN ${t} = 'false' THEN 0` +
+    ` WHEN ${t} IN ('integer', 'real') THEN (${v} <> 0)` +
+    ` WHEN ${t} = 'text' THEN (LENGTH(${v}) > 0)` +
+    ` WHEN ${t} = 'array' THEN (json_array_length(f.frontmatter, '$.${field}') > 0)` +
+    ` WHEN ${t} = 'object' THEN ((SELECT COUNT(*) FROM json_each(f.frontmatter, '$.${field}')) > 0)` +
+    ` ELSE 1 END)`
+  );
+}
+
 /** 编译 WHERE 表达式为 SQL 片段 + 参数；TASK 查询时识别 completed 等任务级字段。 */
 function compileWhere(
   expr: WhereExpr,
@@ -166,8 +204,21 @@ function compileWhere(
       const e = compileWhere(expr.expr, ctx);
       return { sql: `(NOT ${e.sql})`, params: e.params };
     }
+    case "truthy": {
+      // 裸字段真值（`WHERE field`）：对标官方 Values.isTruthy()。`!field` = not(truthy)。
+      // TASK 上下文 completed 与 compare 一致特判为勾选状态。
+      if (ctx.task && expr.field === "completed") {
+        return { sql: "(k.status IN ('x', 'X'))", params: [] };
+      }
+      return { sql: truthySql(expr.field), params: [] };
+    }
     case "compare": {
-      if (ctx.task && expr.field === "completed" && !expr.fn && (expr.op === "=" || expr.op === "!=")) {
+      if (
+        ctx.task &&
+        expr.field === "completed" &&
+        !expr.fn &&
+        (expr.op === "=" || expr.op === "!=")
+      ) {
         const wantDone = expr.value === true || expr.value === "true";
         const isDone = expr.op === "=" ? wantDone : !wantDone;
         return {
