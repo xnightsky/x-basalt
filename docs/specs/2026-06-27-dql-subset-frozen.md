@@ -54,10 +54,11 @@ tags:
 | 24  | DataviewJS（`dataviewjs` 块）               | ❌ 不做      | goal 范围外（需运行时执行任意 JS，安全问题）                                                                                            |
 | 25  | **一元 `!field` / `!(expr)`**（2026-07-01 补正） | ✅          | 词法 `Bang` token（`!=` 仍归 `Op`）；AST `not(truthy)`；对标官方 `NegatedField`。原「不支持」是遗漏、非有意收窄                          |
 | 26  | **裸字段真值 `WHERE field`**（2026-07-01 补正） | ✅          | AST `truthy` 节点 → `json_type` CASE 复刻 `Values.isTruthy()`（null/0/空串/空数组/空对象/false 皆 falsy）。官方推荐的「有无」惯用法     |
+| 27  | **`file.frontmatter`（存在性 + 选列）**（2026-07-02 补正） | ✅          | 顶层键计数 `(SELECT COUNT(*) FROM json_each(f.frontmatter))`；`WHERE file.frontmatter`/`!field`/`=null`/`!=null` 四写法收敛到同一计数；选列返回整块对象。补 §隐式字段映射空缺（原缺 `file.frontmatter`）        |
 
-## 隐式字段映射（沿用真相源，不变）
+## 隐式字段映射（沿用真相源，不变；2026-07-02 补 `file.frontmatter`）
 
-`file.name/path/folder/extension/size/mtime/ctime` = files 列；`file.tags` = tags 聚合；`file.inlinks` = links 反向 JOIN；`file.outlinks` = links 正向 JOIN（含 embed）；`file.tasks` = tasks 关联；frontmatter 标量 = `json_extract(files.frontmatter,'$.<k>')`。**硬约束**：inlinks/outlinks 无物化视图，查询期 JOIN 实时计算。
+`file.name/path/folder/extension/size/mtime/ctime` = files 列；`file.tags` = tags 聚合；`file.inlinks` = links 反向 JOIN；`file.outlinks` = links 正向 JOIN（含 embed）；`file.tasks` = tasks 关联；`file.frontmatter` = 整块 frontmatter 对象/顶层键存在性（见 #27，无 `---` 与空 `---\n---` 索引层同存 `'{}'`、不可再区分）；frontmatter 标量 = `json_extract(files.frontmatter,'$.<k>')`。**硬约束**：inlinks/outlinks 无物化视图，查询期 JOIN 实时计算。
 
 ## 扩展后 AST 契约草案（S2.2c 落 `src/query/ast.ts`）
 
@@ -82,6 +83,8 @@ interface DqlQuery {
 `FROM` and/or 多源、`CALENDAR`、DataviewJS、`length()` 之外的任意聚合/数值表达式运算（如 `a + b`）—— 超子集一律抛带位置 `DqlSyntaxError`。
 
 > **2026-07-01 修订**：一元 `!` 与裸字段真值（`isTruthy`）此前被遗漏（既非纳入亦未列非目标），现补入为 #25/#26；`= null`/`!= null`（#10）重定位为显式 null 比较。完整设计见 [`2026-07-01-dql-truthiness-existence-design.md`](2026-07-01-dql-truthiness-existence-design.md)。
+>
+> **2026-07-02 修订**：`file.frontmatter` 此前不在隐式字段清单、查询即报「不支持的查询字段」，现补入为 #27（顶层键存在性 + 选列）。完整设计见 [`2026-07-01-dql-truthiness-existence-design.md`](2026-07-01-dql-truthiness-existence-design.md) §11、[`2026-07-02-deterministic-eval-gaps.md`](../plans/2026-07-02-deterministic-eval-gaps.md)。
 
 ## S2.2b 衔接（防分叉纪律）
 

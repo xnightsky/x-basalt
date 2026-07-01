@@ -82,6 +82,15 @@ const INLINK_MATCH =
   "(l.target_path_key = f.path_key OR (l.target_path_key IS NULL AND l.target_key = f.name_key))";
 
 /**
+ * frontmatter 顶层键计数：`files.frontmatter` 整块存 JSON（S2.28 索引 schema），
+ * 无 `---` 与空 `---\n---` 都归一存字面 `'{}'`（索引层已丢失二者区别，见 parser/frontmatter.ts）。
+ * 「有/无 frontmatter」在此 schema 下只能定义为「有/无任意顶层键」，故用 json_each 计数子查询
+ * 兜底表达 `file.frontmatter` 的存在性（对治场景库 messy/no-index-count 坐实的缺口：
+ * DQL 曾无法表达"完全没有 frontmatter"，见 docs/plans/2026-07-02-deterministic-eval-gaps.md）。
+ */
+const FM_KEY_COUNT = "(SELECT COUNT(*) FROM json_each(f.frontmatter))";
+
+/**
  * 字段 → SQL 表达式 + 是否为 JSON 聚合列。
  *
  * 隐式字段（tags/inlinks/outlinks/tasks）用相关子查询聚合，对应硬约束「查询期 JOIN 实时计算」。
@@ -94,6 +103,11 @@ function fieldToSql(field: string): { expr: string; json: boolean } {
   if (direct !== undefined) return { expr: direct, json: false };
 
   switch (field) {
+    case "file.frontmatter":
+      // 选列 / TABLE 时返回整块 frontmatter 对象（json_extract 全路径 '$' 等价于原样取列，
+      // 标 json:true 走既有 JSON.parse 出参路径）；真值/存在性由 truthySql / isnull 特判 FM_KEY_COUNT，
+      // 不走这里（'{}' 是非空字符串，走通用列真值判断会被误判为真）。
+      return { expr: "f.frontmatter", json: true };
     case "file.tags":
       return {
         expr: "(SELECT json_group_array(DISTINCT t.tag) FROM tags t WHERE t.file_path = f.path)",
@@ -156,6 +170,10 @@ function scalarFnSql(fn: ScalarFn, fe: string, json: boolean): string {
 function truthySql(field: string): string {
   const direct = FILE_COLUMNS[field];
   if (direct !== undefined) return `(${direct} IS NOT NULL AND ${direct} <> '')`;
+  if (field === "file.frontmatter") {
+    // 不能走「直接列真值」（'{}' 是非空字符串会被误判为真）：真值 = 至少一个顶层键。
+    return `(${FM_KEY_COUNT} > 0)`;
+  }
   if (
     field === "file.tags" ||
     field === "file.inlinks" ||
@@ -234,6 +252,11 @@ function compileWhere(
     }
     case "isnull": {
       // S2.15：= null → IS NULL；!= null → IS NOT NULL（null 不参数化）。
+      if (expr.field === "file.frontmatter") {
+        // frontmatter 列本身 NOT NULL（无 `---` 与空 `---\n---` 都存字面 '{}'，见 FM_KEY_COUNT 注释），
+        // 走通用 IS NULL 永假；= null 改判「无顶层键」，与 !file.frontmatter 同义、互为惯用法。
+        return { sql: `(${FM_KEY_COUNT} ${expr.negated ? ">" : "="} 0)`, params: [] };
+      }
       const { expr: fe } = fieldToSql(expr.field);
       return { sql: `(${fe} IS ${expr.negated ? "NOT " : ""}NULL)`, params: [] };
     }

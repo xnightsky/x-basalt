@@ -383,6 +383,36 @@ test("裸字段真值不干扰 = null（仍为 isnull，显式 null 比较）", 
   });
 });
 
+// === 2026-07-02：file.frontmatter 存在性（对治场景库 messy/no-index-count 坐实的缺口）===
+// 词法/语法层与普通字段无异——"file." 前缀的特殊语义只在 sql-generator 解释（见 query-parser 报告）。
+
+test("file.frontmatter 真值：WHERE file.frontmatter → truthy 节点（同普通字段路径）", () => {
+  assert.deepEqual(parseDql("LIST WHERE file.frontmatter").where, {
+    kind: "truthy",
+    field: "file.frontmatter",
+  });
+});
+
+test("!file.frontmatter → not(truthy file.frontmatter)", () => {
+  assert.deepEqual(parseDql("LIST WHERE !file.frontmatter").where, {
+    kind: "not",
+    expr: { kind: "truthy", field: "file.frontmatter" },
+  });
+});
+
+test("file.frontmatter = null / != null → isnull 节点", () => {
+  assert.deepEqual(parseDql("LIST WHERE file.frontmatter = null").where, {
+    kind: "isnull",
+    field: "file.frontmatter",
+    negated: false,
+  });
+  assert.deepEqual(parseDql("LIST WHERE file.frontmatter != null").where, {
+    kind: "isnull",
+    field: "file.frontmatter",
+    negated: true,
+  });
+});
+
 test("TASK WHERE completed = false LIMIT 可解析并编译", () => {
   const q = parseDql("TASK WHERE completed = false LIMIT 5");
   assert.equal(q.type, "TASK");

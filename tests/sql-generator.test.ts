@@ -281,3 +281,37 @@ test("裸字段真值：file.* 标量列 → 非空且非空串", () => {
     /f\.name IS NOT NULL AND f\.name <> ''/,
   );
 });
+
+// === 2026-07-02：file.frontmatter 存在性——「有/无任意 frontmatter 键」===
+// 对治场景库 messy/no-index-count 坐实的缺口：DQL 曾无法表达"完全没有 frontmatter"、
+// `WHERE file.frontmatter = null` 曾直接报"不支持的查询字段"（见 sql-generator.ts FM_KEY_COUNT 注释）。
+
+test("file.frontmatter 真值：WHERE file.frontmatter → json_each 顶层键计数 > 0（不是通用列真值）", () => {
+  const c = generateSql(parseDql("LIST WHERE file.frontmatter"));
+  assert.match(c.sql, /SELECT COUNT\(\*\) FROM json_each\(f\.frontmatter\)\) > 0/);
+  assert.deepEqual(c.params, []);
+  // 不应误走「非空字符串」判真——'{}' 作为字符串非空，若走 FILE_COLUMNS 通用真值会被误判为真。
+  assert.ok(!/f\.frontmatter IS NOT NULL AND f\.frontmatter/.test(c.sql));
+});
+
+test("!file.frontmatter → (NOT (... > 0))，即顶层键计数 = 0", () => {
+  const c = generateSql(parseDql("LIST WHERE !file.frontmatter"));
+  assert.match(c.sql, /\(NOT \(\(SELECT COUNT\(\*\) FROM json_each\(f\.frontmatter\)\) > 0\)\)/);
+});
+
+test("file.frontmatter = null / != null → 顶层键计数 = 0 / > 0（与 !/裸字段真值同义）", () => {
+  const eq = generateSql(parseDql("LIST WHERE file.frontmatter = null"));
+  assert.match(eq.sql, /SELECT COUNT\(\*\) FROM json_each\(f\.frontmatter\)\) = 0/);
+  assert.deepEqual(eq.params, []);
+  const neq = generateSql(parseDql("LIST WHERE file.frontmatter != null"));
+  assert.match(neq.sql, /SELECT COUNT\(\*\) FROM json_each\(f\.frontmatter\)\) > 0/);
+  // frontmatter 列本身 schema 上 NOT NULL：不应走通用 IS NULL（该列永不为 SQL NULL）。
+  assert.ok(!/f\.frontmatter IS( NOT)? NULL/.test(eq.sql));
+});
+
+test("选列 TABLE file.frontmatter：整块列直接投影，标 json 走 JSON.parse 出参", () => {
+  const c = generateSql(parseDql("TABLE file.frontmatter"));
+  assert.match(c.sql, /f\.frontmatter AS "file\.frontmatter"/);
+  const col = c.columns.find((x) => x.name === "file.frontmatter");
+  assert.equal(col?.json, true);
+});

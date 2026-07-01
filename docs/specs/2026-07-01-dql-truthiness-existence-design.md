@@ -206,3 +206,23 @@ SQLite 语义核对：`json_type(X,P)` 缺路径→SQL NULL（缺键 falsy）；
 1. `!field = value` 的优先级：本设计沿用「`!`/`NOT` 包裹整个 primary」（→ `NOT (field = value)`），与官方「一元高于比较」有极端边界差异；`!field=value` 属病态输入，暂按 codebase 一致性取舍，文档注明。
 2. TASK 上下文 `WHERE completed`（裸真值）是否也走 `k.status IN ('x','X')` 特判——低频，实施时顺带处理或明确报错。
 3. `file.size = 0` 的真值（数值列按「非空」近似为 truthy，与官方 number `0` falsy 有极端差异）——file.* 标量真值属罕见用法，文档注明近似。
+
+## 11. 2026-07-02 补录：`file.frontmatter` 顶层存在性
+
+**收口 §2 末尾遗留的开放点**（"真正的键存在性……官方仅 `contains(object, key)` 提供，且只作用于对象子属性、不适用顶层 frontmatter——故顶层字段的 `= null` 塌缩不可避免"）：dogfood 场景库 `messy/no-index-count` 坐实这不只是理论缺口——chat 实测直接写 `WHERE file.frontmatter = null` 试图问"完全没有 frontmatter"，命中「不支持的查询字段」报错，退化为逐篇 `meta_get` 试探、撞步数顶（详见 `docs/plans/2026-07-02-deterministic-eval-gaps.md`）。
+
+**方案**：把 `file.frontmatter` 补成合法隐式字段，语义定义为**顶层键计数**（`FM_KEY_COUNT = (SELECT COUNT(*) FROM json_each(f.frontmatter))`），与既有「一元 `!` / 裸字段真值 / `= null`」三套惯用法自然收敛：
+
+| 写法 | SQL | 含义 |
+|---|---|---|
+| `WHERE file.frontmatter` | `FM_KEY_COUNT > 0` | 有 ≥1 个顶层键 |
+| `WHERE !file.frontmatter` | `NOT (FM_KEY_COUNT > 0)` | 无任何顶层键 |
+| `WHERE file.frontmatter = null` | `FM_KEY_COUNT = 0` | 同上，`isnull` 惯用法 |
+| `WHERE file.frontmatter != null` | `FM_KEY_COUNT > 0` | 同「有」 |
+| `TABLE file.frontmatter` | `f.frontmatter`（json 列） | 整块 frontmatter 对象 |
+
+**为何不能走通用列真值 / 通用 `IS NULL`**：`files.frontmatter` schema 上 `NOT NULL`，无 `---` 与空 `---\n---` 都归一存字面 `'{}'`（索引层已丢失二者区别，见 `src/parser/frontmatter.ts`）——若走 `FILE_COLUMNS` 的「非空字符串即真」通用判断，`'{}'` 会被误判为真；若走通用 `isnull` 的 `IS NULL`，该列永不为 SQL NULL、恒假。故 `fieldToSql`/`truthySql`/`compileWhere` 的 `isnull` 分支均需对 `file.frontmatter` 做特判（见 `src/query/sql-generator.ts` FM_KEY_COUNT 常量注释）。
+
+**已知限制（不改变本设计 §2 的既有结论）**：「完全无 frontmatter」在当前 schema 下只能定义为「无顶层键」，无法进一步区分「根本没写 `---`」与「写了空 `---\n---`」——两者索引层都存 `'{}'`。若产品需要区分，需扩 `files` 表加列（超出本次范围）。
+
+**测试**：`tests/query-parser.test.ts`（AST 形状）、`tests/sql-generator.test.ts`（SQL 形态：`FM_KEY_COUNT` 出现、不误走通用真值/`IS NULL`）、`tests/query.test.ts`（端到端三篇对照：有键 / 空围栏 / 无围栏）。

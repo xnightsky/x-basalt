@@ -97,6 +97,7 @@ tags:
 | `file.tags`                                              | ✅        | query.test                                 |
 | `file.inlinks` / `file.outlinks`                         | ✅        | 查询期 JOIN 实时计算（硬约束6）；S2.22     |
 | `file.tasks`                                             | ✅        | S2.21/S2.22（任务 `due` 提取待阶段1 S1.3） |
+| `file.frontmatter`（顶层键存在性 + 选列，2026-07-02 补）  | ✅        | query-parser/sql-generator/query 三层测；见 [`2026-07-01-dql-truthiness-existence-design.md`](2026-07-01-dql-truthiness-existence-design.md) §11 |
 | frontmatter 标量字段                                     | ✅        | 白名单字段名                               |
 | `file.link/.day/.cday/.aliases/.etags/.lists` 等         | ❌ 范围外 | 未知字段明确报错                           |
 

@@ -217,6 +217,23 @@ x-basalt query 'TABLE status, due WHERE due != null SORT due ASC'
 
 > **两者的区别**：一篇 `count: 0` 的笔记，`!count` 视为「无」（`0` 是 falsy），而 `count != null` 视为「有」（键存在）。问「有没有意义的值」用 `!field` / `WHERE field`；问「键在不在」用 `= null` / `!= null`。
 
+**判断「完全没有 frontmatter」**（不是某个具名字段缺失，而是整篇没有任何字段）用隐式字段 `file.frontmatter`，四种写法同义：
+
+```
+WHERE file.frontmatter       →  至少 1 个顶层键（有 frontmatter）
+WHERE !file.frontmatter      →  没有任何顶层键（无 frontmatter）
+file.frontmatter = null      →  同 !file.frontmatter
+file.frontmatter != null     →  同 file.frontmatter
+```
+
+```bash
+x-basalt query 'LIST WHERE !file.frontmatter'   # 完全没有 frontmatter 的笔记
+x-basalt query 'TABLE file.frontmatter FROM "" WHERE file.frontmatter'  # 取有 frontmatter 笔记的完整对象
+```
+
+> **别与「未被索引」混淆**：`!file.frontmatter` 问的是笔记本身有没有写元数据头，与该笔记是否已建索引是两回事——「多少篇还没被索引」用 `scan` 命令（或 chat 的 scan 工具），不是 DQL。
+> **已知限制**：无 `---` 与空 `---\n---` 索引层同存为「无字段」，无法进一步区分「根本没写围栏」与「写了空围栏」。
+
 ### 5.6 日期比较
 
 frontmatter 中的 `YYYY-MM-DD` 日期以 ISO 字符串存储，可直接用字典序比较（`<` `>` `<=` `>=`）：
@@ -301,6 +318,14 @@ x-basalt 通过 SQLite JOIN 实时计算隐式字段（**不建物化视图**，
 | `file.tasks`    | `object[]` | 本文件所有任务（`{status,text,due}`）             | `length(file.tasks) > 0` 计数       |
 
 > 聚合字段**不能用于 SORT**（报错）；可用于 SELECT 列（TABLE 中展示为 JSON 数组）。`file.inlinks`/`file.outlinks` 的链接解析路径感知：含 `/` 的按全路径精确，bare 按 basename 回退。
+
+### 7.2b file.frontmatter（对象，整块 + 存在性）
+
+| 字段                | 类型     | 含义                                     | WHERE 用法（存在性，见 §5.5b）        |
+| ------------------- | -------- | ---------------------------------------- | -------------------------------------- |
+| `file.frontmatter`  | `object` | 整块 frontmatter（选列返回全部键值对）   | `WHERE file.frontmatter` / `!file.frontmatter` |
+
+同样**不能用于 SORT**（对象无序，报错）。选列时（`TABLE file.frontmatter`）返回该笔记 frontmatter 的完整 JSON 对象；WHERE 时按「顶层键数量」判存在性，不是通用列真值。
 
 ### 7.3 frontmatter 标量
 

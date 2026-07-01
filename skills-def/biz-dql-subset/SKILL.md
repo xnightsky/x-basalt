@@ -35,6 +35,7 @@ LIMIT <number>
 - 操作符：`= != < > <= >=`、`AND/OR/NOT`、一元 `!`、括号。
 - 字符串谓词函数：`contains/icontains/startswith/endswith`、`regexmatch(field,"pat")`（含 ReDoS 防护）。
 - **真值/存在性（对标官方 `Values.isTruthy()`）**：裸字段 `WHERE field`（`truthy` 节点 → `json_type` CASE：缺失/null/0/空串/空数组/空对象/false 皆 falsy）；`!field` = `not(truthy)`（词法 `Bang` token，`!=` 仍归 `Op`）。**与 `= null` 语义不同**：`field != null`（→ `IS NOT NULL`）把 `0`/空串视为「有」，`!field` 视为「无」——问「有没有 X」用 `!field`/`WHERE field`，问「键是否存在」用 `= null`/`!= null`。
+- **`file.frontmatter` 存在性（2026-07-02 补）**：判「有没有 frontmatter」用 `WHERE file.frontmatter`（有 ≥1 顶层键）/ `!file.frontmatter`（无任何顶层键）/ `= null`（同 `!field`）/ `!= null`（同真值）——四写法收敛到 `(SELECT COUNT(*) FROM json_each(f.frontmatter))` 计数，**不要**用 `WHERE file.frontmatter = null` 之外的写法猜测（该字段曾完全不支持，见 `docs/specs/2026-07-01-dql-truthiness-existence-design.md` §11）。已知限制：无 `---` 与空 `---\n---` 索引层同存 `'{}'`，两者在此判断下不可区分。
 - WHERE 扩展：`field = null` / `!= null`（→ `IS NULL`/`IS NOT NULL`，**显式 null 比较，非真值判断**）、日期比较（ISO 字典序）。
 - 内置标量函数：日期 `date(today)`/`date(now)`；字符串 `lower`/`upper`；`length(x)`（字符串长度 / 数组计数）；数值 `round(x[,n])`。
 - TASK：返回任务行（text/status/line/file），FROM/WHERE 做**文件级**过滤；task 内部字段级过滤为后续（非本轮）。
@@ -49,6 +50,7 @@ LIMIT <number>
 | `file.inlinks`                                     | `links` 表反向，**路径感知（S3.2）**：qualified 链接（target 含 `/`）按 `links.target_path_key = files.path_key` 精确；bare 链接按 `links.target_key = files.name_key`（basename 回退）。消除同名异目录串味 |
 | `file.outlinks`                                    | `links` 表正向：`links.source = files.path`（含 embed）；`contains(file.outlinks,"X")` 同样路径感知：X 含 `/` 按 `target_path_key`，否则 `target_key`                                                       |
 | `file.tasks`                                       | `tasks` 表关联；`TASK` 查询返回任务行、`length(file.tasks)` 计数；task 字段级过滤为后续（非本轮）                                                                                                           |
+| `file.frontmatter`                                 | 选列返回整块 `files.frontmatter` JSON 对象；存在性走 `(SELECT COUNT(*) FROM json_each(f.frontmatter))` 顶层键计数（不可走通用列真值/`IS NULL`，`'{}'` 恒非空字符串、列本身 `NOT NULL`）                     |
 | frontmatter 标量（如 `status`）                    | `json_extract(files.frontmatter, '$.status')`                                                                                                                                                               |
 
 **硬约束**：inlinks/outlinks 等**无物化视图**，一律查询期 JOIN 实时计算（对应 `AGENTS.md` 硬约束第 6 条）。
