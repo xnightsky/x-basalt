@@ -19,6 +19,7 @@ import {
 } from "../meta/index.js";
 import { Orchestrator } from "../orchestrator/index.js";
 import type { PipelineConfig } from "../orchestrator/index.js";
+import { parseFrontmatter } from "../parser/frontmatter.js";
 import { VaultParser } from "../parser/index.js";
 import { DataviewEngine } from "../query/index.js";
 import { SkillRecall } from "../skill/index.js";
@@ -136,6 +137,35 @@ export function buildTools(ctx: ToolContext, safety: Safety): ToolSet {
       }),
       execute: ({ file }) => observe(safety, new VaultParser().parse(readFileSync(toAbs(file), "utf8"))),
     }),
+    read_note: tool({
+      description:
+        "读取笔记正文（剥离 frontmatter 后的原文，非 AST、非仅 frontmatter；用它回答「读整篇/看看写了什么」类请求）。总是读盘取最新内容。按行分页：offset 起始行（默认 0，0-based），size 本页最大行数（默认 200，上限 2000，0=只回 totalLines 不取正文）；数总行数看 totalLines，翻页用 offset+=returned。",
+      inputSchema: jsonSchema<{ file: string; offset?: number; size?: number }>({
+        type: "object",
+        properties: {
+          file: { type: "string", description: ".md 文件路径" },
+          offset: { type: "number", description: "起始行（0-based），默认 0" },
+          size: { type: "number", description: "本页最大行数，默认 200，上限 2000（0=只回 totalLines）" },
+        },
+        required: ["file"],
+        additionalProperties: false,
+      }),
+      execute: ({ file, offset, size }) => {
+        const content = readFileSync(toAbs(file), "utf8");
+        const lines = parseFrontmatter(content).body.split(/\r?\n/);
+        const off = Math.max(0, Math.trunc(offset ?? 0));
+        const sz = clampSize(size, 200, 2000);
+        const page = lines.slice(off, off + sz);
+        return observe(safety, {
+          path: file,
+          totalLines: lines.length,
+          offset: off,
+          returned: page.length,
+          hasMore: off + page.length < lines.length,
+          body: page.join("\n"),
+        });
+      },
+    }),
     scan: tool({
       description:
         "对比文件系统与索引，报告新增/改动/删除（不写库）。返回 counts（各类总计数，标量永不截断——问总共多少看这里）+ byDir（按子目录标量计数，永不截断——问「每个子目录/每个目录下」各多少看这里，别逐条列 changes 数）+ changes（变更明细，分页）+ total/hasMore。size 默认 50（上限 500，0=只回 counts/byDir），offset 默认 0；翻页用 offset+=size。",
@@ -155,6 +185,38 @@ export function buildTools(ctx: ToolContext, safety: Safety): ToolSet {
           return observe(safety, paginateScan(report, offset ?? 0, clampSize(size, 50, 500)));
         } finally {
           indexer.close();
+        }
+      },
+    }),
+    list: tool({
+      description:
+        "列出笔记（按 folder/tag/name 过滤，分页；用它回答「有哪些笔记/列出 XX 下的笔记」类请求）。基于索引快照，新改动需先 scan/index 才能看见。folder 为目录前缀（含子目录，同 DQL FROM \"folder\"）；tag 为前缀语义（同 DQL FROM #tag，area 命中 area 与 area/work）；name 为文件名子串（不区分大小写）；三者可组合、按 AND 拼接。返回 total（命中总数）/returned/hasMore——数总量看 total，不要靠翻页枚举。size 默认 50（上限 500，0=只回 total 不取行），offset 默认 0；翻页用 offset+=size。",
+      inputSchema: jsonSchema<{
+        folder?: string;
+        tag?: string;
+        name?: string;
+        offset?: number;
+        size?: number;
+      }>({
+        type: "object",
+        properties: {
+          folder: { type: "string", description: "目录前缀（POSIX 相对路径），如 'Projects'" },
+          tag: { type: "string", description: "标签（不带 #），如 'area/work'" },
+          name: { type: "string", description: "文件名子串，不区分大小写" },
+          offset: { type: "number", description: "结果起始偏移，默认 0" },
+          size: { type: "number", description: "本页最大行数，默认 50，上限 500（0=只回 total）" },
+        },
+        additionalProperties: false,
+      }),
+      execute: ({ folder, tag, name, offset, size }) => {
+        const engine = new DataviewEngine(ctx.dbPath);
+        try {
+          return observe(
+            safety,
+            engine.list({ folder, tag, name }, { offset: offset ?? 0, size: clampSize(size, 50, 500) }),
+          );
+        } finally {
+          engine.close();
         }
       },
     }),

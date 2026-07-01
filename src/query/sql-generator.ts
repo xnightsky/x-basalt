@@ -22,6 +22,22 @@ export interface CompiledSql {
   type: QueryType;
 }
 
+/** list 工具的过滤条件：三者可任意组合，按 AND 拼接；省略或空串 = 不加该条件。 */
+export interface ListFilter {
+  /** 目录前缀（含子目录），语义同 DQL `FROM "folder"`。 */
+  folder?: string;
+  /** 标签（不带 #），前缀语义同 DQL `FROM #tag`（area 命中 area 与 area/work）。 */
+  tag?: string;
+  /** 文件名子串，不区分大小写。 */
+  name?: string;
+}
+
+/** generateListSql 编译产物：无 LIMIT/OFFSET 的基础查询（分页由执行层外包，同 generateSql 的分页约定）。 */
+export interface CompiledList {
+  sql: string;
+  params: unknown[];
+}
+
 /** GROUP BY 聚合列：length(rows) / count() → 组内文件数；rows → 路径数组。 */
 function compileGroupAggregate(field: string): { sql: string; json: boolean } | null {
   const f = field.trim();
@@ -266,7 +282,7 @@ function compileWhere(
 }
 
 /** 转义 LIKE 通配符（`%` `_` 与转义符 `\` 自身），配合 ` ESCAPE '\'` 子句做字面匹配（S2.9）。 */
-function escapeLike(s: string): string {
+export function escapeLike(s: string): string {
   return s.replace(/[\\%_]/g, (c) => `\\${c}`);
 }
 
@@ -501,4 +517,48 @@ export function generateSql(query: DqlQuery): CompiledSql {
   }
 
   return { sql, params, columns, type: query.type };
+}
+
+/**
+ * 编译 list 工具的过滤条件为参数化 SQL（chat `list` / 未来 CLI 复用）：按 folder/tag/name 过滤，
+ * 不做聚合列投影，只取 files 表标量列。与 {@link generateSql} 同一防注入不变量：全走 `?` 占位符。
+ *
+ * folder/tag 沿用 {@link generateSql} 里 FROM "folder" / FROM #tag 的同款前缀语义（S3.2 之外，
+ * list 面向"发现笔记"场景不涉及链接，故无需路径感知 JOIN）；name 走 LIKE 转义子串匹配。
+ *
+ * @param filter - 过滤条件（三者任意组合，AND 拼接；省略或空串 = 不加该条件）
+ *
+ * @behavior
+ * Given 三个过滤字段均省略
+ * When generateListSql
+ * Then 不产生 WHERE 子句，返回全部文件（按 file.path 排序）
+ *
+ * @behavior
+ * Given folder/tag/name 同时给出
+ * When generateListSql
+ * Then 三个条件按 AND 拼接，参数按 folder→tag→name 顺序绑定
+ */
+export function generateListSql(filter: ListFilter): CompiledList {
+  const whereSql: string[] = [];
+  const params: unknown[] = [];
+
+  if (filter.folder !== undefined && filter.folder !== "") {
+    whereSql.push("(f.folder = ? OR f.folder LIKE ?)");
+    params.push(filter.folder, `${filter.folder}/%`);
+  }
+  if (filter.tag !== undefined && filter.tag !== "") {
+    whereSql.push(
+      "EXISTS (SELECT 1 FROM tags t WHERE t.file_path = f.path AND (t.tag = ? OR t.tag LIKE ?))",
+    );
+    params.push(filter.tag, `${filter.tag}/%`);
+  }
+  if (filter.name !== undefined && filter.name !== "") {
+    whereSql.push("(LOWER(f.name) LIKE LOWER(?) ESCAPE '\\')");
+    params.push(`%${escapeLike(filter.name)}%`);
+  }
+
+  let sql = "SELECT f.path AS path, f.name AS name, f.folder AS folder, f.mtime AS mtime FROM files f";
+  if (whereSql.length) sql += ` WHERE ${whereSql.join(" AND ")}`;
+  sql += " ORDER BY f.path";
+  return { sql, params };
 }

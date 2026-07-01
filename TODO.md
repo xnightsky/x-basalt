@@ -47,7 +47,7 @@ dogfood 期决定提前做：自然语言驱动 vault 的 `chat` 子命令（单
 - **[缺陷] 撞顶判定真 provider 未验**：`stopReason` 靠 `step.toolCalls` 非空判，仅在 mock 验证过形状；真实 provider 下「最后一步既出文本又留 toolCall」等边界未实测。
 - **[缺陷] 默认 maxSteps=20 是拍的**：未经场景库实测校准（grounding 1-2 步 + 任务步的真实分布未知）。
 - **[缺陷] 错误分类启发式有限**：`tool-errors.ts` 对非 `DqlSyntaxError` 来源的错误靠中文/英文 message 关键字兜底，可能漏判（落到 unknown 给泛建议）；写侧 `SQLITE_BUSY` 兜底重试**未做**（按取舍故意不做，需要时再加极简单次重试）。
-- **[能力缺口] 仍缺 read_note / list / 全文搜**：答不了「读整篇正文」「列出有哪些笔记」「哪篇正文提到 X」（chat-gap §2.3 / P1-P2，FTS5 见 backlog）。
+- **[能力缺口] 仍缺全文搜（FTS5，P2）**：~~read_note / list（P1）~~ 已落地（2026-07-02，`src/chat/tools.ts` 新增 `read_note`/`list` 两个读工具 + `DataviewEngine.list`/`generateListSql`，答得了「读整篇正文」「列出有哪些笔记」）；「哪篇正文提到 X」仍待 FTS5（chat-gap §2.3，见 backlog S3.5）。
 
 ## 💡 backlog（待 dogfood 暴露真实需求再开，各自写计划/spec）
 

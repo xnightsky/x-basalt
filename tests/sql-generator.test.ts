@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import { DqlSyntaxError } from "../src/query/errors.js";
 import { parseDql } from "../src/query/parser.js";
-import { generateSql } from "../src/query/sql-generator.js";
+import { generateListSql, generateSql } from "../src/query/sql-generator.js";
 
 // === 自建实现: sql-generator 纯函数单测（DQL AST → 参数化 SQL）===
 // 直接断言生成的 SQL 片段与绑定参数，精准覆盖编译层 bug（不依赖 fixture 数据）。
@@ -314,4 +314,43 @@ test("选列 TABLE file.frontmatter：整块列直接投影，标 json 走 JSON.
   assert.match(c.sql, /f\.frontmatter AS "file\.frontmatter"/);
   const col = c.columns.find((x) => x.name === "file.frontmatter");
   assert.equal(col?.json, true);
+});
+
+// === generateListSql（list 工具的纯 SQL 编译层，与 generateSql 同一防注入不变量：全参数化）===
+
+test("generateListSql：无过滤条件时不加 WHERE，按 path 排序，无参数", () => {
+  const c = generateListSql({});
+  assert.doesNotMatch(c.sql, /WHERE/);
+  assert.match(c.sql, /ORDER BY f\.path$/);
+  assert.deepEqual(c.params, []);
+});
+
+test("generateListSql：folder 前缀匹配（含子目录），参数化", () => {
+  const c = generateListSql({ folder: "Projects" });
+  assert.match(c.sql, /WHERE \(f\.folder = \? OR f\.folder LIKE \?\)/);
+  assert.deepEqual(c.params, ["Projects", "Projects/%"]);
+});
+
+test("generateListSql：tag 用 EXISTS 子查询 + 前缀语义（同 FROM #tag）", () => {
+  const c = generateListSql({ tag: "area" });
+  assert.match(c.sql, /EXISTS \(SELECT 1 FROM tags t WHERE t\.file_path = f\.path/);
+  assert.deepEqual(c.params, ["area", "area/%"]);
+});
+
+test("generateListSql：name 子串不区分大小写 + LIKE 通配符转义", () => {
+  const c = generateListSql({ name: "50%" });
+  assert.match(c.sql, /LOWER\(f\.name\) LIKE LOWER\(\?\) ESCAPE '\\'/);
+  assert.deepEqual(c.params, ["%50\\%%"]);
+});
+
+test("generateListSql：folder+tag+name 组合按 AND 拼接，全部参数化", () => {
+  const c = generateListSql({ folder: "Projects", tag: "project", name: "Alpha" });
+  assert.match(c.sql, /WHERE .*AND.*AND/s);
+  assert.deepEqual(c.params, ["Projects", "Projects/%", "project", "project/%", "%Alpha%"]);
+});
+
+test("generateListSql：空字符串过滤值等同未提供（不加对应条件）", () => {
+  const c = generateListSql({ folder: "", tag: "", name: "" });
+  assert.doesNotMatch(c.sql, /WHERE/);
+  assert.deepEqual(c.params, []);
 });

@@ -3,10 +3,21 @@ import type { Database as Db } from "better-sqlite3";
 import type { QueryResult } from "./ast.js";
 import { parseDql } from "./parser.js";
 import { safeRegexpMatch } from "./regexp.js";
-import { generateSql } from "./sql-generator.js";
+import { generateListSql, generateSql, type ListFilter } from "./sql-generator.js";
 
 export type { DqlQuery, QueryResult } from "./ast.js";
 export { DqlSyntaxError } from "./errors.js";
+export type { ListFilter } from "./sql-generator.js";
+
+/** list() 结果：分页元信息同 QueryResult 约定（total/offset/size/returned/hasMore 前置）。 */
+export interface ListResult {
+  total: number;
+  offset: number;
+  size?: number;
+  returned: number;
+  hasMore: boolean;
+  files: { path: string; name: string; folder: string; mtime: number }[];
+}
 
 // === 自建实现: Dataview 子集执行引擎，不依赖 obsidian-dataview 的 Evaluator/Executor ===
 //
@@ -38,11 +49,47 @@ export class DataviewEngine {
   }
 
   /**
-   * 执行一条 DQL，返回 JSON 结果（带分页元信息）。
+   * 分页外包：给定无 LIMIT/OFFSET 的基础 SQL + 参数，返回本页行与 total/hasMore 元信息。
+   * `query()` / `list()` 共享此逻辑（此前各自内联一份，S2 打磨期合并去重，行为不变）。
    *
-   * 分页在引擎层完成、**不改 DQL 文法**：把编译出的 SQL 外包一层
-   * `SELECT * FROM (<compiled>) LIMIT ? OFFSET ?`；`total` 走 `SELECT COUNT(*) FROM (<compiled>)`，
-   * 不受分页影响。DQL 自带的 `LIMIT` 充当"全集上限"，外层 offset/size 在其内分页。
+   * 省略 size 且 offset=0 时不分页（返回全部，向后兼容）；否则包一层
+   * `SELECT * FROM (<sql>) LIMIT ? OFFSET ?`，`total` 走独立 `SELECT COUNT(*) FROM (<sql>)`。
+   *
+   * @param sql - 基础查询（无 LIMIT/OFFSET）
+   * @param params - sql 的绑定参数
+   * @param opts.offset - 起始偏移（默认 0）
+   * @param opts.size - 本页最大行数；省略 = 不分页
+   */
+  private paginate<T extends Record<string, unknown>>(
+    sql: string,
+    params: unknown[],
+    opts: { offset?: number; size?: number },
+  ): { rows: T[]; total: number; offset: number; size?: number; returned: number; hasMore: boolean } {
+    const offset = Math.max(0, Math.trunc(opts.offset ?? 0));
+    const size = opts.size === undefined ? undefined : Math.max(0, Math.trunc(opts.size));
+    // 仅在显式分页（给了 size，或 offset>0）时才包子查询 + 单独 COUNT；否则保持原"全量"路径与开销。
+    const doPaginate = size !== undefined || offset > 0;
+
+    let rows: T[];
+    let total: number;
+    if (doPaginate) {
+      const countRow = this.db.prepare(`SELECT COUNT(*) AS n FROM (${sql})`).get(...params) as {
+        n: number;
+      };
+      total = countRow.n;
+      // size 省略时 LIMIT -1 = 取 offset 之后全部。
+      rows = this.db.prepare(`SELECT * FROM (${sql}) LIMIT ? OFFSET ?`).all(...params, size ?? -1, offset) as T[];
+    } else {
+      rows = this.db.prepare(sql).all(...params) as T[];
+      total = rows.length;
+    }
+    const returned = rows.length;
+    return { rows, total, offset, size, returned, hasMore: offset + returned < total };
+  }
+
+  /**
+   * 执行一条 DQL，返回 JSON 结果（带分页元信息）。分页语义见 {@link paginate}；
+   * DQL 自带的 `LIMIT` 充当"全集上限"，外层 offset/size 在其内分页，不改 DQL 文法。
    *
    * @param dql - DQL 查询语句
    * @param opts.offset - 起始偏移（默认 0）
@@ -68,27 +115,11 @@ export class DataviewEngine {
     // 词法+语法走 chevrotain（parser.ts）；旧手写 tokenizer/ast.parseQuery 已退役（S2.8 切换）。
     const compiled = generateSql(parseDql(dql));
     const columns = compiled.columns.map((c) => c.name);
-    const offset = Math.max(0, Math.trunc(opts.offset ?? 0));
-    const size = opts.size === undefined ? undefined : Math.max(0, Math.trunc(opts.size));
-    // 仅在显式分页（给了 size，或 offset>0）时才包子查询 + 单独 COUNT；否则保持原"全量"路径与开销。
-    const paginate = size !== undefined || offset > 0;
-
-    let rows: Record<string, unknown>[];
-    let total: number;
-    if (paginate) {
-      // total：DQL 约束内的命中总数（含 DQL 自带 LIMIT 作为全集上限），与分页窗口无关。
-      const countRow = this.db
-        .prepare(`SELECT COUNT(*) AS n FROM (${compiled.sql})`)
-        .get(...compiled.params) as { n: number };
-      total = countRow.n;
-      // 本页：外层 LIMIT/OFFSET 包住编译 SQL；size 省略时 LIMIT -1 = 取 offset 之后全部。
-      rows = this.db
-        .prepare(`SELECT * FROM (${compiled.sql}) LIMIT ? OFFSET ?`)
-        .all(...compiled.params, size ?? -1, offset) as Record<string, unknown>[];
-    } else {
-      rows = this.db.prepare(compiled.sql).all(...compiled.params) as Record<string, unknown>[];
-      total = rows.length;
-    }
+    const { rows, total, offset, size, returned, hasMore } = this.paginate<Record<string, unknown>>(
+      compiled.sql,
+      compiled.params,
+      opts,
+    );
 
     // 聚合列（file.tags/inlinks/outlinks/tasks）以 JSON 字符串返回，就地解析为数组。
     const jsonCols = compiled.columns.filter((c) => c.json).map((c) => c.name);
@@ -99,9 +130,36 @@ export class DataviewEngine {
       }
     }
 
-    const returned = rows.length;
     // 元信息前置（rows 之前），截断时优先保住 total/hasMore。
-    return { type: compiled.type, columns, total, offset, size, returned, hasMore: offset + returned < total, rows };
+    return { type: compiled.type, columns, total, offset, size, returned, hasMore, rows };
+  }
+
+  /**
+   * 列出笔记（按 folder/tag/name 过滤，分页），供 chat `list` 工具复用（对标 agent-browser
+   * `snapshot -i`/`tab list` 的「发现有哪些笔记」缺口）。分页语义同 {@link paginate}。
+   *
+   * @param filter - folder/tag/name 过滤条件（任意组合，AND 拼接；见 {@link ListFilter}）
+   * @param opts.offset - 起始偏移（默认 0）
+   * @param opts.size - 本页最大行数；省略 = 不分页（返回全部）
+   *
+   * @behavior
+   * Given 无过滤条件
+   * When list
+   * Then 返回全部文件（含 path/name/folder/mtime），按 file.path 升序
+   *
+   * @behavior
+   * Given folder/tag/name 任意组合
+   * When list
+   * Then 按 AND 组合过滤；tag 前缀语义同 DQL FROM #tag，folder 前缀语义同 DQL FROM "folder"
+   */
+  list(filter: ListFilter = {}, opts: { offset?: number; size?: number } = {}): ListResult {
+    const compiled = generateListSql(filter);
+    const { rows, total, offset, size, returned, hasMore } = this.paginate<ListResult["files"][number]>(
+      compiled.sql,
+      compiled.params,
+      opts,
+    );
+    return { total, offset, size, returned, hasMore, files: rows };
   }
 
   /** 关闭数据库连接。 */

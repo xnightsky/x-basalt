@@ -1,6 +1,6 @@
 import { test, before } from "node:test";
 import assert from "node:assert/strict";
-import { mkdtempSync, writeFileSync, readFileSync, rmSync } from "node:fs";
+import { mkdirSync, mkdtempSync, writeFileSync, readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { buildTools, type ToolContext } from "../../src/chat/tools.js";
@@ -76,4 +76,50 @@ test("query：工具默认分页 size=50，结果带 total", async () => {
   assert.equal(json.returned, 3);
   assert.equal(json.hasMore, false);
   rmSync(qdir, { recursive: true, force: true });
+});
+
+test("list：工具按 folder 过滤，默认分页 size=50", async () => {
+  const ldir = mkdtempSync(join(tmpdir(), "xb-list-"));
+  mkdirSync(join(ldir, "Projects"), { recursive: true });
+  writeFileSync(join(ldir, "Projects", "a.md"), "# a\n", "utf8");
+  writeFileSync(join(ldir, "Projects", "b.md"), "# b\n", "utf8");
+  writeFileSync(join(ldir, "root.md"), "# root\n", "utf8");
+  const idx = new VaultIndexer({ vaultPath: ldir, dbPath: join(ldir, "index.db") });
+  await idx.rebuild();
+  idx.close();
+  const tools = buildTools({ dbPath: join(ldir, "index.db"), vaultPath: ldir }, safety);
+  const json = unwrap(await tools.list.execute!({ folder: "Projects" }, {} as never));
+  assert.equal(json.total, 2);
+  assert.equal(json.size, 50);
+  assert.equal((json.files as unknown[]).length, 2);
+  rmSync(ldir, { recursive: true, force: true });
+});
+
+test("read_note：返回剥离 frontmatter 的正文", async () => {
+  const tools = buildTools(ctx(), safety);
+  const json = unwrap(await tools.read_note.execute!({ file }, {} as never));
+  assert.match(json.body as string, /# A/);
+  assert.doesNotMatch(json.body as string, /status: draft/);
+});
+
+test("read_note：按行分页（offset/size + hasMore + totalLines）", async () => {
+  const rdir = mkdtempSync(join(tmpdir(), "xb-read-"));
+  const rfile = join(rdir, "note.md");
+  const lines = Array.from({ length: 5 }, (_, i) => `line${i}`);
+  writeFileSync(rfile, `---\nstatus: draft\n---\n${lines.join("\n")}\n`, "utf8");
+  const tools = buildTools({ dbPath: join(rdir, "index.db"), vaultPath: rdir }, safety);
+  const json = unwrap(await tools.read_note.execute!({ file: rfile, size: 3 }, {} as never));
+  assert.equal(json.returned, 3);
+  assert.equal(json.hasMore, true);
+  assert.match(json.body as string, /line0/);
+  assert.doesNotMatch(json.body as string, /line3/);
+  rmSync(rdir, { recursive: true, force: true });
+});
+
+test("read_note：文件不存在 → 结构化 not-found 错误", async () => {
+  const tools = buildTools(ctx(), safety);
+  await assert.rejects(
+    tools.read_note.execute!({ file: join(dir, "missing.md") }, {} as never),
+    /\[工具失败·not-found\]/,
+  );
 });
