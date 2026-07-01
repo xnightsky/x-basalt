@@ -348,7 +348,7 @@ program
             `✓ scan ${fmtVault(vaultPath)}${tag}：+${report.added.length} 新增 ~${report.modified.length} 改动 -${report.deleted.length} 删除（${report.unchanged} 未变跳过）`,
           );
           if (opts.byDir) {
-            const entries = Object.entries(report.byDir).sort(([a], [b]) => a.localeCompare(b));
+            const entries = Object.entries(report.byDir).toSorted(([a], [b]) => a.localeCompare(b));
             if (entries.length === 0) {
               console.log("  （无变更，按目录明细为空）");
             } else {
