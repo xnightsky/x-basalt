@@ -168,7 +168,7 @@ export function buildTools(ctx: ToolContext, safety: Safety): ToolSet {
     }),
     scan: tool({
       description:
-        "对比文件系统与索引，报告新增/改动/删除（不写库）。返回 counts（各类总计数，标量永不截断——问总共多少看这里）+ byDir（按子目录标量计数，永不截断——问「每个子目录/每个目录下」各多少看这里，别逐条列 changes 数）+ changes（变更明细，分页）+ total/hasMore。size 默认 50（上限 500，0=只回 counts/byDir），offset 默认 0；翻页用 offset+=size。",
+        "对比文件系统与索引，报告新增/改动/删除（只读预览、不落盘）。返回 counts（各类总计数，标量永不截断——问总共多少看这里）+ byDir（按子目录标量计数，永不截断——问「每个子目录/每个目录下」各多少看这里，别逐条列 changes 数）+ changes（变更明细，分页）+ total/hasMore。size 默认 50（上限 500，0=只回 counts/byDir），offset 默认 0；翻页用 offset+=size。",
       inputSchema: jsonSchema<{ rehash?: boolean; offset?: number; size?: number }>({
         type: "object",
         properties: {
@@ -414,6 +414,7 @@ export function buildTools(ctx: ToolContext, safety: Safety): ToolSet {
             changed: r.changed,
             skipped: r.skipped,
             failed: r.failed,
+            dryRun: r.dryRun,
           });
         } finally {
           orch.close();

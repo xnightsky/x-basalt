@@ -72,7 +72,7 @@ export class Orchestrator {
     // 索引新鲜度（§6.4）：where 读的是索引，先把候选落库再查询，避免按陈旧索引选错/漏选。
     if (pipeline.where && routed.length > 0) {
       for (const e of routed) {
-        if (e.type === "unlink") this.indexer.remove(e.path);
+        if (e.type === "unlink") this.indexer.removeByKey(e.path);
         else await this.indexer.update(e.path);
       }
       const engine = new DataviewEngine(this.dbPath);

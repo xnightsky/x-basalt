@@ -601,14 +601,28 @@ export class VaultIndexer {
   }
 
   /**
-   * 删除单个文件的索引记录。
+   * 删除单个文件的索引记录（供 watch 等文件系统路径调用方使用）。
    *
    * @param filePath - 绝对路径或相对 Vault 的路径
    */
   remove(filePath: string): void {
     const rel = this.toRelative(filePath);
-    const tx = this.db.transaction((p: string) => this.deleteByPath(p));
-    tx(rel);
+    this.removeByKey(rel);
+  }
+
+  /**
+   * 按索引主键精确删除文件记录。
+   *
+   * @param key - files.path 主键（已归一化的 POSIX 路径）
+   * @returns 是否实际删除了行
+   */
+  removeByKey(key: string): boolean {
+    let removed = false;
+    const tx = this.db.transaction((p: string) => {
+      removed = this.deleteByPath(p);
+    });
+    tx(key);
+    return removed;
   }
 
   /**
@@ -787,14 +801,15 @@ export class VaultIndexer {
   }
 
   /** 删除某文件在六表 + files_fts 中的全部记录（调用方负责包事务）。 */
-  private deleteByPath(rel: string): void {
-    this.stmts.delFile.run(rel);
+  private deleteByPath(rel: string): boolean {
+    const info = this.stmts.delFile.run(rel);
     this.stmts.delLinks.run(rel);
     this.stmts.delTags.run(rel);
     this.stmts.delTasks.run(rel);
     this.stmts.delBlocks.run(rel);
     this.stmts.delInlineFields.run(rel);
     this.stmts.delFts.run(rel);
+    return info.changes > 0;
   }
 }
 

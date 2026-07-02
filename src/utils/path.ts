@@ -190,7 +190,11 @@ export function resolveVaultLayout(input: string | string[]): VaultLayout {
       const label = slash === -1 ? p : p.slice(0, slash);
       const root = labelToRoot.get(label);
       if (root !== undefined) return join(root, slash === -1 ? "" : p.slice(slash + 1));
-      return join(roots[0] as string, p); // 无已知命名空间前缀：保守退回首个根
+      // 旧式单根主键（无命名空间前缀）在多根布局下已无法唯一解析，必须显式报错，
+      // 避免「保守退回首个根」误删错行（见 indexer/removeByKey 与 orchestrator/actions）。
+      throw new Error(
+        `路径 "${p}" 不属于任何已知 vault 根（可用根：${[...labelToRoot.keys()].join(", ")}）`,
+      );
     },
   };
 }

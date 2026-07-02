@@ -32,8 +32,9 @@ const indexAction: Action = {
   write: false,
   async run(ev, ctx) {
     if (ev.type === "unlink") {
-      ctx.indexer.remove(ev.path);
-      return { action: "index", path: ev.path, changed: true, skipped: false };
+      // scan/watch 源已经产出索引主键（多根 = 根名命名空间），直接按主键精确删除。
+      const removed = ctx.indexer.removeByKey(ev.path);
+      return { action: "index", path: ev.path, changed: removed, skipped: false };
     }
     await ctx.indexer.update(ev.path);
     return { action: "index", path: ev.path, changed: true, skipped: false };
