@@ -3,7 +3,7 @@
  *
  * 上游：src/indexer（index/watch 子命令通过 VaultParser 解析每个文件内容）。
  * 下游：parseFrontmatter（./frontmatter.ts）、extractWikilinks（./wikilink.ts）；
- *       其余提取器（tag/callout/task/highlight/blockRef）在本文件内实现并保持模块私有。
+ *       其余提取器（tag/callout/task/highlight/blockRef/inlineField）在本文件内实现并保持模块私有。
  *
  * 不变量：parser 产出的 ObsidianNode[] 是 indexer/query 对 Markdown 的唯一解析来源；
  *         indexer 不重复解析原始正文，query 不感知 ObsidianNode。
@@ -29,6 +29,16 @@ const CALLOUT_HEAD_RE = /^>\s*\[!([^\]]+)\]([+-]?)\s*(.*)$/;
 const HIGHLIGHT_RE = /==(.+?)==/g;
 // BlockRef 定义：行尾 ^id（id 为字母数字与连字符）；^ 前需行首或空白，排除 [[#^id]] 这类引用。
 const BLOCKREF_RE = /(?:^|\s)\^([A-Za-z0-9-]+)\s*$/;
+
+// === Obsidian 规范来源: Dataview inline fields（key:: value 三形态）===
+// 整行 `key:: value`（允许列表项前缀 `- ` / `* `）、方括号 `[key:: value]`（键可见）、
+// 圆括号 `(key:: value)`（键隐藏）。设计真相源 docs/specs/2026-07-02-inline-fields-design.md §6.1。
+// === 自建实现: v1 子集收窄 ===
+// key 仅收 [A-Za-z0-9_]+（与查询层字段名白名单对齐 → DQL 文法零改动，D4；带空格/连字符 key 列 backlog）；
+// 三条正则均线性、无嵌套量词（ReDoS 安全口径见 spec §7）。`https://x` 天然不命中（`//` 非 `::`）。
+const INLINE_FIELD_LINE_RE = /^\s*(?:[-*]\s+)?([A-Za-z0-9_]+)\s*::\s*(.*)$/;
+const INLINE_FIELD_BRACKET_RE = /\[([A-Za-z0-9_]+)\s*::\s*([^\]]*)\]/g;
+const INLINE_FIELD_PAREN_RE = /\(([A-Za-z0-9_]+)\s*::\s*([^)]*)\)/g;
 
 // === Obsidian 规范来源: 代码块/行内代码内不解析行内语法 ===
 // Obsidian（同 CommonMark）不在围栏代码块（``` / ~~~）与行内代码（成对反引号）内识别
@@ -171,6 +181,50 @@ function extractBlockRefs(lines: string[]): ObsidianNode[] {
 }
 
 /**
+ * 提取 inline fields（`key:: value`）节点：整行 / 方括号 / 圆括号三形态。
+ *
+ * 在 maskCode 后的正文上提取（代码区已等长掩码，围栏/行内代码内的 `k:: v` 天然不误吃；
+ * 掩码保持行结构，行号仍与原文对齐）。
+ *
+ * @param masked - 已过 maskCode 的正文（与原文等长、行结构一致）
+ * @returns inlineField 节点：同名 key（按小写归一）last-wins，仅保留最后一次出现
+ *
+ * @behavior
+ * Given 同一文件内同名 key 多次出现（含大小写差异）
+ * When 提取
+ * Then 只保留最后一次出现的 key 原文/值/行号（D3 last-wins 在提取期兑现，
+ *      inline_fields 表内每 file × key_norm 至多一行，查询层 LIMIT 1 仅为防御护栏）
+ *
+ * @behavior
+ * Given `key::`（空值）、非白名单 key（含空格/连字符/非 ASCII）
+ * When 提取
+ * Then 不产出节点（v1 负例口径：空值与 D4 之外的 key 一律不解析，列 backlog）
+ */
+function extractInlineFields(masked: string): ObsidianNode[] {
+  // last-wins（D3）：按 key 小写形式去重，重复出现整体覆盖（key 原文/值/行号皆取最后一次）。
+  const byKeyNorm = new Map<string, Extract<ObsidianNode, { type: "inlineField" }>>();
+  const put = (key: string, rawValue: string, line: number): void => {
+    const value = rawValue.trim();
+    if (key === "" || value === "") return; // 空 key/空 value 为负例，不产出节点
+    byKeyNorm.set(key.toLowerCase(), { type: "inlineField", key, value, line });
+  };
+  const lines = masked.split(/\r?\n/);
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i];
+    if (line === undefined) continue;
+    const full = INLINE_FIELD_LINE_RE.exec(line);
+    if (full?.[1] !== undefined) {
+      // 整行形态独占该行：值取到行尾（可含 [ ] ( ) 字面），不再叠加行内形态扫描。
+      put(full[1], full[2] ?? "", i + 1);
+      continue;
+    }
+    for (const m of line.matchAll(INLINE_FIELD_BRACKET_RE)) put(m[1] ?? "", m[2] ?? "", i + 1);
+    for (const m of line.matchAll(INLINE_FIELD_PAREN_RE)) put(m[1] ?? "", m[2] ?? "", i + 1);
+  }
+  return [...byKeyNorm.values()];
+}
+
+/**
  * 提取 callout 节点：头行 `> [!type]...` 起始，后续连续 `>` 引用行聚合为 content。
  * type 归一化为小写；折叠标记 `+`/`-` → foldable=true。
  */
@@ -230,6 +284,11 @@ export class VaultParser {
    * Given frontmatter YAML 非法
    * When 调用 parse()
    * Then 降级为空 frontmatter {}，整个文件内容作为正文继续提取，不向上抛出异常
+   *
+   * @behavior
+   * Given 正文含 `key:: value`（整行 / [方括号] / (圆括号) 任一形态）
+   * When 调用 parse()
+   * Then 产出 inlineField 节点（同名 key last-wins）；代码区内的 `k:: v` 不被提取
    */
   parse(content: string): ParsedFile {
     const { frontmatter, body } = parseFrontmatter(content);
@@ -245,6 +304,8 @@ export class VaultParser {
       ...extractTasks(lines),
       ...extractHighlights(masked),
       ...extractBlockRefs(lines),
+      // inline fields 与 tag/highlight 同走掩码后正文（代码区不误吃）；掩码等长故行号仍对齐原文。
+      ...extractInlineFields(masked),
     ];
 
     return { frontmatter, nodes };

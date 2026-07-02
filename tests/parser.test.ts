@@ -214,6 +214,79 @@ test("VaultParser.parse：blockRef 取行尾 ^id 定义，不误判 [[#^id]] 引
   );
 });
 
+// === 2026-07-02 #28 inline fields（key:: value 三形态，spec §6.1）===
+
+test("VaultParser.parse：inline fields 三形态——整行 / [方括号] / (圆括号)", () => {
+  const { nodes } = new VaultParser().parse(
+    "rating:: 5\n这本书 [author:: 张三] 值得重读\n看完 (published:: 2026-01) 再说",
+  );
+  assert.deepEqual(nodesOfType(nodes, "inlineField"), [
+    { type: "inlineField", key: "rating", value: "5", line: 1 },
+    { type: "inlineField", key: "author", value: "张三", line: 2 },
+    { type: "inlineField", key: "published", value: "2026-01", line: 3 },
+  ]);
+});
+
+test("VaultParser.parse：整行形态允许列表项前缀；同一行多个行内形态都提取", () => {
+  const { nodes } = new VaultParser().parse(
+    "- k1:: v1\n* k2:: v2\n- [[三体]] (rating:: 5) [read:: 2026-01]",
+  );
+  const byKey = Object.fromEntries(
+    nodesOfType(nodes, "inlineField").map((f) => [f.key, f.value]),
+  );
+  assert.deepEqual(byKey, { k1: "v1", k2: "v2", read: "2026-01", rating: "5" });
+});
+
+test("VaultParser.parse：inline fields 边界——a::b 无空格提取；https://x 与无 :: 行不提取", () => {
+  const { nodes } = new VaultParser().parse("a::b\nhttps://example.com\n普通一行没有双冒号");
+  assert.deepEqual(nodesOfType(nodes, "inlineField"), [
+    { type: "inlineField", key: "a", value: "b", line: 1 },
+  ]);
+});
+
+test("VaultParser.parse：inline fields 负例——空 value、带连字符/空格/中文 key 不提取（D4 backlog）", () => {
+  const { nodes } = new VaultParser().parse(
+    "empty::\nbad-key:: v\n中文键:: v\n行内 [reading time:: 5] 不收",
+  );
+  assert.deepEqual(nodesOfType(nodes, "inlineField"), []);
+});
+
+test("VaultParser.parse：同名 key（含大小写差异）last-wins，行号为最后出现行", () => {
+  const { nodes } = new VaultParser().parse("k:: first\nK:: second\n其它行");
+  assert.deepEqual(nodesOfType(nodes, "inlineField"), [
+    { type: "inlineField", key: "K", value: "second", line: 2 },
+  ]);
+});
+
+test("VaultParser.parse：代码块 / 行内代码内的 key:: value 不提取", () => {
+  const { nodes } = new VaultParser().parse(
+    ["real:: 1", "```", "fake:: 2", "```", "行内 `code:: 3` 之后 (ok:: 4)"].join("\n"),
+  );
+  const byKey = Object.fromEntries(
+    nodesOfType(nodes, "inlineField").map((f) => [f.key, f.value]),
+  );
+  assert.deepEqual(byKey, { real: "1", ok: "4" });
+});
+
+test("VaultParser.parse：任务行上的 (due:: ...) 与 task 节点共存", () => {
+  const { nodes } = new VaultParser().parse("- [x] 完成评审 (due:: 2026-07-10)");
+  assert.equal(nodesOfType(nodes, "task").length, 1);
+  assert.deepEqual(nodesOfType(nodes, "inlineField"), [
+    { type: "inlineField", key: "due", value: "2026-07-10", line: 1 },
+  ]);
+});
+
+test("VaultParser.parse：inline fields ReDoS 对抗——超长行线性完成", () => {
+  // 三条正则均无嵌套量词（spec §7）：超长值 + 大量未闭合 [ 前缀两类对抗输入都应线性完成。
+  const longValue = `k:: ${"a".repeat(200_000)}`;
+  const manyOpens = `${"[x".repeat(50_000)} 尾部`;
+  const start = Date.now();
+  const a = new VaultParser().parse(longValue);
+  new VaultParser().parse(manyOpens);
+  assert.ok(Date.now() - start < 2000, "超长行应在线性时间内完成");
+  assert.equal(nodesOfType(a.nodes, "inlineField")[0]?.value.length, 200_000);
+});
+
 test("linkKey：去扩展名 + 小写 basename", () => {
   assert.equal(linkKey("Folder/Note"), "note");
   assert.equal(linkKey("image.PNG"), "image");

@@ -1,6 +1,6 @@
 ---
-timestamp: 2026-06-30T00:01:23Z
-sha256: 3642d5c92699172d7a364c398da27e4fb0a64d72cd11c1965b1a4d08639313fa
+timestamp: 2026-07-02T05:43:48Z
+sha256: 9512f57ac5f1f98ef9a7f8dae6f0e5d8a720bb1423b9746b9c922904ca0e92cc
 type: guide
 title: 解析层覆盖的 Obsidian 语法
 description: parser 层支持的 wikilink/tag/callout/task 等 Obsidian 专有语法边界
@@ -26,6 +26,7 @@ tags:
 parseFrontmatter  →  extractWikilinks  →  maskCode（代码区掩码）
 →  extractTags（掩码后正文）  →  extractCallouts  →  extractTasks
 →  extractHighlights（掩码后正文）  →  extractBlockRefs
+→  extractInlineFields（掩码后正文）
 ```
 
 `parse` 命令用法见 [commands.md](commands.md)。
@@ -57,8 +58,9 @@ parseFrontmatter  →  extractWikilinks  →  maskCode（代码区掩码）
 | `task`      | `- [x] text` / `- [ ] text` / `- [-] text` / `- [?] text`（任意单字符状态）                                  | `status, text, line`                        |
 | `highlight` | `==text==`                                                                                                   | `content`                                   |
 | `blockRef`  | 行尾 `^block-id` 定义                                                                                        | `id, line`                                  |
+| `inlineField` | `key:: value`（整行 / `[k:: v]` / `(k:: v)` 三形态，Dataview 扩展）                                        | `key, value, line`                          |
 
-`task`/`blockRef` 的 `line` 是**1-based 正文行号**（已剥离 frontmatter 后的正文），indexer 据此回填数据库的 `line_number` 列。
+`task`/`blockRef`/`inlineField` 的 `line` 是**1-based 正文行号**（已剥离 frontmatter 后的正文），indexer 据此回填数据库的 `line_number` 列。
 
 ---
 
@@ -167,6 +169,29 @@ x-basalt parse note.md --format json
 ```
 
 行尾 `^id`（`[A-Za-z0-9-]+`），`^` 前须为行首或空白（排除 `[[#^id]]` 这类引用）。`id` 字段为 `^` 后的标识符，`line` 为 1-based 正文行号。块**引用**（`[[Note#^id]]`）由 wikilink 节点的 `blockId` 字段携带，不产出额外 blockRef 节点。
+
+---
+
+### inlineField（Dataview 行内字段）
+
+**触发语法**（Dataview 扩展，2026-07-02 #28）：
+
+```markdown
+rating:: 5
+- 列表项里 key:: value 也算整行形态
+这本书 [author:: 张三] 值得重读
+这本书 (published:: 2026-01) 阅读视图里键隐藏
+```
+
+| 规则        | 说明                                                                                                        |
+| ----------- | ----------------------------------------------------------------------------------------------------------- |
+| key 字符集  | v1 仅 `[A-Za-z0-9_]+`（与 DQL 字段白名单对齐）；带空格/连字符 key 不解析（backlog）                          |
+| 同名 key    | **last-wins**：同文件多次出现（含大小写差异，按小写归一）只保留最后一次；`key` 保留原大小写                  |
+| 空值        | `key::`（空 value）不产出节点                                                                               |
+| 代码区      | 在掩码后正文提取，围栏 / 行内代码内的 `k:: v` 不误识                                                          |
+| 整行 vs 行内 | 整行形态独占该行（值取到行尾，可含 `[ ] ( )` 字面）；非整行时同一行可提取多个 `[k:: v]` / `(k:: v)`           |
+
+`value` 为原始文本（trim 后，不类型化）。查询侧与 frontmatter 的合并语义（同命名空间、frontmatter 胜）见 [querying-dql.md](querying-dql.md) §7.4；设计真相源 `docs/specs/2026-07-02-inline-fields-design.md`。
 
 ---
 

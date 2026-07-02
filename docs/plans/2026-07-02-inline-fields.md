@@ -9,15 +9,15 @@ tags:
   - query
   - parser
   - indexer
-timestamp: 2026-07-02T04:15:14Z
-sha256: 89707e604b9a20526525be63eb5d12457e42350dd4db2e649b0bd49d1dc3b241
+timestamp: 2026-07-02T05:43:42Z
+sha256: c0c28f249c07d0b1e3a78fc1d5c7822e3085a868b3eac977381261192e73f941
 ---
 # 计划：inline fields（`key:: value`）解析 / 索引 / 查询三层落地
 
 > 2026-07-02 · 承接 feature-gap 研究篇「元数据采集层最关键缺口」。
 > **设计真相源**：[`../specs/2026-07-02-inline-fields-design.md`](../specs/2026-07-02-inline-fields-design.md)——inline 是什么、现状缺口、关键洞察（文法零改动）、**D1–D5 决策**、子集边界与 backlog、三形态正则、`inline_fields` 表 DDL、字段解析 SQL、安全口径、已知限制，**一律以该 spec 为准，本计划不重复**。本计划只留「怎么做 + 验收」。
 > 其它关联：[`../research/2026-06-30-feature-gap-vs-dataview-obsidian.md`](../research/2026-06-30-feature-gap-vs-dataview-obsidian.md) §A、[`../specs/2026-06-27-dql-subset-frozen.md`](../specs/2026-06-27-dql-subset-frozen.md)、[`../specs/2026-06-26-coverage-matrix.md`](../specs/2026-06-26-coverage-matrix.md)。
-> 状态：**草案 — 待 spec §4（D1–D5）拍板后进入 P1**。
+> 状态：**已完成（2026-07-02）：P0–P4 全部落地。全量 lint/typecheck/build/test 绿（502 用例，含 #28 新增的 parser/indexer/scan/sql-generator/query 各层用例）；CLI 手验命中（只有 inline 字段的笔记 `TABLE rating WHERE rating` / `rating > "4"` 均正确）**。
 
 ## 背景（一句）
 

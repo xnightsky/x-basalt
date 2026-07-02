@@ -2,7 +2,7 @@
  * Parser 模块公共类型契约：ObsidianNode（AST 节点联合）与 ParsedFile（单文件解析结果）。
  *
  * 上游：src/parser/index.ts（VaultParser）产出节点；src/parser/wikilink.ts 局部引用本类型。
- * 下游：src/indexer 是唯一消费方，按 type 分派写入 links/tags/tasks/blocks 四表（外加 files 行本身）；
+ * 下游：src/indexer 是唯一消费方，按 type 分派写入 links/tags/tasks/blocks/inline_fields 五表（外加 files 行本身）；
  *       callout/highlight 节点不进索引（无对应查询字段，仅 parse 子命令展示）。
  *       src/query 读取 indexer 落地的 DB 数据，不再接触 ObsidianNode。
  *
@@ -40,7 +40,12 @@ export type ObsidianNode =
   | { type: "task"; status: string; text: string; line: number }
   // blockRef.id：^ 后的块标识符（不含 ^ 前缀；格式 [A-Za-z0-9-]+）。
   | { type: "blockRef"; id: string; line: number }
-  | { type: "highlight"; content: string };
+  | { type: "highlight"; content: string }
+  // inlineField：Dataview 扩展的行内元数据 `key:: value`（整行 / [方括号] / (圆括号) 三形态）。
+  // key 保留原始大小写（v1 仅 [A-Za-z0-9_]+，D4）；value 为原始文本 trim 后（v1 不类型化，D2）；
+  // line 沿用 task/blockRef 的 1-based 正文行号——同名 key last-wins 去重后为最后一次出现行（D3）。
+  // 设计真相源：docs/specs/2026-07-02-inline-fields-design.md §4/§6.1。
+  | { type: "inlineField"; key: string; value: string; line: number };
 
 /**
  * 单文件解析结果：frontmatter 键值对 + 节点数组。

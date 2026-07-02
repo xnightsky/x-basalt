@@ -12,7 +12,7 @@ import { startWatch } from "./watcher.js";
 // === 自建实现: Vault 索引器，唯一写 SQLite 的边界，不内联 DQL ===
 //
 // 上游：cli 的 index / watch 子命令；watcher 的 add/change/unlink 增量回调。
-// 下游：调 VaultParser 拿 ObsidianNode[]，写入 files/links/tags/tasks/blocks 五表。
+// 下游：调 VaultParser 拿 ObsidianNode[]，写入 files/links/tags/tasks/blocks/inline_fields 六表。
 // 不变量：隐式字段（inlinks/outlinks）不在写入期物化，由 query 层 JOIN 实时计算（硬约束第 6 条）。
 
 /** 索引器构造选项。 */
@@ -98,6 +98,7 @@ interface FilePayload {
   tags: TagRow[];
   tasks: TaskRow[];
   blocks: BlockRow[];
+  inlineFields: InlineFieldRow[];
 }
 
 interface LinkRow {
@@ -126,6 +127,15 @@ interface BlockRow {
   filePath: string;
   blockId: string;
   content: string;
+  lineNumber: number;
+}
+// inline fields（key:: value）行：keyNorm = key 小写（查询连接键，spec §6.2）；
+// parser 已 last-wins 去重，每 file × keyNorm 至多一行。
+interface InlineFieldRow {
+  filePath: string;
+  key: string;
+  keyNorm: string;
+  value: string;
   lineNumber: number;
 }
 
@@ -241,12 +251,14 @@ export class VaultIndexer {
     insertTag: Statement;
     insertTask: Statement;
     insertBlock: Statement;
+    insertInlineField: Statement;
     insertFts: Statement;
     delFile: Statement;
     delLinks: Statement;
     delTags: Statement;
     delTasks: Statement;
     delBlocks: Statement;
+    delInlineFields: Statement;
     delFts: Statement;
     getContent: Statement;
   };
@@ -284,6 +296,10 @@ export class VaultIndexer {
         `INSERT OR REPLACE INTO blocks (file_path, block_id, content, line_number)
          VALUES (@filePath, @blockId, @content, @lineNumber)`,
       ),
+      insertInlineField: this.db.prepare(
+        `INSERT INTO inline_fields (file_path, key, key_norm, value, line_number)
+         VALUES (@filePath, @key, @keyNorm, @value, @lineNumber)`,
+      ),
       // rowid 显式对齐 files.id（非 external content 模式，自存一份 path/name/content）。
       insertFts: this.db.prepare(
         `INSERT INTO files_fts (rowid, path, name, content) VALUES (?, ?, ?, ?)`,
@@ -293,6 +309,9 @@ export class VaultIndexer {
       delTags: this.db.prepare(`DELETE FROM tags WHERE file_path = ?`),
       delTasks: this.db.prepare(`DELETE FROM tasks WHERE file_path = ?`),
       delBlocks: this.db.prepare(`DELETE FROM blocks WHERE file_path = ?`),
+      // delete-in-lockstep（spec §6.2 生命周期）：凡删 tags/tasks 处必同步删 inline_fields，
+      // 否则 scan/update 后残留旧字段（回归高危点）。
+      delInlineFields: this.db.prepare(`DELETE FROM inline_fields WHERE file_path = ?`),
       // 按 path 删（files_fts 自存 path 列），不依赖 files.id/rowid 回查，与 delFile 顺序无关。
       delFts: this.db.prepare(`DELETE FROM files_fts WHERE path = ?`),
       getContent: this.db.prepare(`SELECT content FROM files WHERE path = ?`),
@@ -382,7 +401,7 @@ export class VaultIndexer {
     this.db.exec("BEGIN");
     try {
       this.db.exec(
-        "DELETE FROM files; DELETE FROM links; DELETE FROM tags; DELETE FROM tasks; DELETE FROM blocks; DELETE FROM files_fts;",
+        "DELETE FROM files; DELETE FROM links; DELETE FROM tags; DELETE FROM tasks; DELETE FROM blocks; DELETE FROM inline_fields; DELETE FROM files_fts;",
       );
       for (let i = 0; i < files.length; i += REBUILD_BATCH) {
         const batch = files.slice(i, i + REBUILD_BATCH);
@@ -663,6 +682,7 @@ export class VaultIndexer {
     const tags: TagRow[] = [];
     const tasks: TaskRow[] = [];
     const blocks: BlockRow[] = [];
+    const inlineFields: InlineFieldRow[] = [];
 
     for (const node of nodes) {
       switch (node.type) {
@@ -699,6 +719,16 @@ export class VaultIndexer {
             lineNumber: node.line,
           });
           break;
+        case "inlineField":
+          // key_norm 在写侧统一小写（查询层按小写连接，spec §6.3）；parser 已 last-wins 去重。
+          inlineFields.push({
+            filePath: rel,
+            key: node.key,
+            keyNorm: node.key.toLowerCase(),
+            value: node.value,
+            lineNumber: node.line,
+          });
+          break;
         // callout / highlight 不进五表索引（无对应查询字段），仅 parse 子命令展示。
         default:
           break;
@@ -728,6 +758,7 @@ export class VaultIndexer {
       tags,
       tasks,
       blocks,
+      inlineFields,
     };
   }
 
@@ -752,15 +783,17 @@ export class VaultIndexer {
     for (const t of p.tags) this.stmts.insertTag.run(t);
     for (const t of p.tasks) this.stmts.insertTask.run(t);
     for (const b of p.blocks) this.stmts.insertBlock.run(b);
+    for (const f of p.inlineFields) this.stmts.insertInlineField.run(f);
   }
 
-  /** 删除某文件在五表 + files_fts 中的全部记录（调用方负责包事务）。 */
+  /** 删除某文件在六表 + files_fts 中的全部记录（调用方负责包事务）。 */
   private deleteByPath(rel: string): void {
     this.stmts.delFile.run(rel);
     this.stmts.delLinks.run(rel);
     this.stmts.delTags.run(rel);
     this.stmts.delTasks.run(rel);
     this.stmts.delBlocks.run(rel);
+    this.stmts.delInlineFields.run(rel);
     this.stmts.delFts.run(rel);
   }
 }

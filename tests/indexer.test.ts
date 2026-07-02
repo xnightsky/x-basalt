@@ -129,6 +129,51 @@ test("remove 删除单文件记录，update 重新建立（增量幂等）", asy
   idx.close();
 });
 
+// === 2026-07-02 #28 inline fields：随 parser 落库 + delete-in-lockstep（spec §6.2 生命周期）===
+
+test("inline_fields：rebuild 落库 key/key_norm/value/line_number；update/remove 同步清理", async () => {
+  const vaultDir = mkdtempSync(join(tmpdir(), "x-basalt-inline-idx-"));
+  tmpDirs.push(vaultDir);
+  const dbPath = freshDbPath();
+  await writeFile(join(vaultDir, "A.md"), "---\ntitle: T\n---\nRating:: 5\n[author:: 张三]\n");
+
+  const idx = new VaultIndexer({ vaultPath: vaultDir, dbPath });
+  await idx.rebuild();
+
+  const db = openReadonly(dbPath);
+  const rows = (): { key: string; key_norm: string; value: string; line_number: number }[] =>
+    db
+      .prepare(
+        "SELECT key, key_norm, value, line_number FROM inline_fields WHERE file_path = 'A.md' ORDER BY key_norm",
+      )
+      .all() as { key: string; key_norm: string; value: string; line_number: number }[];
+
+  // key 保留原大小写、key_norm 小写；line_number 为 1-based 正文行号（frontmatter 已剥离）。
+  assert.deepEqual(rows(), [
+    { key: "author", key_norm: "author", value: "张三", line_number: 2 },
+    { key: "Rating", key_norm: "rating", value: "5", line_number: 1 },
+  ]);
+
+  // rebuild 幂等：全量 DELETE 含 inline_fields，不重复累加。
+  await idx.rebuild();
+  assert.equal(rows().length, 2);
+
+  // update：改写为无 inline 字段 → 旧行清空（delete-in-lockstep 回归高危点）。
+  await writeFile(join(vaultDir, "A.md"), "---\ntitle: T\n---\n没有字段了\n");
+  await idx.update("A.md");
+  assert.equal(rows().length, 0);
+
+  // 再写回 + remove：删除文件记录时同步清 inline_fields。
+  await writeFile(join(vaultDir, "A.md"), "k:: v\n");
+  await idx.update("A.md");
+  assert.equal(rows().length, 1);
+  idx.remove("A.md");
+  assert.equal(rows().length, 0);
+
+  db.close();
+  idx.close();
+});
+
 /** 轮询等待异步条件（chokidar awaitWriteFinish + 增量落库有延迟）。 */
 async function waitFor(check: () => boolean, timeoutMs = 4000): Promise<boolean> {
   const start = Date.now();

@@ -1,6 +1,6 @@
 ---
-timestamp: 2026-06-30T00:01:23Z
-sha256: d0fa4f1bbacb0002faa7c76dc364aafa9053338deba4a277f0632339dbf288e3
+timestamp: 2026-07-02T05:43:45Z
+sha256: c23ebbc052bd2848680cc965a14c17211c5a934e9f8f3468a5cad14c6b895cd2
 type: spec
 title: 规范覆盖矩阵（x-basalt · 2026-06-26）
 description: Obsidian/DQL 规范能力与实现覆盖矩阵
@@ -33,6 +33,7 @@ tags:
 | Task `due_date`（文本内 `YYYY-MM-DD`）                       | ❌       | `types.ts:19`、schema:63 有列但 parser 不提取 | **恒 NULL**；调研 §2 line 58 要求                      |
 | BlockRef 行尾 `^id` 定义                                     | ✅       | `index.ts:150-161`                            | 不误判 `[[#^id]]` 引用                                 |
 | 代码块/行内代码内不解析（tag/highlight）                     | ✅       | `maskCode` `index.ts:85-110`                  | ——                                                     |
+| Inline fields `key:: value`（整行 / `[k:: v]` / `(k:: v)`，2026-07-02 #28） | ✅       | `parser.test` #28 用例（三形态/负例/last-wins/掩码/ReDoS） | key v1 仅 `[A-Za-z0-9_]+`（D4）；空值不提取；同名 last-wins（D3）；代码区掩码保护 |
 | 代码块内不解析（wikilink/task/callout/blockRef）             | ❌       | `index.ts:217-222` 用原始文本                 | 与 tag/highlight 标准不一致                            |
 | HTML 注释 `<!-- -->` 内不解析                                | ❌       | 全局无处理                                    | ——                                                     |
 | 转义 `\[\[` / `\#`                                           | ⚠️待核实 | ——                                            | 未见转义处理                                           |
@@ -98,7 +99,8 @@ tags:
 | `file.inlinks` / `file.outlinks`                         | ✅        | 查询期 JOIN 实时计算（硬约束6）；S2.22     |
 | `file.tasks`                                             | ✅        | S2.21/S2.22（任务 `due` 提取待阶段1 S1.3） |
 | `file.frontmatter`（顶层键存在性 + 选列，2026-07-02 补）  | ✅        | query-parser/sql-generator/query 三层测；见 [`2026-07-01-dql-truthiness-existence-design.md`](2026-07-01-dql-truthiness-existence-design.md) §11 |
-| frontmatter 标量字段                                     | ✅        | 白名单字段名                               |
+| frontmatter 标量字段                                     | ✅        | 白名单字段名；#28 后 = `COALESCE(fm, inline)` |
+| inline fields（`key:: value` 与 frontmatter 同命名空间，2026-07-02 #28） | ✅        | `sql-generator`/`query`/`indexer`/`scan.test` 的 #28 用例；设计 [`2026-07-02-inline-fields-design.md`](2026-07-02-inline-fields-design.md) |
 | `file.link/.day/.cday/.aliases/.etags/.lists` 等         | ❌ 范围外 | 未知字段明确报错                           |
 
 > 遗留底层边界（非 DQL 引擎层，留各自阶段）：`FROM "folder"` 末尾 `/`、inlinks basename 歧义（阶段3 S3.2）、ctime 跨平台、task `due` 提取（阶段1 S1.3）。

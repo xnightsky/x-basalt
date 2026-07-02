@@ -2,7 +2,7 @@
   // 内置兜底 skill：即使外部 skill 目录为空，也能召回 Obsidian 基础规范。
   // 由 src/skill（SkillRecall）在运行时加载；triggers 用于模糊召回。
   name: "obsidian-base-spec",
-  description: "Obsidian Markdown 与 Dataview(DQL) 子集语法规范：wikilink/embed/frontmatter/tag/callout/task/highlight/blockRef 提取规则与 DQL 文法。",
+  description: "Obsidian Markdown 与 Dataview(DQL) 子集语法规范：wikilink/embed/frontmatter/tag/callout/task/highlight/blockRef/inline fields(key:: value) 提取规则与 DQL 文法。",
   triggers: [
     "wikilink",
     "link",
@@ -23,6 +23,10 @@
     "todo",
     "checkbox",
     "highlight",
+    "inline",
+    "inline-field",
+    "inline fields",
+    "field",
     "dataview",
     "dql",
     "query",
@@ -32,7 +36,7 @@
     "where",
     "sort",
   ],
-  patterns: ["[[...]]", "![[...]]", "#tag", "> [!type]", "- [ ]", "==text==", "^block-id"],
+  patterns: ["[[...]]", "![[...]]", "#tag", "> [!type]", "- [ ]", "==text==", "^block-id", "key:: value"],
   rules: [
     {
       pattern: "\\[\\[([^\\]|#^]+)(#([^\\]|^]+))?(\\^([^\\]|]+))?(\\|([^\\]]+))?\\]\\]",
@@ -75,8 +79,17 @@
       examples: ["这是一个段落 ^para-1"],
     },
     {
+      pattern: "([A-Za-z0-9_]+)\\s*::\\s*(.+)",
+      description: 'Inline field（Dataview 扩展）：正文 key:: value 三形态——整行（可带列表前缀 - / *，值取到行尾）、[key:: value]（键可见）、(key:: value)（键隐藏）。与 frontmatter 同一字段命名空间：DQL 里 WHERE rating > "4" 不区分来源，同名时 frontmatter 胜、inline 兜底。v1 限制：key 仅 [A-Za-z0-9_]+（带空格/连字符不解析）；值恒 TEXT 字典序比较（10 vs 9 会错）；同名 key 同文件 last-wins 取最后一次；代码块/行内代码内不提取；空值 key:: 不提取；inline 不进 file.frontmatter 对象。旧索引库需重跑 index 全量回填才能查到 inline。',
+      examples: [
+        "rating:: 5",
+        "- [[三体]] (rating:: 5) (read:: 2026-01)",
+        "这本书 [author:: 张三] 值得重读",
+      ],
+    },
+    {
       pattern: "(LIST|TABLE)\\s+.*?(FROM\\s+.+?)?(WHERE\\s+.+?)?(GROUP\\s+BY\\s+.+?)?(SORT\\s+.+?)?(LIMIT\\s+\\d+)?",
-      description: 'Dataview DQL 子集：LIST|TABLE <fields> [FROM <源>] [WHERE <cond>] [GROUP BY <field>] [FLATTEN <field>] [SORT <field> ASC|DESC] [LIMIT <n>]。FROM 可省略，省略或 FROM "" 均表示全库；FROM 源仅三类："folder"(含子文件夹) / #tag(前缀命中子标签) / [[link]](反链)。按 frontmatter 字段筛笔记一律用 WHERE，别把字段名或取值当 #tag 写进 FROM。操作符 = != < > <= >= / contains/icontains/startswith/endswith / AND OR NOT / regexmatch。**判断属性有无**：裸字段真值 `WHERE field`（有且为真值，缺失/null/0/空串/空数组 皆 falsy，对标官方 isTruthy）、`!field`（无或为 falsy）；另有显式 null 判断 `field = null` / `!= null`（测「键是否存在」，把 0/空串/空数组视为「有」，与 !field 在 falsy 值上相反——问「有没有 X」默认用 `!field`/`WHERE field`）。隐式字段 file.name/path/folder/extension/size/mtime/ctime/tags/inlinks/outlinks/tasks/frontmatter，外加任意 frontmatter 标量字段。**判断"完全没有 frontmatter"**（而非某具名字段缺失）用 `!file.frontmatter`（无任何顶层键）/ `WHERE file.frontmatter`（有任意键）——与「未被索引」是两回事，别混淆：数「多少篇没被索引」用 scan 工具的 counts/byDir，不是 DQL。**计数**：count() / length(rows) 是 GROUP BY 聚合列（按 <field> 分组的文件数），单独 `TABLE count()` 不带 GROUP BY 无效；要全库总数用 `TABLE count() FROM "" GROUP BY file.extension`，或直接读任一 query 结果的 total 字段。DQL 只有 LIMIT、**无 OFFSET**——分页在 CLI `--offset/--size` 或 chat 工具 offset/size 层做，不在 DQL 文法里。',
+      description: 'Dataview DQL 子集：LIST|TABLE <fields> [FROM <源>] [WHERE <cond>] [GROUP BY <field>] [FLATTEN <field>] [SORT <field> ASC|DESC] [LIMIT <n>]。FROM 可省略，省略或 FROM "" 均表示全库；FROM 源仅三类："folder"(含子文件夹) / #tag(前缀命中子标签) / [[link]](反链)。按 frontmatter 字段筛笔记一律用 WHERE，别把字段名或取值当 #tag 写进 FROM。操作符 = != < > <= >= / contains/icontains/startswith/endswith / AND OR NOT / regexmatch。**判断属性有无**：裸字段真值 `WHERE field`（有且为真值，缺失/null/0/空串/空数组 皆 falsy，对标官方 isTruthy）、`!field`（无或为 falsy）；另有显式 null 判断 `field = null` / `!= null`（测「键是否存在」，把 0/空串/空数组视为「有」，与 !field 在 falsy 值上相反——问「有没有 X」默认用 `!field`/`WHERE field`）。隐式字段 file.name/path/folder/extension/size/mtime/ctime/tags/inlinks/outlinks/tasks/frontmatter，外加任意 frontmatter 标量字段（含正文 inline fields `key:: value`，与 frontmatter 同一命名空间、同名 frontmatter 胜）。**判断"完全没有 frontmatter"**（而非某具名字段缺失）用 `!file.frontmatter`（无任何顶层键）/ `WHERE file.frontmatter`（有任意键）——与「未被索引」是两回事，别混淆：数「多少篇没被索引」用 scan 工具的 counts/byDir，不是 DQL。**计数**：count() / length(rows) 是 GROUP BY 聚合列（按 <field> 分组的文件数），单独 `TABLE count()` 不带 GROUP BY 无效；要全库总数用 `TABLE count() FROM "" GROUP BY file.extension`，或直接读任一 query 结果的 total 字段。DQL 只有 LIMIT、**无 OFFSET**——分页在 CLI `--offset/--size` 或 chat 工具 offset/size 层做，不在 DQL 文法里。',
       examples: [
         'LIST WHERE type = "moc"',
         'LIST WHERE status          // 有 status（真值；缺失/空串/0 不算）',

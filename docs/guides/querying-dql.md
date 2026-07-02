@@ -1,6 +1,6 @@
 ---
-timestamp: 2026-06-30T10:50:38Z
-sha256: c40097a48fa0133200d3b173e02b82be62c8dc3fc28caebb450bd2d26ab9f7a2
+timestamp: 2026-07-02T05:43:46Z
+sha256: 3f5cc3639055767e7745d495427e68d57b720c08c601018c5e38cd14d9485bc5
 type: guide
 title: DQL 查询指南 · x-basalt
 description: Dataview 子集 DQL 语法、隐式字段与查询示例
@@ -336,7 +336,34 @@ x-basalt query 'TABLE status, priority, due WHERE priority >= 2'
 x-basalt query 'LIST WHERE author = "Alice" AND category = "tech"'
 ```
 
-底层映射：`json_extract(files.frontmatter, '$.status')`（参数化绑定，无注入面）。不在白名单内的字段名（含点等特殊字符）报 `DqlSyntaxError`（非 `file.*` 的点号字段）。
+底层映射：`COALESCE(json_extract(files.frontmatter, '$.status'), inline 兜底子查询)`（正文 inline fields 参与合并，见 §7.4；字段名经白名单校验后内联，无注入面）。不在白名单内的字段名（含点等特殊字符）报 `DqlSyntaxError`（非 `file.*` 的点号字段）。
+
+### 7.4 inline fields（正文 `key:: value`，与 frontmatter 同命名空间）
+
+Dataview 扩展的行内元数据（2026-07-02 落地，#28）：字段不写在 frontmatter，直接写在正文里，三种形态——
+
+| 形态   | 写法                              | 说明                       |
+| ------ | --------------------------------- | -------------------------- |
+| 整行   | `rating:: 5`（可带列表前缀 `- `） | 整行即一个字段，值取到行尾 |
+| 方括号 | `这本书 [rating:: 5] 值得重读`    | 行内，阅读视图键可见       |
+| 圆括号 | `这本书 (rating:: 5) 值得重读`    | 行内，阅读视图键隐藏       |
+
+**与 frontmatter 同一字段命名空间**：`WHERE rating > "4"` 不区分字段来自 frontmatter 还是正文 inline；同名时 **frontmatter 胜、inline 兜底**（`COALESCE` 语义，D1）。真值（`WHERE field` / `!field`）与存在性（`= null` / `!= null`）同样把 inline 算作「有」。
+
+```bash
+# 笔记正文：- [[三体]] (rating:: 5) (read:: 2026-01)   ← frontmatter 为空也能查
+x-basalt query 'TABLE rating, read WHERE rating'   # 命中，rating="5"
+x-basalt query 'LIST WHERE rating > "4"'           # 字典序比较，见下警示
+```
+
+**限制与警示（v1）**：
+
+- **值恒为 TEXT，按字典序比较**（D2）：`rating > "4"` 可用，但 **`"10" < "9"`（字典序陷阱）**——多位数比较不可靠，建议等值/前缀用法；数值/日期强类型化列 backlog。
+- **同名 key 同文件多次出现取最后一次**（D3 last-wins，按 key 小写归一去重）；多值列表 backlog。
+- **key 仅 `[A-Za-z0-9_]+`**（D4）：`reading time::`、`bad-key::` 这类带空格/连字符的 key v1 不解析（backlog）。查询侧 key 对 inline **大小写不敏感**（`WHERE RATING` 可命中 `rating:: 5`），对 frontmatter 键名仍大小写敏感。
+- **不进 `file.frontmatter` 对象**（D5）：`TABLE file.frontmatter` 的返回对象不含 inline 字段。
+- 代码块 / 行内代码内的 `k:: v` 不提取；空值（`key::`）不提取。
+- **旧索引库需重跑 `x-basalt index` 全量回填**：升级后 `inline_fields` 表自动补建，但历史数据没有 inline 行，不重建索引查不到。
 
 ---
 

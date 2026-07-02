@@ -6,7 +6,8 @@ import { DqlSyntaxError } from "./errors.js";
 //
 // 上游：DataviewEngine.query；下游：产出 sql + params 交 better-sqlite3 prepare/all。
 // 不变量：所有用户输入一律走占位符 `?` 绑定，禁止字符串拼接（防注入）。
-//        唯一内联的是 frontmatter 字段名，且先以 /^[A-Za-z0-9_]+$/ 白名单校验。
+//        唯一内联的是 frontmatter 字段名（及其小写形式 key_norm，见 inlineFieldSql），
+//        且先以 /^[A-Za-z0-9_]+$/ 白名单校验。
 
 /** 列规格：name 是结果列名（= 字段名），json 标记该列为聚合 JSON 数组（执行后需 JSON.parse）。 */
 export interface ColumnSpec {
@@ -107,6 +108,18 @@ const INLINK_MATCH =
 const FM_KEY_COUNT = "(SELECT COUNT(*) FROM json_each(f.frontmatter))";
 
 /**
+ * inline fields 兜底子查询（docs/specs/2026-07-02-inline-fields-design.md §6.3）：
+ * 按 key 小写形式连接 inline_fields（写侧 key_norm 恒小写）。
+ *
+ * 调用前提：field 已过 `^[A-Za-z0-9_]+$` 白名单校验（小写后字符集不变），内联无注入面，
+ * 同 json_extract 字段名内联约定。LIMIT 1 仅为防御性护栏——last-wins 语义在 parser
+ * 提取期去重兑现（每 file × key_norm 至多一行），不依赖此处行序（裸 LIMIT 1 无 ORDER BY 行序不保证）。
+ */
+function inlineFieldSql(field: string): string {
+  return `(SELECT value FROM inline_fields WHERE file_path = f.path AND key_norm = '${field.toLowerCase()}' LIMIT 1)`;
+}
+
+/**
  * 字段 → SQL 表达式 + 是否为 JSON 聚合列。
  *
  * 隐式字段（tags/inlinks/outlinks/tasks）用相关子查询聚合，对应硬约束「查询期 JOIN 实时计算」。
@@ -153,7 +166,13 @@ function fieldToSql(field: string): { expr: string; json: boolean } {
         // S2.12：未知字段抛带位置的 DqlSyntaxError（pos 0：sql-gen 层无 token 偏移）。
         throw new DqlSyntaxError(`不支持的查询字段: ${field}`, 0);
       }
-      return { expr: `json_extract(f.frontmatter, '$.${field}')`, json: false };
+      // #28 inline fields：frontmatter ∪ inline 同一字段命名空间（spec §6.3，D1 frontmatter 胜）——
+      // frontmatter 缺键或值为显式 null 时兜底取正文 `key:: value` 的原始文本（恒 TEXT，D2）。
+      // compare/isnull/contains/SORT/GROUP BY 均经本分支，故 inline 兜底对它们一体生效。
+      return {
+        expr: `COALESCE(json_extract(f.frontmatter, '$.${field}'), ${inlineFieldSql(field)})`,
+        json: false,
+      };
   }
 }
 
@@ -204,10 +223,14 @@ function truthySql(field: string): string {
   }
   const v = `json_extract(f.frontmatter, '$.${field}')`;
   const t = `json_type(f.frontmatter, '$.${field}')`;
+  // #28 inline 兜底（spec §6.3 + D1）：frontmatter 缺键或显式 null（COALESCE 会跳过的两种情形）
+  // 时看 inline 值——恒 TEXT（D2），真值 = 非空文本；两侧都无 → COALESCE(LENGTH(NULL),0)=0 → falsy。
+  // 其余分支沿用 frontmatter 的 json_type 类型判定（inline 无类型信息，不参与）。
+  const inlineTruthy = `(COALESCE(LENGTH(${inlineFieldSql(field)}), 0) > 0)`;
   return (
     `(CASE` +
-    ` WHEN ${t} IS NULL THEN 0` +
-    ` WHEN ${t} = 'null' THEN 0` +
+    ` WHEN ${t} IS NULL THEN ${inlineTruthy}` +
+    ` WHEN ${t} = 'null' THEN ${inlineTruthy}` +
     ` WHEN ${t} = 'true' THEN 1` +
     ` WHEN ${t} = 'false' THEN 0` +
     ` WHEN ${t} IN ('integer', 'real') THEN (${v} <> 0)` +
@@ -268,6 +291,8 @@ function compileWhere(
     }
     case "isnull": {
       // S2.15：= null → IS NULL；!= null → IS NOT NULL（null 不参数化）。
+      // #28：frontmatter 标量经 fieldToSql 已是 COALESCE(fm, inline)，存在性天然把 inline 算进
+      // （spec §6.3：只有 frontmatter、只有 inline、两者皆有 → 都算「有」；两侧都无 → IS NULL）。
       if (expr.field === "file.frontmatter") {
         // frontmatter 列本身 NOT NULL（无 `---` 与空 `---\n---` 都存字面 '{}'，见 FM_KEY_COUNT 注释），
         // 走通用 IS NULL 永假；= null 改判「无顶层键」，与 !file.frontmatter 同义、互为惯用法。

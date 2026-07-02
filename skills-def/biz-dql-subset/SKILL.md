@@ -37,6 +37,7 @@ LIMIT <number>
 - **真值/存在性（对标官方 `Values.isTruthy()`）**：裸字段 `WHERE field`（`truthy` 节点 → `json_type` CASE：缺失/null/0/空串/空数组/空对象/false 皆 falsy）；`!field` = `not(truthy)`（词法 `Bang` token，`!=` 仍归 `Op`）。**与 `= null` 语义不同**：`field != null`（→ `IS NOT NULL`）把 `0`/空串视为「有」，`!field` 视为「无」——问「有没有 X」用 `!field`/`WHERE field`，问「键是否存在」用 `= null`/`!= null`。
 - **`file.frontmatter` 存在性（2026-07-02 补）**：判「有没有 frontmatter」用 `WHERE file.frontmatter`（有 ≥1 顶层键）/ `!file.frontmatter`（无任何顶层键）/ `= null`（同 `!field`）/ `!= null`（同真值）——四写法收敛到 `(SELECT COUNT(*) FROM json_each(f.frontmatter))` 计数，**不要**用 `WHERE file.frontmatter = null` 之外的写法猜测（该字段曾完全不支持，见 `docs/specs/2026-07-01-dql-truthiness-existence-design.md` §11）。已知限制：无 `---` 与空 `---\n---` 索引层同存 `'{}'`，两者在此判断下不可区分。
 - WHERE 扩展：`field = null` / `!= null`（→ `IS NULL`/`IS NOT NULL`，**显式 null 比较，非真值判断**）、日期比较（ISO 字典序）。
+- **inline fields（#28，2026-07-02 补）**：正文 `key:: value`（整行 / `[k:: v]` / `(k:: v)` 三形态）与 frontmatter **同一字段命名空间**——frontmatter 标量的 SQL 一律 `COALESCE(json_extract(fm,'$.<k>'), (SELECT value FROM inline_fields WHERE file_path=f.path AND key_norm='<k小写>' LIMIT 1))`。D1 frontmatter 胜、inline 兜底（含 fm 显式 null 时兜底）；D2 值恒 TEXT 字典序（`10 vs 9` 会错，guide 已警示）；D3 last-wins 在 **parser 提取期**兑现（每 file × key_norm 至多一行，`LIMIT 1` 仅防御性护栏、不承担语义）；D4 key 白名单 `[A-Za-z0-9_]+` → **DQL 文法零改动**；D5 不做 `file.inlineFields` 聚合字段。真值/存在性（`WHERE field`/`!field`/`= null`/`!= null`）同样计入 inline。设计真相源 `docs/specs/2026-07-02-inline-fields-design.md`。
 - 内置标量函数：日期 `date(today)`/`date(now)`；字符串 `lower`/`upper`；`length(x)`（字符串长度 / 数组计数）；数值 `round(x[,n])`。
 - TASK：返回任务行（text/status/line/file），FROM/WHERE 做**文件级**过滤；task 内部字段级过滤为后续（非本轮）。
 - **仍非目标（遇到报带位置 `DqlSyntaxError`，不静默）**：FROM and/or 多源、CALENDAR、DataviewJS（`dataviewjs` 块）、未知字段 / 未知函数、对聚合 JSON 列排序、`LIMIT` 负数、`length()` 之外的任意数值表达式运算（如 `a + b`）。
@@ -51,7 +52,8 @@ LIMIT <number>
 | `file.outlinks`                                    | `links` 表正向：`links.source = files.path`（含 embed）；`contains(file.outlinks,"X")` 同样路径感知：X 含 `/` 按 `target_path_key`，否则 `target_key`                                                       |
 | `file.tasks`                                       | `tasks` 表关联；`TASK` 查询返回任务行、`length(file.tasks)` 计数；task 字段级过滤为后续（非本轮）                                                                                                           |
 | `file.frontmatter`                                 | 选列返回整块 `files.frontmatter` JSON 对象；存在性走 `(SELECT COUNT(*) FROM json_each(f.frontmatter))` 顶层键计数（不可走通用列真值/`IS NULL`，`'{}'` 恒非空字符串、列本身 `NOT NULL`）                     |
-| frontmatter 标量（如 `status`）                    | `json_extract(files.frontmatter, '$.status')`                                                                                                                                                               |
+| frontmatter 标量（如 `status`）                    | `COALESCE(json_extract(files.frontmatter,'$.status'), inline_fields 兜底子查询)`（#28：fm 胜、正文 inline 兜底）                                                                                            |
+| inline fields（正文 `key:: value`）                | `inline_fields` 表（file_path / key / key_norm / value / line_number；parser last-wins 去重后每 file × key_norm 至多一行），查询期经 COALESCE 并入 frontmatter 标量命名空间，无物化视图（硬约束 6）          |
 
 **硬约束**：inlinks/outlinks 等**无物化视图**，一律查询期 JOIN 实时计算（对应 `AGENTS.md` 硬约束第 6 条）。
 

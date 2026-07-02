@@ -115,7 +115,11 @@ test("S2.15 null 与普通比较混用（AND）", () => {
 
 test("S2.16 日期比较：frontmatter 日期按 ISO 字典序参数化（区间）", () => {
   const c = generateSql(parseDql('LIST WHERE due >= "2026-01-01" AND due < "2027-01-01"'));
-  assert.match(c.sql, /json_extract\(f\.frontmatter, '\$\.due'\) >= \?/);
+  // #28 后 frontmatter 标量为 COALESCE(fm, inline) 合并形态（spec §6.3）。
+  assert.match(
+    c.sql,
+    /COALESCE\(json_extract\(f\.frontmatter, '\$\.due'\), \(SELECT value FROM inline_fields WHERE file_path = f\.path AND key_norm = 'due' LIMIT 1\)\) >= \?/,
+  );
   // ISO 字符串字典序 = 日期序（SQLite 文本比较），无需特殊日期类型。
   assert.deepEqual(c.params, ["2026-01-01", "2027-01-01"]);
 });
@@ -152,7 +156,8 @@ test("S2.20 LIST WITHOUT ID 去 file.name 保留 file.path 标识", () => {
 
 test("S2.18 GROUP BY：分组键 + rows 聚合列 + GROUP BY 子句", () => {
   const c = generateSql(parseDql("LIST GROUP BY status"));
-  assert.match(c.sql, /GROUP BY json_extract\(f\.frontmatter, '\$\.status'\)/);
+  // #28 后分组键同样是 COALESCE(fm, inline) 合并形态。
+  assert.match(c.sql, /GROUP BY COALESCE\(json_extract\(f\.frontmatter, '\$\.status'\)/);
   assert.deepEqual(
     c.columns.map((x) => x.name),
     ["status", "rows"],
@@ -314,6 +319,36 @@ test("选列 TABLE file.frontmatter：整块列直接投影，标 json 走 JSON.
   assert.match(c.sql, /f\.frontmatter AS "file\.frontmatter"/);
   const col = c.columns.find((x) => x.name === "file.frontmatter");
   assert.equal(col?.json, true);
+});
+
+// === 2026-07-02 #28 inline fields（spec §6.3）：frontmatter ∪ inline 同一字段命名空间 ===
+
+test("#28 frontmatter 标量 → COALESCE(fm, inline 子查询)：key 原样进 json path、小写进 key_norm，值仍参数化", () => {
+  const c = generateSql(parseDql('LIST WHERE Rating > "4"'));
+  assert.match(
+    c.sql,
+    /COALESCE\(json_extract\(f\.frontmatter, '\$\.Rating'\), \(SELECT value FROM inline_fields WHERE file_path = f\.path AND key_norm = 'rating' LIMIT 1\)\) > \?/,
+  );
+  assert.deepEqual(c.params, ["4"]);
+});
+
+test("#28 裸字段真值：fm 缺键 / 显式 null 分支兜底 inline（LENGTH>0），其余分支仍按 fm 类型", () => {
+  const c = generateSql(parseDql("LIST WHERE status"));
+  assert.match(
+    c.sql,
+    /WHEN json_type\(f\.frontmatter, '\$\.status'\) IS NULL THEN \(COALESCE\(LENGTH\(\(SELECT value FROM inline_fields WHERE file_path = f\.path AND key_norm = 'status' LIMIT 1\)\), 0\) > 0\)/,
+  );
+  assert.match(c.sql, /'array'/); // fm 侧类型分支保留（对象/数组等仍按 json_type 判真值）
+  assert.deepEqual(c.params, []);
+});
+
+test("#28 = null / != null 存在性对 COALESCE 结果判（只有 inline 也算「有」）", () => {
+  const a = generateSql(parseDql("LIST WHERE due = null"));
+  assert.match(
+    a.sql,
+    /\(COALESCE\(json_extract\(f\.frontmatter, '\$\.due'\), \(SELECT value FROM inline_fields[^)]*\)\) IS NULL\)/,
+  );
+  assert.deepEqual(a.params, []);
 });
 
 // === generateListSql（list 工具的纯 SQL 编译层，与 generateSql 同一防注入不变量：全参数化）===

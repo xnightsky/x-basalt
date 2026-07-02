@@ -1,6 +1,6 @@
 ---
-timestamp: 2026-06-30T00:01:23Z
-sha256: 45fb60b0424f00792fd3b10790cb5f1045b7dfaf7eeccc3560e57f7c6962d745
+timestamp: 2026-07-02T05:43:44Z
+sha256: 85be32849ebdb2954531827f7c95e69945f1bcdc522a0372928dafe2e69a47fd
 type: spec
 title: 扩展后 DQL 目标子集冻结（S2.2a）
 description: x-basalt 支持的 DQL 子集文法冻结规格
@@ -55,10 +55,11 @@ tags:
 | 25  | **一元 `!field` / `!(expr)`**（2026-07-01 补正） | ✅          | 词法 `Bang` token（`!=` 仍归 `Op`）；AST `not(truthy)`；对标官方 `NegatedField`。原「不支持」是遗漏、非有意收窄                          |
 | 26  | **裸字段真值 `WHERE field`**（2026-07-01 补正） | ✅          | AST `truthy` 节点 → `json_type` CASE 复刻 `Values.isTruthy()`（null/0/空串/空数组/空对象/false 皆 falsy）。官方推荐的「有无」惯用法     |
 | 27  | **`file.frontmatter`（存在性 + 选列）**（2026-07-02 补正） | ✅          | 顶层键计数 `(SELECT COUNT(*) FROM json_each(f.frontmatter))`；`WHERE file.frontmatter`/`!field`/`=null`/`!=null` 四写法收敛到同一计数；选列返回整块对象。补 §隐式字段映射空缺（原缺 `file.frontmatter`）        |
+| 28  | **inline fields `key:: value`（整行 / [方括号] / (圆括号)，与 frontmatter 同命名空间）**（2026-07-02 新增） | ✅          | parser 于 maskCode 后提取三形态（key v1 白名单 `[A-Za-z0-9_]+`、同名 last-wins 提取期去重）→ `inline_fields` 表（delete-in-lockstep）→ 查询期 `COALESCE(json_extract(fm), inline 子查询)`（frontmatter 胜、inline 兜底；值恒 TEXT 字典序）；真值/存在性同计入 inline；**DQL 文法零改动**。设计与 D1–D5 见 [`2026-07-02-inline-fields-design.md`](2026-07-02-inline-fields-design.md) |
 
-## 隐式字段映射（沿用真相源，不变；2026-07-02 补 `file.frontmatter`）
+## 隐式字段映射（沿用真相源；2026-07-02 补 `file.frontmatter` 与 #28 inline 合并）
 
-`file.name/path/folder/extension/size/mtime/ctime` = files 列；`file.tags` = tags 聚合；`file.inlinks` = links 反向 JOIN；`file.outlinks` = links 正向 JOIN（含 embed）；`file.tasks` = tasks 关联；`file.frontmatter` = 整块 frontmatter 对象/顶层键存在性（见 #27，无 `---` 与空 `---\n---` 索引层同存 `'{}'`、不可再区分）；frontmatter 标量 = `json_extract(files.frontmatter,'$.<k>')`。**硬约束**：inlinks/outlinks 无物化视图，查询期 JOIN 实时计算。
+`file.name/path/folder/extension/size/mtime/ctime` = files 列；`file.tags` = tags 聚合；`file.inlinks` = links 反向 JOIN；`file.outlinks` = links 正向 JOIN（含 embed）；`file.tasks` = tasks 关联；`file.frontmatter` = 整块 frontmatter 对象/顶层键存在性（见 #27，无 `---` 与空 `---\n---` 索引层同存 `'{}'`、不可再区分）；frontmatter 标量 = `COALESCE(json_extract(files.frontmatter,'$.<k>'), inline_fields 兜底子查询)`（#28：frontmatter 胜、正文 inline `key:: value` 兜底）。**硬约束**：inlinks/outlinks 无物化视图，查询期 JOIN 实时计算。
 
 ## 扩展后 AST 契约草案（S2.2c 落 `src/query/ast.ts`）
 
@@ -85,6 +86,8 @@ interface DqlQuery {
 > **2026-07-01 修订**：一元 `!` 与裸字段真值（`isTruthy`）此前被遗漏（既非纳入亦未列非目标），现补入为 #25/#26；`= null`/`!= null`（#10）重定位为显式 null 比较。完整设计见 [`2026-07-01-dql-truthiness-existence-design.md`](2026-07-01-dql-truthiness-existence-design.md)。
 >
 > **2026-07-02 修订**：`file.frontmatter` 此前不在隐式字段清单、查询即报「不支持的查询字段」，现补入为 #27（顶层键存在性 + 选列）。完整设计见 [`2026-07-01-dql-truthiness-existence-design.md`](2026-07-01-dql-truthiness-existence-design.md) §11、[`2026-07-02-deterministic-eval-gaps.md`](../plans/2026-07-02-deterministic-eval-gaps.md)。
+>
+> **2026-07-02 修订（#28）**：新增 inline fields（`key:: value`）解析/索引/查询三层落地，与 frontmatter 合并为同一字段命名空间（feature-gap 调研列为「元数据采集层最关键缺口」）。设计与 D1–D5 决策见 [`2026-07-02-inline-fields-design.md`](2026-07-02-inline-fields-design.md)，实现计划 [`../plans/2026-07-02-inline-fields.md`](../plans/2026-07-02-inline-fields.md)。
 
 ## S2.2b 衔接（防分叉纪律）
 

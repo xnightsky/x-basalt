@@ -26,7 +26,7 @@ dogfood 期决定提前做：自然语言驱动 vault 的 `chat` 子命令（单
 - **chat 可用性**（对标 agent-browser 三痛点）：[`docs/research/2026-06-30-chat-gap-vs-agent-browser.md`](docs/research/2026-06-30-chat-gap-vs-agent-browser.md) — ~~工具调用无重试（→失败率高）、撞顶静默停（→轮询到上限停）、缺读正文/全文搜/列笔记~~ 均已落地（结构化错误+换策略引导、撞顶续跑、`read_note`/`list`/`search` 三工具，见下 ✅）。
 - **chat 评估/场景库**（兄弟目录素材库，设计草案，**选址/格式待拍板**）：[`docs/specs/2026-06-30-chat-eval-scenario-library-design.md`](docs/specs/2026-06-30-chat-eval-scenario-library-design.md)。
 
-> 高频刚需缺口（据上述调研，待各自开计划/spec）：**inline fields 提取** · **task emoji 多字段+完成状态** · **内置函数补一批**（default/数组高阶/聚合）· ~~FTS5 全文检索~~（已落地，见下 ✅）· ~~chat 工具重试+撞顶续作~~（已落地为「结构化错误+换策略引导」+「撞顶续跑」，见下 ✅）。FROM 多源 AND/OR 取舍建议复核（官方高频）。
+> 高频刚需缺口（据上述调研，待各自开计划/spec）：~~inline fields 提取~~（已落地 2026-07-02：三形态解析 → `inline_fields` 表 → COALESCE 查询合并，见 [`docs/plans/2026-07-02-inline-fields.md`](docs/plans/2026-07-02-inline-fields.md) ✅）· **task emoji 多字段+完成状态** · **内置函数补一批**（default/数组高阶/聚合）· ~~FTS5 全文检索~~（已落地，见下 ✅）· ~~chat 工具重试+撞顶续作~~（已落地为「结构化错误+换策略引导」+「撞顶续跑」，见下 ✅）。FROM 多源 AND/OR 取舍建议复核（官方高频）。
 
 ## 🟡 进行中（2026-07-01）：chat 对话打磨（B 止血 P0 + 可玩化）
 

@@ -1,7 +1,7 @@
 import type { Database } from "better-sqlite3";
 
 // === 自建实现: SQLite 索引 Schema（禁止假设外部缓存，inlinks/outlinks 查询期 JOIN 计算）===
-// 表：files / links / tags / tasks / blocks。
+// 表：files / links / tags / tasks / blocks / inline_fields。
 //
 // 相对设计文档的列扩展（均为查询/解析必需，故刻意加入并在此说明）：
 // - files.name_key：name 的小写无扩展名形式，bare 链接（[[Note]]）按 basename 大小写不敏感解析的连接键（调研 §3.3#1）。
@@ -12,7 +12,7 @@ import type { Database } from "better-sqlite3";
 // - blocks.line_number：块锚点所在正文行号，与 tasks.line_number 对齐，便于回溯定位。
 
 /**
- * 五张表的建表 DDL（IF NOT EXISTS，可重复执行）。
+ * 六张业务表 + store_config 的建表 DDL（IF NOT EXISTS，可重复执行）。
  *
  * 隐式字段不建物化视图，查询期路径感知 JOIN（S3.2）：
  *   inlinks  = links WHERE target_path_key = files.path_key（qualified）或 target_key = files.name_key（bare 回退）；
@@ -80,6 +80,20 @@ CREATE TABLE IF NOT EXISTS blocks (
   UNIQUE(file_path, block_id)
 );
 CREATE INDEX IF NOT EXISTS idx_blocks_file_path ON blocks(file_path);
+
+-- inline fields（Dataview \`key:: value\`，docs/specs/2026-07-02-inline-fields-design.md §6.2）：
+-- 仅存 parser 的原始提取文本；查询期与 frontmatter 标量 COALESCE 合并（D1 frontmatter 胜），
+-- 无物化视图（硬约束 6）。parser 提取期 last-wins 去重（D3），每 file × key_norm 至多一行。
+CREATE TABLE IF NOT EXISTS inline_fields (
+  id          INTEGER PRIMARY KEY AUTOINCREMENT,
+  file_path   TEXT NOT NULL,
+  key         TEXT NOT NULL,        -- 原始 key（trim 后，保留大小写）
+  key_norm    TEXT NOT NULL,        -- key 的小写形式，查询连接键
+  value       TEXT NOT NULL,        -- 原始值文本（v1 不类型化，见 D2）
+  line_number INTEGER NOT NULL      -- 1-based 正文行号（last-wins 后为最后出现行）
+);
+CREATE INDEX IF NOT EXISTS idx_inline_fields_file_path ON inline_fields(file_path);
+CREATE INDEX IF NOT EXISTS idx_inline_fields_key_norm  ON inline_fields(key_norm);
 
 -- 通用 KV 配置表：目前仅存 fts_version（FTS5 分词策略版本号，见 indexer/index.ts ensureFts），
 -- 抄 qmd 的版本号迁移模式——分词/归一规则升级时递增版本号，靠此判定需重建 files_fts，避免新旧索引混用。
