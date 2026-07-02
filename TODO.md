@@ -51,6 +51,8 @@ dogfood 期决定提前做：自然语言驱动 vault 的 `chat` 子命令（单
 
 ## 💡 backlog（待 dogfood 暴露真实需求再开，各自写计划/spec）
 
+- **inline fields 扩展项一律降级（2026-07-02 调研定案）**：值类型化 / 多值列表化 / 带空格 key / `file.inlineFields` / meta 写回 inline（spec §5 backlog 清单）默认**不做**——生态正转向 frontmatter/Properties（官方 Bases 明确不支持 inline、Datacore 被官方建议弃用之），inline 支持定位为**兼容存量 vault 的读侧能力**（v1 已落地即止）。依据：[`docs/research/2026-07-02-inline-fields-adoption-outlook.md`](docs/research/2026-07-02-inline-fields-adoption-outlook.md)。后续更值得调研：task emoji 字段、官方 Bases `.base` 格式。
+
 - **变更编排器 P1 余项 / P2（change orchestration）**：P0 + 统一 `--pipe` + `--apply` + 写动作（apply/set/unset/rename + if-exists）已落地。**P1 余项待续**：背压、缓存跳过、条件分支、检查点续跑、失败告警、内容 hash 去重、**原生管道 stdin（spec §8.3）**、管道 `set` 列表值（现仅标量）。**P2**：DAG/补偿回滚/定时·空闲触发/配置热重载。设计见 [`docs/specs/2026-06-29-change-orchestration-design.md`](docs/specs/2026-06-29-change-orchestration-design.md) §8/§12；**按 dogfood 真实需求再开**。
 - **lint（schema 校验）**：按用户 schema 校验属性存在性/类型/取值，报告或修（"修"复用 normalize/set）。需先定 frontmatter schema 格式（JSON Schema 或自创轻量 DSL，对标 `remark-lint-frontmatter-schema`）——长期 API 承诺最重，**最后做**。
 - **更多 profile**：按需扩（加 profile = 加数据；现有 `pkm-note` / `llm-wiki` / `ssg-blog`）。

@@ -10,8 +10,8 @@ tags:
   - indexer
   - query
   - x-basalt
-timestamp: 2026-07-02T05:43:41Z
-sha256: 2eadac57525aaf110b532e8558138760988cea4c120e3671a9261fa9c401ce66
+timestamp: 2026-07-02T06:24:00Z
+sha256: c370b2d14b95485d95d5564963fbfe40916fb4fa73473f37a606173e637e2840
 ---
 # inline fields（`key:: value`）设计规格：三形态文法 · `inline_fields` 数据模型 · 字段解析语义
 
@@ -91,6 +91,8 @@ Dataview 把 inline 字段与 frontmatter 标量并入**同一字段命名空间
 - `file.inlineFields` 聚合对象字段（D5 不做）；
 - meta 层写回 inline。
 
+> **2026-07-02 调研定案（修订）**：本 backlog 各项**默认不做**——多源对抗验证的调研显示生态正结构性转向 frontmatter/Properties（官方 Bases 明确不支持 inline、后继者 Datacore 被官方建议弃用之），inline 支持定位为**兼容存量 vault 的读侧能力**，v1 落地即止；除非 dogfood 出现真实刚需再逐项立案。证据链见 [`../research/2026-07-02-inline-fields-adoption-outlook.md`](../research/2026-07-02-inline-fields-adoption-outlook.md)。
+
 ## 6. 规范化产物（冻结后为唯一权威定义，实现按此落码）
 
 ### 6.1 三形态文法与正则（parser）
@@ -146,6 +148,7 @@ CREATE INDEX IF NOT EXISTS idx_inline_fields_key_norm  ON inline_fields(key_norm
 - **[语义]** D1 frontmatter-wins 与官方 Dataview 合并语义有细微差异；按 codebase 确定性取舍，本 spec 即为注明处。
 - **[类型]** v1 TEXT 字典序比较对数值/日期是近似（同现有 ISO 取舍）；`rating > "4"` 可用但 `10 vs 9` 字典序会错——`querying-dql` guide 须显式警示。
 - **[模型]** 「无 frontmatter 只有 inline」的笔记 v1 可查（这正是目标）；但 inline 值不进 `file.frontmatter` 对象（D5 不做 `file.inlineFields`）。
+- **[模型] D3 last-wins 使「一篇清单每行一条」场景失真（2026-07-02 实测补注）**：§1 的读书清单示例里 `- [[三体]] (rating:: 5)` 与 `- [[基地]] (rating:: 4)` 同篇两行，整篇 `rating` 只保留最后的 `"4"`——字段是**文件级**的，想每本书各一个分数须每本书一篇笔记。Dataview 原版会聚成列表，对应 backlog「多值列表化」（按 §5 调研定案默认不做）。教程已向使用者示警：[`../guides/tutorial-rating-inline-fields.md`](../guides/tutorial-rating-inline-fields.md) 坑 3。
 - Backlog 见 §5。
 
 ## 9. 真相源 rebase 地图（拍板冻结后与实现同批同步）
