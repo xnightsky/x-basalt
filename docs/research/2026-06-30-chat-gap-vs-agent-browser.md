@@ -26,7 +26,7 @@ sha256: 7bb0adf511305eae6203c9324951b33a2cca816c94922bc5d39f11d2944027cf
 | 工具集（写） | `meta_set/unset/rename/normalize/apply` / `pipeline_run`，直接落盘无确认闸 | `src/chat/tools.ts:183+` |
 | 循环 | `streamText` + `stopWhen: stepCountIs(maxSteps)`，默认 **maxSteps=12** | `src/chat/loop.ts:52`、`src/cli.ts:670` |
 | 中断 | Ctrl+C → AbortController，撤了逐动作确认闸 | `src/chat/index.ts:133` |
-| grounding | 会话级一次性：system prompt 强指令让模型自取 `skills_get core`（对标 agent-browser stub，非每轮往返） | `src/chat/index.ts:23`、`docs/design/chat-skill-grounding.md` |
+| grounding | 会话级一次性：system prompt 强指令让模型自取 `skills_get core`（对标 agent-browser stub，非每轮往返） | `src/chat/index.ts:23`、`docs/specs/2026-06-30-chat-skill-grounding-design.md` |
 | 防注入 | `<<VAULT_DATA nonce>>` 边界包裹 + 8000 字符截断 | `src/chat/safety.ts` |
 
 ## 2. 三个差距（对标 agent-browser）

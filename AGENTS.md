@@ -139,7 +139,7 @@ docs/         research / specs / plans / guides / architecture / testing（见 d
 ## Docs 维护
 
 - 读写路由见 `docs/README.md`；改动前读直接相关文档，结论写回对应目录。
-- 大改动记 ADR 或当前阶段计划；小改动至少同步直接受影响的规范/实现说明/计划，不静默覆盖原规则。
+- 大改动记入对应 `specs/` 决策/设计文档（`-decision`/`-design`）或当前阶段 `plans/`；小改动至少同步直接受影响的规范/实现说明/计划，不静默覆盖原规则。
 - **文档元数据自举（dogfood）**：在 `docs/` 新增或重写文档后，用 x-basalt 自己给它补 frontmatter 元数据（默认 profile `llm-wiki`），不手写——机械字段（`timestamp`/`sha256`）由工具补，语义字段（`type`/`title`/`description`/`tags`）作为消费者读 `meta profile show` 后经 `--set` 补：`x-basalt meta apply llm-wiki <doc> --set type=… --set title=… --set description=… --set tags=…`。x-basalt 的文档由 x-basalt 维护，是写侧能力的持续 dogfood。
 
 ## 脱敏

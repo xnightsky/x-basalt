@@ -1,6 +1,6 @@
 ---
-timestamp: 2026-06-30T00:01:23Z
-sha256: 365295372647ed711edda30f727f189a530b745350df46815dc5884ce4868ff8
+timestamp: 2026-07-02T04:08:57Z
+sha256: 0d43c689627731683d759b152aec8bd57d4b5ed9e42a23693709f25013e56f15
 type: index
 title: docs · 文档入口与路由
 description: x-basalt 文档真相源目录路由与三层口径
@@ -23,6 +23,8 @@ tags:
 | `architecture/` | 稳定后的目标架构（允许阶段性滞后）                              | 边界稳定或用户要求校准时 |
 | `guides/`       | 操作指南：代码质量、注释规范、测试手法等                        | 沉淀可复用工作口径时     |
 | `testing/`      | 测试策略、fixtures 说明、用例清单                               | 测试分层/清单变化时      |
+
+> **specs/ 内三分**（按 frontmatter `type` + 文件名后缀区分）：冻结契约（`-frozen`，type: spec）、设计（`-design`，type: design）、跨领域决策（`-decision`/`-vs-`，type: decision）。三者同放 `specs/`，不另立 rfc/ 或 adr/ 或 design/ 目录。
 
 ## 三层口径
 
@@ -52,5 +54,5 @@ tags:
 
 ## 维护规则
 
-- 大改动记 ADR 或当前阶段计划；小改动至少同步直接受影响的规范/实现说明/计划，不静默覆盖原规则。
+- 大改动记入对应 `specs/` 决策/设计文档（`-decision`/`-design`）或当前阶段 `plans/`；小改动至少同步直接受影响的规范/实现说明/计划，不静默覆盖原规则。
 - 入仓文档禁止出现仓库根目录之外的绝对本机路径（见 `AGENTS.md`「脱敏」）。

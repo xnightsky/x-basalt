@@ -1,3 +1,16 @@
+---
+type: design
+title: chat 技能接地（skill grounding）设计 v2
+description: x-basalt chat（可选 AI 子命令）如何可靠让模型召回 DQL/frontmatter/CLI 规范：对齐 agent-browser 的系统提示词强制先取 core（模型驱动+强框、无门控）+ requiredSkills 软提示 + 两层内部 skill（core / obsidian-base-spec），含决策记录与可靠性兜底阶梯
+tags:
+  - design
+  - chat
+  - ai
+  - skill
+  - x-basalt
+timestamp: 2026-06-30T06:41:18Z
+sha256: 95b9ccb1b27f3baa4aeb6c99fb9b304d17991e7dd9ea0ccb68e709dd52a40f08
+---
 # chat 技能接地（skill grounding）设计 — v2
 
 > 状态：已定稿，落地中。日期：2026-06-30。
