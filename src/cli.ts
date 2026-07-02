@@ -709,10 +709,11 @@ program
     collectVault,
     [] as string[],
   )
+  .option("--trace [file]", "落盘 chat 事件到 JSONL（省略 file 则按时间戳自动命名）")
   .action(
     async (
       input: string | undefined,
-      opts: { model?: string; maxSteps: string; db?: string; vault: string[] },
+      opts: { model?: string; maxSteps: string; db?: string; vault: string[]; trace?: string | true },
     ) => {
       // 先检查 AI key：无 key 直接友好退出，避免先报 "需要 --vault" 造成误导。
       // provider.ts 无 AI SDK 顶层依赖，可安全懒加载；真正触达 SDK 的 index.ts 仍延后到本分支有 key 之后。
@@ -729,12 +730,18 @@ program
         config.vault,
         "需要 --vault 参数或在配置文件中设置 vault",
       );
+      const tracePath =
+        opts.trace === true
+          ? join(BASE_DIR, "chat-traces", `${new Date().toISOString().replaceAll(/[:.]/g, "-")}.jsonl`)
+          : opts.trace;
       const chatOpts = {
         model: opts.model,
         maxSteps: Number(opts.maxSteps),
         dbPath,
         vaultPath,
         skillPath: config.skillPath,
+        trace: tracePath,
+        version: program.version(),
       };
       // 懒加载：只有确认有 key 后才触达 src/chat（及其 AI SDK 依赖）。
       const { runOnce, runRepl, readPipedStdin } = await import("./chat/index.js");

@@ -6,8 +6,10 @@
 // 默认 SIGINT 处理，readline 关闭、进程自然退出。撞步数顶（stopReason='exhausted'）后本轮未完成——
 // 用户可输入「继续」用现有上下文续跑，治「轮询撞顶就静默停」。
 import { createInterface } from "node:readline/promises";
+import { resolve } from "node:path";
 import type { ModelMessage, ToolSet } from "ai";
 import { runLoop, type LoopEvent } from "./loop.js";
+import type { Tracer } from "./trace.js";
 
 /** 一行输入的语义解释结果（把控制流从 readline IO 中挤出来，便于独立、确定性测试/复用）。 */
 export type ReplAction =
@@ -50,7 +52,7 @@ export function helpText(): string {
     "  quit / exit / q      退出",
     "  继续 / continue / go 撞步数顶未完成时，用现有上下文接着跑（仅撞顶后可用）",
     "操作：",
-    "  Ctrl+C               中断当前轮、回到提示符；空闲提示符再按一次退出",
+    "  Ctrl+C               中断当前轮、回到提示符；空闲提示符按一次退出",
   ].join("\n");
 }
 
@@ -91,10 +93,18 @@ export async function runRepl(
   model: unknown,
   tools: ToolSet,
   opts: { maxSteps: number },
-  cfg: { system: string; onEvent: (e: LoopEvent) => void; model?: string },
+  cfg: { system: string; onEvent: (e: LoopEvent) => void; model?: string; tracer?: Tracer },
 ): Promise<number> {
   const rl = createInterface({ input: process.stdin, output: process.stdout });
   process.stdout.write(`${banner(cfg.model)}\n`);
+  // 空闲提示符下的 Ctrl+C：优雅退出并触发 finally 打印 trace 路径；运行中 Ctrl+C 由 runLoop 的 abort 处理。
+  let isRunning = false;
+  let shouldQuit = false;
+  rl.on("SIGINT", () => {
+    if (isRunning) return;
+    shouldQuit = true;
+    rl.close();
+  });
   // system 不进 messages（v7 禁止），每轮经 runLoop 的 system 参数传；messages 只累积 user/assistant/tool。
   let messages: ModelMessage[] = [];
   let canContinue = false; // 上一轮是否撞顶未完成
@@ -119,6 +129,7 @@ export async function runRepl(
       const ac = new AbortController();
       const onSigint = (): void => ac.abort();
       process.on("SIGINT", onSigint);
+      isRunning = true;
       try {
         const r = await runLoop(messages, {
           model,
@@ -131,15 +142,19 @@ export async function runRepl(
         messages = r.messages;
         canContinue = r.stopReason === "exhausted";
       } catch (e) {
+        if (shouldQuit) return 130;
         // 中断/出错后不提供「继续」（上下文可能不一致），下一行须是新指令。
         canContinue = false;
         if (ac.signal.aborted) process.stdout.write("\n· 已中断当前轮\n");
         else process.stderr.write(`\n✗ ${(e as Error).message}\n`);
       } finally {
         process.off("SIGINT", onSigint);
+        isRunning = false;
       }
     }
   } finally {
     rl.close();
+    cfg.tracer?.close();
+    if (cfg.tracer?.isActive()) process.stdout.write(`· trace → ${resolve(cfg.tracer.path)}\n`);
   }
 }

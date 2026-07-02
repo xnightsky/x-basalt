@@ -24,6 +24,12 @@ export interface LoopEvent {
   error?: unknown;
   /** finish：本轮停止原因，供渲染层区分「· 完成」与「⚠ 撞步数顶、可续」。 */
   stopReason?: StopReason;
+  /** finish：本轮 token 用量（provider 返回则带；缺失字段省略）。 */
+  usage?: {
+    inputTokens?: number;
+    outputTokens?: number;
+    totalTokens?: number;
+  };
 }
 
 /** runLoop 返回：累积后的消息 + 停止原因（供 REPL 决定是否支持「继续」续跑）。 */
@@ -89,11 +95,21 @@ export async function runLoop(messages: ModelMessage[], deps: LoopDeps): Promise
   // 区分自然完成 vs 撞步数顶：步数已达 maxSteps 且最后一步仍在调工具（toolCalls 非空＝模型还想继续动作，
   // 只是被 stopWhen 截断）→ exhausted；否则 done。不用 finishReason 判定——它在 mock/部分 provider 下
   // 聚合为 'other' 不可靠，而 step.toolCalls 是 provider 无关的「还想动作」信号。
-  const steps = await result.steps;
+  const [steps, usage] = await Promise.all([result.steps, result.usage]);
   const stillActing = (steps.at(-1)?.toolCalls?.length ?? 0) > 0;
   const exhausted = steps.length >= deps.maxSteps && stillActing;
   const stopReason: StopReason = exhausted ? "exhausted" : "done";
-  deps.onEvent({ type: "finish", stopReason });
+  deps.onEvent({
+    type: "finish",
+    stopReason,
+    usage: usage
+      ? {
+          inputTokens: usage.inputTokens ?? undefined,
+          outputTokens: usage.outputTokens ?? undefined,
+          totalTokens: usage.totalTokens ?? undefined,
+        }
+      : undefined,
+  });
   const response = await result.response;
   return { messages: [...messages, ...(response.messages as ModelMessage[])], stopReason };
 }

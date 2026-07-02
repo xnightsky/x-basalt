@@ -3,11 +3,13 @@
 // 上游：src/cli.ts 的 chat 子命令；下游：provider/safety/tools/loop/repl。
 // 纪律：无 key / 未装依赖 → 打印指引、返回非 0 退出码、不抛栈；其余命令零耦合。
 import type { ModelMessage } from "ai";
+import { resolve } from "node:path";
 import { runLoop, type LoopEvent } from "./loop.js";
 import { createModel, NO_KEY_MESSAGE, resolveProvider } from "./provider.js";
 import { makeSafety } from "./safety.js";
 import { buildTools } from "./tools.js";
 import { runRepl as repl } from "./repl.js";
+import { createTracer, type Tracer } from "./trace.js";
 
 export interface ChatOptions {
   model?: string;
@@ -15,6 +17,10 @@ export interface ChatOptions {
   dbPath: string;
   vaultPath: string | string[];
   skillPath?: string;
+  /** trace 文件路径；true 表示 CLI 已解析为默认路径（实际传入应为字符串）。 */
+  trace?: string | boolean;
+  /** CLI 版本，写入 session 元信息。 */
+  version?: string;
 }
 
 /** 系统提示（精简纪律 + 强制先取 core；规范细节不在此复述、靠 skills_get 取，仿 agent-browser chat）。 */
@@ -111,6 +117,20 @@ export async function readPipedStdin(): Promise<string> {
   return Buffer.concat(chunks).toString("utf8").trim();
 }
 
+/** 按 ChatOptions 创建 tracer；未启用或路径未解析则返回 null。 */
+function makeTracer(opts: ChatOptions): Tracer | null {
+  const path = typeof opts.trace === "string" ? opts.trace : undefined;
+  if (!path) return null;
+  return createTracer({
+    path,
+    model: opts.model,
+    maxSteps: opts.maxSteps,
+    db: opts.dbPath,
+    vault: opts.vaultPath,
+    version: opts.version,
+  });
+}
+
 /** 装配 model + tools；无 key/未装依赖 → 打印指引返回 null（消费者退出非 0）。 */
 async function setup(
   opts: ChatOptions,
@@ -139,6 +159,7 @@ async function setup(
 export async function runOnce(input: string, opts: ChatOptions): Promise<number> {
   const s = await setup(opts);
   if (!s) return 1;
+  const tracer = makeTracer(opts);
   const ac = new AbortController();
   const onSigint = (): void => ac.abort();
   process.on("SIGINT", onSigint);
@@ -149,7 +170,10 @@ export async function runOnce(input: string, opts: ChatOptions): Promise<number>
       model: s.model,
       tools: s.tools,
       maxSteps: opts.maxSteps,
-      onEvent: renderEvent,
+      onEvent: (e) => {
+        renderEvent(e);
+        tracer?.sink(e, 1);
+      },
       abortSignal: ac.signal,
       system: SYSTEM_PROMPT,
     });
@@ -163,6 +187,8 @@ export async function runOnce(input: string, opts: ChatOptions): Promise<number>
     return 1;
   } finally {
     process.off("SIGINT", onSigint);
+    tracer?.close();
+    if (tracer?.isActive()) process.stdout.write(`· trace → ${resolve(tracer.path)}\n`);
   }
 }
 
@@ -170,5 +196,21 @@ export async function runOnce(input: string, opts: ChatOptions): Promise<number>
 export async function runRepl(opts: ChatOptions): Promise<number> {
   const s = await setup(opts);
   if (!s) return 1;
-  return repl(s.model, s.tools, opts, { system: SYSTEM_PROMPT, onEvent: renderEvent, model: opts.model });
+  const tracer = makeTracer(opts);
+  let turn = 1;
+  try {
+    return await repl(s.model, s.tools, opts, {
+      system: SYSTEM_PROMPT,
+      onEvent: (e) => {
+        renderEvent(e);
+        tracer?.sink(e, turn);
+        if (e.type === "finish") turn++;
+      },
+      model: opts.model,
+      tracer: tracer ?? undefined,
+    });
+  } finally {
+    tracer?.close();
+    // REPL 退出提示由 repl.ts 在关闭 readline 后统一打印，避免重复。
+  }
 }
