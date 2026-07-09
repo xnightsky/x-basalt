@@ -4,6 +4,7 @@ import { existsSync } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
 import { parse as parseYaml } from "yaml";
+import type { LintIgnoreConfig } from "./links/ignore.js";
 import type { PipelineConfig } from "./orchestrator/types.js";
 
 // === 自建实现: 项目/全局配置加载，给 CLI 选项提供默认值（免去每次重复 --db/--vault 等）===
@@ -27,6 +28,27 @@ export interface BasaltConfig {
   onChange?: string;
   /** 声明式管道（变更编排器，spec §8）：name → 管道配置。 */
   pipelines?: Record<string, PipelineConfig>;
+  /** lint / links 配置（KB compiler P1）：目前仅 ignore 段。 */
+  lint?: LintConfig;
+}
+
+/** lint 配置（P1 仅 ignore）。 */
+export interface LintConfig {
+  ignore?: LintIgnoreConfig;
+}
+
+/** 解析配置的 lint 段：只挑 ignore.{paths,targets,rules}，畸形项静默丢弃（与 pickConfig 容错一致）。 */
+export function parseLintConfig(raw: unknown): LintConfig {
+  if (raw == null || typeof raw !== "object") return {};
+  const ig = (raw as { ignore?: unknown }).ignore;
+  if (ig == null || typeof ig !== "object") return {};
+  const o = ig as Record<string, unknown>;
+  const strs = (v: unknown): string[] =>
+    Array.isArray(v) ? v.filter((x): x is string => typeof x === "string") : [];
+  const rulesRaw = (o.rules ?? {}) as Record<string, unknown>;
+  const rules: Record<string, string[]> = {};
+  for (const [k, v] of Object.entries(rulesRaw)) rules[k] = strs(v);
+  return { ignore: { paths: strs(o.paths), targets: strs(o.targets), rules } };
 }
 
 /** 允许的字符串键（其余键忽略，避免误用）。 */
@@ -123,6 +145,7 @@ function pickConfig(obj: Record<string, unknown>): BasaltConfig {
   const vault = pickVault(obj.vault);
   if (vault !== undefined) out.vault = vault;
   if (obj.pipelines !== undefined) out.pipelines = parsePipelines(obj.pipelines);
+  if (obj.lint !== undefined) out.lint = parseLintConfig(obj.lint);
   return out;
 }
 
