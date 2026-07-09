@@ -25,6 +25,8 @@ import {
 } from "./meta/index.js";
 import { Orchestrator } from "./orchestrator/index.js";
 import type { EventType, PipelineConfig, RunReport } from "./orchestrator/index.js";
+import { runLinksCheck, runLinksSuggest } from "./links/index.js";
+import { renderHuman } from "./links/report.js";
 import { DataviewEngine } from "./query/index.js";
 import { SkillRecall } from "./skill/index.js";
 import { renderSkill, renderSkillList, renderSkills } from "./skill/render.js";
@@ -755,6 +757,47 @@ program
       process.exitCode = prompt ? await runOnce(prompt, chatOpts) : await runRepl(chatOpts);
     },
   );
+
+const links = program
+  .command("links")
+  .description("本地链接诊断（断链检查 + 修复建议；KB compiler P1）");
+
+links
+  .command("check")
+  .description("扫全 vault 报断链（wikilink/embed/markdown link/图片本地目标存在性）")
+  .argument("[vault...]", "Vault 目录（可多个；省略则回退配置 vault）")
+  .option("--format <fmt>", "输出格式 human|json|yaml（默认 human）")
+  .action(async (vaults: string[], opts: { format?: string }) => {
+    const vault = vaults.length > 0 ? vaults : config.vault;
+    if (vault === undefined) {
+      console.error("✗ 未指定 vault：传目录参数或在配置中设 vault");
+      process.exitCode = 2;
+      return;
+    }
+    const { issues, exitCode } = await runLinksCheck({ vault, ignore: config.lint?.ignore });
+    if (opts.format === "json" || opts.format === "yaml") emit(issues, opts.format);
+    else console.log(renderHuman(issues));
+    process.exitCode = exitCode;
+  });
+
+links
+  .command("suggest")
+  .description("单文件断链 + 路径建议（按 basename 命中给相对路径）")
+  .argument("<file>", "目标 Markdown 文件（vault 相对主键 / cwd 相对 / 绝对）")
+  .argument("[vault...]", "Vault 目录（可多个；省略则回退配置 vault）")
+  .option("--format <fmt>", "输出格式 human|json|yaml（默认 human）")
+  .action(async (file: string, vaults: string[], opts: { format?: string }) => {
+    const vault = vaults.length > 0 ? vaults : config.vault;
+    if (vault === undefined) {
+      console.error("✗ 未指定 vault：传目录参数或在配置中设 vault");
+      process.exitCode = 2;
+      return;
+    }
+    const { issues, exitCode } = await runLinksSuggest(file, { vault, ignore: config.lint?.ignore });
+    if (opts.format === "json" || opts.format === "yaml") emit(issues, opts.format);
+    else console.log(renderHuman(issues));
+    process.exitCode = exitCode;
+  });
 
 program.parseAsync(normalizeArgv(process.argv)).catch((err: unknown) => {
   console.error(`✗ ${(err as Error).message}`);
