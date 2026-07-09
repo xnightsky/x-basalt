@@ -1,6 +1,6 @@
 ---
-timestamp: 2026-07-02T06:13:03Z
-sha256: f908b979861f4e2f2bf0aa219a582f9257b6be5ce9f5eca3aa10c16afb16a34b
+timestamp: 2026-07-09T05:53:07Z
+sha256: 88a52d7a27d4c4dfdd21ff242718b752412f1c8f2e2d72fd8abbdc787d85fba7
 type: guide
 title: 使用指南 · x-basalt（教程总目录）
 description: 面向使用者的教程总目录与分章导航
@@ -9,6 +9,7 @@ tags:
   - usage
   - x-basalt
 ---
+
 # 使用指南 · x-basalt（教程总目录）
 
 > 面向使用者的教程**总目录**。x-basalt 是纯 Node.js CLI——**零依赖 Obsidian GUI / 运行时**，直接通过文件系统操作 Vault 目录，做五件事：解析 Obsidian 专有语法、把 Vault 索引进 SQLite、用 Dataview（DQL）子集查询、按关键字召回规范、读改笔记元数据头（frontmatter）。
@@ -18,7 +19,7 @@ tags:
 
 | 能力     | 命令                       | 说明                                                                                                                                                                       |
 | -------- | -------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| 解析     | `parse`                    | 单个 `.md` → 标准化 AST（wikilink/tag/callout/task/highlight/blockRef/inlineField + frontmatter）                                                                          |
+| 解析     | `parse`                    | 单个 `.md` → 标准化 AST（wikilink/Markdown link/tag/callout/task/highlight/blockRef/inlineField + frontmatter；链接类节点含完整文件位置）                                  |
 | 索引     | `index` / `scan` / `watch` | 全量建库 / **按需增量重扫** / 常驻监听，写入单文件 SQLite                                                                                                                  |
 | 查询     | `query`                    | 自建 Dataview（DQL）子集 → 参数化 SQL → JSON 结果                                                                                                                          |
 | 召回     | `skill`                    | 加载规范知识库，Fuse.js 模糊召回                                                                                                                                           |
@@ -59,18 +60,18 @@ x-basalt skills recall wikilink
 
 ## 教程目录
 
-| 章节                                 | 内容                                                                                                                   |
-| ------------------------------------ | ---------------------------------------------------------------------------------------------------------------------- |
-| [安装与运行](installation.md)        | 要求（Node ≥ 22）、从源码构建、**全局安装（npm link）**、三种运行方式、改源码后重编译                                  |
-| [命令参考](commands.md)              | 9 个命令逐项：`parse` / `index` / `scan` / `query` / `skills` / `meta` / `watch` / `run` / `chat`（签名、选项、默认、示例） |
-| [DQL 查询指南](querying-dql.md)      | 完整 Dataview 子集文法（LIST/TABLE/TASK + WHERE + GROUP BY/FLATTEN/WITHOUT ID + 多键 SORT + 函数）、隐式字段、报错口径 |
+| 章节                                                      | 内容                                                                                                                                      |
+| --------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------- |
+| [安装与运行](installation.md)                             | 要求（Node ≥ 22）、从源码构建、**全局安装（npm link）**、三种运行方式、改源码后重编译                                                     |
+| [命令参考](commands.md)                                   | 9 个命令逐项：`parse` / `index` / `scan` / `query` / `skills` / `meta` / `watch` / `run` / `chat`（签名、选项、默认、示例）               |
+| [DQL 查询指南](querying-dql.md)                           | 完整 Dataview 子集文法（LIST/TABLE/TASK + WHERE + GROUP BY/FLATTEN/WITHOUT ID + 多键 SORT + 函数）、隐式字段、报错口径                    |
 | [教程：`rating::` 打分](tutorial-rating-inline-fields.md) | 10 分钟上手正文 inline fields（`key:: value` 三种写法、示例 vault 实测、坑清单：文本比较/last-wins/frontmatter 优先、该不该用的调研结论） |
-| [索引与同步](indexing-and-sync.md)   | `index` vs `scan` vs `watch` 何时用；scan 深入（mtime/`--rehash`/`--dry-run`/分批断点续）；5 表数据模型；路径感知链接  |
-| [配置与基目录](configuration.md)     | 配置文件（cosmiconfig 向上查找、yaml/json5）、可配置项、**`X_BASALT_DIR`**、优先级                                     |
-| [Obsidian 语法](obsidian-syntax.md)  | `parse` 覆盖的 7 类节点字段与边界、代码区掩码、已知近似                                                                |
-| [与 AI 协作](ai-and-skills.md)       | `skills recall` 自助召回（Fuse.js）、**全局 `x-basalt` 使用技能**（教 AI 用 CLI）、三类「skill」之别                   |
-| [chat 怎么玩](chat.md)               | 用自然语言驱动 vault 的可选-AI `chat`（单发 + REPL）：前置 / 建索引 / 试哪些指令 / 玩时看什么（工具可见·撞顶续跑·失败换策略）/ 限制 |
-| [故障排查与限制](troubleshooting.md) | 常见报错→处理、已知限制与近似                                                                                          |
+| [索引与同步](indexing-and-sync.md)                        | `index` vs `scan` vs `watch` 何时用；scan 深入（mtime/`--rehash`/`--dry-run`/分批断点续）；5 表数据模型；路径感知链接                     |
+| [配置与基目录](configuration.md)                          | 配置文件（cosmiconfig 向上查找、yaml/json5）、可配置项、**`X_BASALT_DIR`**、优先级                                                        |
+| [Obsidian 语法](obsidian-syntax.md)                       | `parse` 覆盖的节点字段与边界、链接定位契约、代码区掩码、已知近似                                                                          |
+| [与 AI 协作](ai-and-skills.md)                            | `skills recall` 自助召回（Fuse.js）、**全局 `x-basalt` 使用技能**（教 AI 用 CLI）、三类「skill」之别                                      |
+| [chat 怎么玩](chat.md)                                    | 用自然语言驱动 vault 的可选-AI `chat`（单发 + REPL）：前置 / 建索引 / 试哪些指令 / 玩时看什么（工具可见·撞顶续跑·失败换策略）/ 限制       |
+| [故障排查与限制](troubleshooting.md)                      | 常见报错→处理、已知限制与近似                                                                                                             |
 
 ---
 

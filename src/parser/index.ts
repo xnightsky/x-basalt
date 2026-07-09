@@ -9,6 +9,8 @@
  *         indexer 不重复解析原始正文，query 不感知 ObsidianNode。
  */
 import { parseFrontmatter } from "./frontmatter.js";
+import { extractMarkdownLinks } from "./markdown-link.js";
+import { countNewlines } from "./source-span.js";
 import type { ObsidianNode, ParsedFile } from "./types.js";
 import { extractWikilinks } from "./wikilink.js";
 
@@ -128,6 +130,13 @@ function maskCode(body: string): string {
     out.push(maskInlineCode(line));
   }
   return out.join("\n");
+}
+
+/** 计算正文在完整文件中的行号偏移；frontmatter 解析失败时 body=content，偏移为 0。 */
+function bodyLineOffset(content: string, body: string): number {
+  const bodyStart = content.endsWith(body) ? content.length - body.length : content.indexOf(body);
+  if (bodyStart <= 0) return 0;
+  return countNewlines(content.slice(0, bodyStart));
 }
 
 /** 提取行内 tag 节点：保留嵌套全名，排除纯数字，按 value 去重。 */
@@ -289,6 +298,11 @@ export class VaultParser {
    * Given 正文含 `key:: value`（整行 / [方括号] / (圆括号) 任一形态）
    * When 调用 parse()
    * Then 产出 inlineField 节点（同名 key last-wins）；代码区内的 `k:: v` 不被提取
+   *
+   * @behavior
+   * Given 正文含 wikilink / embed / Markdown inline link
+   * When 调用 parse()
+   * Then 产出带完整文件 line/column/raw 的链接节点；代码区内链接不产出
    */
   parse(content: string): ParsedFile {
     const { frontmatter, body } = parseFrontmatter(content);
@@ -296,9 +310,11 @@ export class VaultParser {
     // 代码区域掩码：tag/highlight 在掩码后的正文上提取，避免围栏代码块/行内代码内的 #、== 被误识。
     // task/blockRef/callout 仍用原始 lines（行号需对应原文；代码块内的任务行较罕见，列为后续）。
     const masked = maskCode(body);
+    const lineOffset = bodyLineOffset(content, body);
 
     const nodes: ObsidianNode[] = [
-      ...extractWikilinks(body),
+      ...extractWikilinks(masked, { sourceText: body, lineOffset }),
+      ...extractMarkdownLinks(masked, { sourceText: body, lineOffset }),
       ...extractTags(masked),
       ...extractCallouts(lines),
       ...extractTasks(lines),

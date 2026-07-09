@@ -6,9 +6,15 @@
  *       资源 vs 笔记嵌入的区分由 indexer 调用 utils/path.isAssetEmbed 完成，parser 不区分。
  */
 import { linkKey } from "../utils/path.js";
+import { positionAt } from "./source-span.js";
 import type { ObsidianNode } from "./types.js";
 
 type WikilinkNode = Extract<ObsidianNode, { type: "wikilink" }>;
+
+interface WikilinkOptions {
+  sourceText?: string;
+  lineOffset?: number;
+}
 
 // === Obsidian 规范来源 ===
 // [[Note]] / [[Note|Alias]] / [[Folder/Note]] / [[Note#Heading]] / [[Note#^block-id]]
@@ -19,8 +25,10 @@ type WikilinkNode = Extract<ObsidianNode, { type: "wikilink" }>;
 // 捕获可选前缀 ! 与 [[...]] 内部内容（内部不含 ] ，wikilink 不嵌套）。
 const WIKILINK_RE = /(!?)\[\[([^\][]+?)\]\]/g;
 
-/** 解析 [[...]] 内部文本为各字段（不含 embed 标记）。 */
-function parseInner(inner: string): Omit<WikilinkNode, "type" | "embed"> {
+/** 解析 [[...]] 内部文本为各字段（不含 embed 与源位置字段）。 */
+function parseInner(
+  inner: string,
+): Omit<WikilinkNode, "type" | "embed" | "line" | "column" | "raw"> {
   // === Obsidian 规范来源: 先按首个 | 切出别名，再从链接段切锚点 ===
   const pipe = inner.indexOf("|");
   const linkPart = (pipe === -1 ? inner : inner.slice(0, pipe)).trim();
@@ -33,9 +41,8 @@ function parseInner(inner: string): Omit<WikilinkNode, "type" | "embed"> {
   const target = linkPart.slice(0, hash);
   const anchor = linkPart.slice(hash + 1);
   // #^ 优先识别为 block 引用，单 # 为 heading。
-  const fields: Omit<WikilinkNode, "type" | "embed"> = anchor.startsWith("^")
-    ? { target, blockId: anchor.slice(1) }
-    : { target, heading: anchor };
+  const fields: Omit<WikilinkNode, "type" | "embed" | "line" | "column" | "raw"> =
+    anchor.startsWith("^") ? { target, blockId: anchor.slice(1) } : { target, heading: anchor };
   if (alias) fields.alias = alias;
   return fields;
 }
@@ -44,12 +51,12 @@ function parseInner(inner: string): Omit<WikilinkNode, "type" | "embed"> {
  * 从文本中提取全部 wikilink / embed 节点。
  * 解析每个链接的 target、alias、heading 锚点、block 引用、是否 embed。
  *
- * 去重：同一文件内规范化（target basename + 锚点 + embed 标记）相同的链接只保留一次。
- * 之所以把 embed 纳入去重键，是因为 indexer 的 outlinks 需要区分 is_embed，
- * 若忽略 embed 会把 [[X]] 与 ![[X]] 合并而丢失嵌入语义。
+ * P0 links 诊断要求 parser 保留每一次出现，不能在解析层去重；indexer 若需要维持 outlinks
+ * 查询语义，应在写库边界按 target+anchor+embed 去重。
  *
- * @param text - 去掉 frontmatter 的正文
- * @returns 规范化后的 wikilink 节点数组；同一文件内 target+anchor+embed 相同的链接只保留一次
+ * @param text - 已等长屏蔽代码区的正文；未屏蔽时会按原文提取
+ * @param options - sourceText 用于回切 raw；lineOffset 用于换算完整文件行号
+ * @returns 规范化后的 wikilink 节点数组；每次出现都会保留源位置
  *
  * @behavior
  * Given 正文含 [[Target#Heading|Alias]] 形式的链接
@@ -64,34 +71,33 @@ function parseInner(inner: string): Omit<WikilinkNode, "type" | "embed"> {
  * @behavior
  * Given 同一文件内相同 target+anchor+embed 的链接出现多次
  * When 提取 wikilink
- * Then 只保留第一次出现的节点，后续重复被静默丢弃
+ * Then 每次出现都产出节点，供 links check 分别诊断位置
  *
  * @behavior
  * Given [[...]] 内部为空字符串
  * When 提取 wikilink
  * Then 该匹配被静默跳过，不产出节点
  */
-export function extractWikilinks(text: string): ObsidianNode[] {
+export function extractWikilinks(text: string, options: WikilinkOptions = {}): ObsidianNode[] {
   const out: ObsidianNode[] = [];
-  const seen = new Set<string>();
+  const sourceText = options.sourceText ?? text;
+  const lineOffset = options.lineOffset ?? 0;
 
   for (const m of text.matchAll(WIKILINK_RE)) {
     const embed = m[1] === "!";
     const inner = (m[2] ?? "").trim();
     if (inner === "") continue;
     const fields = parseInner(inner);
-
-    // 规范化去重键：basename 大小写不敏感 + 锚点小写 + embed 标记。
-    const anchor = fields.blockId
-      ? `#^${fields.blockId}`
-      : fields.heading
-        ? `#${fields.heading}`
-        : "";
-    const key = `${embed ? "!" : ""}${linkKey(fields.target)}${anchor.toLowerCase()}`;
-    if (seen.has(key)) continue;
-    seen.add(key);
-
-    out.push({ type: "wikilink", ...fields, embed });
+    const index = m.index ?? 0;
+    const raw = sourceText.slice(index, index + (m[0]?.length ?? 0));
+    const { line, column } = positionAt(text, index, lineOffset);
+    out.push({ type: "wikilink", ...fields, embed, line, column, raw });
   }
   return out;
+}
+
+/** indexer 写库前的 wikilink 去重键：保留历史 outlinks 聚合语义，不影响 parser 诊断节点。 */
+export function wikilinkIndexKey(node: WikilinkNode): string {
+  const anchor = node.blockId ? `#^${node.blockId}` : node.heading ? `#${node.heading}` : "";
+  return `${node.embed ? "!" : ""}${linkKey(node.target)}${anchor.toLowerCase()}`;
 }

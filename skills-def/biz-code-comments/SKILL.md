@@ -25,12 +25,12 @@ description: Use when writing, editing, or reviewing code comments, JSDoc, modul
 
 ```typescript
 /**
- * 从去掉 frontmatter 的正文中提取全部 wikilink / embed 节点。
+ * 从等长屏蔽代码区后的正文中提取全部 wikilink / embed 节点。
  *
- * @param text - 已剥离 frontmatter 的正文
- * @returns 规范化后的 wikilink 节点；同一文件内 target+anchor+embed 相同的链接只保留一次
+ * @param text - 已等长屏蔽代码区的正文
+ * @returns 规范化后的 wikilink 节点；每次出现都保留 line/column/raw，供 links/lint 精确诊断
  */
-export function extractWikilinks(text: string): ObsidianNode[] {
+export function extractWikilinks(text: string, options: WikilinkOptions = {}): ObsidianNode[] {
 ```
 
 ### 2. 模块头注释

@@ -27,6 +27,21 @@ export type ObsidianNode =
       heading?: string; // 标题锚点（# 后文本；与 blockId 互斥）
       blockId?: string; // 块引用 ID（#^ 后文本，不含 ^ 前缀；与 heading 互斥）
       embed: boolean; // true = ![[...]] 嵌入，false = [[...]] 普通链接；两者均计入 outlinks
+      line: number; // 1-based 完整文件行号（包含 frontmatter），供 links/lint 诊断回指编辑器位置
+      column: number; // 1-based UTF-16 code unit 列；与 JavaScript 字符串索引换算简单
+      raw: string; // 原始匹配文本，embed 时包含 ! 前缀
+    }
+  // markdownLink：标准 Markdown inline link / image link 的 P0 子集。
+  // 外部 URL、mailto、anchor-only link 也产出节点；是否跳过由后续 links check 判断。
+  | {
+      type: "markdownLink";
+      text: string;
+      target: string;
+      title?: string;
+      image: boolean;
+      line: number; // 1-based 完整文件行号（包含 frontmatter）
+      column: number; // 1-based UTF-16 code unit 列
+      raw: string;
     }
   // tag.value：不含 # 前缀，保留原始大小写（DB 存储时由 indexer 归一化为小写）。
   | { type: "tag"; value: string }
@@ -52,7 +67,7 @@ export type ObsidianNode =
  *
  * `frontmatter.tags`（若存在）由 indexer 单独消费并写入 tags 表（in_frontmatter=1），
  * parser 不在 nodes 中重复产出 frontmatter 标签，职责单一；
- * `nodes` 仅含正文行内提取的节点（wikilink/tag/callout/task/highlight/blockRef）。
+ * `nodes` 仅含正文行内提取的节点（wikilink/markdownLink/tag/callout/task/highlight/blockRef）。
  */
 export interface ParsedFile {
   frontmatter: Record<string, unknown>;

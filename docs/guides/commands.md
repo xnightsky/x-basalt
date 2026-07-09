@@ -1,6 +1,6 @@
 ---
-timestamp: 2026-06-30T23:25:53Z
-sha256: 322e0305140b567eb25ef25dfa38b3c9409b4121bfd254bd210461f36c3cf9bc
+timestamp: 2026-07-09T05:53:07Z
+sha256: 27c7e1a2b6ea895b1000d9720164815760a335267bec3cc952985da5445696e1
 type: guide
 title: 命令参考 · x-basalt
 description: x-basalt CLI 全部子命令的参数、输出形态与示例
@@ -9,6 +9,7 @@ tags:
   - cli
   - x-basalt
 ---
+
 # 命令参考 · x-basalt
 
 ← [使用指南索引](usage.md)
@@ -53,7 +54,7 @@ x-basalt parse <file> [--format json|yaml]
 }
 ```
 
-`nodes` 为 `ObsidianNode[]`——wikilink / tag / callout / task / highlight / blockRef 节点的类型与字段详见 [obsidian-syntax.md](obsidian-syntax.md)。
+`nodes` 为 `ObsidianNode[]`——wikilink / Markdown link / tag / callout / task / highlight / blockRef / inlineField 节点的类型与字段详见 [obsidian-syntax.md](obsidian-syntax.md)。链接类节点携带完整文件 `line` / `column` / `raw`，便于后续 links/lint 定位。
 
 **示例**
 
@@ -72,11 +73,11 @@ x-basalt index [vault...] [--db <path>] [--watch]
 
 全量构建 / 重建 Vault 索引，写入 SQLite。
 
-| 参数/选项     | 默认                             | 说明                                                                                                                       |
-| ------------- | -------------------------------- | -------------------------------------------------------------------------------------------------------------------------- |
+| 参数/选项     | 默认                             | 说明                                                                                                                                                                                                                      |
+| ------------- | -------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `[vault...]`  | 配置 `vault`                     | Vault 根目录，**可多个**（`index ./docs ./notes`）；省略时取配置 `vault`（可为列表），二者皆无则 `✗` 报错。多根索引其并集，主键以各根目录名作命名空间（目录名须互不相同）；详见 [configuration.md §6.5](configuration.md) |
-| `--db <path>` | `.x-basalt/index.db` / 配置 `db` | SQLite 路径；父目录自动创建                                                                                                |
-| `--watch`     | `false`                          | 建完索引后继续监听文件变更，逐条打印 `· <event> <file>`（无 `on-change` 回调，需联动命令请用 [`watch`](#watch--常驻监听)） |
+| `--db <path>` | `.x-basalt/index.db` / 配置 `db` | SQLite 路径；父目录自动创建                                                                                                                                                                                               |
+| `--watch`     | `false`                          | 建完索引后继续监听文件变更，逐条打印 `· <event> <file>`（无 `on-change` 回调，需联动命令请用 [`watch`](#watch--常驻监听)）                                                                                                |
 
 **行为细节**
 
@@ -118,7 +119,7 @@ x-basalt scan [vault...] [--db <path>] [--rehash] [--dry-run] [--json] [--by-dir
 | `--rehash`               | `false`                          | 按文件内容 hash 判断变化（慢但稳）；默认用 mtime + size 快速判断                                                                                                                                                                     |
 | `--dry-run`              | `false`                          | 仅报告差异，**不写库**（触发前预览用）                                                                                                                                                                                               |
 | `--json`                 | `false`                          | 输出结构化 JSON 报告（**始终含 `byDir`**，与 `--by-dir` 无关）；默认打印人读摘要                                                                                                                                                     |
-| `--by-dir`               | `false`                          | 人读模式下追加**按目录标量计数**明细（只报每个目录 added/modified/deleted 的数量，不列文件名——目录再多也不撞 maxChars/撞顶，问「每个子目录各多少」用这个）                                                                          |
+| `--by-dir`               | `false`                          | 人读模式下追加**按目录标量计数**明细（只报每个目录 added/modified/deleted 的数量，不列文件名——目录再多也不撞 maxChars/撞顶，问「每个子目录各多少」用这个）                                                                           |
 | `--pipe k=v` / `--apply` | —                                | 用**管道**处理 scan 出的变更（替代默认仅 index 落库）：一次性 **scan 源编排**，管道语义同 [`run`](#run--变更编排管道)（`--pipe actions=…` 内联 或 `--pipe use=<name>` 引用配置；`--apply` 才落盘）；输出为管道报告，有失败退出码 `1` |
 
 **输出形态**
@@ -173,13 +174,13 @@ x-basalt query "<dql>" [--db <path>] [--offset <n>] [--size <n>] [--vault <path>
 
 执行自建 Dataview（DQL）子集查询，只读打开索引库，不回读 `.md` 文件。
 
-| 参数/选项        | 默认                             | 说明                                                                                          |
-| ---------------- | -------------------------------- | --------------------------------------------------------------------------------------------- |
-| `<dql>`          | 必填                             | DQL 查询语句                                                                                  |
-| `--db <path>`    | `.x-basalt/index.db` / 配置 `db` | 要查询的 SQLite 路径（只读打开）；库不存在则 `✗` 报错                                          |
-| `--offset <n>`   | `0`                              | 结果起始偏移（分页）                                                                          |
-| `--size <n>`     | —（不传=不分页，返回全部）        | 本页最大行数；给定即分页（引擎层外层包 `LIMIT/OFFSET`，不改 DQL 文法）。`size=0` 只回 `total` 不取行；翻页 `offset += size` |
-| `--vault <path>` | —                                | 被接受但**当前不使用**：查询只读索引库，无需 Vault 目录                                        |
+| 参数/选项        | 默认                             | 说明                                                                                                                        |
+| ---------------- | -------------------------------- | --------------------------------------------------------------------------------------------------------------------------- |
+| `<dql>`          | 必填                             | DQL 查询语句                                                                                                                |
+| `--db <path>`    | `.x-basalt/index.db` / 配置 `db` | 要查询的 SQLite 路径（只读打开）；库不存在则 `✗` 报错                                                                       |
+| `--offset <n>`   | `0`                              | 结果起始偏移（分页）                                                                                                        |
+| `--size <n>`     | —（不传=不分页，返回全部）       | 本页最大行数；给定即分页（引擎层外层包 `LIMIT/OFFSET`，不改 DQL 文法）。`size=0` 只回 `total` 不取行；翻页 `offset += size` |
+| `--vault <path>` | —                                | 被接受但**当前不使用**：查询只读索引库，无需 Vault 目录                                                                     |
 
 **输出形态**
 
@@ -486,16 +487,16 @@ pipelines:
 x-basalt chat [input] [--model <name>] [--max-steps <n>] [--vault <path>]... [--db <path>]
 ```
 
-用自然语言驱动 vault：给 `[input]` 走**单发**（翻译→执行→输出→退出），省略则进 **REPL**（多轮、累积上下文）。底层把既有读写原语（query / parse / scan / meta_* / skills / pipeline_run）包成工具，模型自行多步调用；**写动作直接落盘**（无确认闸，靠 `Ctrl+C` 中断 + 原子写兜底）。
+用自然语言驱动 vault：给 `[input]` 走**单发**（翻译→执行→输出→退出），省略则进 **REPL**（多轮、累积上下文）。底层把既有读写原语（query / parse / scan / meta\_\* / skills / pipeline_run）包成工具，模型自行多步调用；**写动作直接落盘**（无确认闸，靠 `Ctrl+C` 中断 + 原子写兜底）。
 
 > **可选 AI**：需 `AI_GATEWAY_API_KEY`（兼容 `AI_GATEWAY_*`）；**无 key 时本命令友好退出、不影响其他命令**。内核零 AI，仅本命令懒加载 `ai` SDK。
 
-| 参数/选项          | 默认                       | 说明                                                                          |
-| ------------------ | -------------------------- | ----------------------------------------------------------------------------- |
-| `[input]`          | —                          | 自然语言指令；省略且 TTY → 进 REPL；省略且有管道输入 → 读 stdin 走单发         |
-| `--model <name>`   | 配置 / `AI_GATEWAY_MODEL`  | 覆盖模型名                                                                     |
-| `--max-steps <n>`  | `20`                       | agentic 最大步数；**撞顶不再静默停**——单发提示、REPL 可输入「继续」续跑       |
-| `--vault` / `--db` | 同其他命令（回退配置）     | 库目录 / 索引路径                                                              |
+| 参数/选项          | 默认                      | 说明                                                                    |
+| ------------------ | ------------------------- | ----------------------------------------------------------------------- |
+| `[input]`          | —                         | 自然语言指令；省略且 TTY → 进 REPL；省略且有管道输入 → 读 stdin 走单发  |
+| `--model <name>`   | 配置 / `AI_GATEWAY_MODEL` | 覆盖模型名                                                              |
+| `--max-steps <n>`  | `20`                      | agentic 最大步数；**撞顶不再静默停**——单发提示、REPL 可输入「继续」续跑 |
+| `--vault` / `--db` | 同其他命令（回退配置）    | 库目录 / 索引路径                                                       |
 
 REPL 内命令：`help` 用法 · `examples` 可玩示例 · `继续` 撞顶续跑 · `quit`/`exit`/`q` 退出；`Ctrl+C` 中断当前轮。
 

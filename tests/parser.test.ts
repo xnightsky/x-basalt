@@ -14,6 +14,13 @@ function wikilinks(nodes: ObsidianNode[]) {
   );
 }
 
+/** 取出 Markdown inline link / image link 节点，便于断言 P0 links 定位契约。 */
+function markdownLinks(nodes: ObsidianNode[]) {
+  return nodes.filter(
+    (n): n is Extract<ObsidianNode, { type: "markdownLink" }> => n.type === "markdownLink",
+  );
+}
+
 test("VaultParser 可实例化", () => {
   assert.ok(new VaultParser());
 });
@@ -57,35 +64,108 @@ test("extractWikilinks：基础 / 别名 / 路径 / heading / blockId / 组合",
       ].join("\n"),
     ),
   );
-  assert.deepEqual(links[0], { type: "wikilink", target: "NoteA", embed: false });
-  assert.deepEqual(links[1], { type: "wikilink", target: "NoteB", alias: "Alias", embed: false });
-  assert.deepEqual(links[2], { type: "wikilink", target: "Folder/NoteC", embed: false });
-  assert.deepEqual(links[3], {
+  assert.deepEqual(
+    links.map(({ line: _line, column: _column, raw: _raw, ...link }) => link),
+    [
+      { type: "wikilink", target: "NoteA", embed: false },
+      { type: "wikilink", target: "NoteB", alias: "Alias", embed: false },
+      { type: "wikilink", target: "Folder/NoteC", embed: false },
+      {
+        type: "wikilink",
+        target: "NoteD",
+        heading: "Heading",
+        embed: false,
+      },
+      {
+        type: "wikilink",
+        target: "NoteE",
+        blockId: "block-id",
+        embed: false,
+      },
+      {
+        type: "wikilink",
+        target: "Folder/NoteF",
+        heading: "Heading",
+        alias: "Alias",
+        embed: false,
+      },
+    ],
+  );
+});
+
+test("extractWikilinks：source span 默认为正文相对位置", () => {
+  const links = wikilinks(extractWikilinks("前缀 [[Note]]\n下一行 ![[Asset.png]]"));
+  assert.deepEqual(
+    links.map((l) => ({
+      target: l.target,
+      embed: l.embed,
+      line: l.line,
+      column: l.column,
+      raw: l.raw,
+    })),
+    [
+      { target: "Note", embed: false, line: 1, column: 4, raw: "[[Note]]" },
+      { target: "Asset.png", embed: true, line: 2, column: 5, raw: "![[Asset.png]]" },
+    ],
+  );
+});
+
+test("extractWikilinks：parser 诊断源不按 basename 去重", () => {
+  const links = wikilinks(extractWikilinks("[[Note]] [[Note|别名]] [[Folder/Note]]"));
+  assert.deepEqual(
+    links.map((l) => ({ target: l.target, alias: l.alias, column: l.column, raw: l.raw })),
+    [
+      { target: "Note", alias: undefined, column: 1, raw: "[[Note]]" },
+      { target: "Note", alias: "别名", column: 10, raw: "[[Note|别名]]" },
+      { target: "Folder/Note", alias: undefined, column: 22, raw: "[[Folder/Note]]" },
+    ],
+  );
+});
+
+test("extractWikilinks：同文件相同 target+anchor 重复出现也保留，embed 仍标记", () => {
+  const links = wikilinks(
+    extractWikilinks("[[Note]] 又一次 [[Note]]\n[[Note#核心]] 和 ![[Note#核心]]"),
+  );
+  assert.equal(links.length, 4);
+  assert.equal(links.filter((l) => l.embed).length, 1);
+  assert.deepEqual(
+    links.map((l) => l.raw),
+    ["[[Note]]", "[[Note]]", "[[Note#核心]]", "![[Note#核心]]"],
+  );
+});
+
+test("extractWikilinks：heading / blockId / alias 字段解析", () => {
+  const links = wikilinks(
+    extractWikilinks("[[NoteD#Heading]]\n[[NoteE#^block-id]]\n[[Folder/NoteF#Heading|Alias]]"),
+  );
+  assert.deepEqual(links[0], {
     type: "wikilink",
     target: "NoteD",
     heading: "Heading",
     embed: false,
+    line: 1,
+    column: 1,
+    raw: "[[NoteD#Heading]]",
   });
-  assert.deepEqual(links[4], {
+  assert.deepEqual(links[1], {
     type: "wikilink",
     target: "NoteE",
     blockId: "block-id",
     embed: false,
+    line: 2,
+    column: 1,
+    raw: "[[NoteE#^block-id]]",
   });
-  assert.deepEqual(links[5], {
+  assert.deepEqual(links[2], {
     type: "wikilink",
     target: "Folder/NoteF",
     heading: "Heading",
     alias: "Alias",
     embed: false,
+    line: 3,
+    column: 1,
+    raw: "[[Folder/NoteF#Heading|Alias]]",
   });
-});
-
-test("extractWikilinks：basename 去重——[[Note]] / [[Note|A]] / [[Folder/Note]] 合并为一条", () => {
-  const links = wikilinks(extractWikilinks("[[Note]] [[Note|别名]] [[Folder/Note]]"));
-  assert.equal(links.length, 1);
-  // 保留首个出现的形态
-  assert.deepEqual(links[0], { type: "wikilink", target: "Note", embed: false });
 });
 
 test("extractWikilinks：embed 前缀 ! 标记 embed=true（笔记与资源）", () => {
@@ -99,13 +179,44 @@ test("extractWikilinks：embed 前缀 ! 标记 embed=true（笔记与资源）",
   assert.equal(links[1].target, "assets/diagram.png");
 });
 
-test("extractWikilinks：同文件相同 target+anchor 去重，link 与 embed 各保留", () => {
-  const links = wikilinks(
-    extractWikilinks("[[Note]] 又一次 [[Note]]\n[[Note#核心]] 和 ![[Note#核心]]"),
+test("VaultParser.parse：wikilink 定位契约使用完整文件行号、UTF-16 列与原始 raw", () => {
+  const { nodes } = new VaultParser().parse(
+    "---\ntitle: T\n---\n\n前缀 [[Note|别名]]\n![[assets/diagram.png]]",
   );
-  // 两个 [[Note]] 去重为 1；[[Note#核心]] 与 ![[Note#核心]] embed 不同各保留 1
-  assert.equal(links.length, 3);
-  assert.equal(links.filter((l) => l.embed).length, 1);
+  assert.deepEqual(wikilinks(nodes), [
+    {
+      type: "wikilink",
+      target: "Note",
+      alias: "别名",
+      embed: false,
+      line: 5,
+      column: 4,
+      raw: "[[Note|别名]]",
+    },
+    {
+      type: "wikilink",
+      target: "assets/diagram.png",
+      embed: true,
+      line: 6,
+      column: 1,
+      raw: "![[assets/diagram.png]]",
+    },
+  ]);
+});
+
+test("VaultParser.parse：wikilink 不为诊断去重，代码区域内链接不产出", () => {
+  const { nodes } = new VaultParser().parse(
+    ["[[Missing]] 再次 [[Missing]]", "```", "[[CodeOnly]]", "```", "行内 `[[InlineCode]]`"].join(
+      "\n",
+    ),
+  );
+  assert.deepEqual(
+    wikilinks(nodes).map((l) => ({ target: l.target, line: l.line, column: l.column, raw: l.raw })),
+    [
+      { target: "Missing", line: 1, column: 1, raw: "[[Missing]]" },
+      { target: "Missing", line: 1, column: 16, raw: "[[Missing]]" },
+    ],
+  );
 });
 
 /** 按类型筛选 VaultParser.parse 的节点。 */
@@ -203,6 +314,93 @@ test("VaultParser.parse：行内代码内的 #tag 与 ==高亮== 不被提取", 
   );
 });
 
+test("VaultParser.parse：Markdown link / image link 产出定位节点", () => {
+  const { nodes } = new VaultParser().parse(
+    [
+      "见 [Alpha](Projects/Alpha.md) 与 ![图](assets/diagram.png)",
+      '标题 [Beta](Projects/Beta.md "Beta 标题")',
+      "外部 [站点](https://example.com) 邮件 [mail](mailto:a@example.com) 锚点 [top](#top)",
+    ].join("\n"),
+  );
+  assert.deepEqual(markdownLinks(nodes), [
+    {
+      type: "markdownLink",
+      text: "Alpha",
+      target: "Projects/Alpha.md",
+      image: false,
+      line: 1,
+      column: 3,
+      raw: "[Alpha](Projects/Alpha.md)",
+    },
+    {
+      type: "markdownLink",
+      text: "图",
+      target: "assets/diagram.png",
+      image: true,
+      line: 1,
+      column: 32,
+      raw: "![图](assets/diagram.png)",
+    },
+    {
+      type: "markdownLink",
+      text: "Beta",
+      target: "Projects/Beta.md",
+      title: "Beta 标题",
+      image: false,
+      line: 2,
+      column: 4,
+      raw: '[Beta](Projects/Beta.md "Beta 标题")',
+    },
+    {
+      type: "markdownLink",
+      text: "站点",
+      target: "https://example.com",
+      image: false,
+      line: 3,
+      column: 4,
+      raw: "[站点](https://example.com)",
+    },
+    {
+      type: "markdownLink",
+      text: "mail",
+      target: "mailto:a@example.com",
+      image: false,
+      line: 3,
+      column: 33,
+      raw: "[mail](mailto:a@example.com)",
+    },
+    {
+      type: "markdownLink",
+      text: "top",
+      target: "#top",
+      image: false,
+      line: 3,
+      column: 65,
+      raw: "[top](#top)",
+    },
+  ]);
+});
+
+test("VaultParser.parse：代码块 / 行内代码内的 Markdown link 不产出", () => {
+  const { nodes } = new VaultParser().parse(
+    [
+      "[Real](real.md)",
+      "```",
+      "[Code](code.md)",
+      "![CodeImg](code.png)",
+      "```",
+      "行内 `[Inline](inline.md)` 之后 ![RealImg](real.png)",
+    ].join("\n"),
+  );
+  assert.deepEqual(
+    markdownLinks(nodes).map((l) => ({ text: l.text, target: l.target, image: l.image })),
+    [
+      { text: "Real", target: "real.md", image: false },
+      { text: "RealImg", target: "real.png", image: true },
+    ],
+  );
+});
+
 test("VaultParser.parse：blockRef 取行尾 ^id 定义，不误判 [[#^id]] 引用", () => {
   const { nodes } = new VaultParser().parse(
     "可被块引用。 ^decision-1\n引用 [[Note#^decision-1]] 不是定义",
@@ -231,9 +429,7 @@ test("VaultParser.parse：整行形态允许列表项前缀；同一行多个行
   const { nodes } = new VaultParser().parse(
     "- k1:: v1\n* k2:: v2\n- [[三体]] (rating:: 5) [read:: 2026-01]",
   );
-  const byKey = Object.fromEntries(
-    nodesOfType(nodes, "inlineField").map((f) => [f.key, f.value]),
-  );
+  const byKey = Object.fromEntries(nodesOfType(nodes, "inlineField").map((f) => [f.key, f.value]));
   assert.deepEqual(byKey, { k1: "v1", k2: "v2", read: "2026-01", rating: "5" });
 });
 
@@ -262,9 +458,7 @@ test("VaultParser.parse：代码块 / 行内代码内的 key:: value 不提取",
   const { nodes } = new VaultParser().parse(
     ["real:: 1", "```", "fake:: 2", "```", "行内 `code:: 3` 之后 (ok:: 4)"].join("\n"),
   );
-  const byKey = Object.fromEntries(
-    nodesOfType(nodes, "inlineField").map((f) => [f.key, f.value]),
-  );
+  const byKey = Object.fromEntries(nodesOfType(nodes, "inlineField").map((f) => [f.key, f.value]));
   assert.deepEqual(byKey, { real: "1", ok: "4" });
 });
 

@@ -1,15 +1,16 @@
 ---
-timestamp: 2026-07-02T05:43:48Z
-sha256: 9512f57ac5f1f98ef9a7f8dae6f0e5d8a720bb1423b9746b9c922904ca0e92cc
+timestamp: 2026-07-09T05:53:07Z
+sha256: ed72f443a633ae0a6e214edd08ac149f3f2ae16ac9638d72dd9210dca653ab7b
 type: guide
 title: 解析层覆盖的 Obsidian 语法
-description: parser 层支持的 wikilink/tag/callout/task 等 Obsidian 专有语法边界
+description: parser 层支持的 wikilink、Markdown link、tag、callout、task 等语法边界与链接定位契约
 tags:
   - guide
   - parser
   - obsidian
   - x-basalt
 ---
+
 # 解析层覆盖的 Obsidian 语法
 
 > 章节归属：[使用指南索引 →](usage.md) · 同级章节：[installation.md](installation.md) · [commands.md](commands.md) · [querying-dql.md](querying-dql.md) · [indexing-and-sync.md](indexing-and-sync.md) · [configuration.md](configuration.md) · [ai-and-skills.md](ai-and-skills.md) · [troubleshooting.md](troubleshooting.md)
@@ -24,6 +25,7 @@ tags:
 
 ```
 parseFrontmatter  →  extractWikilinks  →  maskCode（代码区掩码）
+→  extractWikilinks / extractMarkdownLinks（掩码后正文，回切 raw）
 →  extractTags（掩码后正文）  →  extractCallouts  →  extractTasks
 →  extractHighlights（掩码后正文）  →  extractBlockRefs
 →  extractInlineFields（掩码后正文）
@@ -38,11 +40,11 @@ parseFrontmatter  →  extractWikilinks  →  maskCode（代码区掩码）
 **亮点机制**：在提取行内语法前，先对正文中的代码区域执行**等长掩码**——把围栏代码块（` ``` ` / `~~~`）与行内代码（成对反引号）内的非换行字符替换为等量空格。
 
 - 等长掩码**保留行结构和字符偏移**，后续按行计算 `task`/`blockRef` 行号完全不受影响。
-- `#tag` 和 `==高亮==` 在掩码后的正文上提取，代码注释里的 `# comment`、字符串里的 `==x==` 不会被误识。
+- `wikilink` / Markdown link / `#tag` / `==高亮==` / inline fields 在掩码后的正文上提取，代码注释里的 `[[Fake]]`、`[fake](x.md)`、`# comment`、字符串里的 `==x==` 不会被误识。
 - 行内代码：开合反引号串**数量相等**才成对（CommonMark 语义），无闭合则视作普通文本。
 - 未闭合的围栏块掩码至文末（贴近渲染行为）。
 
-**已知近似**：`[[wikilink]]` 和 `- [ ] task` 暂时**不受掩码保护**，代码块内的此类语法仍会被提取（已知偏差，见[已知近似](#已知近似简表)）。
+**已知近似**：`- [ ] task` 暂时**不受掩码保护**，代码块内的 task 行仍会被提取（已知偏差，见[已知近似](#已知近似简表)）。
 
 ---
 
@@ -50,17 +52,19 @@ parseFrontmatter  →  extractWikilinks  →  maskCode（代码区掩码）
 
 ### 完整列表
 
-| 节点        | 触发语法                                                                                                     | 字段                                        |
-| ----------- | ------------------------------------------------------------------------------------------------------------ | ------------------------------------------- |
-| `wikilink`  | `[[Note]]` / `[[Note\|Alias]]` / `[[F/Note]]` / `[[Note#Heading]]` / `[[Note#^block-id]]`，前缀 `!` 为 embed | `target, alias?, heading?, blockId?, embed` |
-| `tag`       | 行内 `#tag` / 嵌套 `#a/b/c`                                                                                  | `value`（不带 `#`）                         |
-| `callout`   | `> [!type] Title` + 后续 `>` 行，`+`/`-` 折叠标记                                                            | `calloutType, title, foldable, content`     |
-| `task`      | `- [x] text` / `- [ ] text` / `- [-] text` / `- [?] text`（任意单字符状态）                                  | `status, text, line`                        |
-| `highlight` | `==text==`                                                                                                   | `content`                                   |
-| `blockRef`  | 行尾 `^block-id` 定义                                                                                        | `id, line`                                  |
-| `inlineField` | `key:: value`（整行 / `[k:: v]` / `(k:: v)` 三形态，Dataview 扩展）                                        | `key, value, line`                          |
+| 节点           | 触发语法                                                                                                     | 字段                                                           |
+| -------------- | ------------------------------------------------------------------------------------------------------------ | -------------------------------------------------------------- |
+| `wikilink`     | `[[Note]]` / `[[Note\|Alias]]` / `[[F/Note]]` / `[[Note#Heading]]` / `[[Note#^block-id]]`，前缀 `!` 为 embed | `target, alias?, heading?, blockId?, embed, line, column, raw` |
+| `markdownLink` | `[text](target)` / `![alt](target)` / `[text](target "title")`                                               | `text, target, title?, image, line, column, raw`               |
+| `tag`          | 行内 `#tag` / 嵌套 `#a/b/c`                                                                                  | `value`（不带 `#`）                                            |
+| `callout`      | `> [!type] Title` + 后续 `>` 行，`+`/`-` 折叠标记                                                            | `calloutType, title, foldable, content`                        |
+| `task`         | `- [x] text` / `- [ ] text` / `- [-] text` / `- [?] text`（任意单字符状态）                                  | `status, text, line`                                           |
+| `highlight`    | `==text==`                                                                                                   | `content`                                                      |
+| `blockRef`     | 行尾 `^block-id` 定义                                                                                        | `id, line`                                                     |
+| `inlineField`  | `key:: value`（整行 / `[k:: v]` / `(k:: v)` 三形态，Dataview 扩展）                                          | `key, value, line`                                             |
 
 `task`/`blockRef`/`inlineField` 的 `line` 是**1-based 正文行号**（已剥离 frontmatter 后的正文），indexer 据此回填数据库的 `line_number` 列。
+`wikilink`/`markdownLink` 的 `line` 是**1-based 完整文件行号**（包含 frontmatter），`column` 是 **1-based UTF-16 code unit 列**，`raw` 是原始匹配文本，供后续 `links check` / `lint` 精确定位。
 
 ---
 
@@ -80,14 +84,40 @@ parseFrontmatter  →  extractWikilinks  →  maskCode（代码区掩码）
 
 **解析顺序**：`target` → （`#heading` 或 `#^blockId`）→ `|alias`。`#^` **优先识别为 blockId**，单 `#` 为 heading。
 
-**去重规则**：同一文件内，`target basename`（小写）+ 锚点 + embed 标记 构成去重键。`[[X]]` 与 `![[X]]` embed 标记不同，**各自保留**。
+**诊断节点规则**：parser 保留每一次出现，不按 target 去重；同一坏链重复出现时会产出多个带不同 `line`/`column` 的节点，便于后续 links/lint 分别报位置。indexer 写 `links` 表前仍按 `target basename`（小写）+ 锚点 + embed 标记 去重，保持 `file.inlinks`/`file.outlinks` 聚合不膨胀。
 
 ```bash
 # 示例：parse 输出中 wikilink 节点的形态
 x-basalt parse note.md --format json
 # nodes 中的 wikilink：
-# { "type": "wikilink", "target": "Folder/Note", "heading": "Intro", "alias": "见简介", "embed": false }
-# { "type": "wikilink", "target": "Image", "embed": true }
+# { "type": "wikilink", "target": "Folder/Note", "heading": "Intro", "alias": "见简介", "embed": false, "line": 8, "column": 3, "raw": "[[Folder/Note#Intro|见简介]]" }
+# { "type": "wikilink", "target": "Image", "embed": true, "line": 9, "column": 1, "raw": "![[Image]]" }
+```
+
+---
+
+### markdownLink（Markdown inline link / image）
+
+**支持形态**：
+
+| 写法                         | 说明                      |
+| ---------------------------- | ------------------------- |
+| `[Alpha](Projects/Alpha.md)` | 普通 Markdown inline link |
+| `![图](assets/diagram.png)`  | Markdown image link       |
+| `[Beta](Beta.md "标题")`     | 简单引号 title            |
+
+P0 只覆盖 inline link 子集；reference link（`[text][id]`）、嵌套括号、复杂转义暂不解析。外部 URL、`mailto:`、`#anchor` 也会产出节点，是否跳过由后续 links check 判断。
+
+```json
+{
+  "type": "markdownLink",
+  "text": "Alpha",
+  "target": "Projects/Alpha.md",
+  "image": false,
+  "line": 12,
+  "column": 5,
+  "raw": "[Alpha](Projects/Alpha.md)"
+}
 ```
 
 ---
@@ -178,18 +208,19 @@ x-basalt parse note.md --format json
 
 ```markdown
 rating:: 5
+
 - 列表项里 key:: value 也算整行形态
-这本书 [author:: 张三] 值得重读
-这本书 (published:: 2026-01) 阅读视图里键隐藏
+  这本书 [author:: 张三] 值得重读
+  这本书 (published:: 2026-01) 阅读视图里键隐藏
 ```
 
-| 规则        | 说明                                                                                                        |
-| ----------- | ----------------------------------------------------------------------------------------------------------- |
-| key 字符集  | v1 仅 `[A-Za-z0-9_]+`（与 DQL 字段白名单对齐）；带空格/连字符 key 不解析（backlog）                          |
-| 同名 key    | **last-wins**：同文件多次出现（含大小写差异，按小写归一）只保留最后一次；`key` 保留原大小写                  |
-| 空值        | `key::`（空 value）不产出节点                                                                               |
-| 代码区      | 在掩码后正文提取，围栏 / 行内代码内的 `k:: v` 不误识                                                          |
-| 整行 vs 行内 | 整行形态独占该行（值取到行尾，可含 `[ ] ( )` 字面）；非整行时同一行可提取多个 `[k:: v]` / `(k:: v)`           |
+| 规则         | 说明                                                                                                |
+| ------------ | --------------------------------------------------------------------------------------------------- |
+| key 字符集   | v1 仅 `[A-Za-z0-9_]+`（与 DQL 字段白名单对齐）；带空格/连字符 key 不解析（backlog）                 |
+| 同名 key     | **last-wins**：同文件多次出现（含大小写差异，按小写归一）只保留最后一次；`key` 保留原大小写         |
+| 空值         | `key::`（空 value）不产出节点                                                                       |
+| 代码区       | 在掩码后正文提取，围栏 / 行内代码内的 `k:: v` 不误识                                                |
+| 整行 vs 行内 | 整行形态独占该行（值取到行尾，可含 `[ ] ( )` 字面）；非整行时同一行可提取多个 `[k:: v]` / `(k:: v)` |
 
 `value` 为原始文本（trim 后，不类型化）。查询侧与 frontmatter 的合并语义（同命名空间、frontmatter 胜）见 [querying-dql.md](querying-dql.md) §7.4；设计真相源 `docs/specs/2026-07-02-inline-fields-design.md`。
 
@@ -216,12 +247,12 @@ status: in-progress
 
 ## 已知近似（简表）
 
-| 近似项                    | 当前行为                        | 影响                                                                                        |
-| ------------------------- | ------------------------------- | ------------------------------------------------------------------------------------------- |
-| 代码块内的 `[[wikilink]]` | 仍按正文提取，不剔除            | 代码示例中的链接会进 links 表                                                               |
-| 代码块内的 `- [ ] task`   | 仍按正文提取，不剔除            | 代码块内任务会进 tasks 表                                                                   |
-| 同名 basename 链接歧义    | 取索引中首个匹配（近似）        | 多文件同名时可能指向错误文件；路径感知解析详见 [indexing-and-sync.md](indexing-and-sync.md) |
-| 大小写                    | 链接 / 标签匹配默认大小写不敏感 | 与 Obsidian 官方行为一致                                                                    |
+| 近似项                                     | 当前行为                        | 影响                                                                                        |
+| ------------------------------------------ | ------------------------------- | ------------------------------------------------------------------------------------------- |
+| Markdown reference link / 复杂 inline link | 暂不产出 `markdownLink` 节点    | 后续 links check 无法检查这类链接；先用 inline link 形态规避                                |
+| 代码块内的 `- [ ] task`                    | 仍按正文提取，不剔除            | 代码块内任务会进 tasks 表                                                                   |
+| 同名 basename 链接歧义                     | 取索引中首个匹配（近似）        | 多文件同名时可能指向错误文件；路径感知解析详见 [indexing-and-sync.md](indexing-and-sync.md) |
+| 大小写                                     | 链接 / 标签匹配默认大小写不敏感 | 与 Obsidian 官方行为一致                                                                    |
 
 ---
 

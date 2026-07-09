@@ -5,6 +5,7 @@ import { readdir, readFile, stat } from "node:fs/promises";
 import { basename, dirname, extname, join, posix as posixPath, sep } from "node:path";
 import { parseFrontmatter } from "../parser/frontmatter.js";
 import { VaultParser } from "../parser/index.js";
+import { wikilinkIndexKey } from "../parser/wikilink.js";
 import { linkKey, pathKey, resolveVaultLayout, type VaultLayout } from "../utils/path.js";
 import { createSchema } from "./schema.js";
 import { startWatch } from "./watcher.js";
@@ -179,7 +180,9 @@ function ensureFts(db: Db): void {
 
   db.exec("DROP TABLE IF EXISTS files_fts");
   db.exec("CREATE VIRTUAL TABLE files_fts USING fts5(path, name, content, tokenize='trigram')");
-  db.exec("INSERT INTO files_fts(rowid, path, name, content) SELECT id, path, name, content FROM files");
+  db.exec(
+    "INSERT INTO files_fts(rowid, path, name, content) SELECT id, path, name, content FROM files",
+  );
   db.prepare(
     "INSERT INTO store_config(key, value) VALUES ('fts_version', ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value",
   ).run(FTS_VERSION);
@@ -463,7 +466,8 @@ export class VaultIndexer {
     // 删除 = 在库不在 FS，且不属于本轮缺失的根（见上 @behavior）。
     for (const path of dbMap.keys()) {
       if (fsMap.has(path)) continue;
-      if (missingRoots.length > 0 && isUnderAnyRoot(this.layout.toAbs(path), missingRoots)) continue;
+      if (missingRoots.length > 0 && isUnderAnyRoot(this.layout.toAbs(path), missingRoots))
+        continue;
       deleted.push(path);
     }
     for (const [rel, fs] of fsMap) {
@@ -581,7 +585,12 @@ export class VaultIndexer {
     let last: ScanProgress | undefined;
     for await (const p of this.scanIter(opts)) last = p;
     const report = last
-      ? { added: last.added, modified: last.modified, deleted: last.deleted, unchanged: last.unchanged }
+      ? {
+          added: last.added,
+          modified: last.modified,
+          deleted: last.deleted,
+          unchanged: last.unchanged,
+        }
       : { added: [], modified: [], deleted: [], unchanged: 0 };
     return { ...report, byDir: groupByDir(report) };
   }
@@ -693,6 +702,7 @@ export class VaultIndexer {
     const bodyLines = parseFrontmatter(content).body.split(/\r?\n/);
 
     const links: LinkRow[] = [];
+    const seenLinkKeys = new Set<string>();
     const tags: TagRow[] = [];
     const tasks: TaskRow[] = [];
     const blocks: BlockRow[] = [];
@@ -701,6 +711,13 @@ export class VaultIndexer {
     for (const node of nodes) {
       switch (node.type) {
         case "wikilink":
+          {
+            // parser 保留每次出现供 links/lint 诊断；indexer 仍按历史 target+anchor+embed 去重，
+            // 保持 file.inlinks/file.outlinks 聚合不因同一文件重复链接而膨胀。
+            const key = wikilinkIndexKey(node);
+            if (seenLinkKeys.has(key)) break;
+            seenLinkKeys.add(key);
+          }
           links.push({
             source: rel,
             target: node.target,

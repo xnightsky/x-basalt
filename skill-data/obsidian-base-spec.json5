@@ -2,10 +2,13 @@
   // 内置兜底 skill：即使外部 skill 目录为空，也能召回 Obsidian 基础规范。
   // 由 src/skill（SkillRecall）在运行时加载；triggers 用于模糊召回。
   name: "obsidian-base-spec",
-  description: "Obsidian Markdown 与 Dataview(DQL) 子集语法规范：wikilink/embed/frontmatter/tag/callout/task/highlight/blockRef/inline fields(key:: value) 提取规则与 DQL 文法。",
+  description: "Obsidian Markdown 与 Dataview(DQL) 子集语法规范：wikilink/embed/Markdown link/frontmatter/tag/callout/task/highlight/blockRef/inline fields(key:: value) 提取规则与 DQL 文法。",
   triggers: [
     "wikilink",
     "link",
+    "markdown link",
+    "markdown image",
+    "markdownLink",
     "embed",
     "alias",
     "heading",
@@ -36,17 +39,37 @@
     "where",
     "sort",
   ],
-  patterns: ["[[...]]", "![[...]]", "#tag", "> [!type]", "- [ ]", "==text==", "^block-id", "key:: value"],
+  patterns: [
+    "[[...]]",
+    "![[...]]",
+    "[text](target)",
+    "![alt](target)",
+    "#tag",
+    "> [!type]",
+    "- [ ]",
+    "==text==",
+    "^block-id",
+    "key:: value",
+  ],
   rules: [
     {
       pattern: "\\[\\[([^\\]|#^]+)(#([^\\]|^]+))?(\\^([^\\]|]+))?(\\|([^\\]]+))?\\]\\]",
-      description: "Wikilink：[[Note]] / [[Note|Alias]] / [[Folder/Note]] / [[Note#Heading]] / [[Note#^block-id]]。解析顺序 target →（#heading 或 #^blockId）→ |alias。",
+      description: "Wikilink：[[Note]] / [[Note|Alias]] / [[Folder/Note]] / [[Note#Heading]] / [[Note#^block-id]]。解析顺序 target →（#heading 或 #^blockId）→ |alias。parse 节点含完整文件 line/column/raw；parser 不去重，indexer 写 links 表前去重。",
       examples: ["[[Note]]", "[[Note|Alias]]", "[[Folder/Note#Heading|别名]]", "[[Note#^abc123]]"],
     },
     {
       pattern: "!\\[\\[([^\\]]+)\\]\\]",
-      description: "Embed：![[...]]。target 带媒体扩展名（png/jpg/mp4/pdf 等）为资源嵌入，否则为笔记嵌入。embed 同时计入 outlinks。",
+      description: "Embed：![[...]]。target 带媒体扩展名（png/jpg/mp4/pdf 等）为资源嵌入，否则为笔记嵌入。embed 同时计入 outlinks；parse 节点 raw 含 ! 前缀。",
       examples: ["![[Note]]", "![[image.png]]", "![[video.mp4]]"],
+    },
+    {
+      pattern: "!?\\[[^\\]\\n]+\\]\\([^\\)\\n]+\\)",
+      description: 'Markdown inline link / image link（P0 子集）：[text](target)、![alt](target)、[text](target "title")。parse 产出 markdownLink 节点：text/target/title?/image/line/column/raw。外部 URL、mailto、#anchor 也产出节点；reference link、嵌套括号、复杂转义暂不支持。代码块/行内代码内不产出。',
+      examples: [
+        "[Alpha](Projects/Alpha.md)",
+        "![图](assets/diagram.png)",
+        '[Beta](Beta.md "标题")',
+      ],
     },
     {
       pattern: "^---\\n([\\s\\S]*?)\\n---",
@@ -92,8 +115,8 @@
       description: 'Dataview DQL 子集：LIST|TABLE <fields> [FROM <源>] [WHERE <cond>] [GROUP BY <field>] [FLATTEN <field>] [SORT <field> ASC|DESC] [LIMIT <n>]。FROM 可省略，省略或 FROM "" 均表示全库；FROM 源仅三类："folder"(含子文件夹) / #tag(前缀命中子标签) / [[link]](反链)。按 frontmatter 字段筛笔记一律用 WHERE，别把字段名或取值当 #tag 写进 FROM。操作符 = != < > <= >= / contains/icontains/startswith/endswith / AND OR NOT / regexmatch。**判断属性有无**：裸字段真值 `WHERE field`（有且为真值，缺失/null/0/空串/空数组 皆 falsy，对标官方 isTruthy）、`!field`（无或为 falsy）；另有显式 null 判断 `field = null` / `!= null`（测「键是否存在」，把 0/空串/空数组视为「有」，与 !field 在 falsy 值上相反——问「有没有 X」默认用 `!field`/`WHERE field`）。隐式字段 file.name/path/folder/extension/size/mtime/ctime/tags/inlinks/outlinks/tasks/frontmatter，外加任意 frontmatter 标量字段（含正文 inline fields `key:: value`，与 frontmatter 同一命名空间、同名 frontmatter 胜）。**判断"完全没有 frontmatter"**（而非某具名字段缺失）用 `!file.frontmatter`（无任何顶层键）/ `WHERE file.frontmatter`（有任意键）——与「未被索引」是两回事，别混淆：数「多少篇没被索引」用 scan 工具的 counts/byDir，不是 DQL。**计数**：count() / length(rows) 是 GROUP BY 聚合列（按 <field> 分组的文件数），单独 `TABLE count()` 不带 GROUP BY 无效；要全库总数用 `TABLE count() FROM "" GROUP BY file.extension`，或直接读任一 query 结果的 total 字段。DQL 只有 LIMIT、**无 OFFSET**——分页在 CLI `--offset/--size` 或 chat 工具 offset/size 层做，不在 DQL 文法里。',
       examples: [
         'LIST WHERE type = "moc"',
-        'LIST WHERE status          // 有 status（真值；缺失/空串/0 不算）',
-        'LIST WHERE !index          // 没有 index（缺失或 falsy）——问「多少篇没有 X」用这个',
+        "LIST WHERE status          // 有 status（真值；缺失/空串/0 不算）",
+        "LIST WHERE !index          // 没有 index（缺失或 falsy）——问「多少篇没有 X」用这个",
         'LIST WHERE !file.frontmatter // 完全没有 frontmatter（无任何顶层键）——不是"没被索引"',
         'TABLE file.name, rating FROM "" WHERE rating >= 4 SORT rating DESC',
         "LIST FROM #project WHERE status = 'active' SORT file.mtime DESC LIMIT 10",
@@ -107,8 +130,20 @@
     supports_alias: true,
     supports_heading_anchor: true,
     supports_block_ref: true,
+    supports_markdown_inline_link_nodes: true,
+    link_nodes_have_source_span: true,
     embed_distinguishes_asset: true,
     case_sensitive: false,
-    dql_subset: ["LIST", "TABLE", "FROM", "WHERE", "GROUP BY", "FLATTEN", "SORT", "LIMIT", "count()"],
+    dql_subset: [
+      "LIST",
+      "TABLE",
+      "FROM",
+      "WHERE",
+      "GROUP BY",
+      "FLATTEN",
+      "SORT",
+      "LIMIT",
+      "count()",
+    ],
   },
 }

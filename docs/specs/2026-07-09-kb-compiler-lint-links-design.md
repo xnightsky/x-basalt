@@ -9,13 +9,14 @@ tags:
   - links
   - parser
   - x-basalt
-timestamp: 2026-07-09T05:27:46Z
-sha256: f0d171ab7e595cbafb402793dba855367c4e4b47ddf5e9cd205635892489e2ac
+timestamp: 2026-07-09T05:53:07Z
+sha256: 97921931f4ec9fa229524a6131e2a330880a7b4e2e40ef83a3a9cb5d881cad9e
 ---
+
 # KB compiler / lint / links 设计规格
 
 > 日期：2026-07-09 · 类型：parser 定位契约 + links/lint/profile 分层设计
-> 状态：设计入口已建立；实现前需先开对应 plan。关联调研：[`../research/2026-07-09-markdown-kb-compiler-lint-links-research.md`](../research/2026-07-09-markdown-kb-compiler-lint-links-research.md)。
+> 状态：P0 parser 定位契约已落地；P1 links check/suggest 待开计划。关联调研：[`../research/2026-07-09-markdown-kb-compiler-lint-links-research.md`](../research/2026-07-09-markdown-kb-compiler-lint-links-research.md)。
 
 ## 1. 结论
 
@@ -34,14 +35,14 @@ parser 带位置结构化节点
 
 ## 2. 背景与现状
 
-现有 parser 已支持 Obsidian 专有语法与 Dataview inline fields，但链接定位能力不完整：
+P0 实现前，parser 已支持 Obsidian 专有语法与 Dataview inline fields，但链接定位能力不完整：
 
 - `wikilink` 节点已有 `target` / `alias` / `heading` / `blockId` / `embed`，但没有 `line` / `column` / `raw`。
 - `task`、`blockRef`、`inlineField` 已带行号；其中 `inlineField.line` 是 1-based 正文行号。
 - 普通 Markdown link / image link 当前没有结构化节点。
 - indexer 已将 wikilink/embed 写入 `links` 表，但 `links` 表服务查询，不适合直接承载 lint 的源位置诊断。
 
-因此，第一步不是写 `links check`，而是冻结 parser 位置契约。否则后续会出现两个问题：坏链只能报数量不能定位；rewrite/fix 需要重新解析原文，容易与 parser 语义分叉。
+因此，第一步不是写 `links check`，而是冻结 parser 位置契约。否则后续会出现两个问题：坏链只能报数量不能定位；rewrite/fix 需要重新解析原文，容易与 parser 语义分叉。P0 已按此切口完成，后续 P1 直接消费 parser 节点，不在 links 命令里重新解析 Markdown。
 
 ## 3. 范围与非范围
 
@@ -95,9 +96,9 @@ P2 把 links 诊断提升为通用诊断框架：
 
 ```ts
 interface SourceSpan {
-  line: number;   // 1-based 完整文件行号，包含 frontmatter 行
+  line: number; // 1-based 完整文件行号，包含 frontmatter 行
   column: number; // 1-based UTF-16 code unit 列
-  raw: string;    // 原始匹配文本，例如 "[[Note|别名]]" 或 "[text](../a.md)"
+  raw: string; // 原始匹配文本，例如 "[[Note|别名]]" 或 "[text](../a.md)"
 }
 ```
 
@@ -214,14 +215,14 @@ Issue 是诊断结果，不是 AST 节点。
 type BasaltIssueSeverity = "error" | "warning" | "info";
 
 interface BasaltIssue {
-  file: string;          // vault 相对路径
-  line: number;          // 1-based 完整文件行号
-  column: number;        // 1-based UTF-16 code unit 列
-  rule: string;          // 例如 "links/no-missing-target"
+  file: string; // vault 相对路径
+  line: number; // 1-based 完整文件行号
+  column: number; // 1-based UTF-16 code unit 列
+  rule: string; // 例如 "links/no-missing-target"
   severity: BasaltIssueSeverity;
   message: string;
-  target?: string;       // 原始链接目标
-  reason?: string;       // 机器可读原因，例如 "not_found"
+  target?: string; // 原始链接目标
+  reason?: string; // 机器可读原因，例如 "not_found"
   suggestions?: string[];
   fixable: boolean;
 }
@@ -377,7 +378,7 @@ x-basalt lint --rules links --fix --apply
 
 ## 11. 阶段切口
 
-1. **P0 parser 定位契约**：改类型、提取器、parser 测试；不改 CLI。
+1. **P0 parser 定位契约**：改类型、提取器、parser 测试；不改 CLI。✅ 已落地：wikilink/embed 带完整文件 `line`/`column`/`raw`，新增 `markdownLink` 节点，代码区链接不产出，indexer 维持 links 表去重。
 2. **P1 links check/suggest**：新增 links 模块与 CLI；输出内部 issue JSON。
 3. **P2 Issue + lint 壳**：冻结 `BasaltIssue`，让 links 与 lint 共用诊断模型。
 4. **P3 profile/schema**：接 `.x-basalt/config.*` 的轻量 DSL。
@@ -386,13 +387,13 @@ x-basalt lint --rules links --fix --apply
 
 ## 12. 真相源同步
 
-进入 P0 实现计划时同步：
+P0 实现同步项：
 
-- `docs/plans/2026-07-09-kb-compiler-parser-position.md`：实现切口与验收。
-- `docs/specs/2026-06-26-coverage-matrix.md`：新增 links/parser 定位覆盖项。
-- `skills-def/biz-obsidian-spec/SKILL.md`：补链接位置契约与 Markdown link 节点。
-- `skill-data/obsidian-base-spec.json5` 或相关运行时 skill：按需补 parser 能力说明。
-- `docs/guides/commands.md`：等 P1 CLI 存在后再补命令说明。
+- `docs/plans/2026-07-09-kb-compiler-parser-position.md`：实现切口与验收。✅
+- `docs/specs/2026-06-26-coverage-matrix.md`：新增 links/parser 定位覆盖项。✅
+- `skills-def/biz-obsidian-spec/SKILL.md`：补链接位置契约与 Markdown link 节点。✅
+- `skill-data/obsidian-base-spec.json5` 或相关运行时 skill：按需补 parser 能力说明。✅
+- `docs/guides/commands.md`：parse 输出说明已补链接定位；links check CLI 等 P1 存在后再补命令说明。
 
 ## 13. 开放问题
 

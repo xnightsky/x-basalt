@@ -1,6 +1,6 @@
 ---
-timestamp: 2026-07-02T05:43:45Z
-sha256: c23ebbc052bd2848680cc965a14c17211c5a934e9f8f3468a5cad14c6b895cd2
+timestamp: 2026-07-09T05:53:07Z
+sha256: e643138fc6c81cb6a6062aede7b10bd837d3cfababe6f014429f60d791eb0920
 type: spec
 title: 规范覆盖矩阵（x-basalt · 2026-06-26）
 description: Obsidian/DQL 规范能力与实现覆盖矩阵
@@ -9,6 +9,7 @@ tags:
   - coverage
   - x-basalt
 ---
+
 # 规范覆盖矩阵（x-basalt · 2026-06-26）
 
 > 目的：一眼看清「到底支持什么、近似什么、没做什么」——消除黑盒的真相源。
@@ -18,26 +19,27 @@ tags:
 
 ## A. Obsidian 语法解析覆盖
 
-| 语法                                                         | 状态     | 证据                                          | 备注                                                   |
-| ------------------------------------------------------------ | -------- | --------------------------------------------- | ------------------------------------------------------ |
-| Frontmatter（YAML）                                          | ✅       | `frontmatter.ts`、`parser.test`               | gray-matter；首行 `---` 才识别                         |
-| Wikilink `[[t]]` / `\|alias` / `#heading` / `#^block` / 组合 | ✅       | `wikilink.ts`、`parser.test`                  | ——                                                     |
-| Embed `![[...]]`（笔记/资源）                                | ✅       | `wikilink.ts`（embed 标记）                   | ——                                                     |
-| 行内 Tag `#a` / 嵌套 `#a/b`                                  | ✅       | `index.ts:113-126`                            | 排除 `#123`；已在掩码后正文提取                        |
-| Frontmatter tags                                             | ✅(分工) | `index.ts:200-201`                            | 不入 nodes，交 indexer（`in_frontmatter=1`）           |
-| Highlight `==text==`                                         | ✅       | `index.ts:128-135`                            | 代码块/行内代码已掩码                                  |
-| Callout `> [!type] title` + 正文                             | ⚠️       | `index.ts:167-193`                            | type 归一化小写、聚合正文 OK                           |
-| Callout 折叠 `+`/`-` 默认态                                  | ⚠️       | `index.ts:187`                                | `+`/`-` 合并为 `foldable:boolean`，丢默认展开/折叠区分 |
-| 嵌套 callout `>>`                                            | ⚠️待核实 | ——                                            | 未见专门处理                                           |
-| Task `- [ ]`/`- [x]`/自定义状态                              | ✅       | `index.ts:137-148`                            | status 取方括号单字符                                  |
-| Task `due_date`（文本内 `YYYY-MM-DD`）                       | ❌       | `types.ts:19`、schema:63 有列但 parser 不提取 | **恒 NULL**；调研 §2 line 58 要求                      |
-| BlockRef 行尾 `^id` 定义                                     | ✅       | `index.ts:150-161`                            | 不误判 `[[#^id]]` 引用                                 |
-| 代码块/行内代码内不解析（tag/highlight）                     | ✅       | `maskCode` `index.ts:85-110`                  | ——                                                     |
-| Inline fields `key:: value`（整行 / `[k:: v]` / `(k:: v)`，2026-07-02 #28） | ✅       | `parser.test` #28 用例（三形态/负例/last-wins/掩码/ReDoS） | key v1 仅 `[A-Za-z0-9_]+`（D4）；空值不提取；同名 last-wins（D3）；代码区掩码保护 |
-| 代码块内不解析（wikilink/task/callout/blockRef）             | ❌       | `index.ts:217-222` 用原始文本                 | 与 tag/highlight 标准不一致                            |
-| HTML 注释 `<!-- -->` 内不解析                                | ❌       | 全局无处理                                    | ——                                                     |
-| 转义 `\[\[` / `\#`                                           | ⚠️待核实 | ——                                            | 未见转义处理                                           |
-| Basename 链接解析（同名异目录区分）                          | ⚠️       | `utils/path.ts` linkKey                       | 同名误合并（MVP 近似，已承认）                         |
+| 语法                                                                        | 状态     | 证据                                                       | 备注                                                                                        |
+| --------------------------------------------------------------------------- | -------- | ---------------------------------------------------------- | ------------------------------------------------------------------------------------------- |
+| Frontmatter（YAML）                                                         | ✅       | `frontmatter.ts`、`parser.test`                            | gray-matter；首行 `---` 才识别                                                              |
+| Wikilink `[[t]]` / `\|alias` / `#heading` / `#^block` / 组合                | ✅       | `wikilink.ts`、`parser.test`                               | parser 保留每次出现，节点含完整文件 `line`/`column`/`raw`；indexer 写 `links` 表前维持去重  |
+| Embed `![[...]]`（笔记/资源）                                               | ✅       | `wikilink.ts`（embed 标记）                                | 节点 `raw` 含 `!`，完整文件定位同 wikilink                                                  |
+| Markdown inline link / image link（P0 子集）                                | ✅       | `markdown-link.ts`、`parser.test`                          | 支持 `[text](target)` / `![alt](target)` / 简单 title；reference link/嵌套括号/复杂转义后置 |
+| 行内 Tag `#a` / 嵌套 `#a/b`                                                 | ✅       | `index.ts:113-126`                                         | 排除 `#123`；已在掩码后正文提取                                                             |
+| Frontmatter tags                                                            | ✅(分工) | `index.ts:200-201`                                         | 不入 nodes，交 indexer（`in_frontmatter=1`）                                                |
+| Highlight `==text==`                                                        | ✅       | `index.ts:128-135`                                         | 代码块/行内代码已掩码                                                                       |
+| Callout `> [!type] title` + 正文                                            | ⚠️       | `index.ts:167-193`                                         | type 归一化小写、聚合正文 OK                                                                |
+| Callout 折叠 `+`/`-` 默认态                                                 | ⚠️       | `index.ts:187`                                             | `+`/`-` 合并为 `foldable:boolean`，丢默认展开/折叠区分                                      |
+| 嵌套 callout `>>`                                                           | ⚠️待核实 | ——                                                         | 未见专门处理                                                                                |
+| Task `- [ ]`/`- [x]`/自定义状态                                             | ✅       | `index.ts:137-148`                                         | status 取方括号单字符                                                                       |
+| Task `due_date`（文本内 `YYYY-MM-DD`）                                      | ❌       | `types.ts:19`、schema:63 有列但 parser 不提取              | **恒 NULL**；调研 §2 line 58 要求                                                           |
+| BlockRef 行尾 `^id` 定义                                                    | ✅       | `index.ts:150-161`                                         | 不误判 `[[#^id]]` 引用                                                                      |
+| 代码块/行内代码内不解析（wikilink/Markdown link/tag/highlight/inlineField） | ✅       | `maskCode` + `parser.test`                                 | 链接类节点用掩码文本匹配、原文回切 raw                                                      |
+| Inline fields `key:: value`（整行 / `[k:: v]` / `(k:: v)`，2026-07-02 #28） | ✅       | `parser.test` #28 用例（三形态/负例/last-wins/掩码/ReDoS） | key v1 仅 `[A-Za-z0-9_]+`（D4）；空值不提取；同名 last-wins（D3）；代码区掩码保护           |
+| 代码块内不解析（task/callout/blockRef）                                     | ❌       | `index.ts` 仍用原始 lines                                  | task 仍会吃代码块；链接类已修正                                                             |
+| HTML 注释 `<!-- -->` 内不解析                                               | ❌       | 全局无处理                                                 | ——                                                                                          |
+| 转义 `\[\[` / `\#`                                                          | ⚠️待核实 | ——                                                         | 未见转义处理                                                                                |
+| Basename 链接解析（同名异目录区分）                                         | ⚠️       | `utils/path.ts` linkKey                                    | 同名误合并（MVP 近似，已承认）                                                              |
 
 ## B. DQL（Dataview 子集）覆盖
 
@@ -63,18 +65,18 @@ tags:
 
 ### WHERE
 
-| 能力                                      | 状态 | 证据                                               |
-| ----------------------------------------- | ---- | -------------------------------------------------- |
-| 比较 `=` `!=` `<` `>` `<=` `>=`           | ✅   | sql-generator/query-parser.test                    |
-| `AND` / `OR` / `NOT` / 一元 `!` / 括号优先级 | ✅   | query-parser.test（`!` 优先级用例，S2.15b）        |
-| `contains` / `icontains`                  | ✅   | LIKE 通配符转义（S2.9）+ icontains 大小写（S2.10） |
-| `startswith` / `endswith`                 | ✅   | LIKE 转义（S2.9）                                  |
-| `regexmatch`                              | ✅   | ReDoS 缓解（S2.23）；regexp.test                   |
-| 裸字段真值 `WHERE field` / `!field`（isTruthy） | ✅   | S2.15b（truthy→json_type CASE；与 =null 语义分离）  |
-| null 判断（`= null` / `!= null`，显式）   | ✅   | S2.15（isnull→IS NULL/IS NOT NULL；非真值判断）     |
-| 日期比较（ISO 字典序）                    | ✅   | S2.16                                              |
-| 内置标量 `lower`/`upper`/`length`/`round` | ✅   | S2.17（length 数组→json_array_length）             |
-| `date(today)` / `date(now)`               | ✅   | S2.17（求值 ISO 串作右值）                         |
+| 能力                                            | 状态 | 证据                                               |
+| ----------------------------------------------- | ---- | -------------------------------------------------- |
+| 比较 `=` `!=` `<` `>` `<=` `>=`                 | ✅   | sql-generator/query-parser.test                    |
+| `AND` / `OR` / `NOT` / 一元 `!` / 括号优先级    | ✅   | query-parser.test（`!` 优先级用例，S2.15b）        |
+| `contains` / `icontains`                        | ✅   | LIKE 通配符转义（S2.9）+ icontains 大小写（S2.10） |
+| `startswith` / `endswith`                       | ✅   | LIKE 转义（S2.9）                                  |
+| `regexmatch`                                    | ✅   | ReDoS 缓解（S2.23）；regexp.test                   |
+| 裸字段真值 `WHERE field` / `!field`（isTruthy） | ✅   | S2.15b（truthy→json_type CASE；与 =null 语义分离） |
+| null 判断（`= null` / `!= null`，显式）         | ✅   | S2.15（isnull→IS NULL/IS NOT NULL；非真值判断）    |
+| 日期比较（ISO 字典序）                          | ✅   | S2.16                                              |
+| 内置标量 `lower`/`upper`/`length`/`round`       | ✅   | S2.17（length 数组→json_array_length）             |
+| `date(today)` / `date(now)`                     | ✅   | S2.17（求值 ISO 串作右值）                         |
 
 ### SORT / LIMIT / 其他
 
@@ -92,16 +94,16 @@ tags:
 
 ### 隐式字段
 
-| 字段                                                     | 状态      | 证据                                       |
-| -------------------------------------------------------- | --------- | ------------------------------------------ |
-| `file.name/.path/.folder/.extension/.size/.mtime/.ctime` | ✅        | S2.22 全集核对                             |
-| `file.tags`                                              | ✅        | query.test                                 |
-| `file.inlinks` / `file.outlinks`                         | ✅        | 查询期 JOIN 实时计算（硬约束6）；S2.22     |
-| `file.tasks`                                             | ✅        | S2.21/S2.22（任务 `due` 提取待阶段1 S1.3） |
-| `file.frontmatter`（顶层键存在性 + 选列，2026-07-02 补）  | ✅        | query-parser/sql-generator/query 三层测；见 [`2026-07-01-dql-truthiness-existence-design.md`](2026-07-01-dql-truthiness-existence-design.md) §11 |
-| frontmatter 标量字段                                     | ✅        | 白名单字段名；#28 后 = `COALESCE(fm, inline)` |
-| inline fields（`key:: value` 与 frontmatter 同命名空间，2026-07-02 #28） | ✅        | `sql-generator`/`query`/`indexer`/`scan.test` 的 #28 用例；设计 [`2026-07-02-inline-fields-design.md`](2026-07-02-inline-fields-design.md) |
-| `file.link/.day/.cday/.aliases/.etags/.lists` 等         | ❌ 范围外 | 未知字段明确报错                           |
+| 字段                                                                     | 状态      | 证据                                                                                                                                             |
+| ------------------------------------------------------------------------ | --------- | ------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `file.name/.path/.folder/.extension/.size/.mtime/.ctime`                 | ✅        | S2.22 全集核对                                                                                                                                   |
+| `file.tags`                                                              | ✅        | query.test                                                                                                                                       |
+| `file.inlinks` / `file.outlinks`                                         | ✅        | 查询期 JOIN 实时计算（硬约束6）；S2.22                                                                                                           |
+| `file.tasks`                                                             | ✅        | S2.21/S2.22（任务 `due` 提取待阶段1 S1.3）                                                                                                       |
+| `file.frontmatter`（顶层键存在性 + 选列，2026-07-02 补）                 | ✅        | query-parser/sql-generator/query 三层测；见 [`2026-07-01-dql-truthiness-existence-design.md`](2026-07-01-dql-truthiness-existence-design.md) §11 |
+| frontmatter 标量字段                                                     | ✅        | 白名单字段名；#28 后 = `COALESCE(fm, inline)`                                                                                                    |
+| inline fields（`key:: value` 与 frontmatter 同命名空间，2026-07-02 #28） | ✅        | `sql-generator`/`query`/`indexer`/`scan.test` 的 #28 用例；设计 [`2026-07-02-inline-fields-design.md`](2026-07-02-inline-fields-design.md)       |
+| `file.link/.day/.cday/.aliases/.etags/.lists` 等                         | ❌ 范围外 | 未知字段明确报错                                                                                                                                 |
 
 > 遗留底层边界（非 DQL 引擎层，留各自阶段）：`FROM "folder"` 末尾 `/`、inlinks basename 歧义（阶段3 S3.2）、ctime 跨平台、task `due` 提取（阶段1 S1.3）。
 

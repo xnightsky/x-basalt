@@ -107,7 +107,7 @@
     },
     {
       pattern: "parse <file> [--format json|yaml]",
-      description: "解析单个 .md → { frontmatter, nodes }；nodes 含 wikilink/tag/callout/task/highlight/blockRef。--format 默认 json，可选 yaml。纯函数，不碰 DB。",
+      description: "解析单个 .md → { frontmatter, nodes }；nodes 含 wikilink/Markdown link/tag/callout/task/highlight/blockRef/inlineField。wikilink/embed/markdownLink 节点含完整文件 line/column/raw，可用于后续 links/lint 定位；parser 保留重复链接诊断节点，indexer 写 links 表前再去重。--format 默认 json，可选 yaml。纯函数，不碰 DB。",
       examples: ["x-basalt parse note.md", "x-basalt parse note.md --format yaml"],
     },
     {
@@ -137,8 +137,8 @@
       pattern: "计数 / 分页（数总量别全量 LIST）",
       description: '要"有多少"绝不全量 LIST 再数：① 任何 query 结果都带 total（命中总数）——读它即可；② 全库/分组计数用 `TABLE count() FROM "" GROUP BY <字段>`（count()/length(rows) 是 GROUP BY 聚合列，单独 `TABLE count()` 不带 GROUP BY 无效）。分页：CLI 用 `--offset/--size`，chat 的 query/scan 工具用 `offset/size`（默认 size=50，上限 500，size=0 只回 total/counts）。chat 的 scan 工具还返回 counts{added,modified,deleted,unchanged}（标量、永不截断）——"多少新增/未索引"直接读 counts。DQL 自身只有 LIMIT、无 OFFSET，分页一律在 CLI/工具层。',
       examples: [
-        'x-basalt query \'TABLE count() FROM "" GROUP BY file.extension\' --db ./index.db',
-        'x-basalt query \'LIST FROM ""\' --size 100 --offset 100 --db ./index.db',
+        "x-basalt query 'TABLE count() FROM \"\" GROUP BY file.extension' --db ./index.db",
+        "x-basalt query 'LIST FROM \"\"' --size 100 --offset 100 --db ./index.db",
       ],
     },
     {
@@ -194,7 +194,7 @@
     },
     {
       pattern: 'chat ["<自然语言>"] [--model <name>] [--max-steps <n>] [--db <path>] [--vault <path>]',
-      description: "可选 AI 子命令（如何用）：用自然语言驱动既有原语（读 query/parse/scan/meta_get/skills_recall + 写 meta_set/unset/rename/normalize/apply + 批量 pipeline_run）跑 plan→act→observe 循环。带参=单发翻译执行即退；省略参数=进 REPL（quit/exit/q 退出）。最小可选 AI：内核零 AI、chat 隔离懒加载 SDK；没配 key=本命令禁用但其余命令全功能照常（需 AI_GATEWAY_API_KEY，--model 覆盖模型）。写动作直接落盘、无逐个确认弹窗——安全靠流式可观测 + Ctrl+C 中断在途 + 既有原子写（kill 不损坏文件）+ git 兜底。**只做一次性操作，不支持常驻 watch/监听**：绝不让它跑 watch 或 index --watch 这类常驻命令——会永不返回、把 chat 挂死；持续维护 vault 用独立的 watch / scan --pipe。能力边界：当前做结构化任务（DQL/元数据/规范），按笔记正文全文检索依赖 FTS5（未落地）。**如何配置（AI_GATEWAY_* 三变量、Linux/macOS 与 Windows 各平台设法与持久化、离线本地端点）见 docs/guides/ai-and-skills.md 第四节。**",
+      description: "可选 AI 子命令（如何用）：用自然语言驱动既有原语（读 query/parse/scan/meta_get/skills_recall/search + 写 meta_set/unset/rename/normalize/apply + 批量 pipeline_run）跑 plan→act→observe 循环。带参=单发翻译执行即退；省略参数=进 REPL（quit/exit/q 退出）。最小可选 AI：内核零 AI、chat 隔离懒加载 SDK；没配 key=本命令禁用但其余命令全功能照常（需 AI_GATEWAY_API_KEY，--model 覆盖模型）。写动作直接落盘、无逐个确认弹窗——安全靠流式可观测 + Ctrl+C 中断在途 + 既有原子写（kill 不损坏文件）+ git 兜底。**只做一次性操作，不支持常驻 watch/监听**：绝不让它跑 watch 或 index --watch 这类常驻命令——会永不返回、把 chat 挂死；持续维护 vault 用独立的 watch / scan --pipe。能力边界：当前做结构化任务（DQL/元数据/规范）与 FTS5 正文全文检索；语义向量检索未落地。**如何配置（AI_GATEWAY_* 三变量、Linux/macOS 与 Windows 各平台设法与持久化、离线本地端点）见 docs/guides/ai-and-skills.md 第四节。**",
       examples: [
         'x-basalt chat "把 projects 下 status 为空的笔记列出来"',
         'x-basalt chat "给 2024 年的周报都补上 tag weekly"',
@@ -207,7 +207,7 @@
       description: '操作符：= != < > <= >= / contains icontains startswith endswith / AND OR NOT / regexmatch(field,"pattern")。判有无：裸字段真值 `WHERE field`（对标官方 isTruthy：缺失/null/0/空串/空数组 皆 falsy）、`!field`（无或 falsy）；显式 null 判断 `field = null`/`!= null`（测键是否存在，把 0/空串视为「有」，与 !field 在 falsy 值上相反——问「多少篇没有 X」默认用 `!field`）。隐式字段：file.name/path/folder/extension/size/mtime/ctime/tags/inlinks/outlinks/tasks/frontmatter 与任意 frontmatter 标量。**字段值可来自 frontmatter 或正文 inline fields（`key:: value` 整行/[方括号]/(圆括号) 三形态，同一命名空间）**：同名 frontmatter 胜、inline 兜底；inline 值恒 TEXT 字典序比较（10 vs 9 会错）、同名 last-wins、key 仅 [A-Za-z0-9_]+；真值/存在性同样计入 inline；旧库要查 inline 需重跑 index 回填。判「完全没有 frontmatter」用 `!file.frontmatter`（别跟「未被索引」混淆，后者用 scan 工具的 counts/byDir；inline 字段也不进 file.frontmatter 对象）。FROM #a 前缀命中 #a/b；FROM "F" 含子文件夹；FROM [[N]] 取指向 N 的反向链接。',
       examples: [
         'LIST WHERE contains(file.tags, "area")',
-        'LIST WHERE !index          // 没有 index（缺失或 falsy）',
+        "LIST WHERE !index          // 没有 index（缺失或 falsy）",
         'LIST WHERE !file.frontmatter // 完全没有 frontmatter（不是"没被索引"）',
         'TABLE rating WHERE rating > "4"  // rating 可来自 frontmatter 或正文 (rating:: 5)',
         'LIST WHERE regexmatch(file.name, "^20[0-9]{2}-")',
@@ -224,7 +224,7 @@
     },
     {
       pattern: "限制与非目标",
-      description: "frontmatter 日期以 ISO 存储（精确等值不命中，用范围/前缀）；代码块内 #tag/==..== 不剔除；链接按 basename 解析；file.tasks 仅显示不可过滤；file.day 等、多字段 SORT、length() 数值比较为非目标，遇到明确报错。完整说明见 docs/guides/usage.md。",
+      description: "frontmatter 日期以 ISO 存储（精确等值不命中，用范围/前缀）；代码块内 task 仍会被提取；Markdown reference link / 复杂 inline link 暂不产出 markdownLink 节点；链接查询按路径感知规则解析，bare basename 同名时全列（近似）；file.tasks 仅显示不可过滤；file.day 等、length() 数值比较为非目标，遇到明确报错。完整说明见 docs/guides/usage.md。",
       examples: ["x-basalt query \"LIST WHERE due >= '2026-06-01'\" --db ./index.db"],
     },
   ],

@@ -36,7 +36,7 @@ dogfood 期决定提前做：自然语言驱动 vault 的 `chat` 子命令（单
 
 建议后续立项顺序：
 
-1. **P0 parser 定位契约**：给 wikilink / Markdown link / image link 节点补 `line` / `column` / `raw` / `target`；明确 links 行号采用完整文件行号，便于编辑器与 CI 对齐。
+1. **P0 parser 定位契约**：给 wikilink / Markdown link / image link 节点补 `line` / `column` / `raw` / `target`；明确 links 行号采用完整文件行号，便于编辑器与 CI 对齐。✅ 已落地：parser 保留链接诊断节点，indexer 维持 links 表去重。
 2. **P1 `links check` / `links suggest`**：检查本地 Markdown 相对链接、图片、wikilink、embed；支持 ignore；按 basename 给路径建议。
 3. **P2 统一 `BasaltIssue` + `lint` 壳**：冻结 `file` / `line` / `column` / `rule` / `severity` / `message` / `target` / `reason` / `suggestions` / `fixable` JSON 字段。
 4. **P3 profile/schema v1**：在 `.x-basalt/config.*` 声明 `profiles.<name>.include|required|enums|tagRules|domain|ignore`，首版用轻量 DSL，不承诺完整 JSON Schema。
@@ -48,6 +48,7 @@ dogfood 期决定提前做：自然语言驱动 vault 的 `chat` 子命令（单
 **验证方式改为「手玩」**：AI agent 行为质量在场景库（C 线）落地前没法靠自动化判定——本次**删除了为 chat 新增的 AI 行为单测**（tool-errors / repl / loop-exhausted / tools-dql 集成），保留会话前就有的确定性测试（safety / provider / isolation / loop 主路径 / tools 主路径）。production 代码保留，靠 `docs/guides/chat.md` 指引**亲手玩**来验证。
 
 **已落地（production，typecheck/build 通过；逻辑确定但 agent 效果未验证）**：
+
 - **工具错误结构化 + 换策略引导（非机械重试）**：`src/chat/tool-errors.ts` 分类底层错误（DQL→dql / 库未建 `SQLITE_CANTOPEN`→not-found / `ENOENT`→not-found / 瞬时→transient），包成「[工具失败·类] 原因 + 换策略建议」回灌；SYSTEM_PROMPT 加「失败换写法/角度（A≠B）、别硬试同一操作」。**方向修正**：原 §2.1「工具重试」改为「结构化 + 引导换策略」——chat 读多写少、工具皆一次性独立调用（无会话读写事务），机械精准重试无土壤（详见 memory `chat-retry-as-strategy-not-precision`）。
 - **撞顶区分 + REPL 续跑**：`loop.ts` 返回 `stopReason`（done/exhausted，按末步是否仍 `toolCalls` 判）；exhausted 显式提示、REPL 输入「继续」用现有上下文续跑；默认步数 12→20。
 - **REPL 可玩化（最小实现，无 TUI 框架）**：启动横幅、`help` 速查、`examples`/`例子` 列可玩示例指令（含一条故意写错 DQL 观察自纠）、撞顶提示符引导、退出语。
@@ -69,7 +70,7 @@ dogfood 期决定提前做：自然语言驱动 vault 的 `chat` 子命令（单
 - **inline fields 扩展项一律降级（2026-07-02 调研定案）**：值类型化 / 多值列表化 / 带空格 key / `file.inlineFields` / meta 写回 inline（spec §5 backlog 清单）默认**不做**——生态正转向 frontmatter/Properties（官方 Bases 明确不支持 inline、Datacore 被官方建议弃用之），inline 支持定位为**兼容存量 vault 的读侧能力**（v1 已落地即止）。依据：[`docs/research/2026-07-02-inline-fields-adoption-outlook.md`](docs/research/2026-07-02-inline-fields-adoption-outlook.md)。后续更值得调研：task emoji 字段、官方 Bases `.base` 格式。
 
 - **变更编排器 P1 余项 / P2（change orchestration）**：P0 + 统一 `--pipe` + `--apply` + 写动作（apply/set/unset/rename + if-exists）已落地。**P1 余项待续**：背压、缓存跳过、条件分支、检查点续跑、失败告警、内容 hash 去重、**原生管道 stdin（spec §8.3）**、管道 `set` 列表值（现仅标量）。**P2**：DAG/补偿回滚/定时·空闲触发/配置热重载。设计见 [`docs/specs/2026-06-29-change-orchestration-design.md`](docs/specs/2026-06-29-change-orchestration-design.md) §8/§12；**按 dogfood 真实需求再开**。
-- **KB compiler / lint / links 分层路线**：已调研定案（见上 2026-07-09 段），设计入口已建立：[`docs/specs/2026-07-09-kb-compiler-lint-links-design.md`](docs/specs/2026-07-09-kb-compiler-lint-links-design.md)。下一步先开 P0 计划 `docs/plans/2026-07-09-kb-compiler-parser-position.md`，只做 parser link 定位契约；**禁止直接跳到大而全 `lint --profile --fix`**。
+- **KB compiler / lint / links 分层路线**：已调研定案（见上 2026-07-09 段），设计入口已建立：[`docs/specs/2026-07-09-kb-compiler-lint-links-design.md`](docs/specs/2026-07-09-kb-compiler-lint-links-design.md)。P0 parser link 定位契约已按 [`docs/plans/2026-07-09-kb-compiler-parser-position.md`](docs/plans/2026-07-09-kb-compiler-parser-position.md) 落地；下一步开 P1 `links check` / `links suggest` 计划，**禁止直接跳到大而全 `lint --profile --fix`**。
 - **更多 profile**：按需扩（加 profile = 加数据；现有 `pkm-note` / `llm-wiki` / `ssg-blog`）。
 - **不做**：type 强制 / 日期格式统一（调研判风险高、格式不确定）。
 - ~~**语义/全文检索（S3.5）**~~：FTS5 全文部分（core、无 AI、中文 trigram）**已落地**（2026-07-02，见上「🐞」段）——`files_fts` 虚表 + 版本号迁移守卫 + `DataviewEngine.search`/CLI `search`/chat `search` 工具。**embedding 向量语义检索仍是 backlog**（接口后、默认关、FTS5 兜底，触发条件见 [`docs/specs/2026-06-28-semantic-retrieval-integration.md`](docs/specs/2026-06-28-semantic-retrieval-integration.md) §10：dogfood 中出现"想按正文内容找笔记但 FTS5 子串匹配不够、确有穷尽概念相关刚需"再立计划）。
