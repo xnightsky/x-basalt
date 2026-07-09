@@ -1,6 +1,6 @@
 ---
-timestamp: 2026-07-02T04:08:57Z
-sha256: 0d43c689627731683d759b152aec8bd57d4b5ed9e42a23693709f25013e56f15
+timestamp: 2026-07-09T05:27:46Z
+sha256: 2d3d32367cbe82f4f3bbb1a06e060271cebd7c5cfdc9b9bf68897ed0b1b307bf
 type: index
 title: docs · 文档入口与路由
 description: x-basalt 文档真相源目录路由与三层口径
@@ -37,6 +37,8 @@ tags:
 - **架构总览（架构图 + 组件清单，先读这个建立全局观）**：[`architecture/2026-06-28-overview.md`](architecture/2026-06-28-overview.md)——分层依赖/读写数据流/DQL 管线/SQLite 数据模型/组件目录
 - 使用指南（面向使用者，**教程总目录 + 分章**）：[`guides/usage.md`](guides/usage.md)——安装/命令/DQL/索引同步/配置/Obsidian语法/AI协作/排查
 - 选库与许可证避坑（选第三方库前必读）：[`guides/dependency-license-policy.md`](guides/dependency-license-policy.md)
+- Markdown 知识库编译器调研（lint / links / profile 分层路线）：[`research/2026-07-09-markdown-kb-compiler-lint-links-research.md`](research/2026-07-09-markdown-kb-compiler-lint-links-research.md)
+- Markdown 知识库编译器设计（parser 定位 / links / lint / profile 分层契约）：[`specs/2026-07-09-kb-compiler-lint-links-design.md`](specs/2026-07-09-kb-compiler-lint-links-design.md)
 - 发布时机决策（先 dogfood 还是先开源）：[`specs/2026-06-28-release-vs-dogfood.md`](specs/2026-06-28-release-vs-dogfood.md)
 - 设计：[`specs/2026-06-25-x-basalt-design.md`](specs/2026-06-25-x-basalt-design.md)
 - 调研：[`research/2026-06-25-obsidian-spec-and-deps.md`](research/2026-06-25-obsidian-spec-and-deps.md)
