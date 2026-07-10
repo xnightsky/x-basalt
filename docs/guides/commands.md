@@ -29,6 +29,7 @@ tags:
 7. [`watch`](#watch--常驻监听)
 8. [`run`](#run--变更编排管道)
 9. [`chat`](#chat--自然语言驱动可选-ai)
+10. [`links`](#links--本地链接诊断)
 
 ---
 
@@ -512,6 +513,42 @@ x-basalt chat "这个库有多少篇笔记？"      # 单发
 ```
 
 > 上例假设已配 `.x-basalt/config.yaml`（`vault` 等）；没配就给各命令补 `--vault <path>`（库不在默认位置再加 `--db <path>`）。
+
+---
+
+## `links` — 本地链接诊断
+
+检查 vault 内**本地链接是否断掉**（KB compiler P1）。**内存 per-run，不依赖已建索引**——遍历 vault 现解析，退出即弃（不写 SQLite）。
+
+```bash
+x-basalt links check [vault...] [--format human|json|yaml]   # 扫全库报断链
+x-basalt links suggest <file> [vault...]                     # 单文件断链 + 修复建议
+```
+
+**检查范围**：wikilink `[[..]]`、embed `![[..]]`、Markdown `[](..)`、图片 `![](..)` 的**本地目标存在性**。外部 URL / `mailto:` / 纯锚点跳过；`#heading` / `#^block` 锚点校验后置（P1 只查文件目标）。
+
+| 参数 | 默认 | 说明 |
+| --- | --- | --- |
+| `[vault...]` | 配置 `vault` | Vault 根目录，可多个；省略时取配置 `vault`（对齐 `index`/`scan`） |
+| `--format <fmt>` | `human` | `human`（`file:line:col 消息 + → 建议`）/ `json` / `yaml` |
+| `<file>`（suggest） | 必填 | 目标 Markdown（vault 相对主键 / cwd 相对 / 绝对） |
+
+**断链原因（`reason`）**：`not_found`（目标不存在）/ `outside_vault`（逃出根）/ `backslash_path`（含反斜杠，应改 `/`）/ `ambiguous_target`（同名多处，需限定路径）/ `external_skipped`（外部/锚点，不产出 issue）。
+
+**退出码**：有断链 `1`，全通过 `0`（便于 CI / 脚本闸门）。
+
+**ignore**：在 `.x-basalt/config.*` 配 `lint.ignore` 屏蔽历史附件 / 生成目录 / 外链：
+
+```yaml
+lint:
+  ignore:
+    paths: [".tmp/**", "dist/**"]        # 忽略被检查文件
+    targets: ["http://*", "https://*"]   # 忽略目标字符串
+    rules:
+      links/no-broken-link: ["legacy/**"] # 仅对该规则额外忽略
+```
+
+`suggest` 与 `check` 内嵌的 `suggestions[]` 一致：按 basename 在 vault 内找同名文件，给相对当前文件的路径建议（多命中即 `ambiguous_target`）。
 
 ---
 

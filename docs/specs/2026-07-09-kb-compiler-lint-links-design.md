@@ -379,7 +379,7 @@ x-basalt lint --rules links --fix --apply
 ## 11. 阶段切口
 
 1. **P0 parser 定位契约**：改类型、提取器、parser 测试；不改 CLI。✅ 已落地：wikilink/embed 带完整文件 `line`/`column`/`raw`，新增 `markdownLink` 节点，代码区链接不产出，indexer 维持 links 表去重。
-2. **P1 links check/suggest**：新增 links 模块与 CLI；输出内部 issue JSON。
+2. **P1 links check/suggest**：新增 links 模块与 CLI；输出内部 issue JSON。✅ 已落地（`src/links/` 内存 per-run 白名单集合；`[vault...]` 位置参数对齐 index/scan；`lint.ignore` 配置；锚点 / `tmp_path` 后置——见 [`../plans/2026-07-09-kb-compiler-links-check.md`](../plans/2026-07-09-kb-compiler-links-check.md)）。
 3. **P2 Issue + lint 壳**：冻结 `BasaltIssue`，让 links 与 lint 共用诊断模型。
 4. **P3 profile/schema**：接 `.x-basalt/config.*` 的轻量 DSL。
 5. **P4 CI/baseline**：GitHub annotation 与 baseline。

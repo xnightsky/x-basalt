@@ -18,13 +18,15 @@
 建议后续立项顺序：
 
 1. **P0 parser 定位契约**：给 wikilink / Markdown link / image link 节点补 `line` / `column` / `raw` / `target`；明确 links 行号采用完整文件行号，便于编辑器与 CI 对齐。✅ 已落地：parser 保留链接诊断节点，indexer 维持 links 表去重。
-2. **P1 `links check` / `links suggest`**：检查本地 Markdown 相对链接、图片、wikilink、embed；支持 ignore；按 basename 给路径建议。**← 下一步（P0 地基已铺好，纯 core 无 AI，好写测试）**
-3. **P2 统一 `BasaltIssue` + `lint` 壳**：冻结 `file` / `line` / `column` / `rule` / `severity` / `message` / `target` / `reason` / `suggestions` / `fixable` JSON 字段。
+2. **P1 `links check` / `links suggest`**：✅ 已落地（`src/links/`，内存 per-run 不碰 SQLite；白名单集合 + basename 建议 + `lint.ignore` 配置 + JSON/人读输出 + CI 退出码）。31 单测 + 场景库真实 vault 验证（messy/pkm 54 真实 wikilink 0 假阳 + 注入验证覆盖 markdownLink/embed 各分支）。见 [`docs/plans/2026-07-09-kb-compiler-links-check.md`](docs/plans/2026-07-09-kb-compiler-links-check.md)。
+3. **P2 统一 `BasaltIssue` + `lint` 壳**：冻结 `file` / `line` / `column` / `rule` / `severity` / `message` / `target` / `reason` / `suggestions` / `fixable` JSON 字段。**← 下一步（Issue 类型已在 `src/links/types.ts` 内部落地，P2 提升为公共稳定契约、让 lint 与 links 共用）**
 4. **P3 profile/schema v1**：在 `.x-basalt/config.*` 声明 `profiles.<name>.include|required|enums|tagRules|domain|ignore`，首版用轻量 DSL，不承诺完整 JSON Schema。
 5. **P4 CI / baseline**：`--ci`、`--format github`、`--baseline` 在 Issue JSON 稳定后再做。
 6. **P5 rewrite/fix**：`links rewrite --apply` 与有限 `lint --fix` 最后做；默认 dry-run，不自动猜业务语义。
 
-设计入口：[`docs/specs/2026-07-09-kb-compiler-lint-links-design.md`](docs/specs/2026-07-09-kb-compiler-lint-links-design.md)。P0 已按 [`docs/plans/2026-07-09-kb-compiler-parser-position.md`](docs/plans/2026-07-09-kb-compiler-parser-position.md) 落地；**禁止直接跳到大而全 `lint --profile --fix`**。
+设计入口：[`docs/specs/2026-07-09-kb-compiler-lint-links-design.md`](docs/specs/2026-07-09-kb-compiler-lint-links-design.md)。P0（parser 定位）+ P1（links check/suggest）已落地；**禁止直接跳到大而全 `lint --profile --fix`**。
+
+> **links P1 有意收敛（各自待需求再开）**：锚点 / heading 校验（P1.5）、`tmp_path` reason（P1 靠 `lint.ignore.paths` 覆盖）、suggest 精排（同目录 / README 优先，现字典序）、行内注释禁用（如 markdown-link-check 的 `disable-next-line`）、mtime 解析缓存（大库优化）、reference link（`[text][id]`，依赖 P0 parser 尚不产出）。
 
 ## 📋 功能覆盖 gap（对标官方 Dataview/Obsidian，deep-research 22 确认）
 
