@@ -10,23 +10,25 @@ import type { CollectedFile, TargetIndex } from "./types.js";
 // 的目标是非 .md 文件，故白名单必须收全部文件，否则图片链接永远误报 not_found。
 // 规则真相源：docs/specs/2026-07-09-kb-compiler-lint-links-design.md §5。
 
+/** 向「key → 值列表」Map 追加一项（缺 key 时新建列表）。 */
+function pushValue(m: Map<string, string[]>, k: string, v: string): void {
+  const arr = m.get(k);
+  if (arr) arr.push(v);
+  else m.set(k, [v]);
+}
+
 /** 由已收集文件构建白名单目标索引（key 全小写，Obsidian 链接大小写不敏感；值保留原始大小写）。 */
 export function buildTargetIndex(all: CollectedFile[]): TargetIndex {
   const pathSet = new Set<string>();
   const notesByStem = new Map<string, string[]>();
   const notesByPathKey = new Set<string>();
   const filesByBasename = new Map<string, string[]>();
-  const push = (m: Map<string, string[]>, k: string, v: string): void => {
-    const arr = m.get(k);
-    if (arr) arr.push(v);
-    else m.set(k, [v]);
-  };
   for (const f of all) {
     const rel = toPosix(f.key);
     pathSet.add(rel.toLowerCase());
-    push(filesByBasename, basename(rel).toLowerCase(), rel);
+    pushValue(filesByBasename, basename(rel).toLowerCase(), rel);
     if (extname(rel).toLowerCase() === ".md") {
-      push(notesByStem, linkKey(rel), rel);
+      pushValue(notesByStem, linkKey(rel), rel);
       notesByPathKey.add(pathKey(rel));
     }
   }

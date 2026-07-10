@@ -37,18 +37,23 @@ export interface LintConfig {
   ignore?: LintIgnoreConfig;
 }
 
+/** 从任意值挑出字符串数组（非数组 → 空；过滤掉非字符串项）。 */
+function pickStringArray(v: unknown): string[] {
+  return Array.isArray(v) ? v.filter((x): x is string => typeof x === "string") : [];
+}
+
 /** 解析配置的 lint 段：只挑 ignore.{paths,targets,rules}，畸形项静默丢弃（与 pickConfig 容错一致）。 */
 export function parseLintConfig(raw: unknown): LintConfig {
   if (raw == null || typeof raw !== "object") return {};
   const ig = (raw as { ignore?: unknown }).ignore;
   if (ig == null || typeof ig !== "object") return {};
   const o = ig as Record<string, unknown>;
-  const strs = (v: unknown): string[] =>
-    Array.isArray(v) ? v.filter((x): x is string => typeof x === "string") : [];
   const rulesRaw = (o.rules ?? {}) as Record<string, unknown>;
   const rules: Record<string, string[]> = {};
-  for (const [k, v] of Object.entries(rulesRaw)) rules[k] = strs(v);
-  return { ignore: { paths: strs(o.paths), targets: strs(o.targets), rules } };
+  for (const [k, v] of Object.entries(rulesRaw)) rules[k] = pickStringArray(v);
+  return {
+    ignore: { paths: pickStringArray(o.paths), targets: pickStringArray(o.targets), rules },
+  };
 }
 
 /** 允许的字符串键（其余键忽略，避免误用）。 */

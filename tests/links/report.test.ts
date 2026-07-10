@@ -8,7 +8,7 @@ test("renderHuman: 空 → 成功文案", () => {
 });
 
 test("renderHuman: 含定位、消息、建议、汇总", () => {
-  const out = renderHuman([
+  const issues: BasaltIssue[] = [
     {
       file: "notes/Index.md",
       line: 2,
@@ -21,7 +21,8 @@ test("renderHuman: 含定位、消息、建议、汇总", () => {
       suggestions: ["../Ghost.md"],
       fixable: false,
     },
-  ]);
+  ];
+  const out = renderHuman(issues);
   assert.match(out, /notes\/Index\.md:2:1/);
   assert.match(out, /链接目标不存在/);
   assert.match(out, /建议.*Ghost\.md/);
