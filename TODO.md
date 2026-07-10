@@ -26,6 +26,8 @@
 
 设计入口：[`docs/specs/2026-07-09-kb-compiler-lint-links-design.md`](docs/specs/2026-07-09-kb-compiler-lint-links-design.md)。P0（parser 定位）+ P1（links check/suggest）已落地；**禁止直接跳到大而全 `lint --profile --fix`**。
 
+> **links P1 待补验证（非缺陷，覆盖缺口，风险低）**：① 真实数据里 `markdownLink` / 资源 embed **零自然覆盖**（messy/pkm 恰好只有 wikilink，现靠 31 单测 + messy 拷贝注入验证兜底，未在自然产生的真实数据上跑过）；② `ambiguous_target` 真实 vault 未触发（仅单测）；③ **多根 vault**（如 evals `scale` 场景 `./doc`+`./docs`）links 命令未专门跑（多根解析走既有 `resolveVaultLayout`，但 links 侧未验）。
+>
 > **links P1 有意收敛（各自待需求再开）**：锚点 / heading 校验（P1.5）、`tmp_path` reason（P1 靠 `lint.ignore.paths` 覆盖）、suggest 精排（同目录 / README 优先，现字典序）、行内注释禁用（如 markdown-link-check 的 `disable-next-line`）、mtime 解析缓存（大库优化）、reference link（`[text][id]`，依赖 P0 parser 尚不产出）。
 
 ## 📋 功能覆盖 gap（对标官方 Dataview/Obsidian，deep-research 22 确认）
