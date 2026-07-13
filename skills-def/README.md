@@ -2,7 +2,7 @@
 
 本目录是 x-basalt **开发期** AI 召回用 skill 的**唯一源码**。`.claude/skills/` 与 `.agents/skills/` 仅为安装产物（均已 gitignore），由 `pnpm run skills:install` 从这里拷贝生成，**不要手改安装产物**。
 
-> 区分：`skills-def/` 是开发侧（AI 写代码时召回规范）；仓库根的 `skill-data/` 是**产品运行时** SkillRecall 加载的数据，两者互不替代。
+> 区分：`skills-def/` 是开发侧（AI 写代码时召回规范）；仓库根的 `skills-data/` 是**产品运行时** SkillRecall 加载的数据，两者互不替代。
 
 ## 现有 skill
 

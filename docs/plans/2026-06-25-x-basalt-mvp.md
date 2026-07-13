@@ -94,5 +94,5 @@ tags:
   - CLI 冒烟（tsx + dist 双跑）：parse(json/yaml)、index、query(LIST/TABLE/inlinks)、skills list/recall、watch（初始 rebuild + add/change 增量 + on-change 触发 + `FROM #fresh` 命中新笔记）。
   - 附带：按用户要求从邻居 y-bot 抄入 `biz-code-comments` skill 并本地化（真相源指向本仓库 `AGENTS.md`、示例改本项目域、补「规范来源/自建实现」分界），同步 `skills-def/README.md`、`AGENTS.md` 清单并 `skills:install`。
 - 阶段 5（2026-06-25 收口验证通过）：
-  - 全量门：`pnpm run typecheck` exit 0；`pnpm run build` exit 0（dist 产出，`node dist/cli.js` 五命令可用、dist→`skill-data/` 兜底解析正常）；`pnpm test` → 41 项全绿（todo 0）；`pnpm run lint` 0 告警；改动的源码/测试文件 `oxfmt --check` 全通过。
+  - 全量门：`pnpm run typecheck` exit 0；`pnpm run build` exit 0（dist 产出，`node dist/cli.js` 五命令可用、dist→`skills-data/` 兜底解析正常）；`pnpm test` → 41 项全绿（todo 0）；`pnpm run lint` 0 告警；改动的源码/测试文件 `oxfmt --check` 全通过。
   - **[已知风险]** 仓库级 `oxfmt --check .` 在 docs/markdown/json 等**未被本次改动触及**的文件上仍报格式不符（如 `README.md`、`docs/*`、`skills-def/INSTALL.md`、`.oxlintrc.json`），为既有基线漂移（oxfmt 默认会重排中文 prose）。本次只格式化自身改动文件，未对用户手写文档做大规模重排；是否全仓 `pnpm format` 留待单独决策。

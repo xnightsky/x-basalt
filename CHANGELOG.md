@@ -20,7 +20,7 @@
 ### Changed
 
 - **（breaking）`skill` 命令组改名为 `skills`**（复数，**不保留单数别名**），对齐 agent-browser / Gemini CLI / Claude Code 等生态惯例。
-- **（breaking）skill 运行时数据目录 `skills/` → `skill-data/`**，避免与 `skills` 命令前缀混淆、对齐 agent-browser；外部覆盖路径 `OBSIDIAN_SKILL_PATH` / 配置 `skillPath` / `~/.obsidian-core/skills` 不变。
+- **（breaking）skill 运行时数据目录 `skills/` → `skills-data/`**，避免与 `skills` 命令前缀混淆、对齐 agent-browser；外部覆盖路径 `OBSIDIAN_SKILL_PATH` / 配置 `skillPath` / `~/.obsidian-core/skills` 不变。
 - **（breaking）内置自我说明书 skill 改名 `x-basalt-usage` → `x-basalt`**（作为全局主 skill 反向召回的对象，用工具名最直观）。
 - `skills` 读子命令默认输出由 JSON 改为人类 / AI 可读 Markdown，`--json` 切回结构化。
 - DQL 引擎改用 chevrotain（词法 + parser），越界带位置报 `DqlSyntaxError`；旧手写 tokenizer 移除。

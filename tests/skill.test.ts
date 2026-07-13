@@ -139,8 +139,8 @@ test("resolvedDir 显式 skillPath 时返回该目录", () => {
   assert.equal(new SkillRecall({ skillPath: dir }).resolvedDir(), dir);
 });
 
-test("resolvedDir 默认返回内置 skill-data 目录", () => {
-  assert.equal(basename(new SkillRecall().resolvedDir()), "skill-data");
+test("resolvedDir 默认返回内置 skills-data 目录", () => {
+  assert.equal(basename(new SkillRecall().resolvedDir()), "skills-data");
 });
 
 test("list 项含顶层 description（内置 skill 已补 description）", () => {

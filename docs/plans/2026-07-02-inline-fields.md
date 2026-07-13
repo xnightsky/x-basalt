@@ -61,7 +61,7 @@ x-basalt 三元元数据模型缺 inline fields 一元（解析层无 `::`、索
 
 ### P4 · 文档 / skills / 收尾（执行 spec §9 rebase 地图）
 
-- guides ×2、skills-def ×2（改完 `pnpm run skills:install`）、skill-data ×2、根 `TODO.md` 勾掉——逐项内容见 **spec §9**。
+- guides ×2、skills-def ×2（改完 `pnpm run skills:install`）、skills-data ×2、根 `TODO.md` 勾掉——逐项内容见 **spec §9**。
 - `dql-subset-frozen` #28 占位翻 ✅；`coverage-matrix` 从 ❌ 翻 ✅ 并挂测试号。
 - **docs 元数据自举**：对本计划与 spec 跑 `x-basalt meta apply llm-wiki <doc> --refresh-derived`（AGENTS「文档元数据自举」）。
 - **验收**：docs 链接自洽；`skills:install` 后 `x-basalt skills get biz-dql-subset` 含 inline；spec §9 清单逐项勾达。

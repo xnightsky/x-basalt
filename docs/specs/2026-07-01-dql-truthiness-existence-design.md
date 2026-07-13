@@ -16,7 +16,7 @@ tags:
 > 日期：2026-07-01 · 类型：语义补正设计（先于代码）
 > 父冻结规格：[`2026-06-27-dql-subset-frozen.md`](2026-06-27-dql-subset-frozen.md)（本设计对其 #10 行做修订、并新增 #25/#26）
 > 关联能力对标：[`../research/2026-06-30-feature-gap-vs-dataview-obsidian.md`](../research/2026-06-30-feature-gap-vs-dataview-obsidian.md)（本项为该轮 deep-research 的**盲区补录**）
-> 真相源纪律：本设计冻结后，按 §7 rebase 地图同步 `skills-def/biz-dql-subset/SKILL.md` + `skill-data/obsidian-base-spec.json5` + research/architecture/plan/coverage，并 `pnpm run skills:install` 重装。
+> 真相源纪律：本设计冻结后，按 §7 rebase 地图同步 `skills-def/biz-dql-subset/SKILL.md` + `skills-data/obsidian-base-spec.json5` + research/architecture/plan/coverage，并 `pnpm run skills:install` 重装。
 
 ## 1. 触发（dogfood 实况）
 
@@ -179,8 +179,8 @@ SQLite 语义核对：`json_type(X,P)` 缺路径→SQL NULL（缺键 falsy）；
 | 5 | `docs/architecture/2026-06-28-overview.md` | §5 DQL 编译管线：WHERE atom 增真值节点、isTruthy→SQL 映射一句 |
 | 6 | `docs/plans/2026-06-26-dql-kernel-steps.md` | 新增步 **S2.15b 真值/一元 `!`**（TDD：先测后码，含 falsy 值对照与优先级用例） |
 | 7 | `skills-def/biz-dql-subset/SKILL.md` | 「支持的子集/操作符」补 `!`+裸真值+isTruthy；`= null` 定位为显式 null 比较；「非目标」相应更新 |
-| 8 | `skill-data/obsidian-base-spec.json5` | DQL 规则描述补存在性惯用法（`!field`/裸字段）与 `=null` 分歧对照 + 示例；`pnpm run skills:install` 重装 |
-| 9 | `skill-data/core.json5` | DQL 基础一句：判有无优先 `!field`/裸字段 |
+| 8 | `skills-data/obsidian-base-spec.json5` | DQL 规则描述补存在性惯用法（`!field`/裸字段）与 `=null` 分歧对照 + 示例；`pnpm run skills:install` 重装 |
+| 9 | `skills-data/core.json5` | DQL 基础一句：判有无优先 `!field`/裸字段 |
 | 10 | `docs/guides/querying-dql.md`、`docs/guides/obsidian-syntax.md` | 用户向新增「判断属性有无 / 真值 vs `= null`」小节 |
 | 11 | `src/chat/tool-errors.ts` | dql 建议从「回指文档」改为内联干货（判有无用 `!field`/裸字段；不再自我打转）|
 

@@ -62,7 +62,7 @@ src/skill/    Skill 召回：json5 加载 + 模糊匹配，内置 obsidian-base-
 src/meta/     元数据写侧：frontmatter 往返内核(yaml Document) + CRUD + 原子写（唯一写 .md 的层）
 src/utils/    路径等工具
 src/cli.ts    commander 入口
-skill-data/   产品运行时 Skill 数据（SkillRecall 加载，含 obsidian-base-spec.json5）
+skills-data/   产品运行时 Skill 数据（SkillRecall 加载，含 obsidian-base-spec.json5）
 skills-def/   开发侧业务 skill 源码（AI 召回用，见「Skills 真相源」）
 tests/        Node 原生测试 + fixtures/sample-vault
 docs/         research / specs / plans / guides / architecture / testing（见 docs/README.md）
@@ -121,7 +121,7 @@ docs/         research / specs / plans / guides / architecture / testing（见 d
   - `biz-dql-subset`：DQL 子集文法 + SQL 编译映射 + 隐式字段语义，开发 query/indexer 时召回。
   - `biz-code-comments`：中文注释 / JSDoc / 模块头 / 跨模块不变量 / 规范来源分界规范，写或审查注释时召回。
 - 新增/修改 skill 后跑 `pnpm run skills:install` 重新安装。
-- 注意区分：`skills-def/` 是**开发侧** AI 召回；`skill-data/` 是**产品运行时** SkillRecall 数据，两者不互相替代。
+- 注意区分：`skills-def/` 是**开发侧** AI 召回；`skills-data/` 是**产品运行时** SkillRecall 数据，两者不互相替代。
 
 ## 本地规则（AGENTS.local.md）
 

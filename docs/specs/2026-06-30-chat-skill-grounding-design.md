@@ -51,7 +51,7 @@ sha256: 95b9ccb1b27f3baa4aeb6c99fb9b304d17991e7dd9ea0ccb68e709dd52a40f08
 | `pipeline_run` | where=DQL → `obsidian-base-spec`；actions → `core` |
 | `parse`/`scan`/`meta_get`/`meta_unset`/`meta_rename` | 无（入参平凡） |
 
-### 3.3 两层内部 skill（`skill-data/*.json5`，运行时 SkillRecall 读）
+### 3.3 两层内部 skill（`skills-data/*.json5`，运行时 SkillRecall 读）
 - **`core`**（由 `x-basalt.json5` 改名）：强制基线 = 能力总览 + DQL 基础 + meta/pipeline 用法。
 - **`obsidian-base-spec`**：深层 DQL/frontmatter 语法，按需取。
 
@@ -79,7 +79,7 @@ sha256: 95b9ccb1b27f3baa4aeb6c99fb9b304d17991e7dd9ea0ccb68e709dd52a40f08
 ## 6. 落地 blast radius（改名 `x-basalt`→`core` 的牵连）
 
 `x-basalt` 作为 **skill 名**的引用（≠ CLI 二进制名 `x-basalt`、≠ 配置目录 `.x-basalt/`、≠ cosmiconfig 名）：
-- `skill-data/x-basalt.json5` → `core.json5`：`name:"x-basalt"`→`"core"`、自引用 `skills get x-basalt`→`skills get core`、triggers 加 `"core"`（保留 `"x-basalt"` 兼容召回）、注释。
+- `skills-data/x-basalt.json5` → `core.json5`：`name:"x-basalt"`→`"core"`、自引用 `skills get x-basalt`→`skills get core`、triggers 加 `"core"`（保留 `"x-basalt"` 兼容召回）、注释。
 - `src/skill/loader.ts:40` `ALWAYS_AVAILABLE = ["obsidian-base-spec","x-basalt"]` → `[…,"core"]`（+ 注释 37/91）。
 - `tests/skill.test.ts:73/84/134` 断言 `name === "x-basalt"` / `includes("x-basalt")` → `"core"`。
 - `src/chat/index.ts`：撤注入（`"x-basalt"` 随 `GROUNDING_SKILLS` 删除）+ §3.1 指令。
@@ -96,5 +96,5 @@ sha256: 95b9ccb1b27f3baa4aeb6c99fb9b304d17991e7dd9ea0ccb68e709dd52a40f08
 - chat 实跑 `如何查询 type research 文档`：观察模型**第一步是否调 `skills_get({name:"core"})`**（A 档是否生效的关键证据）；再看是否写对 DQL。
 
 ## 8. 与外部 skill 的边界（务必不混）
-- `skill-data/*.json5`（**内部**）：chat 运行时知识库（本设计对象）。
+- `skills-data/*.json5`（**内部**）：chat 运行时知识库（本设计对象）。
 - `skills-def/*/SKILL.md`（**外部**）：装到全局 skills 注册表、给 Claude Code 等 AI **驱动 x-basalt CLI** 用的发现 stub。**本设计不动它。**

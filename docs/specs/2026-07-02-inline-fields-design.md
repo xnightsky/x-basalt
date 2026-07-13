@@ -160,7 +160,7 @@ CREATE INDEX IF NOT EXISTS idx_inline_fields_key_norm  ON inline_fields(key_norm
 | 3 | `docs/guides/querying-dql.md` | 新增 inline fields 小节（三形态、与 frontmatter 同命名空间、优先级 D1、类型 D2 / 多值 D3 限制警示） |
 | 4 | `docs/guides/obsidian-syntax.md` | inline field 语法说明 |
 | 5 | `skills-def/biz-dql-subset/SKILL.md` + `skills-def/biz-obsidian-spec/SKILL.md` | 补 inline fields → `pnpm run skills:install` 重装 |
-| 6 | `skill-data/core.json5` / `skill-data/obsidian-base-spec.json5` | 产品运行时召回补 inline fields |
+| 6 | `skills-data/core.json5` / `skills-data/obsidian-base-spec.json5` | 产品运行时召回补 inline fields |
 | 7 | 根 `TODO.md` | feature-gap 高频刚需清单里 inline fields 勾掉并链接 plan |
 
 执行切口与验收见实现计划 P0 / P4。

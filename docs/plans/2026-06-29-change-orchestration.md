@@ -221,7 +221,7 @@ export interface RunReport {
   - 证据：`pnpm test tests/cli.test.ts`。前置：CO-F2、CO-G1。
 
 - [ ] **CO-G3 收口：质量门 + 文档 + skill**
-  - 动作：`typecheck`/`lint`/`build`/相关测试全绿；更新 `docs/guides/commands.md`+`usage.md` 加编排器命令；自我说明书 `skill-data/x-basalt.json5` 同步；TODO 标 P0 完成。
+  - 动作：`typecheck`/`lint`/`build`/相关测试全绿；更新 `docs/guides/commands.md`+`usage.md` 加编排器命令；自我说明书 `skills-data/x-basalt.json5` 同步；TODO 标 P0 完成。
   - 验收：全绿；命令签名在代码/文档/skill 一致。
   - 证据：`pnpm run typecheck && pnpm test && pnpm run lint && pnpm run build`。前置：CO-G2。
 

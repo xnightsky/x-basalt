@@ -75,4 +75,4 @@ x-basalt skills recall wikilink
 
 ---
 
-> 维护：命令签名 / DQL 子集 / 数据模型 / 配置项变化时，同步对应章节、`README.md`、自我说明书 skill（`skill-data/x-basalt.json5`）与 `docs/specs`，确保互相验证（见 `../README.md` 三层口径）。
+> 维护：命令签名 / DQL 子集 / 数据模型 / 配置项变化时，同步对应章节、`README.md`、自我说明书 skill（`skills-data/x-basalt.json5`）与 `docs/specs`，确保互相验证（见 `../README.md` 三层口径）。

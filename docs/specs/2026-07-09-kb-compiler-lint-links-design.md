@@ -392,7 +392,7 @@ P0 实现同步项：
 - `docs/plans/2026-07-09-kb-compiler-parser-position.md`：实现切口与验收。✅
 - `docs/specs/2026-06-26-coverage-matrix.md`：新增 links/parser 定位覆盖项。✅
 - `skills-def/biz-obsidian-spec/SKILL.md`：补链接位置契约与 Markdown link 节点。✅
-- `skill-data/obsidian-base-spec.json5` 或相关运行时 skill：按需补 parser 能力说明。✅
+- `skills-data/obsidian-base-spec.json5` 或相关运行时 skill：按需补 parser 能力说明。✅
 - `docs/guides/commands.md`：parse 输出说明已补链接定位；links check CLI 等 P1 存在后再补命令说明。
 
 ## 13. 开放问题

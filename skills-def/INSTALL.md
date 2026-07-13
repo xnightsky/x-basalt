@@ -8,9 +8,9 @@
 | --------------------------------------------------- | ----------------------------------------------------------------- | ------------ |
 | `skills-def/<name>/SKILL.md`                        | **真相源**：开发期 AI 召回用的 skill 源码                         | ✅ 入仓      |
 | `.claude/skills/<name>/` + `.agents/skills/<name>/` | **安装产物**：由脚本拷贝生成，供 Claude Code / 其他 AI 运行时发现 | ❌ gitignore |
-| `skill-data/*.json5`（仓库根）                      | **产品运行时**数据：被 `src/skill` 的 SkillRecall 加载            | ✅ 入仓      |
+| `skills-data/*.json5`（仓库根）                      | **产品运行时**数据：被 `src/skill` 的 SkillRecall 加载            | ✅ 入仓      |
 
-> `skills-def/`（开发侧）与 `skill-data/`（产品运行时）是两套东西，互不替代。
+> `skills-def/`（开发侧）与 `skills-data/`（产品运行时）是两套东西，互不替代。
 
 ## 二、安装
 

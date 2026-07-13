@@ -17,7 +17,7 @@
   },
   "files": [
     "dist",
-    "skill-data",
+    "skills-data",
     "README.md",
     "CHANGELOG.md",
     "LICENSE"

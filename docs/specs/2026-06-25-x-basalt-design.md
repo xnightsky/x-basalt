@@ -114,7 +114,7 @@ DQL 子集与隐式字段见调研 §3。文件：`tokenizer.ts` / `ast.ts` / `s
 
 ```typescript
 class SkillRecall {
-  constructor(opts?: { skillPath?: string }); // env OBSIDIAN_SKILL_PATH > ~/.obsidian-core/skills > 内置 skill-data/
+  constructor(opts?: { skillPath?: string }); // env OBSIDIAN_SKILL_PATH > ~/.obsidian-core/skills > 内置 skills-data/
   list(): SkillMeta[];
   recall(keyword: string): SkillDefinition[];
 }
