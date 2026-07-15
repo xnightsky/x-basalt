@@ -2,6 +2,15 @@
 
 > backlog / roadmap（存在 = 有待做项）。**已完成的不堆这**——见 git log、`docs/plans/`、`docs/specs/`。
 
+## 🔧 2026-07-15 召回质量四修（进行中）
+
+首跑（cc-sonnet + pi-deepseek）稳定复发的召回失真，隔离工作区 `.worktrees/recall-quality`（分支 `fix/recall-quality`）。计划：[`docs/plans/2026-07-15-recall-quality-fixes.md`](docs/plans/2026-07-15-recall-quality-fixes.md)。
+
+- [x] **P1** chat 别短路成通用问答：`runLoop` 兜底检测零 vault 工具 → finish 带「未从 vault 召回」标注 + 渲染 + prompt 纪律。（真实 LLM 行为待批次复跑确认）
+- [x] **P2** skills recall 中文召回率：Fuse 仅 name+triggers（去泛化词泄漏）+ 多词切词并集 + `obsidian-base-spec` 补 31 个中文触发词。
+- [x] **P3** DQL `LIKE` 定向报错引导到 `contains()`（不新增算子，对标官方 Dataview）。
+- [x] **P4** search 中文相关性/分词：查询构造改「切词 AND / CJK trigram-OR 宽松召回 / 2 字 CJK LIKE 兜底」，最短长度 3→2，索引不变。
+
 ## dogfood 观察期（2026-06-28 起）
 
 核心读侧（解析/索引/查询/召回/CLI）+ 写侧（meta：CRUD / normalize / profile-apply + `--refresh-derived`，3 套 profile）+ 变更编排器 **P0 + P1 写动作**（`--pipe` 五段管线 + `--apply` 落盘闸 + apply/set/unset/rename + if-exists）+ **CLI chat（读+写，可选 AI，单发 + REPL）** 均已落地（详见 git log、`docs/plans/`、`docs/specs/`）。**先不发布，全局安装实际用一段时间，据真实反馈再迭代。**
