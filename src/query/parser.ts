@@ -503,6 +503,18 @@ export function parseDql(dql: string): DqlQuery {
   if (parser.errors.length > 0) {
     const e = parser.errors[0]!;
     const tok = (e as { token?: IToken }).token;
+    // === 自建实现: SQL 习惯 LIKE 的定向引导（对标官方 Dataview：无 LIKE 算子，用 contains 家族）===
+    // 模型带 SQL 惯性会写 `name LIKE "%x%"`；LIKE 落成多余 Identifier，chevrotain 只报裸
+    // "Redundant input, ... found: LIKE"，不指方向 → 模型退化成全量 LIST 兜底。识别到越界 token
+    // 是 LIKE 时，改抛点名替代算子的 DqlSyntaxError（位置沿用 LIKE 偏移），把模型引到 contains()。
+    if (tok && /^like$/i.test(tok.image)) {
+      throw new DqlSyntaxError(
+        "DQL 不支持 LIKE（对标官方 Dataview，无此算子）。改用字符串谓词：" +
+          'contains(field, "子串") / icontains（大小写不敏感）/ startswith / endswith，' +
+          '正则用 regexmatch(field, "模式")。例：contains(name, "test")',
+        tok.startOffset,
+      );
+    }
     throw new DqlSyntaxError(e.message, tok?.startOffset ?? 0);
   }
   return ast;

@@ -343,6 +343,36 @@ test("parser 语法错误：带位置 DqlSyntaxError", () => {
   assert.throws(() => parseDql("LIST WHERE"), DqlSyntaxError);
 });
 
+// === 2026-07-15 P3：SQL 习惯 LIKE 的定向报错引导（不新增算子，对标官方 Dataview）===
+
+test("P3 WHERE ... LIKE 抛定向 DqlSyntaxError：指向 contains、带越界 token 位置", () => {
+  const dql = 'LIST FROM "" WHERE type="research" AND name LIKE "%test%"';
+  assert.throws(
+    () => parseDql(dql),
+    (e: unknown) => {
+      assert.ok(e instanceof DqlSyntaxError, "应为 DqlSyntaxError");
+      // 引导到正确算子：文案必须点名 contains（可用 icontains/startswith/endswith）
+      assert.match(e.message, /contains/, "错误文案应指向 contains()");
+      assert.match(e.message, /LIKE/, "错误文案应点名 LIKE 不受支持");
+      // 位置定位在 LIKE 越界 token（源串中 LIKE 起始偏移 = 44）
+      assert.equal(e.pos, dql.indexOf("LIKE"), "位置应落在 LIKE 处");
+      return true;
+    },
+  );
+});
+
+test("P3 大小写不敏感：小写 like 同样触发定向引导", () => {
+  assert.throws(
+    () => parseDql('LIST WHERE name like "%x%"'),
+    (e: unknown) => e instanceof DqlSyntaxError && /contains/.test((e as DqlSyntaxError).message),
+  );
+});
+
+test('P3 正解仍正常：contains(field,"子串") 可解析', () => {
+  // 不应抛错——LIKE 的替代写法保持合法。
+  assert.doesNotThrow(() => parseDql('LIST WHERE contains(name, "test")'));
+});
+
 // === 2026-07-01 S2.15b：一元 `!` + 裸字段真值（truthy），对标官方 Dataview isTruthy ===
 
 test("词法：孤立 ! 为 Bang，!= 仍为 Op（多字符先吃）", () => {
