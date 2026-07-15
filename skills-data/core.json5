@@ -93,7 +93,7 @@
     "x-basalt meta set <file> <key> <value>",
     "x-basalt watch <vault> --on-change <cmd>",
     "x-basalt run --pipe actions=... [--apply]",
-    'x-basalt chat "<自然语言>"  (需 AI_GATEWAY_API_KEY)',
+    'x-basalt chat "<自然语言>" [--quiet] [--json]  (需 AI_GATEWAY_API_KEY)',
   ],
   rules: [
     {
@@ -193,10 +193,11 @@
       ],
     },
     {
-      pattern: 'chat ["<自然语言>"] [--model <name>] [--max-steps <n>] [--db <path>] [--vault <path>]',
-      description: "可选 AI 子命令（如何用）：用自然语言驱动既有原语（读 query/parse/scan/meta_get/skills_recall/search + 写 meta_set/unset/rename/normalize/apply + 批量 pipeline_run）跑 plan→act→observe 循环。带参=单发翻译执行即退；省略参数=进 REPL（quit/exit/q 退出）。最小可选 AI：内核零 AI、chat 隔离懒加载 SDK；没配 key=本命令禁用但其余命令全功能照常（需 AI_GATEWAY_API_KEY，--model 覆盖模型）。写动作直接落盘、无逐个确认弹窗——安全靠流式可观测 + Ctrl+C 中断在途 + 既有原子写（kill 不损坏文件）+ git 兜底。**只做一次性操作，不支持常驻 watch/监听**：绝不让它跑 watch 或 index --watch 这类常驻命令——会永不返回、把 chat 挂死；持续维护 vault 用独立的 watch / scan --pipe。能力边界：当前做结构化任务（DQL/元数据/规范）与 FTS5 正文全文检索；语义向量检索未落地。**如何配置（AI_GATEWAY_* 三变量、Linux/macOS 与 Windows 各平台设法与持久化、离线本地端点）见 docs/guides/ai-and-skills.md 第四节。**",
+      pattern: 'chat ["<自然语言>"] [--model <name>] [--max-steps <n>] [--db <path>] [--vault <path>] [--quiet] [--json]',
+      description: "可选 AI 子命令（如何用）：用自然语言驱动既有原语（读 query/parse/scan/meta_get/skills_recall/search + 写 meta_set/unset/rename/normalize/apply + 批量 pipeline_run）跑 plan→act→observe 循环。带参=单发翻译执行即退；省略参数=进 REPL（quit/exit/q 退出）。**被其它 AI/脚本程序化调用时加 `--quiet`（纯答案，推荐）或 `--json`（结构化），完全隐藏 plan→act→observe 过程；因为调用方通常会把 stdout+stderr 合并进模型上下文，过程轨迹只会白占 token。人交互/REPL 才用默认完整轨迹。**最小可选 AI：内核零 AI、chat 隔离懒加载 SDK；没配 key=本命令禁用但其余命令全功能照常（需 AI_GATEWAY_API_KEY，--model 覆盖模型）。写动作直接落盘、无逐个确认弹窗——安全靠流式可观测 + Ctrl+C 中断在途 + 既有原子写（kill 不损坏文件）+ git 兜底。**只做一次性操作，不支持常驻 watch/监听**：绝不让它跑 watch 或 index --watch 这类常驻命令——会永不返回、把 chat 挂死；持续维护 vault 用独立的 watch / scan --pipe。能力边界：当前做结构化任务（DQL/元数据/规范）与 FTS5 正文全文检索；语义向量检索未落地。**如何配置（AI_GATEWAY_* 三变量、Linux/macOS 与 Windows 各平台设法与持久化、离线本地端点）见 docs/guides/ai-and-skills.md 第四节。**",
       examples: [
         'x-basalt chat "把 projects 下 status 为空的笔记列出来"',
+        'x-basalt chat "总结 vault 里的前端测试约定" --quiet   # 供 AI/脚本调用，只回结果',
         'x-basalt chat "给 2024 年的周报都补上 tag weekly"',
         'x-basalt chat --model anthropic/claude-opus-4.8 "..."',
         "x-basalt chat   # 省略参数进 REPL，连续提问，quit/exit/q 退出",

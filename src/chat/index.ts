@@ -11,6 +11,7 @@ import { buildTools, NO_RECALL_NOTICE, RECALL_TOOL_NAMES } from "./tools.js";
 import { runRepl as repl } from "./repl.js";
 import { createTracer, type Tracer } from "./trace.js";
 
+/** chat 单发与 REPL 共用装配选项；quiet/json 只改变单发输出，不改变循环执行。 */
 export interface ChatOptions {
   model?: string;
   maxSteps: number;
@@ -21,6 +22,10 @@ export interface ChatOptions {
   trace?: string | boolean;
   /** CLI 版本，写入 session 元信息。 */
   version?: string;
+  /** 单发只输出模型答案与结果限定；不会向 stdout/stderr 打印工具过程。 */
+  quiet?: boolean;
+  /** 单发聚合为一个 JSON 对象；优先级高于 quiet。 */
+  json?: boolean;
 }
 
 /** 系统提示（精简纪律 + 强制先取 core；规范细节不在此复述、靠 skills_get 取，仿 agent-browser chat）。 */
@@ -41,6 +46,33 @@ export const SYSTEM_PROMPT =
 
 /** 单行预览上限（字符）。 */
 const PREVIEW_MAX = 200;
+
+/** 非 TTY 最小摘要的短目标上限，避免工具参数重新膨胀成过程日志。 */
+const SHORT_TARGET_MAX = 80;
+
+const EXHAUSTED_NOTICE =
+  "⚠ 已达步数上限、任务可能未完成——REPL 中输入「继续」可接着跑；单发可重试时加大 --max-steps。";
+
+/** 单发事件输出档位；full 也用于保持 REPL 现有完整轨迹。 */
+export type ChatOutputProfile = "full" | "summary" | "quiet" | "json";
+
+/** 可注入 writer 让输出契约可独立测试，同时避免改写全局 stdout/stderr。 */
+export interface ChatOutputWriters {
+  stdout: (text: string) => void;
+  stderr: (text: string) => void;
+}
+
+/** JSON 档需跨事件累积答案；其余档也共用同一上下文以统一渲染入口。 */
+export interface RenderContext {
+  profile: ChatOutputProfile;
+  answer: string;
+  writers: ChatOutputWriters;
+}
+
+const PROCESS_WRITERS: ChatOutputWriters = {
+  stdout: (text) => process.stdout.write(text),
+  stderr: (text) => process.stderr.write(text),
+};
 
 /** 折叠空白、截断成单行预览，超长附剩余字符数。 */
 function oneLine(s: string, max = PREVIEW_MAX): string {
@@ -78,38 +110,101 @@ function fmtError(err: unknown): string {
   return oneLine(msg, 300);
 }
 
+/** 从常见工具参数中提取一个短目标；不回退到整段 JSON，避免摘要档再次制造 token 噪声。 */
+function fmtShortTarget(input: unknown): string {
+  if (typeof input === "string") return oneLine(input, SHORT_TARGET_MAX);
+  if (!input || typeof input !== "object" || Array.isArray(input)) return "";
+  const record = input as Record<string, unknown>;
+  for (const key of [
+    "query",
+    "path",
+    "file",
+    "dql",
+    "keyword",
+    "name",
+    "folder",
+    "tag",
+    "profile",
+  ]) {
+    const value = record[key];
+    if (typeof value === "string" && value.trim()) return oneLine(value, SHORT_TARGET_MAX);
+  }
+  return "";
+}
+
+function completeUsage(usage: LoopEvent["usage"]): NonNullable<LoopEvent["usage"]> | null {
+  if (
+    typeof usage?.inputTokens !== "number" ||
+    typeof usage.outputTokens !== "number" ||
+    typeof usage.totalTokens !== "number"
+  ) {
+    return null;
+  }
+  return {
+    inputTokens: usage.inputTokens,
+    outputTokens: usage.outputTokens,
+    totalTokens: usage.totalTokens,
+  };
+}
+
+function renderFinish(e: LoopEvent, context: RenderContext): void {
+  if (context.profile === "json") {
+    context.writers.stdout(
+      `${JSON.stringify({
+        answer: context.answer,
+        recalled: e.recalled ?? false,
+        stopReason: e.stopReason ?? "done",
+        steps: e.steps ?? 0,
+        usage: completeUsage(e.usage),
+      })}\n`,
+    );
+    return;
+  }
+  if (e.noRecallNotice) context.writers.stdout(`\n${e.noRecallNotice}\n`);
+  if (e.stopReason === "exhausted") {
+    context.writers.stdout(`\n${EXHAUSTED_NOTICE}\n`);
+  } else if (context.profile === "full") {
+    context.writers.stdout("\n· 完成\n");
+  }
+}
+
 /**
- * 流式渲染：文本直出；工具调用显示入参、结果显示输出预览、出错显示错误；收尾据 stopReason 区分提示。
- * 此前只为 tool-call 打一行无入参提示、丢弃 tool-result/tool-error、finish 仅打「· 完成」——
- * 用户侧表现为「调用没有 input/output、撞步数顶却像自然结束」，本函数即修复点。
- * exhausted（撞 maxSteps 顶、模型还想继续）下显式提示「未完成、可续/可加步数」，不再静默假装收工。
+ * 按 profile 渲染一条循环事件；默认 full 保持 REPL 现有体验，单发传持久 context 支持 JSON 聚合。
+ *
+ * @behavior Given quiet 或 json When 收到工具过程事件 Then stdout/stderr 均不写过程
+ * @behavior Given quiet 收到 no-recall/exhausted finish When 收尾 Then 仍向 stdout 写结果限定
+ * @behavior Given summary 收到工具调用 When 渲染 Then stderr 只写工具名与短目标，不写结果预览
  */
-export function renderEvent(e: LoopEvent): void {
+export function renderEvent(
+  e: LoopEvent,
+  context: RenderContext = { profile: "full", answer: "", writers: PROCESS_WRITERS },
+): void {
   switch (e.type) {
     case "text":
-      if (e.text) process.stdout.write(e.text);
+      if (!e.text) break;
+      if (context.profile === "json") context.answer += e.text;
+      else context.writers.stdout(e.text);
       break;
     case "tool-call": {
-      const args = fmtInput(e.input);
-      process.stdout.write(`\n· 调用 ${e.toolName}${args ? ` ${args}` : ""} …\n`);
+      if (context.profile === "full") {
+        const args = fmtInput(e.input);
+        context.writers.stdout(`\n· 调用 ${e.toolName}${args ? ` ${args}` : ""} …\n`);
+      } else if (context.profile === "summary") {
+        const target = fmtShortTarget(e.input);
+        context.writers.stderr(`· ${e.toolName}${target ? ` ${target}` : ""}\n`);
+      }
       break;
     }
     case "tool-result":
-      process.stdout.write(`  ↳ ${fmtOutput(e.output)}\n`);
+      if (context.profile === "full") context.writers.stdout(`  ↳ ${fmtOutput(e.output)}\n`);
       break;
     case "tool-error":
-      process.stdout.write(`  ✗ ${e.toolName} 出错：${fmtError(e.error)}\n`);
+      if (context.profile === "full") {
+        context.writers.stdout(`  ✗ ${e.toolName} 出错：${fmtError(e.error)}\n`);
+      }
       break;
     case "finish":
-      // P1：本轮零 vault 工具却给了实质答复 → 先如实标注，避免调用方把通用知识误当已召回。
-      if (e.noRecallNotice) process.stdout.write(`\n${e.noRecallNotice}\n`);
-      if (e.stopReason === "exhausted") {
-        process.stdout.write(
-          "\n⚠ 已达步数上限、任务可能未完成——REPL 中输入「继续」可接着跑；单发可重试时加大 --max-steps。\n",
-        );
-      } else {
-        process.stdout.write("\n· 完成\n");
-      }
+      renderFinish(e, context);
       break;
   }
 }
@@ -133,6 +228,13 @@ function makeTracer(opts: ChatOptions): Tracer | null {
     vault: opts.vaultPath,
     version: opts.version,
   });
+}
+
+/** 单发输出优先级：JSON > quiet > TTY 完整轨迹 > 非 TTY 最小摘要。 */
+function outputProfile(opts: ChatOptions): ChatOutputProfile {
+  if (opts.json) return "json";
+  if (opts.quiet) return "quiet";
+  return process.stdout.isTTY ? "full" : "summary";
 }
 
 /** 装配 model + tools；无 key/未装依赖 → 打印指引返回 null（消费者退出非 0）。 */
@@ -164,6 +266,8 @@ export async function runOnce(input: string, opts: ChatOptions): Promise<number>
   const s = await setup(opts);
   if (!s) return 1;
   const tracer = makeTracer(opts);
+  const profile = outputProfile(opts);
+  const renderContext: RenderContext = { profile, answer: "", writers: PROCESS_WRITERS };
   const ac = new AbortController();
   const onSigint = (): void => ac.abort();
   process.on("SIGINT", onSigint);
@@ -175,7 +279,7 @@ export async function runOnce(input: string, opts: ChatOptions): Promise<number>
       tools: s.tools,
       maxSteps: opts.maxSteps,
       onEvent: (e) => {
-        renderEvent(e);
+        renderEvent(e, renderContext);
         tracer?.sink(e, 1);
       },
       abortSignal: ac.signal,
@@ -194,7 +298,9 @@ export async function runOnce(input: string, opts: ChatOptions): Promise<number>
   } finally {
     process.off("SIGINT", onSigint);
     tracer?.close();
-    if (tracer?.isActive()) process.stdout.write(`· trace → ${resolve(tracer.path)}\n`);
+    if (tracer?.isActive() && profile === "full") {
+      process.stdout.write(`· trace → ${resolve(tracer.path)}\n`);
+    }
   }
 }
 

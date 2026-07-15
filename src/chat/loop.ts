@@ -30,6 +30,10 @@ export interface LoopEvent {
    * 把「模型通用知识作答」误当「已从 vault 召回」上报。
    */
   noRecallNotice?: string;
+  /** finish：本轮是否实际调用过任一 vault 召回工具，供结构化输出如实标注来源。 */
+  recalled?: boolean;
+  /** finish：SDK 实际完成的步骤数，供结构化输出报告，不参与停止原因判定。 */
+  steps?: number;
   /** finish：本轮 token 用量（provider 返回则带；缺失字段省略）。 */
   usage?: {
     inputTokens?: number;
@@ -135,6 +139,8 @@ export async function runLoop(messages: ModelMessage[], deps: LoopDeps): Promise
     type: "finish",
     stopReason,
     noRecallNotice,
+    recalled: usedRecallTool,
+    steps: steps.length,
     usage: usage
       ? {
           inputTokens: usage.inputTokens ?? undefined,

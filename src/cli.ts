@@ -703,7 +703,11 @@ program
   .description("自然语言驱动 vault（可选 AI；需 AI_GATEWAY_API_KEY，无则禁用，不影响其他命令）")
   .argument("[input]", "自然语言指令（省略则进 REPL）")
   .option("--model <name>", "覆盖 AI_GATEWAY_MODEL")
-  .option("--max-steps <n>", "agentic 最大步数（撞顶不再静默停：单发提示、REPL 可「继续」续跑）", "20")
+  .option(
+    "--max-steps <n>",
+    "agentic 最大步数（撞顶不再静默停：单发提示、REPL 可「继续」续跑）",
+    "20",
+  )
   .option("--db <path>", "SQLite 索引路径（默认 .x-basalt/index.db，可由配置 db 覆盖）")
   .option(
     "--vault <path>",
@@ -711,11 +715,21 @@ program
     collectVault,
     [] as string[],
   )
+  .option("-q, --quiet", "单发只输出答案与 no-recall/exhausted 结果限定，完全隐藏工具过程")
+  .option("--json", "单发结束后输出一个结构化 JSON 对象（优先于 --quiet）")
   .option("--trace [file]", "落盘 chat 事件到 JSONL（省略 file 则按时间戳自动命名）")
   .action(
     async (
       input: string | undefined,
-      opts: { model?: string; maxSteps: string; db?: string; vault: string[]; trace?: string | true },
+      opts: {
+        model?: string;
+        maxSteps: string;
+        db?: string;
+        vault: string[];
+        quiet?: boolean;
+        json?: boolean;
+        trace?: string | true;
+      },
     ) => {
       // 先检查 AI key：无 key 直接友好退出，避免先报 "需要 --vault" 造成误导。
       // provider.ts 无 AI SDK 顶层依赖，可安全懒加载；真正触达 SDK 的 index.ts 仍延后到本分支有 key 之后。
@@ -734,7 +748,11 @@ program
       );
       const tracePath =
         opts.trace === true
-          ? join(BASE_DIR, "chat-traces", `${new Date().toISOString().replaceAll(/[:.]/g, "-")}.jsonl`)
+          ? join(
+              BASE_DIR,
+              "chat-traces",
+              `${new Date().toISOString().replaceAll(/[:.]/g, "-")}.jsonl`,
+            )
           : opts.trace;
       const chatOpts = {
         model: opts.model,
@@ -744,6 +762,8 @@ program
         skillPath: config.skillPath,
         trace: tracePath,
         version: program.version(),
+        quiet: opts.quiet,
+        json: opts.json,
       };
       // 懒加载：只有确认有 key 后才触达 src/chat（及其 AI SDK 依赖）。
       const { runOnce, runRepl, readPipedStdin } = await import("./chat/index.js");
