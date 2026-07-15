@@ -9,6 +9,7 @@ import { createInterface } from "node:readline/promises";
 import { resolve } from "node:path";
 import type { ModelMessage, ToolSet } from "ai";
 import { runLoop, type LoopEvent } from "./loop.js";
+import { NO_RECALL_NOTICE, RECALL_TOOL_NAMES } from "./tools.js";
 import type { Tracer } from "./trace.js";
 
 /** 一行输入的语义解释结果（把控制流从 readline IO 中挤出来，便于独立、确定性测试/复用）。 */
@@ -32,8 +33,10 @@ export function interpretLine(raw: string, canContinue: boolean): ReplAction {
   if (line === "quit" || line === "exit" || line === "q") return { kind: "quit" };
   if (line === "") return { kind: "skip" };
   if (line === "help" || line === ":help" || line === "?" || line === "？") return { kind: "help" };
-  if (line === "examples" || line === ":examples" || line === "例子" || line === "示例") return { kind: "examples" };
-  if (canContinue && (line === "继续" || line === "continue" || line === "go")) return { kind: "continue" };
+  if (line === "examples" || line === ":examples" || line === "例子" || line === "示例")
+    return { kind: "examples" };
+  if (canContinue && (line === "继续" || line === "continue" || line === "go"))
+    return { kind: "continue" };
   return { kind: "message", content: line };
 }
 
@@ -110,7 +113,10 @@ export async function runRepl(
   let canContinue = false; // 上一轮是否撞顶未完成
   try {
     for (;;) {
-      const action = interpretLine(await rl.question(canContinue ? PROMPT_CONTINUE : PROMPT), canContinue);
+      const action = interpretLine(
+        await rl.question(canContinue ? PROMPT_CONTINUE : PROMPT),
+        canContinue,
+      );
       if (action.kind === "quit") {
         process.stdout.write("再见。\n");
         return 0;
@@ -138,6 +144,8 @@ export async function runRepl(
           onEvent: cfg.onEvent,
           abortSignal: ac.signal,
           system: cfg.system,
+          recallToolNames: RECALL_TOOL_NAMES,
+          noRecallNotice: NO_RECALL_NOTICE,
         });
         messages = r.messages;
         canContinue = r.stopReason === "exhausted";

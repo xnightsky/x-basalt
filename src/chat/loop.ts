@@ -24,6 +24,12 @@ export interface LoopEvent {
   error?: unknown;
   /** finish：本轮停止原因，供渲染层区分「· 完成」与「⚠ 撞步数顶、可续」。 */
   stopReason?: StopReason;
+  /**
+   * finish：本轮"未从 vault 召回"的如实标注（P1）。仅当本轮产出了实质文本答复、却**零** vault 检索
+   * 工具调用时置为 {@link LoopDeps.noRecallNotice} 文案；否则不置。渲染层据此在收尾处提示，避免调用方
+   * 把「模型通用知识作答」误当「已从 vault 召回」上报。
+   */
+  noRecallNotice?: string;
   /** finish：本轮 token 用量（provider 返回则带；缺失字段省略）。 */
   usage?: {
     inputTokens?: number;
@@ -51,7 +57,24 @@ export interface LoopDeps {
    * ai@7.0.6 默认禁止 messages 里出现 system 角色（InvalidPromptError），系统提示是顶层独立项。
    */
   system?: string;
+  /**
+   * 计入"已从 vault 召回"的工具名集合（P1）：模型调用了其中任一工具即视为真的查过 vault，
+   * 收尾不加标注。skills_* 取的是本 CLI 规范、不算 vault 召回，故不列入。与 {@link noRecallNotice}
+   * 配套：二者同时提供才启用"零 vault 工具 → 如实标注"检测。
+   */
+  recallToolNames?: string[];
+  /**
+   * "未从 vault 召回"标注文案（P1）。本轮产出实质文本答复却零 {@link recallToolNames} 调用时，
+   * 经 finish 事件的 {@link LoopEvent.noRecallNotice} 下发给渲染层。未提供 = 不启用该检测（行为不变）。
+   */
+  noRecallNotice?: string;
 }
+
+/**
+ * 触发"未召回"标注的最短答复字符数（P1 降噪阈值）：短于此的输出多为寒暄/澄清/拒答，
+ * 给它们贴"未从 vault 召回"既无意义又打扰；实质知识答复通常远长于此。取值偏保守，宁可少标不误扰。
+ */
+const NO_RECALL_MIN_ANSWER_CHARS = 40;
 
 /**
  * 跑一轮 agentic 循环：messages → 模型 → SDK 自动多步 → 流式回显 → 返回追加消息后的完整 messages。
@@ -75,16 +98,20 @@ export async function runLoop(messages: ModelMessage[], deps: LoopDeps): Promise
     stopWhen: stepCountIs(deps.maxSteps),
     abortSignal: deps.abortSignal,
   });
+  // P1「未从 vault 召回」检测：累计实质答复长度 + 是否调用过 recall 工具。
+  const recallSet = new Set(deps.recallToolNames ?? []);
+  let answerChars = 0;
+  let usedRecallTool = false;
   for await (const part of result.stream) {
     // 注：part 字段名以 ai@7.0.x 为准——text-delta 的 .text/.delta、tool-call 的 .toolName/.input、
     // tool-result 的 .output、tool-error 的 .error。input/output/error 此前被丢弃，是本次可观测性修复点。
     if (part.type === "text-delta") {
-      deps.onEvent({
-        type: "text",
-        text:
-          (part as { text?: string; delta?: string }).text ?? (part as { delta?: string }).delta,
-      });
+      const text =
+        (part as { text?: string; delta?: string }).text ?? (part as { delta?: string }).delta;
+      answerChars += text?.length ?? 0;
+      deps.onEvent({ type: "text", text });
     } else if (part.type === "tool-call") {
+      if (recallSet.has(part.toolName)) usedRecallTool = true;
       deps.onEvent({ type: "tool-call", toolName: part.toolName, input: part.input });
     } else if (part.type === "tool-result") {
       deps.onEvent({ type: "tool-result", toolName: part.toolName, output: part.output });
@@ -99,9 +126,15 @@ export async function runLoop(messages: ModelMessage[], deps: LoopDeps): Promise
   const stillActing = (steps.at(-1)?.toolCalls?.length ?? 0) > 0;
   const exhausted = steps.length >= deps.maxSteps && stillActing;
   const stopReason: StopReason = exhausted ? "exhausted" : "done";
+  // P1：本轮产出了实质文本答复、却零 vault 检索工具调用 → 如实标注（配了 noRecallNotice 才启用）。
+  const noRecallNotice =
+    deps.noRecallNotice && !usedRecallTool && answerChars >= NO_RECALL_MIN_ANSWER_CHARS
+      ? deps.noRecallNotice
+      : undefined;
   deps.onEvent({
     type: "finish",
     stopReason,
+    noRecallNotice,
     usage: usage
       ? {
           inputTokens: usage.inputTokens ?? undefined,

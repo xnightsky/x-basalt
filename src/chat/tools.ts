@@ -33,6 +33,32 @@ export interface ToolContext {
   skillPath?: string;
 }
 
+/**
+ * 计入"已从 vault 召回"的工具名（P1）：查询/读/写该 Obsidian vault 的工具。模型调用了其中任一，
+ * 即视为真的查过 vault，chat 收尾不加"未召回"标注。**skills_recall / skills_get 取的是本 CLI 的
+ * 规范说明、不是 vault 内容**，故刻意不列入——只用它们作答仍属"未从 vault 召回"。
+ * 与 buildTools 的 tool 名一一对应，增删 vault 工具时同步维护。
+ */
+export const RECALL_TOOL_NAMES = [
+  "query",
+  "parse",
+  "read_note",
+  "scan",
+  "list",
+  "search",
+  "meta_get",
+  "meta_set",
+  "meta_unset",
+  "meta_rename",
+  "meta_normalize",
+  "meta_apply",
+  "pipeline_run",
+];
+
+/** "未从 vault 召回"如实标注文案（P1）：本轮零 {@link RECALL_TOOL_NAMES} 调用却给了实质答复时提示。 */
+export const NO_RECALL_NOTICE =
+  "⚠ 本次未调用任何 vault 检索工具，以上为模型通用知识、并非从该 Obsidian vault 召回——若需基于 vault 内容作答，请改用 search / query 等工具后再答。";
+
 /** 读工具结果统一过 safety：非字符串先 JSON 化，再截断+边界包裹。 */
 function observe(safety: Safety, v: unknown): string {
   const s = typeof v === "string" ? v : JSON.stringify(v, null, 2);
@@ -121,7 +147,10 @@ export function buildTools(ctx: ToolContext, safety: Safety): ToolSet {
       execute: ({ dql, offset, size }) => {
         const engine = new DataviewEngine(ctx.dbPath);
         try {
-          return observe(safety, engine.query(dql, { offset: offset ?? 0, size: clampSize(size, 50, 500) }));
+          return observe(
+            safety,
+            engine.query(dql, { offset: offset ?? 0, size: clampSize(size, 50, 500) }),
+          );
         } finally {
           engine.close();
         }
@@ -135,7 +164,8 @@ export function buildTools(ctx: ToolContext, safety: Safety): ToolSet {
         required: ["file"],
         additionalProperties: false,
       }),
-      execute: ({ file }) => observe(safety, new VaultParser().parse(readFileSync(toAbs(file), "utf8"))),
+      execute: ({ file }) =>
+        observe(safety, new VaultParser().parse(readFileSync(toAbs(file), "utf8"))),
     }),
     read_note: tool({
       description:
@@ -145,7 +175,10 @@ export function buildTools(ctx: ToolContext, safety: Safety): ToolSet {
         properties: {
           file: { type: "string", description: ".md 文件路径" },
           offset: { type: "number", description: "起始行（0-based），默认 0" },
-          size: { type: "number", description: "本页最大行数，默认 200，上限 2000（0=只回 totalLines）" },
+          size: {
+            type: "number",
+            description: "本页最大行数，默认 200，上限 2000（0=只回 totalLines）",
+          },
         },
         required: ["file"],
         additionalProperties: false,
@@ -174,7 +207,10 @@ export function buildTools(ctx: ToolContext, safety: Safety): ToolSet {
         properties: {
           rehash: { type: "boolean", description: "按内容对比（慢但稳），默认 mtime+size" },
           offset: { type: "number", description: "changes 起始偏移，默认 0" },
-          size: { type: "number", description: "changes 本页最大条数，默认 50，上限 500（0=只回 counts）" },
+          size: {
+            type: "number",
+            description: "changes 本页最大条数，默认 50，上限 500（0=只回 counts）",
+          },
         },
         additionalProperties: false,
       }),
@@ -190,7 +226,7 @@ export function buildTools(ctx: ToolContext, safety: Safety): ToolSet {
     }),
     list: tool({
       description:
-        "列出笔记（按 folder/tag/name 过滤，分页；用它回答「有哪些笔记/列出 XX 下的笔记」类请求）。基于索引快照，新改动需先 scan/index 才能看见。folder 为目录前缀（含子目录，同 DQL FROM \"folder\"）；tag 为前缀语义（同 DQL FROM #tag，area 命中 area 与 area/work）；name 为文件名子串（不区分大小写）；三者可组合、按 AND 拼接。返回 total（命中总数）/returned/hasMore——数总量看 total，不要靠翻页枚举。size 默认 50（上限 500，0=只回 total 不取行），offset 默认 0；翻页用 offset+=size。",
+        '列出笔记（按 folder/tag/name 过滤，分页；用它回答「有哪些笔记/列出 XX 下的笔记」类请求）。基于索引快照，新改动需先 scan/index 才能看见。folder 为目录前缀（含子目录，同 DQL FROM "folder"）；tag 为前缀语义（同 DQL FROM #tag，area 命中 area 与 area/work）；name 为文件名子串（不区分大小写）；三者可组合、按 AND 拼接。返回 total（命中总数）/returned/hasMore——数总量看 total，不要靠翻页枚举。size 默认 50（上限 500，0=只回 total 不取行），offset 默认 0；翻页用 offset+=size。',
       inputSchema: jsonSchema<{
         folder?: string;
         tag?: string;
@@ -213,7 +249,10 @@ export function buildTools(ctx: ToolContext, safety: Safety): ToolSet {
         try {
           return observe(
             safety,
-            engine.list({ folder, tag, name }, { offset: offset ?? 0, size: clampSize(size, 50, 500) }),
+            engine.list(
+              { folder, tag, name },
+              { offset: offset ?? 0, size: clampSize(size, 50, 500) },
+            ),
           );
         } finally {
           engine.close();
@@ -236,7 +275,10 @@ export function buildTools(ctx: ToolContext, safety: Safety): ToolSet {
       execute: ({ query, offset, size }) => {
         const engine = new DataviewEngine(ctx.dbPath);
         try {
-          return observe(safety, engine.search(query, { offset: offset ?? 0, size: clampSize(size, 50, 500) }));
+          return observe(
+            safety,
+            engine.search(query, { offset: offset ?? 0, size: clampSize(size, 50, 500) }),
+          );
         } finally {
           engine.close();
         }
@@ -268,17 +310,23 @@ export function buildTools(ctx: ToolContext, safety: Safety): ToolSet {
         "按名读取规范全文（skills_recall 召不回时用此精确读取）。可用：core(x-basalt 能力总览/CLI 用法/DQL 基础/meta·pipeline)、obsidian-base-spec(精确 DQL 文法+frontmatter/tag 提取规则)。",
       inputSchema: jsonSchema<{ name: string }>({
         type: "object",
-        properties: { name: { type: "string", description: "skill 名，如 core / obsidian-base-spec" } },
+        properties: {
+          name: { type: "string", description: "skill 名，如 core / obsidian-base-spec" },
+        },
         required: ["name"],
         additionalProperties: false,
       }),
       execute: ({ name }) =>
-        observe(safety, new SkillRecall({ skillPath: ctx.skillPath }).get(name) ?? `✗ 未找到 skill：${name}`),
+        observe(
+          safety,
+          new SkillRecall({ skillPath: ctx.skillPath }).get(name) ?? `✗ 未找到 skill：${name}`,
+        ),
     }),
 
     // ---- 写工具（execute 直接以非 dry-run 落盘，无 confirm）----
     meta_set: tool({
-      description: "设置/更新某笔记的一个 frontmatter 属性（直接写入）。值类型/归一规则见 obsidian-base-spec。",
+      description:
+        "设置/更新某笔记的一个 frontmatter 属性（直接写入）。值类型/归一规则见 obsidian-base-spec。",
       inputSchema: jsonSchema<{ file: string; key: string; value: string; type?: string }>({
         type: "object",
         properties: {
