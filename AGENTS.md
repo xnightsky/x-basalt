@@ -63,7 +63,7 @@ src/meta/     元数据写侧：frontmatter 往返内核(yaml Document) + CRUD +
 src/utils/    路径等工具
 src/cli.ts    commander 入口
 skills-data/   产品运行时 Skill 数据（SkillRecall 加载，含 obsidian-base-spec.json5）
-skills-def/   开发侧业务 skill 源码（AI 召回用，见「Skills 真相源」）
+skills-def/   开发期 AI 召回 skill 源码：cli/（消费侧入口，装宿主全局）+ dev/（biz-* 开发侧，装本仓）（见「Skills 真相源」）
 tests/        Node 原生测试 + fixtures/sample-vault
 docs/         research / specs / plans / guides / architecture / testing（见 docs/README.md）
 ```
@@ -115,13 +115,16 @@ docs/         research / specs / plans / guides / architecture / testing（见 d
 
 ## Skills 真相源（skills-def）
 
-- 开发侧自建 skill 源码**唯一维护在 `skills-def/<name>/SKILL.md`**；`.claude/skills/` 与 `.agents/skills/` 仅安装产物（由 `pnpm run skills:install` 拷贝生成，均已 gitignore），不手改安装产物。
-- 现有业务 skill：
-  - `biz-obsidian-spec`：Obsidian Markdown 精确文法，开发/维护 parser 时召回。
-  - `biz-dql-subset`：DQL 子集文法 + SQL 编译映射 + 隐式字段语义，开发 query/indexer 时召回。
-  - `biz-code-comments`：中文注释 / JSDoc / 模块头 / 跨模块不变量 / 规范来源分界规范，写或审查注释时召回。
-- 新增/修改 skill 后跑 `pnpm run skills:install` 重新安装。
-- 注意区分：`skills-def/` 是**开发侧** AI 召回；`skills-data/` 是**产品运行时** SkillRecall 数据，两者不互相替代。
+- 开发期召回 skill 源码**唯一维护在 `skills-def/{cli,dev}/<name>/SKILL.md`**；`.claude/skills/` 与 `.agents/skills/` 仅安装产物（由 `pnpm run skills:install*` 拷贝生成，均已 gitignore），不手改安装产物。
+- 按受众 / 安装去向分两组（`scripts/install-skills.mjs` 按目录路由）：
+  - **`cli/`（消费侧入口，`pnpm run skills:install:global` → 宿主全局）**：
+    - `x-basalt`：**薄入口**，只做触发 + 指路，权威用法一律 `x-basalt skills get core`（不在本文重抄命令表，避免二次漂移）。
+  - **`dev/`（开发侧业务规范，`pnpm run skills:install` → 本仓）**：
+    - `biz-obsidian-spec`：Obsidian Markdown 精确文法，开发/维护 parser 时召回。
+    - `biz-dql-subset`：DQL 子集文法 + SQL 编译映射 + 隐式字段语义，开发 query/indexer 时召回。
+    - `biz-code-comments`：中文注释 / JSDoc / 模块头 / 跨模块不变量 / 规范来源分界规范，写或审查注释时召回。
+- 新增/修改 skill 后跑对应 `skills:install`（开发侧 `pnpm run skills:install`，消费侧入口 `pnpm run skills:install:global`）重新安装。
+- 注意区分：`skills-def/` 是**开发期** AI 召回；`skills-data/` 是**产品运行时** SkillRecall 数据（自我说明书 `core` 在此），两者不互相替代。
 
 ## 本地规则（AGENTS.local.md）
 

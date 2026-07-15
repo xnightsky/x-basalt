@@ -13,12 +13,13 @@
 - **`skills` 子命令扩展**：`get <name>`（按名取整篇）、`get --all`、`path [name]`；所有读子命令支持 `--json`（默认输出人类 / AI 可读 Markdown）。
 - **DQL 子集大幅扩展**：`TASK` / `GROUP BY` / `FLATTEN` / `WITHOUT ID`、多键 `SORT`、`WHERE field = null`、日期 ISO 比较、字符串谓词 `contains/icontains/startswith/endswith/regexmatch`、内置函数 `lower/upper/length/round` 与 `date(today)/date(now)`。
 - **`X_BASALT_DIR` 环境变量**：自定义 `.x-basalt` 基目录（config 与 `index.db` 都落其下）。
-- **全局使用技能** `skills-def/x-basalt/SKILL.md`（`scope: global`，`pnpm run skills:install:global` 装到 `~/.claude/skills/` 与 `~/.agents/skills/`），教任意 AI 会话驱动本 CLI。
+- **全局使用技能** `skills-def/cli/x-basalt/SKILL.md`（`scope: global`，`pnpm run skills:install:global` 装到 `~/.claude/skills/` 与 `~/.agents/skills/`），教任意 AI 会话驱动本 CLI。
 - 本地 git 门禁：受版本控制的 `.githooks/pre-push`（push 前跑 typecheck + test + lint），`pnpm install` 经 `prepare`（`scripts/setup-hooks.mjs`）自动接线 `core.hooksPath`，零新依赖、不依赖云端 CI。
 - 打包就绪：`LICENSE`（MIT）、`CHANGELOG.md`、`package.json` 的 `author` 与 `prepublishOnly` 发布门（typecheck + test + build）。
 
 ### Changed
 
+- **skills-def 入口薄化 + `cli/`/`dev/` 目录分组**：外层 `x-basalt` 入口 skill 改为薄「触发 + 指路」——用法一律 `x-basalt skills get core`，不再重抄命令表/DQL 细节，消开发文档与运行时 `core` 的二次漂移。`skills-def/` 按受众分 `cli/`（消费侧入口，装宿主全局）与 `dev/`（`biz-*` 开发侧，装本仓）；`install-skills.mjs` 改按**目录**路由（原按 `scope` frontmatter），`skills:install` / `skills:install:global` 两脚本语义不变。运行时 `core` 补 `X_BASALT_DIR` 说明。
 - **（breaking）`skill` 命令组改名为 `skills`**（复数，**不保留单数别名**），对齐 agent-browser / Gemini CLI / Claude Code 等生态惯例。
 - **（breaking）skill 运行时数据目录 `skills/` → `skills-data/`**，避免与 `skills` 命令前缀混淆、对齐 agent-browser；外部覆盖路径 `OBSIDIAN_SKILL_PATH` / 配置 `skillPath` / `~/.obsidian-core/skills` 不变。
 - **（breaking）内置自我说明书 skill 改名 `x-basalt-usage` → `x-basalt`**（作为全局主 skill 反向召回的对象，用工具名最直观）。

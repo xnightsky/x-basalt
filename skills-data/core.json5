@@ -216,10 +216,11 @@
     },
     {
       pattern: "项目配置 .x-basalt/config.yaml",
-      description: "项目本地配置默认放隐藏目录 .x-basalt/（不入 git，类比 .obsidian/），免去重复传参。默认 YAML，也支持 JSON5/JSON；扁平 .x-basalt.yaml 亦可。键：db / vault / skillPath / format / onChange。索引默认落 .x-basalt/index.db（目录自动建）。CLI 从 cwd 向上查找，全局回退 ~/.x-basalt/config.yaml。优先级：flag > 项目配置 > 全局配置 > 内置默认。",
+      description: "项目本地配置默认放隐藏目录 .x-basalt/（不入 git，类比 .obsidian/），免去重复传参。默认 YAML，也支持 JSON5/JSON；扁平 .x-basalt.yaml 亦可。键：db / vault / skillPath / format / onChange。索引默认落 .x-basalt/index.db（目录自动建）。CLI 从 cwd 向上查找，全局回退 ~/.x-basalt/config.yaml。配置值优先级：flag > 项目配置 > 全局配置 > 内置默认。环境变量 X_BASALT_DIR 指定 .x-basalt 基目录（config 与 index.db 都落其下），把状态搬到任意位置；基目录优先级：命令行 flag > X_BASALT_DIR > 就近 .x-basalt/ > 默认。",
       examples: [
         "cp .x-basalt/config.example.yaml .x-basalt/config.yaml",
         "# .x-basalt/config.yaml 内写 vault: ./my-vault 后，x-basalt index / query 可零参数运行",
+        "X_BASALT_DIR=/data/state x-basalt index ./vault   # 状态落 /data/state/.x-basalt/",
       ],
     },
     {
