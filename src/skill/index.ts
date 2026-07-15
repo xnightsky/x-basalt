@@ -30,6 +30,11 @@ export class SkillRecall {
     this.dir = resolveSkillDir(opts?.skillPath);
     // 构造期建一次模糊索引（skills 一次性加载、不变）。name 权重高于单个 trigger：
     // 名字直接命中比触发器命中更相关，排序时优先。
+    //
+    // 只以 name+triggers 为检索键（P2 · 刻意不纳入 description/rules）：description 里含「语法/规范/
+    // 查询」等泛化词，一旦纳入检索键，中文多词查询（如「…注意事项 规范」）会因命中「规范」而误召回，
+    // 重演「召回失真」。中文概念召回改由 triggers 的中文别名精确承载（见 skills-data 触发词），
+    // 泛化词不入 triggers → 不误召回。includeScore 供 recall 多词合并按最优分排序。
     this.fuse = new Fuse(this.skills, {
       keys: [
         { name: "name", weight: 2 },
@@ -38,6 +43,7 @@ export class SkillRecall {
       threshold: FUSE_THRESHOLD,
       ignoreLocation: true, // 触发器可落在任意位置，不偏向串首
       minMatchCharLength: 2,
+      includeScore: true,
     });
   }
 
@@ -84,6 +90,20 @@ export class SkillRecall {
   recall(keyword: string): SkillDefinition[] {
     const kw = keyword.trim();
     if (!kw) return [];
-    return this.fuse.search(kw).map((r) => r.item);
+    // 多词查询按空白切词分别召回再并集（P2）：模型常传整条短语（「双向链接 语法」「wikilink heading」），
+    // 而 Fuse 对含噪短语整体模糊匹配会因距离过大漏掉本可命中的概念词。逐 token 搜、按最优 score 合并，
+    // 只要任一 token 命中 trigger/name 即召回；泛化词（规范/语法…）不在 triggers 内、不会误召回。
+    const tokens = kw.split(/\s+/).filter(Boolean);
+    const queries = tokens.length > 1 ? [kw, ...tokens] : [kw];
+    const best = new Map<string, { item: SkillDefinition; score: number }>();
+    for (const q of queries) {
+      for (const r of this.fuse.search(q)) {
+        const score = r.score ?? 1;
+        const prev = best.get(r.item.name);
+        if (!prev || score < prev.score) best.set(r.item.name, { item: r.item, score });
+      }
+    }
+    // 按最优（最小）score 升序 = 相关性降序；同分保持稳定。
+    return [...best.values()].toSorted((a, b) => a.score - b.score).map((e) => e.item);
   }
 }

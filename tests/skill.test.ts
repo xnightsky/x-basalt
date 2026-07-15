@@ -55,6 +55,36 @@ test("无命中返回空数组", () => {
   assert.deepEqual(new SkillRecall().recall("zzz-not-a-trigger-xyz"), []);
 });
 
+// === 2026-07-15 P2：中文查询召回率（触发词中文别名 + description/rules 参与匹配）===
+
+test("P2 中文概念词召回 obsidian-base-spec（标签/双链/任务/嵌入/内联字段）", () => {
+  const recall = new SkillRecall();
+  for (const kw of ["标签", "双链", "任务", "嵌入", "内联字段", "块引用", "标注"]) {
+    assert.ok(
+      recall.recall(kw).some((s) => s.name === "obsidian-base-spec"),
+      `中文关键字「${kw}」应召回 obsidian-base-spec`,
+    );
+  }
+});
+
+test("P2 中文短语（含空格/多词）也能召回", () => {
+  const recall = new SkillRecall();
+  assert.ok(
+    recall.recall("双向链接 语法").some((s) => s.name === "obsidian-base-spec"),
+    "「双向链接 语法」应召回 obsidian-base-spec",
+  );
+});
+
+test("P2 不放水：与规范无关的中文串仍返回空", () => {
+  // vault 内并无「前端单元测试」相关规范，返回空是正确的（阈值不放水召回无关 skill）。
+  assert.deepEqual(new SkillRecall().recall("前端单元测试"), []);
+});
+
+test("P2 不放水：无关多词短语（含泛化词 规范/注意事项）经切词仍不误召回", () => {
+  // 首跑逐字复发的 query：多词切词后「规范」等泛化词绝不能撞上 obsidian-base-spec（否则重演召回失真）。
+  assert.deepEqual(new SkillRecall().recall("前端单元测试 unittest 注意事项 规范"), []);
+});
+
 test("外部 skill 目录为空时仍降级召回内置兜底", () => {
   const emptyDir = mkdtempSync(join(tmpdir(), "x-basalt-skill-"));
   tmpDirs.push(emptyDir);
