@@ -189,8 +189,9 @@ test("search 主路径：经 --db 全文检索共享索引正文，返回命中 
   assert.match(res.rows[0].snippet, /mytag/);
 });
 
-test("退出码：search 查询过短（< 3 字符）→ 退出 1 且 stderr 提示不合法", () => {
-  const r = run(["search", "ab", "--db", sharedDb]);
+test("退出码：search 查询过短（< 2 字符）→ 退出 1 且 stderr 提示不合法", () => {
+  // P4 放宽最短长度到 2（2 字 CJK 走 LIKE 兜底）；1 字仍拒查。
+  const r = run(["search", "a", "--db", sharedDb]);
   assert.equal(r.status, 1);
   assert.match(r.stderr, /✗/);
   assert.match(r.stderr, /不合法/);

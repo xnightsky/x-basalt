@@ -144,9 +144,7 @@ test("search：查询过短 → 结构化 invalid 错误", async () => {
   await idx.rebuild();
   idx.close();
   const tools = buildTools({ dbPath: join(sdir, "index.db"), vaultPath: sdir }, safety);
-  await assert.rejects(
-    tools.search.execute!({ query: "ab" }, {} as never),
-    /\[工具失败·invalid\]/,
-  );
+  // P4 放宽最短长度到 2；1 字仍不合法。
+  await assert.rejects(tools.search.execute!({ query: "a" }, {} as never), /\[工具失败·invalid\]/);
   rmSync(sdir, { recursive: true, force: true });
 });

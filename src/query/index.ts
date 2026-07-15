@@ -29,17 +29,59 @@ export interface SearchResult {
   rows: { path: string; name: string; snippet: string }[];
 }
 
-/** trigram 子串检索的最短查询长度（分词器至少需要 3 字符才能形成一个 trigram）。 */
-const MIN_FTS_QUERY_LEN = 3;
+/** 全文检索最短查询长度（P4 放宽 3→2：2 字 CJK 是常见词，改走 LIKE 子串兜底，见 {@link DataviewEngine.search}）。 */
+const MIN_FTS_QUERY_LEN = 2;
+
+/** trigram 窗口长度：≥3 字的词才能形成 FTS5 MATCH 可用的 trigram token；更短的词走 LIKE。 */
+const TRIGRAM_LEN = 3;
 
 /**
- * 把用户原始查询整体转义为 FTS5 MATCH 的字面短语参数（`"` → `""` 并整体加引号）：
+ * 把单个词转义为 FTS5 MATCH 的字面短语参数（`"` → `""` 并整体加引号）：
  * 杜绝 FTS5 查询语法（NEAR/OR/列过滤/前缀通配/未闭合引号等）被用户输入意外触发——
  * 未转义的悬空操作符或未闭合引号会让 SQLite 直接抛语法错误（S3.5 手工验证过）。
  * trigram 分词器 + 短语查询 = 子串搜索，是 SQLite 官方推荐用法。
  */
 function escapeFtsPhrase(raw: string): string {
   return `"${raw.replaceAll('"', '""')}"`;
+}
+
+/** 查询是否含 CJK 汉字：决定用「trigram-OR 宽松召回」（CJK 无空白分词）还是「字面短语 AND」（ASCII 词天然以空白分界）。 */
+function hasCjk(s: string): boolean {
+  return /[㐀-䶿一-鿿]/.test(s);
+}
+
+/** 把一个词切成重叠 trigram（步长 1）：`前端单元测试` → [前端单, 端单元, 单元测, 元测试]。 */
+function overlappingTrigrams(term: string): string[] {
+  const out: string[] = [];
+  for (let i = 0; i + TRIGRAM_LEN <= term.length; i++) out.push(term.slice(i, i + TRIGRAM_LEN));
+  return out;
+}
+
+/** 转义 SQL LIKE 通配符（`\` `%` `_`），配合 `ESCAPE '\'` 让用户输入按字面子串匹配、不被当通配。 */
+function escapeLikePattern(raw: string): string {
+  return raw.replace(/[\\%_]/g, (c) => `\\${c}`);
+}
+
+/** LIKE 兜底命中时就地构造高亮片段（FTS 的 snippet() 只作用于 files_fts，此路径用 files 表、需自建）。 */
+function likeSnippet(content: string, terms: string[]): string {
+  const flat = content.replace(/\s+/g, " ").trim();
+  const lc = flat.toLowerCase();
+  // 取最先出现的命中词为片段中心。
+  let idx = -1;
+  let hit = "";
+  for (const t of terms) {
+    const i = lc.indexOf(t.toLowerCase());
+    if (i >= 0 && (idx < 0 || i < idx)) {
+      idx = i;
+      hit = flat.slice(i, i + t.length);
+    }
+  }
+  if (idx < 0) return flat.slice(0, 64); // 防御：LIKE 已命中，理论不达此
+  const start = Math.max(0, idx - 20);
+  const end = Math.min(flat.length, idx + hit.length + 44);
+  const before = flat.slice(start, idx);
+  const after = flat.slice(idx + hit.length, end);
+  return `${start > 0 ? "… " : ""}${before}[${hit}]${after}${end < flat.length ? " …" : ""}`;
 }
 
 // === 自建实现: Dataview 子集执行引擎，不依赖 obsidian-dataview 的 Evaluator/Executor ===
@@ -87,7 +129,14 @@ export class DataviewEngine {
     sql: string,
     params: unknown[],
     opts: { offset?: number; size?: number },
-  ): { rows: T[]; total: number; offset: number; size?: number; returned: number; hasMore: boolean } {
+  ): {
+    rows: T[];
+    total: number;
+    offset: number;
+    size?: number;
+    returned: number;
+    hasMore: boolean;
+  } {
     const offset = Math.max(0, Math.trunc(opts.offset ?? 0));
     const size = opts.size === undefined ? undefined : Math.max(0, Math.trunc(opts.size));
     // 仅在显式分页（给了 size，或 offset>0）时才包子查询 + 单独 COUNT；否则保持原"全量"路径与开销。
@@ -101,7 +150,9 @@ export class DataviewEngine {
       };
       total = countRow.n;
       // size 省略时 LIMIT -1 = 取 offset 之后全部。
-      rows = this.db.prepare(`SELECT * FROM (${sql}) LIMIT ? OFFSET ?`).all(...params, size ?? -1, offset) as T[];
+      rows = this.db
+        .prepare(`SELECT * FROM (${sql}) LIMIT ? OFFSET ?`)
+        .all(...params, size ?? -1, offset) as T[];
     } else {
       rows = this.db.prepare(sql).all(...params) as T[];
       total = rows.length;
@@ -177,11 +228,9 @@ export class DataviewEngine {
    */
   list(filter: ListFilter = {}, opts: { offset?: number; size?: number } = {}): ListResult {
     const compiled = generateListSql(filter);
-    const { rows, total, offset, size, returned, hasMore } = this.paginate<ListResult["files"][number]>(
-      compiled.sql,
-      compiled.params,
-      opts,
-    );
+    const { rows, total, offset, size, returned, hasMore } = this.paginate<
+      ListResult["files"][number]
+    >(compiled.sql, compiled.params, opts);
     return { total, offset, size, returned, hasMore, files: rows };
   }
 
@@ -210,19 +259,46 @@ export class DataviewEngine {
     const trimmed = query.trim();
     if (trimmed.length < MIN_FTS_QUERY_LEN) {
       throw new Error(
-        `全文检索查询不合法：至少需要 ${MIN_FTS_QUERY_LEN} 个字符（trigram 子串匹配要求），当前 ${trimmed.length} 个`,
+        `全文检索查询不合法：至少需要 ${MIN_FTS_QUERY_LEN} 个字符，当前 ${trimmed.length} 个`,
       );
     }
-    const phrase = escapeFtsPhrase(trimmed);
+    // === 自建实现: 中文相关性/分词的查询构造（P4）——只动查询侧，索引 tokenizer 与库结构不变 ===
+    // 此前把「整条查询（含空格）」转成单一字面短语，trigram 下等价「要求原文含该连续子串」：
+    // 多词（空格）、异措辞、2 字词一律落空（首跑复发的召回失真）。改为按空白切词后分档：
+    const terms = trimmed.split(/\s+/).filter(Boolean);
+    const hasShort = terms.some((t) => t.length < TRIGRAM_LEN);
+
+    // 档 3（含短词）：任一词 < 3 字（2 字 CJK / 短 ASCII）无法形成 trigram token，放进 MATCH 会使整体
+    // 落空 → 直接走 LIKE 子串兜底（每词 AND，精确）。这也是 2 字 CJK（测试/标签/任务）的唯一可行路径。
+    if (hasShort) return this.searchLike(terms, opts);
+
+    if (hasCjk(trimmed)) {
+      // 档 1（CJK，全部 ≥3 字）：各词重叠 trigram 取并集后 OR + bm25。完整连续子串命中全部 trigram →
+      // bm25 排最前；异措辞但字面 trigram 有交集者也浮现（召回）。比「严格短语命中即止」更能兜住
+      // 「只回 1 条且不相关」——严格命中即止会漏掉措辞不同的相关笔记。
+      const trigrams = [...new Set(terms.flatMap(overlappingTrigrams))];
+      const expr = (trigrams.length > 0 ? trigrams : terms).map(escapeFtsPhrase).join(" OR ");
+      return this.searchFts(expr, opts);
+    }
+    // 档 2（纯 ASCII，全部 ≥3 字）：每词字面短语 AND——保留既有精确子串语义（英文以空白分界，无需拆
+    // trigram），并把此前「整串单短语」升级为「多词 AND」，修掉带空格查询要求连续子串的问题。
+    const expr = terms.map(escapeFtsPhrase).join(" AND ");
+    return this.searchFts(expr, opts);
+  }
+
+  /** FTS5 MATCH 执行 + 分页 + 缺表友好报错（trigram 索引路径；bm25 排序、snippet 高亮）。 */
+  private searchFts(matchExpr: string, opts: { offset?: number; size?: number }): SearchResult {
     // 片段截取列 = content（第 2 列，0-based）；ORDER BY 内联在基础 SQL 里，随 paginate 分页窗口保序。
     const baseSql =
       "SELECT path AS path, name AS name, snippet(files_fts, 2, '[', ']', ' … ', 16) AS snippet, bm25(files_fts) AS rank " +
       "FROM files_fts WHERE files_fts MATCH ? ORDER BY rank, path ASC";
-    let paged: ReturnType<typeof this.paginate<{ path: string; name: string; snippet: string; rank: number }>>;
+    let paged: ReturnType<
+      typeof this.paginate<{ path: string; name: string; snippet: string; rank: number }>
+    >;
     try {
       paged = this.paginate<{ path: string; name: string; snippet: string; rank: number }>(
         baseSql,
-        [phrase],
+        [matchExpr],
         opts,
       );
     } catch (e) {
@@ -232,6 +308,39 @@ export class DataviewEngine {
       throw e;
     }
     const rows = paged.rows.map(({ path, name, snippet }) => ({ path, name, snippet }));
+    return {
+      total: paged.total,
+      offset: paged.offset,
+      size: paged.size,
+      returned: paged.returned,
+      hasMore: paged.hasMore,
+      rows,
+    };
+  }
+
+  /**
+   * LIKE 子串兜底（含短词档 / 2 字 CJK）：直接查 files 表，每词 `content/name LIKE '%词%'` 的 AND。
+   * 走全表扫描（无 trigram MATCH 的 bm25），故按 path 稳定排序、就地自建高亮片段。vault 量级可接受。
+   */
+  private searchLike(terms: string[], opts: { offset?: number; size?: number }): SearchResult {
+    const cond = terms
+      .map(() => "(content LIKE ? ESCAPE '\\' OR name LIKE ? ESCAPE '\\')")
+      .join(" AND ");
+    const params = terms.flatMap((t) => {
+      const p = `%${escapeLikePattern(t)}%`;
+      return [p, p];
+    });
+    const baseSql = `SELECT path AS path, name AS name, content AS content FROM files WHERE ${cond} ORDER BY path ASC`;
+    const paged = this.paginate<{ path: string; name: string; content: string }>(
+      baseSql,
+      params,
+      opts,
+    );
+    const rows = paged.rows.map(({ path, name, content }) => ({
+      path,
+      name,
+      snippet: likeSnippet(content, terms),
+    }));
     return {
       total: paged.total,
       offset: paged.offset,
