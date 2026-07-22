@@ -9,12 +9,12 @@ tags:
   - metadata
   - profile
   - x-basalt
-timestamp: 2026-07-22T06:57:50Z
-sha256: 45912b8f56cdd8cbe6a0515e1afee0e82e13709bfbc62456168baf153c9a0d35
+timestamp: 2026-07-22T07:35:09Z
+sha256: b127dfce616c7d196aeac0519a2aff4166a9947008ef2ac4a32b7620343fd7eb
 ---
 # KB compiler P3b · 自定义 config profile（profiles.<name> + extends + enums）
 
-> 状态：active · 设计真相源：[design §8.2](../specs/2026-07-09-kb-compiler-lint-links-design.md)。承接 P3a 内置校验 [`2026-07-22-kb-compiler-p3a-profile-lint.md`](2026-07-22-kb-compiler-p3a-profile-lint.md)。
+> 状态：✅ done（2026-07-22 落地）· 设计真相源：[design §8.2](../specs/2026-07-09-kb-compiler-lint-links-design.md)。承接 P3a 内置校验 [`2026-07-22-kb-compiler-p3a-profile-lint.md`](2026-07-22-kb-compiler-p3a-profile-lint.md)。
 
 **Goal:** 让 `.x-basalt/config.*` 能声明自定义 `profiles.<name>`——支持 `extends`（继承内置或其他 config profile）、`required`（追加）、`enums`（字段→允许值集）、`include`（glob，可选）。`lint --profile <name>`：`<name>` 是 config profile 就用之（**同名覆盖内置**），否则回退内置。新增规则 `metadata/enum-invalid`；required-missing 复用 P3a。
 
@@ -45,28 +45,34 @@ sha256: 45912b8f56cdd8cbe6a0515e1afee0e82e13709bfbc62456168baf153c9a0d35
 
 ## 切口（TDD，按序；每步先失败测试后最小实现）
 
-- [ ] **Task 1 — config.ts `profiles` 段**
+- [x] **Task 1 — config.ts `profiles` 段**（✅ `ProfileConfig`@`src/lint/profile.ts` + `parseProfiles`@`config.ts`；3 config 测试）
   - `src/lint/profile.ts` 先声明 `ProfileConfig` 类型（实现在 Task 2）；`src/config.ts` 加 `BasaltConfig.profiles?`、`parseProfiles(raw)`（宽容挑 `extends`/`required`/`enums`/`include`）、`pickConfig` 接入。
   - `tests/config.test.ts` 补：解析 profiles（extends/required/enums/include）；畸形字段丢弃、非对象降级 `{}`。
   - Verify：`pnpm run typecheck` + config 测试。
-- [ ] **Task 2 — `resolveLintProfile`（src/lint/profile.ts）**
+- [x] **Task 2 — `resolveLintProfile`（src/lint/profile.ts）**（✅ extends 合并/环/未知父/同名覆盖；10 测试）
   - `LintProfile` 类型 + `resolveLintProfile(name, configProfiles): LintProfile`：config-first→extends 递归合并（required 并集 / enums 按字段并集 / include 子覆盖父）；内置回退（required from role、enums {}）；环/未知父/未知名定向报错。
   - `tests/lint/profile.test.ts`：内置名 / config 新建（无 extends）/ extends 内置 / extends config 多级 / 同字段 enum 并集 / include 继承与覆盖 / 环 / 未知父 / 未知名 / 同名覆盖内置。
   - Verify：`pnpm run typecheck` + profile 测试。
-- [ ] **Task 3 — `readFrontmatter` + `checkMetadata` 泛化（required + enum + include）**
+- [x] **Task 3 — `readFrontmatter` + `checkMetadata` 泛化（required + enum + include）**（✅ `readFrontmatter`@meta；enum-invalid/数组/null 跳过/include；P3a 用例保持绿）
   - `src/meta/index.ts` 加只读 `readFrontmatter(content): Record<string, unknown>`（`splitDocument`→`getMeta(doc)`）。
   - `src/lint/metadata.ts`：入参加 `profiles?`；`resolveLintProfile` 起手；`include` 过滤；required-missing（复用形状）+ enum-invalid（数组逐元素、null/缺失跳过）。
   - `tests/lint/metadata.test.ts` 补：enum 非法报诊断 / 合法不报 / 数组字段逐元素 / null·缺失跳过 enum / config profile 的 required / include 收窄；P3a 既有用例保持绿（回归护栏）。
   - Verify：`pnpm run typecheck` + metadata 测试。
-- [ ] **Task 4 — lint 壳 + CLI 透传 config.profiles**
+- [x] **Task 4 — lint 壳 + CLI 透传 config.profiles**（✅ `LintRunOptions.profiles` + CLI 透传；3 子进程 CLI 测试）
   - `src/lint/index.ts`：`LintRunOptions` 加 `profiles?`；`RULE_RUNNERS.metadata` 透传。
   - `src/cli.ts`：`lint` action 把 `config.profiles` 传入 `runLint`（`--profile` 已存在，无需加 flag）。
   - `tests/lint/cli-config-profile.test.ts`（子进程真 CLI，`X_BASALT_DIR` 注入含 `profiles` 的临时 config）：config profile 的 enum-invalid + required → 退出 1 + JSON；合法 → 0 + `[]`；同名覆盖内置生效。
   - Verify：`pnpm run typecheck` + `pnpm run build` + CLI 测试。
-- [ ] **Task 5 — 收口**
-  - 全量门禁：`pnpm run lint` + `typecheck` + `build` + 全量 `pnpm test`（触及 config.ts / cli.ts 公共契约，升级全量）。
-  - 端到端（built CLI）：临时 vault + `.x-basalt/config` 自定义 profile 跑 `lint --profile <name>`（enum 违规/齐全/同名覆盖）。
-  - 契约对账：design §8.2 状态行 + §8.3 + 本计划勾选 + TODO；`src/lint/metadata.ts`/`profile.ts` 注释回指 design §8.2。
+- [x] **Task 5 — 收口**（✅）
+  - 全量门禁：`pnpm run lint` ✓ · `typecheck` ✓ · `build` ✓ · 全量 `pnpm test` **614 pass** ✓（新增 22 测试；`format:check` repo-wide 预存红、非本阶段门禁，仅把新增两文件 oxfmt 归一，未动 `src/cli.ts` 预存态）。
+  - 端到端（built CLI）：`my-wiki`（extends llm-wiki + enums）缺 author + type/status 越集 → 退出 1；`team-note`（三级 extends 链）required 跨链并集正确；`good.md` 齐全 0；环/未知父/未知名均定向报错退 1；内置 `llm-wiki`、无 `--profile` 默认 links 行为不变。
+  - 契约对账：design §8.2/§8 状态行 + §11 + 本计划勾选 + TODO；`src/lint/metadata.ts`/`profile.ts` 注释回指 design §8.1/§8.2。
+
+## Evidence
+
+- 代码：`src/config.ts`（`parseProfiles` + `BasaltConfig.profiles`）、`src/lint/profile.ts`（`ProfileConfig`/`LintProfile`/`resolveLintProfile`）、`src/lint/metadata.ts`（泛化 required+enum+include）、`src/lint/index.ts`（`LintRunOptions.profiles` 透传）、`src/meta/index.ts`（`readFrontmatter`）、`src/cli.ts`（`profiles: config.profiles` + `--profile` 帮助文案）。
+- 测试：`tests/config.test.ts`(+3)、`tests/lint/profile.test.ts`(+10)、`tests/lint/metadata.test.ts`(+6)、`tests/lint/cli-config-profile.test.ts`(+3)。全量 614 pass。
+- 决策 6（enum-invalid=error）与 决策 7（include 沿用 links 极简 glob，`docs/**/*.md` 不匹配顶层）为本阶段拍板，已在会话与本计划记录。
 
 ## Verify（总）
 

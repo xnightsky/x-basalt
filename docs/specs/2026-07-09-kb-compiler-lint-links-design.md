@@ -9,14 +9,14 @@ tags:
   - links
   - parser
   - x-basalt
-timestamp: 2026-07-22T05:48:43Z
-sha256: 4e9e15303a9c88259cbd452182e959f672b7a315f3681c258077c7f386b1c26c
+timestamp: 2026-07-22T07:34:00Z
+sha256: a07b9273c60e9f93c55212585d3d9292d8ddeca1cedbf707e0ac647ab1245aa8
 ---
 
 # KB compiler / lint / links 设计规格
 
 > 日期：2026-07-09 · 类型：parser 定位契约 + links/lint/profile 分层设计
-> 状态：P0 parser 定位契约 + P1 links check/suggest + P2 统一诊断契约（`BasaltDiagnostic`）与 lint 壳 已落地；P3 metadata profile lint 分两阶段（§8：P3a 内置校验 / P3b 自定义 config），P3a 进行中（见 [`../plans/2026-07-22-kb-compiler-p3a-profile-lint.md`](../plans/2026-07-22-kb-compiler-p3a-profile-lint.md)）。关联调研：[`../research/2026-07-09-markdown-kb-compiler-lint-links-research.md`](../research/2026-07-09-markdown-kb-compiler-lint-links-research.md)。
+> 状态：P0 parser 定位契约 + P1 links check/suggest + P2 统一诊断契约（`BasaltDiagnostic`）与 lint 壳 已落地；P3 metadata profile lint 分两阶段（§8）**均已落地**：P3a 内置校验（见 [`../plans/2026-07-22-kb-compiler-p3a-profile-lint.md`](../plans/2026-07-22-kb-compiler-p3a-profile-lint.md)）、P3b 自定义 config profile（`profiles.<name>` + `extends` + enum，见 [`../plans/2026-07-22-kb-compiler-p3b-config-profile.md`](../plans/2026-07-22-kb-compiler-p3b-config-profile.md)）。关联调研：[`../research/2026-07-09-markdown-kb-compiler-lint-links-research.md`](../research/2026-07-09-markdown-kb-compiler-lint-links-research.md)。
 
 ## 1. 结论
 
@@ -284,7 +284,9 @@ profile/schema 是 metadata lint 的**读侧校验**配置。它与写侧 `meta 
 - 选文件：全 vault `.md` + 既有 `lint.ignore.paths`（无 `include`——那属 P3b）。
 - 价值：零 config 立即能查「哪些文档缺 required 字段」，几乎零新逻辑、纯 dogfood。
 
-### 8.2 P3b — 自定义 profile（config 定义 + `extends`）
+### 8.2 P3b — 自定义 profile（config 定义 + `extends`）✅ 已落地
+
+> 落地：`src/config.ts` `parseProfiles`（`profiles` 段宽容挑键）+ `src/lint/profile.ts` `resolveLintProfile`（extends 合并成 `LintProfile`）+ `src/lint/metadata.ts`（required + enum 校验 + `include` 收窄）+ CLI 透传 `config.profiles`。新增 rule `metadata/enum-invalid`（`reason: enum_invalid`、severity `error`、数组字段逐元素、缺失/空值跳过）。见计划 [`../plans/2026-07-22-kb-compiler-p3b-config-profile.md`](../plans/2026-07-22-kb-compiler-p3b-config-profile.md)。
 
 `.x-basalt/config.*` 新增 `profiles` 段，用户可**继承内置魔改**或**全新定义**：
 
@@ -406,7 +408,7 @@ x-basalt lint --rules links --fix --apply
 1. **P0 parser 定位契约**：改类型、提取器、parser 测试；不改 CLI。✅ 已落地：wikilink/embed 带完整文件 `line`/`column`/`raw`，新增 `markdownLink` 节点，代码区链接不产出，indexer 维持 links 表去重。
 2. **P1 links check/suggest**：新增 links 模块与 CLI；输出内部 issue JSON。✅ 已落地（`src/links/` 内存 per-run 白名单集合；`[vault...]` 位置参数对齐 index/scan；`lint.ignore` 配置；锚点 / `tmp_path` 后置——见 [`../plans/2026-07-09-kb-compiler-links-check.md`](../plans/2026-07-09-kb-compiler-links-check.md)）。
 3. **P2 统一诊断契约 + lint 壳**：把 `BasaltIssue` 更名为 `BasaltDiagnostic` 并冻结为公共稳定契约（落 `src/diagnostic.ts`），让 `links check` 与 `lint --rules links` 共用同一诊断模型（不再 links 私有）。
-4. **P3 profile/schema**（分两阶段，见 §8）：**P3a** 内置 profile required 校验（`lint --profile <builtin>`，复用 `getProfile`/`diffProfile`，零 config）；**P3b** 自定义 config profile（`profiles.<name>` + `extends` + enum）。
+4. **P3 profile/schema**（分两阶段，见 §8）：**P3a** ✅ 内置 profile required 校验（`lint --profile <builtin>`，复用 `getProfile`/`diffProfile`，零 config）；**P3b** ✅ 自定义 config profile（`profiles.<name>` + `extends` + enum，新增 `metadata/enum-invalid`）。
 5. **P4 CI/baseline**：GitHub annotation 与 baseline。
 6. **P5 rewrite/fix**：有限机械修复，默认 dry-run。
 

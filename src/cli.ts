@@ -826,7 +826,10 @@ program
   .description("按规则集诊断 vault，产出统一 BasaltDiagnostic（KB compiler；规则：links、metadata）")
   .argument("[vault...]", "Vault 目录（可多个；省略则回退配置 vault）")
   .option("--rules <list>", "规则集，逗号分隔（默认 links；给 --profile 时默认 metadata）")
-  .option("--profile <name>", "metadata 规则用的内置 profile（pkm-note|llm-wiki|ssg-blog）")
+  .option(
+    "--profile <name>",
+    "metadata 规则用的 profile：config profiles.<name> 优先（同名覆盖内置），否则内置 pkm-note|llm-wiki|ssg-blog",
+  )
   .option("--format <fmt>", "输出格式 human|json|yaml（默认 human）")
   .action(async (vaults: string[], opts: { rules?: string; profile?: string; format?: string }) => {
     const vault = vaults.length > 0 ? vaults : config.vault;
@@ -843,6 +846,7 @@ program
       vault,
       rules,
       profile: opts.profile,
+      profiles: config.profiles,
       ignore: config.lint?.ignore,
     });
     if (opts.format === "json" || opts.format === "yaml") emit(diagnostics, opts.format);

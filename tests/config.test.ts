@@ -137,3 +137,59 @@ test("畸形配置降级为不抛错（返回对象）", () => {
   });
   assert.equal(typeof cfg, "object");
 });
+
+// === P3b: profiles 段解析（自定义 config profile；design §8.2）===
+
+test("profiles 段：解析 extends/required/enums/include", () => {
+  const dir = freshDir();
+  writeFileSync(
+    join(dir, ".x-basalt.yaml"),
+    [
+      "profiles:",
+      "  my-wiki:",
+      "    extends: llm-wiki",
+      "    required:",
+      "      - author",
+      "    enums:",
+      "      type: [note, person]",
+      "      status: [draft, active]",
+      '    include: "docs/**/*.md"',
+      "  team-note:",
+      "    required: [owner, area]",
+      "    enums:",
+      "      area: [infra, product]",
+      "",
+    ].join("\n"),
+  );
+  const cfg = loadConfig(dir);
+  assert.equal(cfg.profiles?.["my-wiki"]?.extends, "llm-wiki");
+  assert.deepEqual(cfg.profiles?.["my-wiki"]?.required, ["author"]);
+  assert.deepEqual(cfg.profiles?.["my-wiki"]?.enums, {
+    type: ["note", "person"],
+    status: ["draft", "active"],
+  });
+  assert.equal(cfg.profiles?.["my-wiki"]?.include, "docs/**/*.md");
+  assert.deepEqual(cfg.profiles?.["team-note"]?.required, ["owner", "area"]);
+  assert.deepEqual(cfg.profiles?.["team-note"]?.enums, { area: ["infra", "product"] });
+});
+
+test("profiles 段：畸形字段静默丢弃（extends/include 非串→undefined，required/enum 非数组→空）", () => {
+  const dir = freshDir();
+  writeFileSync(
+    join(dir, ".x-basalt.json5"),
+    `{ profiles: { bad: { extends: 123, required: "nope", enums: { type: "x" }, include: 5 } } }`,
+  );
+  const cfg = loadConfig(dir);
+  const bad = cfg.profiles?.bad;
+  assert.equal(bad?.extends, undefined);
+  assert.deepEqual(bad?.required, []);
+  assert.deepEqual(bad?.enums, { type: [] });
+  assert.equal(bad?.include, undefined);
+});
+
+test("profiles 段：profile 值非对象 → 视为空定义（不抛）", () => {
+  const dir = freshDir();
+  writeFileSync(join(dir, ".x-basalt.json5"), `{ profiles: { weird: 42 } }`);
+  const cfg = loadConfig(dir);
+  assert.deepEqual(cfg.profiles?.weird, { required: [], enums: {} });
+});

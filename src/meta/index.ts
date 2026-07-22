@@ -57,6 +57,15 @@ export function inspectProfile(content: string, profileName: string): ProfileDif
 }
 
 /**
+ * 只读解析 frontmatter 为普通对象（纯函数、不碰 fs）：供 lint 的 metadata 规则读字段值做 enum 校验
+ * （design §8.2）。无 frontmatter → 空对象。键存在性语义等价 hasMeta（doc.has）。
+ */
+export function readFrontmatter(content: string): Record<string, unknown> {
+  const parts = splitDocument(content);
+  return (getMeta(parts.doc) ?? {}) as Record<string, unknown>;
+}
+
+/**
  * 编辑 frontmatter：读文件 → 解析 → 用 mutate 改 doc → 序列化 → 原子写回。
  * frontmatter 为非法 YAML 时拒写并抛错（绝不在无法解析的结构上写、防毁文件）。
  * 无字节变化则不写盘；dry-run 仅计算不落盘。

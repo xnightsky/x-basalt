@@ -2,6 +2,7 @@ import type { BasaltDiagnostic } from "../diagnostic.js";
 import { checkVault } from "../links/check.js";
 import type { LintIgnoreConfig } from "../links/ignore.js";
 import { checkMetadata } from "./metadata.js";
+import type { ProfileConfig } from "./profile.js";
 
 // === 自建实现: lint 壳（规则注册表分发；P2 links / P3a metadata）===
 //
@@ -13,7 +14,8 @@ import { checkMetadata } from "./metadata.js";
 export interface LintRunOptions {
   vault: string | string[];
   rules?: string[]; // 省略：给了 profile → ["metadata"]，否则 ["links"]（保持 P2 行为）
-  profile?: string; // metadata 规则用的内置 profile 名
+  profile?: string; // metadata 规则用的 profile 名（config profile 优先，否则内置）
+  profiles?: Record<string, ProfileConfig>; // 自定义 config profile（config.profiles；P3b）
   ignore?: LintIgnoreConfig;
 }
 
@@ -26,7 +28,12 @@ export interface LintRunResult {
 const RULE_RUNNERS: Record<string, (opts: LintRunOptions) => Promise<BasaltDiagnostic[]>> = {
   links: (opts) => checkVault({ vault: opts.vault, ignore: opts.ignore }),
   metadata: (opts) =>
-    checkMetadata({ vault: opts.vault, profile: opts.profile as string, ignore: opts.ignore }),
+    checkMetadata({
+      vault: opts.vault,
+      profile: opts.profile as string,
+      profiles: opts.profiles,
+      ignore: opts.ignore,
+    }),
 };
 
 /** 当前支持的规则名（用于校验与报错提示）。 */

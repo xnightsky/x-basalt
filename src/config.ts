@@ -5,6 +5,7 @@ import { homedir } from "node:os";
 import { join } from "node:path";
 import { parse as parseYaml } from "yaml";
 import type { LintIgnoreConfig } from "./links/ignore.js";
+import type { ProfileConfig } from "./lint/profile.js";
 import type { PipelineConfig } from "./orchestrator/types.js";
 
 // === 自建实现: 项目/全局配置加载，给 CLI 选项提供默认值（免去每次重复 --db/--vault 等）===
@@ -30,6 +31,8 @@ export interface BasaltConfig {
   pipelines?: Record<string, PipelineConfig>;
   /** lint / links 配置（KB compiler P1）：目前仅 ignore 段。 */
   lint?: LintConfig;
+  /** 自定义 metadata profile（KB compiler P3b）：name → 原始配置（extends 合并延后到 lint-run 期）。 */
+  profiles?: Record<string, ProfileConfig>;
 }
 
 /** lint 配置（P1 仅 ignore）。 */
@@ -54,6 +57,31 @@ export function parseLintConfig(raw: unknown): LintConfig {
   return {
     ignore: { paths: pickStringArray(o.paths), targets: pickStringArray(o.targets), rules },
   };
+}
+
+/**
+ * 解析配置的 profiles 段为原始 ProfileConfig 映射（自定义 metadata profile，KB compiler P3b）。
+ * 宽容挑键（畸形字段静默丢弃，与 parseLintConfig 一致）：extends/include 非串 → 省略；required、
+ * enums.<field> 非数组 → 空数组；profile 值非对象 → 视为空定义 `{ required:[], enums:{} }`。
+ * extends 合并 / 环检测 / 未知父校验延后到 lint-run 期（src/lint/profile.ts resolveLintProfile）。
+ */
+export function parseProfiles(raw: unknown): Record<string, ProfileConfig> {
+  if (raw == null || typeof raw !== "object") return {};
+  const out: Record<string, ProfileConfig> = {};
+  for (const [name, value] of Object.entries(raw as Record<string, unknown>)) {
+    const p = (value != null && typeof value === "object" ? value : {}) as Record<string, unknown>;
+    const enumsRaw = (p.enums != null && typeof p.enums === "object" ? p.enums : {}) as Record<
+      string,
+      unknown
+    >;
+    const enums: Record<string, string[]> = {};
+    for (const [field, vals] of Object.entries(enumsRaw)) enums[field] = pickStringArray(vals);
+    const cfg: ProfileConfig = { required: pickStringArray(p.required), enums };
+    if (typeof p.extends === "string") cfg.extends = p.extends;
+    if (typeof p.include === "string") cfg.include = p.include;
+    out[name] = cfg;
+  }
+  return out;
 }
 
 /** 允许的字符串键（其余键忽略，避免误用）。 */
@@ -151,6 +179,7 @@ function pickConfig(obj: Record<string, unknown>): BasaltConfig {
   if (vault !== undefined) out.vault = vault;
   if (obj.pipelines !== undefined) out.pipelines = parsePipelines(obj.pipelines);
   if (obj.lint !== undefined) out.lint = parseLintConfig(obj.lint);
+  if (obj.profiles !== undefined) out.profiles = parseProfiles(obj.profiles);
   return out;
 }
 
