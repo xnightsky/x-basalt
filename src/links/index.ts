@@ -3,7 +3,7 @@ import { resolveVaultLayout } from "../utils/path.js";
 import { checkFile, checkVault } from "./check.js";
 import { compileIgnore, type LintIgnoreConfig } from "./ignore.js";
 import { buildTargetIndex, collectFiles } from "./scan.js";
-import type { BasaltIssue } from "./types.js";
+import type { BasaltDiagnostic } from "./types.js";
 
 // === 自建实现: links 模块对外入口（CLI 装配点）===
 //
@@ -15,14 +15,14 @@ export interface LinksRunOptions {
 }
 
 export interface LinksRunResult {
-  issues: BasaltIssue[];
+  diagnostics: BasaltDiagnostic[];
   exitCode: number;
 }
 
-/** 全 vault 断链检查。有 error 级 issue → 退出码 1，否则 0。 */
+/** 全 vault 断链检查。有 error 级诊断 → 退出码 1，否则 0。 */
 export async function runLinksCheck(opts: LinksRunOptions): Promise<LinksRunResult> {
-  const issues = await checkVault({ vault: opts.vault, ignore: opts.ignore });
-  return { issues, exitCode: issues.some((i) => i.severity === "error") ? 1 : 0 };
+  const diagnostics = await checkVault({ vault: opts.vault, ignore: opts.ignore });
+  return { diagnostics, exitCode: diagnostics.some((d) => d.severity === "error") ? 1 : 0 };
 }
 
 /** 单文件断链 + 建议（建同一 vault 白名单索引，只检查目标文件）。 */
@@ -37,8 +37,8 @@ export async function runLinksSuggest(
   const fileAbs = layout.toAbs(fileRel);
   const content = await readFile(fileAbs, "utf8");
   const key = layout.toKey(fileAbs);
-  const issues = checkFile(fileAbs, key, content, index, ignore);
-  return { issues, exitCode: issues.some((i) => i.severity === "error") ? 1 : 0 };
+  const diagnostics = checkFile(fileAbs, key, content, index, ignore);
+  return { diagnostics, exitCode: diagnostics.some((d) => d.severity === "error") ? 1 : 0 };
 }
 
-export type { BasaltIssue } from "./types.js";
+export type { BasaltDiagnostic } from "./types.js";

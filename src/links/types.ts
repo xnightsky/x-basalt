@@ -1,33 +1,23 @@
 /**
- * links 模块公共类型：诊断结果 BasaltIssue、白名单目标索引 TargetIndex、链接判定 LinkFinding。
+ * links 模块类型：断链原因 LinkDiagnosticReason、白名单目标索引 TargetIndex、链接判定 LinkFinding。
+ *
+ * 公共稳定诊断契约 BasaltDiagnostic 的真相源在 src/diagnostic.ts；此处 re-export，便于 links 侧就近引用。
  *
  * 上游：src/links/scan（建索引）、resolve（判定）、check（编排）。
  * 下游：src/cli.ts links 命令输出。
- * 契约冻结程度：P1 放内部模块，字段暂不作为公共 API；P2 再固化为 lint --format json 稳定输出。
- * 设计真相源：docs/specs/2026-07-09-kb-compiler-lint-links-design.md §6。
+ * 设计真相源：docs/specs/2026-07-09-kb-compiler-lint-links-design.md §5/§6。
  */
 
+// 公共契约真相源在 src/diagnostic.ts（中立叶子）；links 侧 re-export，消费方可从任一处引入。
+export type { BasaltDiagnostic, BasaltDiagnosticSeverity } from "../diagnostic.js";
+
 /** P1 产出的断链原因（tmp_path/unsupported_reference_link 后置，见 spec §5/§6 收敛说明）。 */
-export type LinkIssueReason =
+export type LinkDiagnosticReason =
   | "not_found"
   | "outside_vault"
   | "backslash_path"
   | "ambiguous_target"
   | "external_skipped";
-
-/** 统一诊断结果（P1 仅 links 规则产出；字段对齐 spec §6，P2 冻结为公共 JSON）。 */
-export interface BasaltIssue {
-  file: string; // vault 相对 POSIX 路径
-  line: number; // 1-based 完整文件行号
-  column: number; // 1-based UTF-16 code unit 列
-  rule: string; // 如 "links/no-broken-link"
-  severity: "error" | "warning" | "info";
-  message: string;
-  target?: string;
-  reason?: LinkIssueReason;
-  suggestions?: string[];
-  fixable: boolean; // P1 恒为 false（不落盘修复）
-}
 
 /** 白名单目标索引（Docusaurus 式集合；key 全小写，值保留原始大小写相对路径）。 */
 export interface TargetIndex {
@@ -45,6 +35,6 @@ export interface CollectedFile {
 
 /** 单链接判定结果：reason 为空表示链接有效。 */
 export interface LinkFinding {
-  reason?: LinkIssueReason;
+  reason?: LinkDiagnosticReason;
   suggestions?: string[];
 }

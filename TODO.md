@@ -4,7 +4,7 @@
 
 ## 🧱 2026-07-22 KB compiler P2 · 统一诊断契约 + lint 壳（进行中）
 
-把 P1 落地的 links 私有诊断类型 `BasaltIssue` 更名为 `BasaltDiagnostic` 并提升为**公共稳定契约**（新 `src/issue.ts` 中立叶子），冻结为 `lint --format json` 稳定输出；新增最小 `lint --rules links` 壳与 `links check` 共用同一诊断产物。计划：[`docs/plans/2026-07-22-kb-compiler-p2-diagnostic-contract.md`](docs/plans/2026-07-22-kb-compiler-p2-diagnostic-contract.md)；设计：[design §6](docs/specs/2026-07-09-kb-compiler-lint-links-design.md)。**禁止跳到大而全 `lint --profile --fix`（P3–P5 各自后置）。**
+把 P1 落地的 links 私有诊断类型 `BasaltIssue` 更名为 `BasaltDiagnostic` 并提升为**公共稳定契约**（新 `src/diagnostic.ts` 中立叶子），冻结为 `lint --format json` 稳定输出；新增最小 `lint --rules links` 壳与 `links check` 共用同一诊断产物。计划：[`docs/plans/2026-07-22-kb-compiler-p2-diagnostic-contract.md`](docs/plans/2026-07-22-kb-compiler-p2-diagnostic-contract.md)；设计：[design §6](docs/specs/2026-07-09-kb-compiler-lint-links-design.md)。**禁止跳到大而全 `lint --profile --fix`（P3–P5 各自后置）。**
 
 ## 🔧 2026-07-15 召回质量四修（进行中）
 

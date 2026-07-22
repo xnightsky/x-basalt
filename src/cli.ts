@@ -794,9 +794,9 @@ links
       process.exitCode = 2;
       return;
     }
-    const { issues, exitCode } = await runLinksCheck({ vault, ignore: config.lint?.ignore });
-    if (opts.format === "json" || opts.format === "yaml") emit(issues, opts.format);
-    else console.log(renderHuman(issues));
+    const { diagnostics, exitCode } = await runLinksCheck({ vault, ignore: config.lint?.ignore });
+    if (opts.format === "json" || opts.format === "yaml") emit(diagnostics, opts.format);
+    else console.log(renderHuman(diagnostics));
     process.exitCode = exitCode;
   });
 
@@ -813,9 +813,9 @@ links
       process.exitCode = 2;
       return;
     }
-    const { issues, exitCode } = await runLinksSuggest(file, { vault, ignore: config.lint?.ignore });
-    if (opts.format === "json" || opts.format === "yaml") emit(issues, opts.format);
-    else console.log(renderHuman(issues));
+    const { diagnostics, exitCode } = await runLinksSuggest(file, { vault, ignore: config.lint?.ignore });
+    if (opts.format === "json" || opts.format === "yaml") emit(diagnostics, opts.format);
+    else console.log(renderHuman(diagnostics));
     process.exitCode = exitCode;
   });
 

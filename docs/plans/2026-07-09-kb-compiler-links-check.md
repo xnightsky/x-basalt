@@ -15,7 +15,7 @@ timestamp: 2026-07-09T00:00:00Z
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-> **P2 更新（2026-07-22）**：本计划落地的诊断类型 `BasaltIssue` 已在 P2 更名为 `BasaltDiagnostic` 并提升为公共稳定契约（落 `src/issue.ts`），详见 [design §6](../specs/2026-07-09-kb-compiler-lint-links-design.md) 与 P2 计划 [`2026-07-22-kb-compiler-p2-diagnostic-contract.md`](2026-07-22-kb-compiler-p2-diagnostic-contract.md)。下文代码片段保留 P1 落地时的原始命名 `BasaltIssue` 作为历史记录，不逐处回改。
+> **P2 更新（2026-07-22）**：本计划落地的诊断类型 `BasaltIssue` 已在 P2 更名为 `BasaltDiagnostic` 并提升为公共稳定契约（落 `src/diagnostic.ts`），详见 [design §6](../specs/2026-07-09-kb-compiler-lint-links-design.md) 与 P2 计划 [`2026-07-22-kb-compiler-p2-diagnostic-contract.md`](2026-07-22-kb-compiler-p2-diagnostic-contract.md)。下文代码片段保留 P1 落地时的原始命名 `BasaltIssue` 作为历史记录，不逐处回改。
 
 **Goal:** 给 x-basalt 新增 `links check`（扫全 vault 报断链）与 `links suggest <file>`（单文件断链 + 修复建议）两条 CLI 命令，产出带 `line`/`column` 定位的诊断。
 

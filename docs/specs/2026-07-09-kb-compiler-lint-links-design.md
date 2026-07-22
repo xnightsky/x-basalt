@@ -9,8 +9,8 @@ tags:
   - links
   - parser
   - x-basalt
-timestamp: 2026-07-22T03:38:30Z
-sha256: 1c23ee8e4063ecf37011ef840b25331ca75c6189eb415b98d4284b96920b8809
+timestamp: 2026-07-22T03:55:45Z
+sha256: 4ae55484c3162fa4b17008b4d7ba807b9e45f5b6222244e97a28d9cec920b13c
 ---
 
 # KB compiler / lint / links 设计规格
@@ -240,7 +240,7 @@ interface BasaltDiagnostic {
 
 JSON 字段一旦进入 CI 就是长期 API。P1 曾把该接口放在 `src/links/` 内部模块（名为 `BasaltIssue`）；P2 提升为**公共稳定契约**并冻结为 `lint --format json` 的稳定输出，`links check` 与 `lint --rules links` 共用。
 
-> **P2 命名决策（2026-07-22）**：`BasaltIssue` → **`BasaltDiagnostic`**（`BasaltIssueSeverity` → `BasaltDiagnosticSeverity`）。理由：① 与本仓工具链（oxc/oxlint 的 `OxcDiagnostic`）及 LSP / TypeScript 的 `Diagnostic` 对齐——本契约字段形状（`file`/`line`/`column`/`severity`/`rule`/`message`）即 LSP `Diagnostic`；② 规避与 GitHub Issue 撞词（P4 规划 `--format github` annotation，撞词面真实）。规则 id（如 `links/no-broken-link`）、severity 取值、字段名均不变，仅换承载名词；`reason` 冻结为 `string`（机器可读原因，links 侧仍产 `not_found` 等字面量，为 P3 metadata 规则的 reason 留出共用空间）。公共契约真相源落 `src/issue.ts`（中立叶子，对齐 `src/config.ts`/`src/format.ts`），`src/links/types.ts` re-export 保后向兼容。
+> **P2 命名决策（2026-07-22）**：`BasaltIssue` → **`BasaltDiagnostic`**（`BasaltIssueSeverity` → `BasaltDiagnosticSeverity`）。理由：① 与本仓工具链（oxc/oxlint 的 `OxcDiagnostic`）及 LSP / TypeScript 的 `Diagnostic` 对齐——本契约字段形状（`file`/`line`/`column`/`severity`/`rule`/`message`）即 LSP `Diagnostic`；② 规避与 GitHub Issue 撞词（P4 规划 `--format github` annotation，撞词面真实）。规则 id（如 `links/no-broken-link`）、severity 取值、字段名均不变，仅换承载名词；`reason` 冻结为 `string`（机器可读原因，links 侧仍产 `not_found` 等字面量，为 P3 metadata 规则的 reason 留出共用空间）。公共契约真相源落 `src/diagnostic.ts`（中立叶子，对齐 `src/config.ts`/`src/format.ts`），`src/links/types.ts` re-export 保后向兼容。
 
 ## 7. Ignore 配置语义
 
@@ -382,7 +382,7 @@ x-basalt lint --rules links --fix --apply
 
 1. **P0 parser 定位契约**：改类型、提取器、parser 测试；不改 CLI。✅ 已落地：wikilink/embed 带完整文件 `line`/`column`/`raw`，新增 `markdownLink` 节点，代码区链接不产出，indexer 维持 links 表去重。
 2. **P1 links check/suggest**：新增 links 模块与 CLI；输出内部 issue JSON。✅ 已落地（`src/links/` 内存 per-run 白名单集合；`[vault...]` 位置参数对齐 index/scan；`lint.ignore` 配置；锚点 / `tmp_path` 后置——见 [`../plans/2026-07-09-kb-compiler-links-check.md`](../plans/2026-07-09-kb-compiler-links-check.md)）。
-3. **P2 统一诊断契约 + lint 壳**：把 `BasaltIssue` 更名为 `BasaltDiagnostic` 并冻结为公共稳定契约（落 `src/issue.ts`），让 `links check` 与 `lint --rules links` 共用同一诊断模型（不再 links 私有）。
+3. **P2 统一诊断契约 + lint 壳**：把 `BasaltIssue` 更名为 `BasaltDiagnostic` 并冻结为公共稳定契约（落 `src/diagnostic.ts`），让 `links check` 与 `lint --rules links` 共用同一诊断模型（不再 links 私有）。
 4. **P3 profile/schema**：接 `.x-basalt/config.*` 的轻量 DSL。
 5. **P4 CI/baseline**：GitHub annotation 与 baseline。
 6. **P5 rewrite/fix**：有限机械修复，默认 dry-run。
