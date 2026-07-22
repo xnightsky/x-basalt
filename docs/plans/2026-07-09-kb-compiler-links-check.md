@@ -15,6 +15,8 @@ timestamp: 2026-07-09T00:00:00Z
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
+> **P2 更新（2026-07-22）**：本计划落地的诊断类型 `BasaltIssue` 已在 P2 更名为 `BasaltDiagnostic` 并提升为公共稳定契约（落 `src/issue.ts`），详见 [design §6](../specs/2026-07-09-kb-compiler-lint-links-design.md) 与 P2 计划 [`2026-07-22-kb-compiler-p2-diagnostic-contract.md`](2026-07-22-kb-compiler-p2-diagnostic-contract.md)。下文代码片段保留 P1 落地时的原始命名 `BasaltIssue` 作为历史记录，不逐处回改。
+
 **Goal:** 给 x-basalt 新增 `links check`（扫全 vault 报断链）与 `links suggest <file>`（单文件断链 + 修复建议）两条 CLI 命令，产出带 `line`/`column` 定位的诊断。
 
 **Architecture:** 纯函数式一次性静态检查——遍历 vault 用现有 `VaultParser` 现解析拿带位置链接节点，先构建「白名单目标索引」（Docusaurus 式：文件路径 Set + basename/stem Map），再逐链接 O(1) 比对判定断链与建议。全程内存 per-run，输出即弃；**不新增 SQLite 表、不改 indexer**。新模块 `src/links/` 是继 query/chat 之后 parser 的又一消费者。

@@ -2,6 +2,10 @@
 
 > backlog / roadmap（存在 = 有待做项）。**已完成的不堆这**——见 git log、`docs/plans/`、`docs/specs/`。
 
+## 🧱 2026-07-22 KB compiler P2 · 统一诊断契约 + lint 壳（进行中）
+
+把 P1 落地的 links 私有诊断类型 `BasaltIssue` 更名为 `BasaltDiagnostic` 并提升为**公共稳定契约**（新 `src/issue.ts` 中立叶子），冻结为 `lint --format json` 稳定输出；新增最小 `lint --rules links` 壳与 `links check` 共用同一诊断产物。计划：[`docs/plans/2026-07-22-kb-compiler-p2-diagnostic-contract.md`](docs/plans/2026-07-22-kb-compiler-p2-diagnostic-contract.md)；设计：[design §6](docs/specs/2026-07-09-kb-compiler-lint-links-design.md)。**禁止跳到大而全 `lint --profile --fix`（P3–P5 各自后置）。**
+
 ## 🔧 2026-07-15 召回质量四修（进行中）
 
 首跑（cc-sonnet + pi-deepseek）稳定复发的召回失真，隔离工作区 `.worktrees/recall-quality`（分支 `fix/recall-quality`）。计划：[`docs/plans/2026-07-15-recall-quality-fixes.md`](docs/plans/2026-07-15-recall-quality-fixes.md)。
@@ -28,7 +32,7 @@
 
 1. **P0 parser 定位契约**：给 wikilink / Markdown link / image link 节点补 `line` / `column` / `raw` / `target`；明确 links 行号采用完整文件行号，便于编辑器与 CI 对齐。✅ 已落地：parser 保留链接诊断节点，indexer 维持 links 表去重。
 2. **P1 `links check` / `links suggest`**：✅ 已落地（`src/links/`，内存 per-run 不碰 SQLite；白名单集合 + basename 建议 + `lint.ignore` 配置 + JSON/人读输出 + CI 退出码）。31 单测 + 场景库真实 vault 验证（messy/pkm 54 真实 wikilink 0 假阳 + 注入验证覆盖 markdownLink/embed 各分支）。见 [`docs/plans/2026-07-09-kb-compiler-links-check.md`](docs/plans/2026-07-09-kb-compiler-links-check.md)。
-3. **P2 统一 `BasaltIssue` + `lint` 壳**：冻结 `file` / `line` / `column` / `rule` / `severity` / `message` / `target` / `reason` / `suggestions` / `fixable` JSON 字段。**← 下一步（Issue 类型已在 `src/links/types.ts` 内部落地，P2 提升为公共稳定契约、让 lint 与 links 共用）**
+3. **P2 统一 `BasaltDiagnostic` + `lint` 壳**：冻结 `file` / `line` / `column` / `rule` / `severity` / `message` / `target` / `reason` / `suggestions` / `fixable` JSON 字段。**← 进行中（更名 `BasaltIssue`→`BasaltDiagnostic`、提升为公共稳定契约、lint 与 links 共用；见顶部「KB compiler P2」）**
 4. **P3 profile/schema v1**：在 `.x-basalt/config.*` 声明 `profiles.<name>.include|required|enums|tagRules|domain|ignore`，首版用轻量 DSL，不承诺完整 JSON Schema。
 5. **P4 CI / baseline**：`--ci`、`--format github`、`--baseline` 在 Issue JSON 稳定后再做。
 6. **P5 rewrite/fix**：`links rewrite --apply` 与有限 `lint --fix` 最后做；默认 dry-run，不自动猜业务语义。
