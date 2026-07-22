@@ -9,8 +9,8 @@ tags:
   - metadata
   - profile
   - x-basalt
-timestamp: 2026-07-22T05:50:32Z
-sha256: 72660b95cb97a0a20533568b3a1b406eec245afa0af9bd093d0d7ae24e26fc29
+timestamp: 2026-07-22T06:08:34Z
+sha256: fa00d3f1f398c370e3a21415b632a7bb92c1ce7ed5426f1f9163747d87c9857e
 ---
 # KB compiler P3a · 内置 profile 校验（metadata/required-missing）
 
@@ -28,23 +28,25 @@ sha256: 72660b95cb97a0a20533568b3a1b406eec245afa0af9bd093d0d7ae24e26fc29
 
 ## 切口（TDD，按序）
 
-- [ ] **Task 1 — meta 暴露读侧 `inspectProfile(content, name): ProfileDiff`**
-  - `src/meta/index.ts` 加纯函数 `inspectProfile(content: string, profileName: string): ProfileDiff`（`splitDocument(content)` → `diffProfile(doc, getProfile(name))`；不碰 fs、不写盘）。未知 profile 沿用 `getProfile` 定向报错。
-  - 先写失败测试 `tests/meta/inspect-profile.test.ts`：给定缺 `type` 的 frontmatter + `llm-wiki` → `missing.required` 含 `type`；齐全 → 空。
-  - Verify：`pnpm run typecheck` + 该测试。
-- [ ] **Task 2 — metadata 规则 `src/lint/metadata.ts`**
-  - `checkMetadata({ vault, profile, ignore }): Promise<BasaltDiagnostic[]>`：`collectFiles` 取 `.md` → 逐篇 `readFile` → `inspectProfile` → 对每个 `missing.required` 字段产 `BasaltDiagnostic`（rule/severity/reason/target/位置见 Decision 3）→ `compileIgnore` 过滤 → 按 `file/line/column` `toSorted`。
-  - 先写失败测试 `tests/lint/metadata.test.ts`（临时 vault）：缺字段报诊断、齐全不报、`ignore.paths` 过滤、未知 profile 报错。
-  - Verify：`pnpm run typecheck` + 该测试。
-- [ ] **Task 3 — 接入 lint 壳 + CLI `--profile`**
-  - `src/lint/index.ts`：`LintRunOptions` 加 `profile?: string`；`RULE_RUNNERS.metadata = (o) => checkMetadata({ vault: o.vault, profile: o.profile!, ignore: o.ignore })`；`--profile` 给了但 rules 未含 metadata → 自动并入 metadata；metadata 选中但无 profile → 定向报错。
-  - `src/cli.ts`：`lint` 命令加 `--profile <name>`。
-  - 先写失败测试 `tests/lint/cli-profile.test.ts`（子进程真 CLI）：`lint --profile llm-wiki` 对缺 `type` 的临时 vault 退出码 1 + JSON 含 `metadata/required-missing`；齐全退出 0。
-  - Verify：`pnpm run typecheck` + `pnpm run build` + 该测试。
-- [ ] **Task 4 — 收口**
-  - 全量门禁（触及 cli + 跨模块）：`pnpm run lint` / `typecheck` / `build` / 全量 `pnpm test`。
-  - 端到端（built CLI）：对本仓 `docs/`（已按 llm-wiki 维护）跑 `x-basalt lint --profile llm-wiki`——预期基本无 required 缺失（dogfood 自证），有则如实报。
-  - 契约对账：design §8 / 本计划 / TODO；`AGENTS.md` 目录结构段同 P2 判定不补。
+- [x] **Task 1 — meta 暴露读侧 `inspectProfile(content, name): ProfileDiff`**（✅ 2026-07-22）
+  - `src/meta/index.ts` 加纯函数 `inspectProfile`（`splitDocument` → `diffProfile(doc, getProfile(name))`；只读不碰 fs）。写侧 `applyProfile` 与读侧共用同一 `diffProfile`。
+  - `tests/meta/inspect-profile.test.ts`（先失败后实现）：缺 type / 齐全 / 无 frontmatter / 未知 profile。
+  - Verify：`pnpm run typecheck` ✓ · 4 tests ✓。
+- [x] **Task 2 — metadata 规则 `src/lint/metadata.ts`**（✅ 2026-07-22）
+  - `checkMetadata({ vault, profile, ignore })`：`collectFiles` → 逐篇 `inspectProfile` → 每个 `missing.required` 产 `metadata/required-missing`（severity error、reason `required_missing`、target=字段名、line:1 col:1）→ `compileIgnore` 过滤 → `toSorted`。未知 profile 前置 `getProfile` 校验（空 vault 亦报错）。
+  - `tests/lint/metadata.test.ts`（先失败后实现）：缺字段报诊断 / 齐全空 / `ignore.paths` 过滤 / 未知 profile 报错。
+  - Verify：`pnpm run typecheck` ✓ · 4 tests ✓。
+- [x] **Task 3 — 接入 lint 壳 + CLI `--profile`**（✅ 2026-07-22）
+  - `src/lint/index.ts`：`LintRunOptions` 加 `profile?`；`RULE_RUNNERS.metadata`；rules 省略时**有 profile→默认 metadata、否则 links**（保持 P2，不强改显式 rules）；metadata 选中但无 profile → 定向报错。
+  - `src/cli.ts`：`lint` 加 `--profile <name>`。
+  - `tests/lint/cli-profile.test.ts`（先失败后实现，子进程真 CLI）：缺 type→退出 1 + `metadata/required-missing` JSON；齐全→0 + `[]`；`--rules metadata` 无 profile→报错。
+  - Verify：`pnpm run typecheck` ✓ · `pnpm run build` ✓ · 3 tests ✓。
+- [x] **Task 4 — 收口**（✅ 2026-07-22）
+  - **修 P2 遗留**：`lint` 人读原复用 links 的「断链」措辞，metadata 诊断被误称「断链」。新增中性 `src/lint/report.ts`（「共 N 处问题」/「✓ 未发现问题」），`lint` 命令改用之；`links check`/`suggest` 保留「断链」（该命令下准确）。`tests/lint/report.test.ts`（先失败后实现）断言不含「断链」。
+  - 全量门禁：`pnpm run lint` ✓ · `typecheck` ✓ · `build` ✓ · 全量 `pnpm test` **592 pass** ✓。
+  - 端到端（built CLI）：`lint --profile llm-wiki` 缺→退出 1、齐→0 + `[]`、未知 profile / `--rules metadata` 无 profile 均定向报错；`links` 默认行为不变。
+  - **dogfood 发现**：本仓 `docs/plans/2026-07-02-deterministic-eval-gaps.md` 缺 required `type`（feature 自证有效；给该文档补 `type` 属独立收尾，不并入本阶段）。
+  - 契约对账：design §8 / 本计划 / TODO 已同步；`AGENTS.md` 目录结构段同 P2 判定不补。
 
 ## Verify（总）
 

@@ -46,6 +46,17 @@ export function readMeta(file: string, key?: string): unknown {
 }
 
 /**
+ * 读侧 profile 校验（纯函数、只读、不碰 fs）：解析 frontmatter 内容 → 对照 profile 算 present/missing。
+ * 供 lint 的 metadata 规则消费（`lint --profile <name>`，design §8.1）；与写侧 applyProfile 共用同一
+ * `diffProfile` 判定——一套 profile 定义两处用（写侧补、读侧查）。未知 profile 沿用 getProfile 定向报错。
+ */
+export function inspectProfile(content: string, profileName: string): ProfileDiff {
+  const profile = getProfile(profileName);
+  const parts = splitDocument(content);
+  return diffProfile(parts.doc, profile);
+}
+
+/**
  * 编辑 frontmatter：读文件 → 解析 → 用 mutate 改 doc → 序列化 → 原子写回。
  * frontmatter 为非法 YAML 时拒写并抛错（绝不在无法解析的结构上写、防毁文件）。
  * 无字节变化则不写盘；dry-run 仅计算不落盘。

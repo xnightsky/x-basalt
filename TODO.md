@@ -2,10 +2,10 @@
 
 > backlog / roadmap（存在 = 有待做项）。**已完成的不堆这**——见 git log、`docs/plans/`、`docs/specs/`。
 
-## 🧭 2026-07-22 KB compiler P3 · metadata profile lint（P3a 进行中）
+## 🧭 2026-07-22 KB compiler P3 · metadata profile lint（P3a 已落地 · P3b 后置）
 
 metadata 侧 lint，分两阶段（设计见 [design §8](docs/specs/2026-07-09-kb-compiler-lint-links-design.md)；业界依据已核实、信源见计划）：
-- **P3a**（进行中）：`lint --profile <builtin>` 校验内置 profile 的 required 字段（复用 `getProfile`/`diffProfile`，零 config），rule `metadata/required-missing`。计划：[`docs/plans/2026-07-22-kb-compiler-p3a-profile-lint.md`](docs/plans/2026-07-22-kb-compiler-p3a-profile-lint.md)。
+- **P3a**（✅ 已落地）：`lint --profile <builtin>` 校验内置 profile 的 required 字段（复用 `getProfile`/`diffProfile`，零 config），rule `metadata/required-missing`；顺带修 P2 遗留（lint 人读中性化，不再对 metadata 说「断链」）。计划：[`docs/plans/2026-07-22-kb-compiler-p3a-profile-lint.md`](docs/plans/2026-07-22-kb-compiler-p3a-profile-lint.md)。
 - **P3b**（后置）：`.x-basalt/config` 自定义 `profiles.<name>` + `extends` 继承 + `enums`；合并语义（单父/子覆盖/只加不减/环检测/同名覆盖）。
 - **仍不碰**：`--fix`（P5）、ci/baseline（P4）、完整 JSON Schema。
 
@@ -36,7 +36,7 @@ metadata 侧 lint，分两阶段（设计见 [design §8](docs/specs/2026-07-09-
 1. **P0 parser 定位契约**：给 wikilink / Markdown link / image link 节点补 `line` / `column` / `raw` / `target`；明确 links 行号采用完整文件行号，便于编辑器与 CI 对齐。✅ 已落地：parser 保留链接诊断节点，indexer 维持 links 表去重。
 2. **P1 `links check` / `links suggest`**：✅ 已落地（`src/links/`，内存 per-run 不碰 SQLite；白名单集合 + basename 建议 + `lint.ignore` 配置 + JSON/人读输出 + CI 退出码）。31 单测 + 场景库真实 vault 验证（messy/pkm 54 真实 wikilink 0 假阳 + 注入验证覆盖 markdownLink/embed 各分支）。见 [`docs/plans/2026-07-09-kb-compiler-links-check.md`](docs/plans/2026-07-09-kb-compiler-links-check.md)。
 3. **P2 统一 `BasaltDiagnostic` + `lint` 壳**：冻结 `file` / `line` / `column` / `rule` / `severity` / `message` / `target` / `reason` / `suggestions` / `fixable` JSON 字段。✅ 已落地（`BasaltIssue`→`BasaltDiagnostic` 提升为 `src/diagnostic.ts` 公共契约；最小 `lint --rules links` 壳与 `links check` 共用同一诊断产物——见 [`docs/plans/2026-07-22-kb-compiler-p2-diagnostic-contract.md`](docs/plans/2026-07-22-kb-compiler-p2-diagnostic-contract.md) 与 git log）。
-4. **P3 profile/schema**（分两阶段，见 design §8）：**P3a**（进行中）内置 profile required 校验 `lint --profile <builtin>`（复用 `getProfile`/`diffProfile`，零 config，rule `metadata/required-missing`）；**P3b** 自定义 config `profiles.<name>` + `extends` + `enums`（合并语义见计划）。轻量 DSL，不承诺完整 JSON Schema。见顶部「KB compiler P3」。
+4. **P3 profile/schema**（分两阶段，见 design §8）：**P3a**（✅ 已落地）内置 profile required 校验 `lint --profile <builtin>`（复用 `getProfile`/`diffProfile`，零 config，rule `metadata/required-missing`）；**P3b**（后置）自定义 config `profiles.<name>` + `extends` + `enums`（合并语义见计划）。轻量 DSL，不承诺完整 JSON Schema。见顶部「KB compiler P3」。
 5. **P4 CI / baseline**：`--ci`、`--format github`、`--baseline` 在 Issue JSON 稳定后再做。
 6. **P5 rewrite/fix**：`links rewrite --apply` 与有限 `lint --fix` 最后做；默认 dry-run，不自动猜业务语义。
 
