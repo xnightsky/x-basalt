@@ -1,3 +1,16 @@
+---
+type: plan
+title: 收口场景库坐实的确定性产品缺口
+description: 把 dogfood 场景库坐实的三个确定性产品缺口（scan byDir 分组计数 / 缺失 vault 根 warn-and-skip / DQL file.frontmatter 存在性）在产品侧修掉并回归，走通「找失败→修产品→重测」确定性半环
+tags:
+  - plan
+  - eval
+  - scan
+  - dql
+  - x-basalt
+timestamp: 2026-07-02T05:35:48Z
+sha256: 2a0b75262102e56de752e9cce09c1629d38c53521a1cb47a19d1ae50dbe3724d
+---
 # 计划：收口场景库坐实的确定性产品缺口
 
 > 2026-07-02 · scan byDir 分组计数 · 缺失 vault 根 warn · DQL `file.frontmatter` 存在性
