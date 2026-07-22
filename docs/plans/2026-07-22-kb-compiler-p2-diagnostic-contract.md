@@ -9,8 +9,8 @@ tags:
   - links
   - diagnostic
   - x-basalt
-timestamp: 2026-07-22T03:56:27Z
-sha256: e4ca55b1213140fc7348b3224d693329a95eb9ce1db52b1f7695c78a27ca429e
+timestamp: 2026-07-22T04:08:18Z
+sha256: 47de6e7f5cec97fc7fdfff6e9ed19c87841d6b3d6fd4df93fd76581411bdd5f4
 ---
 # KB compiler P2 · 统一诊断契约 BasaltDiagnostic + lint 壳
 
@@ -33,17 +33,19 @@ sha256: e4ca55b1213140fc7348b3224d693329a95eb9ce1db52b1f7695c78a27ca429e
   - **彻底清「issue」token**（超出原计划的一致性收敛）：文件 `issue.ts`→`diagnostic.ts`、`issue.test.ts`→`diagnostic.test.ts`；类型 `BasaltIssue`→`BasaltDiagnostic`、`LinkIssueReason`→`LinkDiagnosticReason`；`toIssue`→`toDiagnostic`；变量/字段 `issues`/`issue`→`diagnostics`/`diagnostic`（含 `LinksRunResult.issues`、`cli.ts` 解构）。代码内仅存 `diagnostic.ts` 注释里刻意的「GitHub Issue」撇清词。
   - 新增 `tests/diagnostic.test.ts`：契约字段形状 + severity 单一真相源 + reason 放宽的可观察断言。
   - Verify：`pnpm run typecheck` ✓ · 35 tests pass（4 契约 + 31 links）✓ · `pnpm run lint` ✓（`format:check` 为基线噪声——oxfmt 无配置，全仓默认风格不匹配，非本次引入）。
-- [ ] **Task 2 — 最小 lint 壳模块 `src/lint/`**
-  - 先写失败测试 `tests/lint/run.test.ts`：`runLint({ vault, rules: ["links"] })` 与 `checkVault` 产出同构 `BasaltDiagnostic[]`；未知 rule → 抛错/定向错误。
-  - `src/lint/index.ts`：`runLint(opts)` 分发（P2 仅 `links` → `checkVault`），返回 `{ diagnostics, exitCode }`。
-  - Verify：`pnpm run typecheck` + `tests/lint/run.test.ts`。
-- [ ] **Task 3 — CLI `lint` 命令接线**
-  - 先写失败测试 `tests/lint/cli.test.ts`（子进程跑真 CLI）：断链 → 退出码 1 + JSON 形状与 `links check` 同构；`--rules links` 默认；未知 rule 报错。
-  - `src/cli.ts` 新增 `lint` 命令：`[vault...]` + `--rules <list>` + `--format <fmt>`；json/yaml 走 `emit`、human 走渲染（复用/等价 `renderHuman`）。
-  - Verify：`pnpm run typecheck` + `pnpm run build` + `tests/lint/cli.test.ts`。
-- [ ] **Task 4 — 收口**
-  - 契约对账：design / 本计划 / TODO / `AGENTS.md` 目录结构段（如需补 `src/diagnostic.ts`、`src/lint/`）。
-  - 全量门禁（触及跨模块公共契约 + 根 `cli.ts`）：`pnpm run lint`、`pnpm run typecheck`、`pnpm run build`、全量 `pnpm test`。
+- [x] **Task 2 — 最小 lint 壳模块 `src/lint/`**（✅ 2026-07-22）
+  - `src/lint/index.ts`：`runLint(opts)` 经 `RULE_RUNNERS` 注册表分发（P2 仅 `links` → `checkVault`），rules 省略/空→默认 `["links"]`，未知 rule 定向抛错，汇总按 `file/line/column` `toSorted`，返回 `{ diagnostics, exitCode }`；导出 `LINT_RULES`。
+  - `tests/lint/run.test.ts`（先失败后实现）：同构 checkVault、默认 links、无断链→0、未知规则报错。
+  - Verify：`pnpm run typecheck` ✓ · `tests/lint/run.test.ts` 4 pass ✓。
+- [x] **Task 3 — CLI `lint` 命令接线**（✅ 2026-07-22）
+  - `src/cli.ts` 新增 `lint [vault...] --rules <list> --format <fmt>`；`--rules` 逗号分隔（默认 links），json/yaml 走 `emit`、human 走 `renderHuman`（P2 仅 links 规则，复用其人读渲染）；未知 rule 经顶层 `catch` 打印 `✗ …` 退 1。
+  - `tests/lint/cli.test.ts`（先失败后实现，子进程跑真 CLI）：断链退出码 1 + JSON 与 `links check` 同构、默认 links、未知规则报错。
+  - Verify：`pnpm run typecheck` ✓ · `pnpm run build` ✓ · `tests/lint/cli.test.ts` 3 pass ✓。
+- [x] **Task 4 — 收口**（✅ 2026-07-22）
+  - 契约对账：design / 本计划 / TODO 已同步；**`AGENTS.md` 目录结构段不补**——该段是核心管线概览（parser→indexer→query→skill→meta），同级的 `links`/`chat`/`config.ts`/`format.ts` 均未列，为保持粒度一致 `diagnostic.ts`/`lint/` 亦不列。
+  - 全量门禁：`pnpm run lint` ✓ · `pnpm run typecheck` ✓ · `pnpm run build` ✓ · 全量 `pnpm test` **579 pass** ✓。
+  - 端到端（built CLI）：`x-basalt lint --rules links --format json` 与 `x-basalt links check --format json` JSON 完全同构、退出码一致；human 输出、未知规则报错、空 vault→`[]` 均验。
+  - **已知 follow-up（非缺陷）**：`lint` 人读复用 links 的「断链」文案，P3 接入 metadata 规则时再泛化为中性「问题/诊断」措辞。
 
 ## Verify（总）
 
@@ -55,7 +57,7 @@ sha256: e4ca55b1213140fc7348b3224d693329a95eb9ce1db52b1f7695c78a27ca429e
 
 - design §6 / §3.3 / §11 + 顶部状态行：已更名 + 记录 P2 命名决策（本轮文档提交）。
 - P1 plan：已加 P2 更名 forward-note（本轮文档提交）。
-- 落地后：`src/diagnostic.ts` 注释回指 design §6；`AGENTS.md` 目录结构段按需补 `src/diagnostic.ts` / `src/lint/`。
+- `src/diagnostic.ts` 注释已回指 design §6；`AGENTS.md` 目录结构段经评估**不补**（见 Task 4：与同级 links/chat 未列保持粒度一致）。
 
 ## 全局约束（沿用 AGENTS.md / P1）
 
