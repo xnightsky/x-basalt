@@ -2,12 +2,12 @@
 
 > backlog / roadmap（存在 = 有待做项）。**已完成的不堆这**——见 git log、`docs/plans/`、`docs/specs/`。
 
-## 🧭 2026-07-22 KB compiler P3 · metadata profile lint（P3a 已落地 · P3b 后置）
+## 🧭 2026-07-22 KB compiler P3 · metadata profile lint（P3a 已落地 · P3b 进行中）
 
 metadata 侧 lint，分两阶段（设计见 [design §8](docs/specs/2026-07-09-kb-compiler-lint-links-design.md)；业界依据已核实、信源见计划）：
 - **P3a**（✅ 已落地）：`lint --profile <builtin>` 校验内置 profile 的 required 字段（复用 `getProfile`/`diffProfile`，零 config），rule `metadata/required-missing`；顺带修 P2 遗留（lint 人读中性化，不再对 metadata 说「断链」）。计划：[`docs/plans/2026-07-22-kb-compiler-p3a-profile-lint.md`](docs/plans/2026-07-22-kb-compiler-p3a-profile-lint.md)。
-- **P3b**（后置）：`.x-basalt/config` 自定义 `profiles.<name>` + `extends` 继承 + `enums`；合并语义（单父/子覆盖/只加不减/环检测/同名覆盖）。
-- **仍不碰**：`--fix`（P5）、ci/baseline（P4）、完整 JSON Schema。
+- **P3b**（🔨 进行中）：`.x-basalt/config` 自定义 `profiles.<name>` + `extends` 继承 + `enums`；合并语义（单父/子覆盖/required 并集/enums 按字段只加不减/环检测/未知父报错/同名覆盖内置）；新增 rule `metadata/enum-invalid`。计划：[`docs/plans/2026-07-22-kb-compiler-p3b-config-profile.md`](docs/plans/2026-07-22-kb-compiler-p3b-config-profile.md)。
+- **仍不碰**：`excludes`/减字段、多父 `extends`、`tagRules`、`domain.fromPath`、`--fix`（P5）、ci/baseline（P4）、完整 JSON Schema。
 
 ## 🔧 2026-07-15 召回质量四修（进行中）
 
