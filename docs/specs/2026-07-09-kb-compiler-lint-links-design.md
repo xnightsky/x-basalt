@@ -9,14 +9,14 @@ tags:
   - links
   - parser
   - x-basalt
-timestamp: 2026-07-22T03:55:45Z
-sha256: 4ae55484c3162fa4b17008b4d7ba807b9e45f5b6222244e97a28d9cec920b13c
+timestamp: 2026-07-22T05:48:43Z
+sha256: 4e9e15303a9c88259cbd452182e959f672b7a315f3681c258077c7f386b1c26c
 ---
 
 # KB compiler / lint / links 设计规格
 
 > 日期：2026-07-09 · 类型：parser 定位契约 + links/lint/profile 分层设计
-> 状态：P0 parser 定位契约 + P1 links check/suggest 已落地；P2 统一诊断契约（`BasaltDiagnostic`）+ lint 壳进行中（见 [`../plans/2026-07-22-kb-compiler-p2-diagnostic-contract.md`](../plans/2026-07-22-kb-compiler-p2-diagnostic-contract.md)）。关联调研：[`../research/2026-07-09-markdown-kb-compiler-lint-links-research.md`](../research/2026-07-09-markdown-kb-compiler-lint-links-research.md)。
+> 状态：P0 parser 定位契约 + P1 links check/suggest + P2 统一诊断契约（`BasaltDiagnostic`）与 lint 壳 已落地；P3 metadata profile lint 分两阶段（§8：P3a 内置校验 / P3b 自定义 config），P3a 进行中（见 [`../plans/2026-07-22-kb-compiler-p3a-profile-lint.md`](../plans/2026-07-22-kb-compiler-p3a-profile-lint.md)）。关联调研：[`../research/2026-07-09-markdown-kb-compiler-lint-links-research.md`](../research/2026-07-09-markdown-kb-compiler-lint-links-research.md)。
 
 ## 1. 结论
 
@@ -270,41 +270,64 @@ lint:
 - `rules.<rule>` 只对特定 rule 忽略指定文件或目标模式。
 - ignore 命中后不产出 issue；调试模式可后续加 `--show-ignored`，首版不承诺。
 
-## 8. Profile/schema v1
+## 8. Profile/schema：两阶段（P3a 内置校验 / P3b 自定义 config）
 
-profile/schema 是 metadata lint 的配置，不替代现有 `meta profile` 写侧模板。
+profile/schema 是 metadata lint 的**读侧校验**配置。它与写侧 `meta profile`（`src/meta/profiles.ts` 的 pkm-note / llm-wiki / ssg-blog）**共享同一套 profile 概念**——写侧「按 profile 补元数据」，读侧「按 profile 查元数据」，一套定义两处用（dogfood）。产出统一 `BasaltDiagnostic`，走 P2 的 lint 壳。分两阶段落地，各自最小可交付。
+
+### 8.1 P3a — 内置 profile 校验（零 config，开箱即用）
+
+`x-basalt lint --profile <builtin>`（builtin ∈ pkm-note / llm-wiki / ssg-blog）：
+
+- 复用 `getProfile()` + `diffProfile()`，对选中文档校验**内置 profile 的 required 字段是否齐全**。
+- 规则 `metadata/required-missing`（severity `error`；required 缺失即 profile 失效）。
+- 内置 profile 只有 role、无 enum，故 **P3a 只做 required**。
+- 选文件：全 vault `.md` + 既有 `lint.ignore.paths`（无 `include`——那属 P3b）。
+- 价值：零 config 立即能查「哪些文档缺 required 字段」，几乎零新逻辑、纯 dogfood。
+
+### 8.2 P3b — 自定义 profile（config 定义 + `extends`）
+
+`.x-basalt/config.*` 新增 `profiles` 段，用户可**继承内置魔改**或**全新定义**：
 
 ```yaml
 profiles:
-  llm-wiki:
-    include: "docs/**/*.md"
-    required: ["type", "title", "description", "tags"]
+  my-wiki:
+    extends: llm-wiki                # 继承内置 required 基线（零重复）
+    required: [author]               # 追加必填（与父级并集）
     enums:
-      type: ["index", "guide", "design", "spec", "decision", "research", "plan"]
-    tagRules:
-      require: ["x-basalt"]
-      byType:
-        design: ["design"]
-        research: ["research"]
-    domain:
-      fromPath:
-        docs/specs: spec
-        docs/research: research
-    ignore:
-      - "docs/archive/**"
+      type: [note, person, project, design, spec, plan]
+      status: [draft, active, done]
+    include: "docs/**/*.md"          # 只查这些（可选；缺省=全 vault + lint.ignore）
+  team-note:                         # 不继承 = 全新一套
+    required: [owner, area]
+    enums: { area: [infra, product, research] }
 ```
 
-首版只承诺轻量 DSL：
+新增规则 `metadata/enum-invalid`（值不在允许集）；required-missing 复用 8.1。
 
-- `include`
-- `required`
-- `enums`
-- `tagRules.require`
-- `tagRules.byType`
-- `domain.fromPath`
-- `ignore`
+**`extends` 合并语义（v1 定死，最难点）**：
 
-不承诺完整 JSON Schema，不做类型系统强制，不做日期格式统一。需要更强 schema 时再单独调研扩展。
+1. **单父、子覆盖父**（对齐 ESLint Base→Derived→Resulting、Metadata Menu 子覆盖父）。
+2. **required 取并集、enums 按字段合并——只加不减**。
+3. **不做 `excludes`/减字段**（Metadata Menu 该功能有已知继承 bug）；subtractive 后置。
+4. **环检测**（A→B→A 报错）、**未知父定向报错**、**同名 config 覆盖内置**（对齐 ESLint local 优先）。
+5. 多父数组 `extends: [a, b]` 后置（P3b.1）。
+
+**护栏**：守住 `required` + `enum`（+后续 `tagRules`），**不滑向完整 JSON Schema**（type 强校验 / format / 条件校验是 JSON Schema/Zod 的活，重造不划算）。
+
+### 8.3 后置（P3b.1+）
+
+`tagRules.require` / `tagRules.byType`、`domain.fromPath`、config profile 反哺写侧 `meta apply`、多父 `extends`、`excludes` 减字段、`--fix`。不做类型系统强制、日期格式统一。
+
+### 8.4 业界依据（「内置预设 + config `extends`/新建 + required/enum」是多生态趋同范式，非原创冒险）
+
+- **`extends` 继承**（子覆盖父、Base/Derived/Resulting、数组多父）：ESLint / Stylelint / markdownlint / tsconfig。
+- **frontmatter 场景 config 定义内容类型 + `extends` 继承基线**：Front Matter CMS（`frontmatter.json` 的 `taxonomy.contentTypes` + `frontMatter.extends`）——与本设计最贴。
+- **按 glob 挂自定义 schema 校验 frontmatter + enum**：remark-lint-frontmatter-schema（JSON Schema，含 enum/pattern）——lint 产出侧最贴。
+- **生态内自定义笔记类 + 继承**：Obsidian Metadata Menu `fileClass`（`extends`/`excludes`；其继承 bug 即「只加不减」的反面教材）。
+- **自定义内容模型 config**：Decap/Netlify CMS collections、Sanity schema types。
+- **`required`/`enum` 是最基础两把校验、`allOf` 组合、别重造 schema**：JSON Schema。
+
+信源 URL 见 [`../plans/2026-07-22-kb-compiler-p3a-profile-lint.md`](../plans/2026-07-22-kb-compiler-p3a-profile-lint.md)「业界依据（信源）」段。
 
 ## 9. 命令面草案
 
@@ -383,7 +406,7 @@ x-basalt lint --rules links --fix --apply
 1. **P0 parser 定位契约**：改类型、提取器、parser 测试；不改 CLI。✅ 已落地：wikilink/embed 带完整文件 `line`/`column`/`raw`，新增 `markdownLink` 节点，代码区链接不产出，indexer 维持 links 表去重。
 2. **P1 links check/suggest**：新增 links 模块与 CLI；输出内部 issue JSON。✅ 已落地（`src/links/` 内存 per-run 白名单集合；`[vault...]` 位置参数对齐 index/scan；`lint.ignore` 配置；锚点 / `tmp_path` 后置——见 [`../plans/2026-07-09-kb-compiler-links-check.md`](../plans/2026-07-09-kb-compiler-links-check.md)）。
 3. **P2 统一诊断契约 + lint 壳**：把 `BasaltIssue` 更名为 `BasaltDiagnostic` 并冻结为公共稳定契约（落 `src/diagnostic.ts`），让 `links check` 与 `lint --rules links` 共用同一诊断模型（不再 links 私有）。
-4. **P3 profile/schema**：接 `.x-basalt/config.*` 的轻量 DSL。
+4. **P3 profile/schema**（分两阶段，见 §8）：**P3a** 内置 profile required 校验（`lint --profile <builtin>`，复用 `getProfile`/`diffProfile`，零 config）；**P3b** 自定义 config profile（`profiles.<name>` + `extends` + enum）。
 5. **P4 CI/baseline**：GitHub annotation 与 baseline。
 6. **P5 rewrite/fix**：有限机械修复，默认 dry-run。
 
