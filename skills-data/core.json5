@@ -194,7 +194,7 @@
     },
     {
       pattern: 'chat ["<自然语言>"] [--model <name>] [--max-steps <n>] [--db <path>] [--vault <path>] [--quiet] [--json]',
-      description: "可选 AI 子命令（如何用）：用自然语言驱动既有原语（读 query/parse/scan/meta_get/skills_recall/search + 写 meta_set/unset/rename/normalize/apply + 批量 pipeline_run）跑 plan→act→observe 循环。带参=单发翻译执行即退；省略参数=进 REPL（quit/exit/q 退出）。**被其它 AI/脚本程序化调用时加 `--quiet`（纯答案，推荐）或 `--json`（结构化），完全隐藏 plan→act→observe 过程；因为调用方通常会把 stdout+stderr 合并进模型上下文，过程轨迹只会白占 token。人交互/REPL 才用默认完整轨迹。**最小可选 AI：内核零 AI、chat 隔离懒加载 SDK；没配 key=本命令禁用但其余命令全功能照常（需 AI_GATEWAY_API_KEY，--model 覆盖模型）。写动作直接落盘、无逐个确认弹窗——安全靠流式可观测 + Ctrl+C 中断在途 + 既有原子写（kill 不损坏文件）+ git 兜底。**只做一次性操作，不支持常驻 watch/监听**：绝不让它跑 watch 或 index --watch 这类常驻命令——会永不返回、把 chat 挂死；持续维护 vault 用独立的 watch / scan --pipe。能力边界：当前做结构化任务（DQL/元数据/规范）与 FTS5 正文全文检索；语义向量检索未落地。**如何配置（AI_GATEWAY_* 三变量、Linux/macOS 与 Windows 各平台设法与持久化、离线本地端点）见 docs/guides/ai-and-skills.md 第四节。**",
+      description: "可选 AI 子命令（如何用）：用自然语言驱动既有原语（读 query/parse/scan/meta_get/skills_recall/search + 写 meta_set/unset/rename/normalize/apply + 批量 pipeline_run）跑 plan→act→observe 循环。带参=单发翻译执行即退；省略参数=进 REPL（quit/exit/q 退出）。**被其它 AI/脚本程序化调用时加 `--quiet`（纯答案，推荐）或 `--json`（结构化），完全隐藏 plan→act→observe 过程；因为调用方通常会把 stdout+stderr 合并进模型上下文，过程轨迹只会白占 token。人交互/REPL 才用默认完整轨迹。**最小可选 AI：内核零 AI、chat 隔离懒加载 SDK；没配 key=本命令禁用但其余命令全功能照常（需 AI_GATEWAY_API_KEY，--model 覆盖模型）。写动作直接落盘、无逐个确认弹窗——安全靠流式可观测 + Ctrl+C 中断在途 + 既有原子写（kill 不损坏文件）+ git 兜底。**只做一次性操作，不支持常驻 watch/监听**：绝不让它跑 watch 或 index --watch 这类常驻命令——会永不返回、把 chat 挂死；持续维护 vault 用独立的 watch / scan --pipe。能力边界：当前做结构化任务（DQL/元数据/规范）与 FTS5 正文全文检索；语义向量检索未落地。**如何配置（AI_GATEWAY_* 三变量、Linux/macOS 与 Windows 各平台设法与持久化、离线本地端点）见 docs/guides/ai-and-skills.md 第四节。** **免配直调**：X_BASALT_DIR 或项目配置已设 vault 时，站 repo 根直接 `x-basalt chat` 即自动解析 db/vault，无需定位/读 config，也无需手传 --vault/--db（除非要覆盖默认）。",
       examples: [
         'x-basalt chat "把 projects 下 status 为空的笔记列出来"',
         'x-basalt chat "总结 vault 里的前端测试约定" --quiet   # 供 AI/脚本调用，只回结果',
@@ -217,11 +217,12 @@
     },
     {
       pattern: "项目配置 .x-basalt/config.yaml",
-      description: "项目本地配置默认放隐藏目录 .x-basalt/（不入 git，类比 .obsidian/），免去重复传参。默认 YAML，也支持 JSON5/JSON；扁平 .x-basalt.yaml 亦可。键：db / vault / skillPath / format / onChange。索引默认落 .x-basalt/index.db（目录自动建）。CLI 从 cwd 向上查找，全局回退 ~/.x-basalt/config.yaml。配置值优先级：flag > 项目配置 > 全局配置 > 内置默认。环境变量 X_BASALT_DIR 指定 .x-basalt 基目录（config 与 index.db 都落其下），把状态搬到任意位置；基目录优先级：命令行 flag > X_BASALT_DIR > 就近 .x-basalt/ > 默认。",
+      description: "项目本地配置默认放隐藏目录 .x-basalt/（不入 git，类比 .obsidian/），免去重复传参。默认 YAML，也支持 JSON5/JSON；扁平 .x-basalt.yaml 亦可。键：db / vault / skillPath / format / onChange。索引默认落 .x-basalt/index.db（目录自动建）。CLI 从 cwd 向上查找，全局回退 ~/.x-basalt/config.yaml。配置值优先级：flag > 项目配置 > 全局配置 > 内置默认。环境变量 X_BASALT_DIR 指定 .x-basalt 基目录（config 与 index.db 都落其下），把状态搬到任意位置；基目录优先级：命令行 flag > X_BASALT_DIR > 就近 .x-basalt/ > 默认。 **上游 AI/脚本无需感知 X_BASALT_DIR 或 config 的位置**：只要 X_BASALT_DIR（或就近 .x-basalt/config）已配好 vault，就在 repo 根**直接**跑 x-basalt（如 chat/query/index）——CLI 自读 env+配置解析 db/vault；**别去定位或 cat .x-basalt/config.*，别手动补 --vault/--db**（要覆盖默认才显式传）。X_BASALT_DIR 常用相对值（如 .tmp/.x-basalt）以一套 env 适配多 repo：站在各 repo 根执行即自动对应该 repo 的状态目录与其 vault，故解析靠「站对 repo 根」而非把路径写死成绝对。",
       examples: [
         "cp .x-basalt/config.example.yaml .x-basalt/config.yaml",
         "# .x-basalt/config.yaml 内写 vault: ./my-vault 后，x-basalt index / query 可零参数运行",
         "X_BASALT_DIR=/data/state x-basalt index ./vault   # 状态落 /data/state/.x-basalt/",
+        'x-basalt chat "当前 vault 有多少篇笔记？" --quiet   # X_BASALT_DIR/config 已配 vault：站 repo 根直接调，勿翻 config、勿手传 --vault',
       ],
     },
     {

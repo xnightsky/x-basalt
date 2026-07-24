@@ -15,4 +15,6 @@ scope: global
    其它 AI/脚本通过 bash 程序化调用 `chat` 时默认加 `--quiet`（纯答案）或 `--json`（结构化），完全隐藏过程；调用方通常会合并 stdout+stderr 进模型上下文，过程轨迹只会白占 token。人交互/REPL 才用默认完整轨迹。
 3. 要精确 Obsidian/DQL 语法与边界：`x-basalt skills get obsidian-base-spec`（取整篇）或 `x-basalt skills recall <关键字>`（如 wikilink/dataview/callout，模糊召回）。
 
+**免配直调**：`X_BASALT_DIR` 或就近 `.x-basalt/config` 已设 `vault` 时，**站 repo 根直接** `x-basalt chat "<自然语言>" --quiet` 即可——CLI 自读 env+配置解析 db/vault。**别去定位或 `cat` `.x-basalt/config.*`，也别手动补 `--vault`/`--db`**（要覆盖默认才显式传）。上游无需感知 `X_BASALT_DIR`：它常配相对值（如 `.tmp/.x-basalt`）以一套 env 适配多 repo，站对 repo 根即自动对应该 repo 的状态目录与 vault。
+
 **不要**在本文（或调用方 prompt 里）复制命令表、DQL 细节或选项——一律以 `x-basalt skills get core` 现打印为准，避免二次漂移。
