@@ -1,0 +1,676 @@
+/**
+ * base 模块 P1 执行引擎：BaseEngine.query() —— 对 SQLite 索引中的 Markdown 笔记执行 .base view，
+ * 返回行/列（conformance id `bases-markdown-2026-07`）。
+ *
+ * 执行流程（顺序即诊断顺序，保证字节稳定）：
+ *   loadBaseDocument（文档层诊断）→ 任一 error 即空结果短路
+ *   → planBaseQuery（planner 诊断；view 选择 + filter 合并 + 表达式编译）→ 同上短路
+ *   → markdown-only-dataset warning（每次查询恒发，BASE-DATA-001/002）
+ *   → types.json 显式类型表读取（P2b，可选只读，BASE-TYPE-001..003）
+ *   → 无显式 sort 时 default-sort-tiebreak info（x-basalt 扩展，BASE-RESULT-004）
+ *   → readBaseRows（SQLite → BaseRow；maxRows 预算在此截断）
+ *   → 逐行求值合并 filter（无 filter 全量通过）→ 多键 sort（恒附 file.path ASC tie-break）
+ *   → limit 截断（total = filter 后 limit 前行数）→ 逐列投影序列化
+ *   → groupBy 分桶（P2b 片三，可选；list/link 键暂定拒绝 GROUP-002）
+ *   → summaries 汇总（P2b 片三，可选；计算集 = filter 后 limit 前全量，暂定）
+ *
+ * 错误口径（设计 §11「error 阻止结果」，计划「关键取舍」#10）：
+ * - query() **不 throw**——加载/选择/解析/预算任一 error 级诊断即返回
+ *   rows=[]/total=0/columns=[] + 全量诊断；
+ * - 行级类型错误（onRowError 通道）不阻断查询：filter 语境该行按不通过处理、投影语境该
+ *   cell 置 null，诊断 severity=warning、主位置指表达式（.base 完整文件位置）、
+ *   message/target 附行 file.path（设计 §11 位置规则）；
+ * - BaseBudgetError（maxRows/maxOperations/maxCallDepth/maxCollectionItems 任一耗尽）
+ *   捕获后转 base/execution-budget（error）+ 空结果，绝不返回部分行冒充成功；
+ * - 行级诊断设上限 {@link MAX_ROW_DIAGNOSTICS} 条（防洪），超出补一条汇总诊断。
+ *
+ * DB 连接：按 dbPath 缓存只读连接（readonly + fileMustExist；:memory: 例外不加这两个 flag，
+ * 照搬 src/query/index.ts 模式），close() 关全部。
+ *
+ * 上游：P0 文档层（document.ts）、planner.ts、source.ts、evaluator.ts。
+ * 下游：未来 CLI 薄出口（本阶段不加 CLI 命令）。
+ * 不变量：不写任何 vault 文件；无 eval/new Function；SQL 全部固定无拼接（见 source.ts）。
+ * 设计真相源：docs/specs/2026-07-22-bases-headless-engine-design.md §4/§10/§11/§12。
+ */
+
+import Database from "better-sqlite3";
+import type { Database as Db } from "better-sqlite3";
+import type { BasaltDiagnostic } from "../diagnostic.js";
+import { loadBaseDocument } from "./document.js";
+import {
+  evaluateExpression,
+  isBaseBudgetError,
+  type BaseRow,
+  type BaseRowErrorInfo,
+} from "./evaluator.js";
+import { BASE_RULES, baseDiagnostic } from "./errors.js";
+import {
+  planBaseQuery,
+  spanPlusOffset,
+  type CompiledCustomSummary,
+  type CompiledFilter,
+} from "./planner.js";
+import { readBaseRows } from "./source.js";
+import { BUILTIN_SUMMARIES, runBuiltinSummary } from "./summaries.js";
+import { loadBaseTypeSchema } from "./typeschema.js";
+import {
+  DEFAULT_BASE_EXECUTION_LIMITS,
+  type BaseExecutionLimits,
+  type SourceSpan,
+} from "./types.js";
+import {
+  BaseBudgetError,
+  MISSING,
+  createFileValue,
+  isLinkValue,
+  sortKeyCompare,
+  toOutputValue,
+  truthy,
+  typedEqual,
+  type BaseValue,
+} from "./values.js";
+
+// === 自建实现 ===
+
+/** Markdown conformance id（md-only 数据集；附件不作为行，all-files 属 P3）。 */
+const CONFORMANCE = "bases-markdown-2026-07" as const;
+
+/**
+ * 行级诊断条数上限（防洪）：单行单表达式至多一条，但行数 × 表达式数仍可膨胀；
+ * 超出后只补一条汇总诊断，保证诊断数组不随行数无界增长（字节稳定前提之一）。
+ */
+const MAX_ROW_DIAGNOSTICS = 100;
+
+/**
+ * 自定义汇总求值用的占位行（P2b 片三，SUM-002 暂定）：summaryValues 作用域下 note/file
+ * 属性一律 MISSING（evaluator 不读行内容），本行仅满足 BaseRow 契约，字段永不参与求值。
+ */
+const SUMMARY_ROW: BaseRow = {
+  note: {},
+  file: createFileValue({
+    name: "",
+    basename: "",
+    path: "",
+    folder: "",
+    ext: "",
+    size: 0,
+    ctime: 0,
+    mtime: 0,
+    properties: {},
+    tags: [],
+    links: [],
+  }),
+};
+
+/**
+ * query() 输出值的稳定 JSON 形状（设计 §4）：无类实例、无 symbol 键、无 undefined。
+ * P2a 起含 typed values 包装形状：`{ type: "date"|"datetime", value }` 与
+ * `{ type: "link", path, display?, subpath? }`（序列化真相源在 values.ts toOutputValue）。
+ */
+export type BaseOutputValue =
+  | null
+  | string
+  | number
+  | boolean
+  | BaseOutputValue[]
+  | { [key: string]: BaseOutputValue };
+
+/** BaseEngine.query() 入参（设计 §4，签名与契约一字不差）。 */
+export interface BaseQueryOptions {
+  /** .base 路径（vault 相对或绝对；resolve 后必须落在 vaultRoots 内，BASE-SEC-008）。 */
+  basePath: string;
+  /** 指定 view 名；缺省取 views[0]（BASE-VIEW-001）。 */
+  view?: string;
+  /** 索引库路径（engine 只读打开；:memory: 仅测试用）。 */
+  dbPath: string;
+  /** 允许的 vault 根（多根时索引键为 `<根目录名>/<相对>` 命名空间路径）。 */
+  vaultRoots: string[];
+  /**
+   * P1 接受但不消费：`this.*` 仍报 base/dynamic-context-required（显式 context 属 P3）。
+   * 参数先行入契约，避免 P3 破签名。
+   */
+  contextFile?: string;
+  /**
+   * 注入时钟（P2a 起消费）：today/now 的时间来源，缺省 `() => new Date()`。
+   * 测试必须注入固定 clock，保证重复运行字节一致（FORM-006）。
+   */
+  clock?: () => Date;
+  /** 执行预算覆盖（缺省 DEFAULT_BASE_EXECUTION_LIMITS）。 */
+  limits?: Partial<BaseExecutionLimits>;
+}
+
+/** BaseEngine.query() 结果（设计 §4，签名与契约一字不差）。 */
+export interface BaseQueryResult {
+  conformance: typeof CONFORMANCE;
+  /** .base 的 vault 相对 POSIX 路径。 */
+  base: string;
+  /** 实际执行的 view 名。 */
+  view: string;
+  /** 投影列原文数组（= view.order，缺省 ["file.name"]）。 */
+  columns: string[];
+  /** filter 后、limit 前行数。 */
+  total: number;
+  /** 行数组（长度 ≤ limit）；key 为列原文，missing 投影为 null。 */
+  rows: Record<string, BaseOutputValue>[];
+  /**
+   * 分组结果（P2b 片三增量可选字段；view 配置 groupBy 时存在，否则缺省）。
+   * 组序 = 组键 sortKeyCompare（direction 控制方向）；组内行序 = view sort + file.path
+   * tie-break（与顶层 rows 同一比较器）；rows 与顶层 rows 同一投影形状（向后兼容，
+   * 顶层 rows 平铺行为不变）。key 经 toOutputValue 序列化（稳定 JSON）。
+   */
+  groups?: { key: BaseOutputValue; rows: Record<string, BaseOutputValue>[] }[];
+  /**
+   * 汇总结果（P2b 片三增量可选字段；view 配置 summaries 时存在，否则缺省）。
+   * key = view summaries 的 property-ref 原文（YAML 声明序）；计算集 = filter 后
+   * limit 前全量（暂定口径）；全部值被类型跳过 → null。
+   */
+  summaries?: Record<string, BaseOutputValue>;
+  /** 全量诊断（顺序：文档层 → planner → 引擎级 → 行级按行序，字节稳定）。 */
+  diagnostics: BasaltDiagnostic[];
+}
+
+/** 诊断数组是否含 error 级（error 阻止结果，设计 §11）。 */
+function hasError(diagnostics: BasaltDiagnostic[]): boolean {
+  return diagnostics.some((d) => d.severity === "error");
+}
+
+/**
+ * 运行时值 → 输出 JSON 形状（设计 §4「不能泄漏类实例」）。
+ * P2a 起委托 values.ts 的 {@link toOutputValue}（typed values 序列化真相源：
+ * MISSING→null、file→path、date/datetime/duration/link 包装形状、object/array 递归）；
+ * 本导出仅为兼容 P1 调用方保留，行为与 toOutputValue 完全一致。
+ */
+export function toBaseOutputValue(v: BaseValue): BaseOutputValue {
+  return toOutputValue(v);
+}
+
+/**
+ * Bases 无头执行引擎（设计 §4 公共 API）。
+ *
+ * @example
+ * const engine = new BaseEngine();
+ * const r = engine.query({ basePath: "views/projects.base", dbPath: ".x-basalt/index.db", vaultRoots: ["."] });
+ * engine.close();
+ */
+export class BaseEngine {
+  /** dbPath → 只读连接缓存（同库多次查询复用；close() 统一关闭）。 */
+  private readonly dbs = new Map<string, Db>();
+
+  /** 打开（或复用）索引库只读连接；:memory: 例外（better-sqlite3 限制，仅测试用）。 */
+  private getDb(dbPath: string): Db {
+    let db = this.dbs.get(dbPath);
+    if (db === undefined) {
+      const inMemory = dbPath === ":memory:";
+      // fileMustExist：未建库直接报错，而非静默创建空库给出误导性空结果（同 query/index.ts）。
+      db = new Database(dbPath, { readonly: !inMemory, fileMustExist: !inMemory });
+      this.dbs.set(dbPath, db);
+    }
+    return db;
+  }
+
+  /** 关闭全部缓存连接（幂等）。 */
+  close(): void {
+    for (const db of this.dbs.values()) db.close();
+    this.dbs.clear();
+  }
+
+  /**
+   * 执行一次 .base 查询。不 throw（行级/文档级/预算问题一律经 diagnostics 表达）；
+   * 唯一例外是索引库打不开（fileMustExist）等编程/环境错误，与 DataviewEngine 同口径。
+   */
+  query(options: BaseQueryOptions): BaseQueryResult {
+    const limits: BaseExecutionLimits = { ...DEFAULT_BASE_EXECUTION_LIMITS, ...options.limits };
+
+    // ---- 文档层（诊断顺序 1：文档层）----
+    const doc = loadBaseDocument({
+      basePath: options.basePath,
+      vaultRoots: options.vaultRoots,
+      limits,
+    });
+    const diagnostics: BasaltDiagnostic[] = [...doc.diagnostics];
+    const base = doc.path;
+
+    /** 空结果（error 短路 / 预算耗尽共用）：rows=[]/total=0/columns=[]，诊断全量。 */
+    const emptyResult = (view: string): BaseQueryResult => ({
+      conformance: CONFORMANCE,
+      base,
+      view,
+      columns: [],
+      total: 0,
+      rows: [],
+      diagnostics,
+    });
+
+    // md-only conformance warning：每次查询恒发（成功/短路/预算耗尽路径都发），
+    // 声明附件不作为行的数据集差异（BASE-DATA-001/002）。
+    const pushMarkdownOnly = (): void => {
+      diagnostics.push(
+        baseDiagnostic(
+          base,
+          { line: 1, column: 1 },
+          BASE_RULES.markdownOnlyDataset,
+          "warning",
+          "本次查询为 md-only conformance（bases-markdown-2026-07）：仅 Markdown 笔记作为行，" +
+            "附件（图片/PDF/.base 等）不作为行（BASE-DATA-001/002；all-files 属 P3）",
+          { reason: "markdown_only_dataset" },
+        ),
+      );
+    };
+
+    if (hasError(diagnostics)) {
+      pushMarkdownOnly();
+      return emptyResult(options.view ?? "");
+    }
+
+    // ---- planner（诊断顺序 2：view 选择 + filter 合并 + 表达式编译）----
+    const plan = planBaseQuery(doc, options.view, limits);
+    diagnostics.push(...plan.diagnostics);
+    if (hasError(plan.diagnostics) || plan.view === undefined) {
+      pushMarkdownOnly();
+      return emptyResult(options.view ?? "");
+    }
+    const view = plan.view;
+
+    // ---- 引擎级诊断（顺序 3）：md-only warning + types.json + 默认排序 info ----
+    pushMarkdownOnly();
+
+    // types.json 显式类型表（P2b 片二，BASE-TYPE-001..003，语法 §5.1 第 1 条）。
+    // 每次 query 读一次、不做缓存：文件通常 <1KB，同步读成本远低于一次 SQLite 全表读；
+    // 缓存会引入「vault 内文件已改而表陈旧」的一致性问题（索引监听不覆盖 .obsidian/），
+    // 每次重读保证与 vault 当前状态一致。
+    const typeSchema = loadBaseTypeSchema(options.vaultRoots);
+    diagnostics.push(...typeSchema.diagnostics);
+
+    if (plan.sort.length === 0) {
+      // 无显式 sort：最终按 file.path ASC 稳定排序，避免文件系统遍历顺序漂移（BASE-RESULT-004）。
+      diagnostics.push(
+        baseDiagnostic(
+          base,
+          view.span,
+          BASE_RULES.defaultSortTiebreak,
+          "info",
+          "view 未显式 sort：按 file.path ASC 稳定排序（x-basalt 扩展，非官方 Bases 语义）",
+          { reason: "default_sort_tiebreak" },
+        ),
+      );
+    }
+
+    // ---- 行级诊断收集（顺序 4：source 问题 → filter/sort/投影按行序）----
+    let rowDiagCount = 0;
+    let rowDiagSuppressed = 0;
+    const pushRowDiagnostic = (
+      span: SourceSpan,
+      source: string,
+      info: BaseRowErrorInfo,
+      rowPath: string,
+    ): void => {
+      // 防洪上限：超出只计数，结束后补一条汇总诊断（见模块头）。
+      if (rowDiagCount >= MAX_ROW_DIAGNOSTICS) {
+        rowDiagSuppressed += 1;
+        return;
+      }
+      rowDiagCount += 1;
+      diagnostics.push(
+        baseDiagnostic(
+          base,
+          spanPlusOffset(span, source, info.offset),
+          info.rule,
+          // 行级错误不阻断查询（该行按不通过 / cell 置 null 处理），故 severity=warning。
+          "warning",
+          `${info.message}（行：${rowPath}）`,
+          // 设计 §11：主位置指表达式，target 附行 file.path（原 target 存在时一并保留）。
+          { target: info.target === undefined ? rowPath : `${info.target}（行：${rowPath}）` },
+        ),
+      );
+    };
+    const flushSuppressed = (): void => {
+      if (rowDiagSuppressed > 0) {
+        diagnostics.push(
+          baseDiagnostic(
+            base,
+            view.span,
+            BASE_RULES.propertyTypeMismatch,
+            "warning",
+            `行级诊断超过上限 ${MAX_ROW_DIAGNOSTICS} 条，后续 ${rowDiagSuppressed} 条已省略（防洪）`,
+            { reason: "row_diagnostics_capped" },
+          ),
+        );
+      }
+    };
+
+    /** 预算耗尽统一出口：execution-budget（error）+ 空结果，不返回部分行。 */
+    const budgetFailure = (e: unknown): BaseQueryResult | undefined => {
+      if (!isBaseBudgetError(e)) return undefined;
+      diagnostics.push(
+        baseDiagnostic(
+          base,
+          view.span,
+          BASE_RULES.executionBudget,
+          "error",
+          `执行预算耗尽：${e.message}`,
+          { reason: "execution_budget" },
+        ),
+      );
+      return emptyResult(view.name);
+    };
+
+    // ---- 数据源（source 问题诊断先于求值诊断；maxRows 预算在此截断）----
+    let rows: BaseRow[];
+    try {
+      rows = readBaseRows(this.getDb(options.dbPath), limits, (issue) => {
+        diagnostics.push(
+          baseDiagnostic(
+            base,
+            { line: 1, column: 1 },
+            BASE_RULES.invalidYaml,
+            "warning",
+            issue.message,
+            { target: issue.file, reason: issue.reason },
+          ),
+        );
+      });
+    } catch (e) {
+      const failure = budgetFailure(e);
+      if (failure !== undefined) return failure;
+      throw e;
+    }
+
+    try {
+      // ---- 公式求值接线（P2a 计划「关键取舍」#6）----
+      // 拍板「按需 + 每行缓存」而非「一律按拓扑序求全量」：未被 filter/sort/投影引用到的公式
+      // 不求值、不产生行级诊断（其类型错误不应污染无关查询）；公式体内的 formula.* 递归经同一
+      // accessor，天然按依赖序求值（循环/超深已由 planner 静态拒绝，深度 ≤ maxFormulaDepth）。
+      // 拓扑序（plan.formulaOrder）在 planner 用于循环/深度校验，求值侧无需再按序驱动。
+      const hasFormulas = plan.formulaOrder.length > 0;
+      const formulaAccessors = new WeakMap<BaseRow, { get(name: string): BaseValue }>();
+      const formulaAccessorFor = (row: BaseRow): { get(name: string): BaseValue } | undefined => {
+        if (!hasFormulas) return undefined;
+        let acc = formulaAccessors.get(row);
+        if (acc === undefined) {
+          // 每行每公式至多求值一次（Map 缓存）；BaseValue 域不含 undefined，get 命中即有效缓存。
+          const cache = new Map<string, BaseValue>();
+          acc = {
+            get: (name: string): BaseValue => {
+              const hit = cache.get(name);
+              if (hit !== undefined) return hit;
+              const def = plan.formulas[name];
+              // 未定义公式名已由 planner 静态拒绝（unknown-property error 短路）；此处防御兜底。
+              if (def === undefined) return MISSING;
+              const value = evaluateExpression(def.ast, row, {
+                limits,
+                ...(options.clock !== undefined ? { clock: options.clock } : {}),
+                formulas: acc as { get(name: string): BaseValue },
+                propertyTypes: typeSchema.table,
+                onRowError: (info) => pushRowDiagnostic(def.span, def.source, info, row.file.path),
+              });
+              cache.set(name, value);
+              return value;
+            },
+          };
+          formulaAccessors.set(row, acc);
+        }
+        return acc;
+      };
+
+      // ---- filter：逐行求值合并 filter（无 filter 全量通过；行级错误该行按不通过处理）----
+      const filtered = rows.filter((row) => {
+        if (plan.filter === undefined) return true;
+        return evalFilter(plan.filter, row, limits, pushRowDiagnostic, {
+          clock: options.clock,
+          formulas: formulaAccessorFor(row),
+          propertyTypes: typeSchema.table,
+        });
+      });
+
+      // ---- sort keys：逐行求值（行级错误 → MISSING 键，sortKeyCompare 恒排最后组）----
+      const decorated = filtered.map((row) => ({
+        row,
+        keys: plan.sort.map((s) =>
+          evaluateExpression(s.ast, row, {
+            limits,
+            ...(options.clock !== undefined ? { clock: options.clock } : {}),
+            ...(formulaAccessorFor(row) !== undefined
+              ? { formulas: formulaAccessorFor(row) as { get(name: string): BaseValue } }
+              : {}),
+            propertyTypes: typeSchema.table,
+            onRowError: (info) => pushRowDiagnostic(view.span, s.property, info, row.file.path),
+          }),
+        ),
+      }));
+
+      // 多键稳定比较（sortKeyCompare 恒 ASC 语义，DESC 由方向取反）；
+      // 最终恒附 file.path ASC tie-break（计划「关键取舍」#11：含显式 sort 的场景也兜底，
+      // 保证全键相等时结果仍字节稳定）。
+      decorated.sort((a, b) => {
+        for (let i = 0; i < plan.sort.length; i += 1) {
+          const c = sortKeyCompare(a.keys[i] as BaseValue, b.keys[i] as BaseValue);
+          if (c !== 0) {
+            return (plan.sort[i] as { direction: "ASC" | "DESC" }).direction === "DESC" ? -c : c;
+          }
+        }
+        const pa = a.row.file.path;
+        const pb = b.row.file.path;
+        return pa < pb ? -1 : pa > pb ? 1 : 0;
+      });
+
+      // ---- limit：total = filter 后 limit 前行数（limit=0 → rows=[] 但 total 正确）----
+      const total = decorated.length;
+      const limited = plan.limit === undefined ? decorated : decorated.slice(0, plan.limit);
+
+      // ---- 投影：逐行逐列求值并序列化（行级错误 → 该 cell null + 诊断，同行级口径）----
+      const outRows = limited.map(({ row }) => {
+        const out: Record<string, BaseOutputValue> = {};
+        for (let i = 0; i < plan.columns.length; i += 1) {
+          const column = plan.columns[i] as string;
+          // columnExprs 与 columns 一一对应（planner 保证任一失败即整体 error 短路，此处必存在）。
+          const value = evaluateExpression(
+            plan.columnExprs[i] as (typeof plan.columnExprs)[number],
+            row,
+            {
+              limits,
+              ...(options.clock !== undefined ? { clock: options.clock } : {}),
+              ...(formulaAccessorFor(row) !== undefined
+                ? { formulas: formulaAccessorFor(row) as { get(name: string): BaseValue } }
+                : {}),
+              propertyTypes: typeSchema.table,
+              onRowError: (info) => pushRowDiagnostic(view.span, column, info, row.file.path),
+            },
+          );
+          // P2a：序列化走 toOutputValue（typed values 真相源）；P1 形状行为不回归。
+          out[column] = toOutputValue(value);
+        }
+        return out;
+      });
+
+      // ---- groupBy（P2b 片三，计划「关键取舍」#9，BASE-GROUP-001）----
+      // 作用于 limit 后行集（= 顶层 rows 同一集合，向后兼容：顶层 rows 平铺行为不变）。
+      let groups: { key: BaseOutputValue; rows: Record<string, BaseOutputValue>[] }[] | undefined;
+      if (plan.groupBy !== undefined) {
+        const groupBy = plan.groupBy;
+        // 分组键逐行求值（行级错误 → MISSING 键；公式/时钟/类型表同 sort 键求值接线）。
+        const keys = limited.map(({ row }) =>
+          evaluateExpression(groupBy.ast, row, {
+            limits,
+            ...(options.clock !== undefined ? { clock: options.clock } : {}),
+            ...(formulaAccessorFor(row) !== undefined
+              ? { formulas: formulaAccessorFor(row) as { get(name: string): BaseValue } }
+              : {}),
+            propertyTypes: typeSchema.table,
+            onRowError: (info) =>
+              pushRowDiagnostic(view.span, groupBy.property, info, row.file.path),
+          }),
+        );
+        // GROUP-002（暂定，待 oracle）：list/link（多值）分组键 → base/unsupported-feature
+        // （error）+ 空结果，与空 filter 数组同款拒绝口径，不猜官方语义。
+        if (keys.some((k) => Array.isArray(k) || isLinkValue(k))) {
+          flushSuppressed();
+          diagnostics.push(
+            baseDiagnostic(
+              base,
+              view.span,
+              BASE_RULES.unsupportedFeature,
+              "error",
+              `groupBy 分组键为 list/link（多值）暂不支持（GROUP-002 暂定，待官方 oracle 冻结）`,
+              { target: groupBy.property, reason: "list_group_key" },
+            ),
+          );
+          return emptyResult(view.name);
+        }
+        // 分桶：typedEqual 相等即同组（MISSING 只等于 MISSING，故 missing 键与显式 null 键
+        // 各自成组——序列化后 key 同为 null，读侧以组序区分；暂定口径，注释存证）。
+        // 比较/迭代经 spendGroup 扣 maxOperations（防大行数 × 多组 O(n·g) 耗尽）。
+        let groupOps = 0;
+        const spendGroup = (): void => {
+          groupOps += 1;
+          if (groupOps > limits.maxOperations) {
+            throw new BaseBudgetError(
+              `groupBy 分桶比较次数超过预算上限 ${limits.maxOperations}（防资源耗尽）`,
+            );
+          }
+        };
+        const buckets: { key: BaseValue; rowIdx: number[] }[] = [];
+        keys.forEach((key, i) => {
+          spendGroup();
+          const hit = buckets.find((b) => {
+            spendGroup();
+            return typedEqual(b.key, key);
+          });
+          if (hit !== undefined) hit.rowIdx.push(i);
+          else buckets.push({ key, rowIdx: [i] });
+        });
+        // 组序：组键 sortKeyCompare（恒 ASC 语义，DESC 整体取反——沿用顶层 sort 的既有口径，
+        // null/MISSING/不可比键在同 rank 组内按首现序稳定）；桶内行序 = limited 顺序
+        // （= view sort + file.path tie-break，与顶层 rows 同一比较器结果）。
+        buckets.sort((a, b) => {
+          const c = sortKeyCompare(a.key, b.key);
+          return groupBy.direction === "DESC" ? -c : c;
+        });
+        groups = buckets.map((b) => ({
+          key: toOutputValue(b.key),
+          rows: b.rowIdx.map((i) => outRows[i] as Record<string, BaseOutputValue>),
+        }));
+      }
+
+      // ---- summaries（P2b 片三，计划「关键取舍」#10/#11，BASE-SUM-001 / SUM-002 暂定）----
+      // 计算集 = filter 后 limit 前全量（暂定口径）；groupBy 同现时仍按全量集计算一份——
+      // 组级汇总属官方 UI 形态，无头 JSON 暂不做，注释标注。
+      let summariesOut: Record<string, BaseOutputValue> | undefined;
+      if (plan.summaries.length > 0) {
+        summariesOut = {};
+        // 汇总迭代/比较预算（Unique 的 O(n²) 去重等；与求值侧 maxOperations 同一上限）。
+        let sumOps = 0;
+        const spendSummary = (): void => {
+          sumOps += 1;
+          if (sumOps > limits.maxOperations) {
+            throw new BaseBudgetError(
+              `summaries 计算迭代/比较次数超过预算上限 ${limits.maxOperations}（防资源耗尽）`,
+            );
+          }
+        };
+        for (const s of plan.summaries) {
+          // 目标列逐行求值（行级错误 → MISSING 进列表，由内置口径跳过/Empty 计数）。
+          const values = filtered.map((row) =>
+            evaluateExpression(s.ast, row, {
+              limits,
+              ...(options.clock !== undefined ? { clock: options.clock } : {}),
+              ...(formulaAccessorFor(row) !== undefined
+                ? { formulas: formulaAccessorFor(row) as { get(name: string): BaseValue } }
+                : {}),
+              propertyTypes: typeSchema.table,
+              onRowError: (info) => pushRowDiagnostic(view.span, s.property, info, row.file.path),
+            }),
+          );
+          const builtin = BUILTIN_SUMMARIES.get(s.name);
+          if (builtin !== undefined) {
+            summariesOut[s.property] = toOutputValue(
+              runBuiltinSummary(builtin, values, spendSummary),
+            );
+            continue;
+          }
+          // 顶层自定义汇总（SUM-002 暂定）：隐式 values 作用域 = 目标列跨行**非空**值列表
+          // （null/MISSING 剔除，与内置「空值跳过」口径对齐——mean 等 list 聚合遇空值即类型
+          // 错误，剔除后官方示例 values.mean().round(3) 可用）；无行上下文：values 之外
+          // note/file 属性为 MISSING（禁止访问行外状态，见 evaluator EvalContext.summaryValues）。
+          const custom = plan.customSummaries[s.name] as CompiledCustomSummary; // 名字合法性 planner 已核验
+          const scopeValues = values.filter((v) => v !== MISSING && v !== null);
+          const value = evaluateExpression(custom.ast, SUMMARY_ROW, {
+            limits,
+            ...(options.clock !== undefined ? { clock: options.clock } : {}),
+            summaryValues: scopeValues,
+            onRowError: (info) =>
+              pushRowDiagnostic(custom.span, custom.source, info, `汇总 ${s.name}`),
+          });
+          summariesOut[s.property] = toOutputValue(value);
+        }
+      }
+
+      flushSuppressed();
+      return {
+        conformance: CONFORMANCE,
+        base,
+        view: view.name,
+        columns: plan.columns,
+        total,
+        rows: outRows,
+        ...(groups !== undefined ? { groups } : {}),
+        ...(summariesOut !== undefined ? { summaries: summariesOut } : {}),
+        diagnostics,
+      };
+    } catch (e) {
+      const failure = budgetFailure(e);
+      if (failure !== undefined) return failure;
+      throw e;
+    }
+  }
+}
+
+/**
+ * 求值编译后 filter 树于一行（深度已被文档层 maxFilterDepth 限住，递归安全）。
+ * - expr：evaluateExpression 返回值的 truthy（行级错误 → MISSING → false，该行不通过）；
+ * - and：全部通过（短路）；or：任一通过（短路）；
+ * - not：不满足其中任何一项 = NOT(child1 OR child2 ...)（设计 §6）。
+ * BaseBudgetError 不在此吞掉，继续上抛（engine 转 execution-budget + 空结果）。
+ * P2a：extras 透传注入时钟与公式 accessor（filter 中可引用 formula.* / today()/now()）。
+ * P2b：extras 透传 types.json 显式类型表（note 属性读取升级链首，见 evaluator.ts）。
+ */
+function evalFilter(
+  node: CompiledFilter,
+  row: BaseRow,
+  limits: BaseExecutionLimits,
+  pushRowDiagnostic: (
+    span: SourceSpan,
+    source: string,
+    info: BaseRowErrorInfo,
+    rowPath: string,
+  ) => void,
+  extras: {
+    clock?: () => Date;
+    formulas?: { get(name: string): BaseValue };
+    propertyTypes?: Record<string, string>;
+  } = {},
+): boolean {
+  switch (node.kind) {
+    case "expr": {
+      const value = evaluateExpression(node.ast, row, {
+        limits,
+        ...(extras.clock !== undefined ? { clock: extras.clock } : {}),
+        ...(extras.formulas !== undefined ? { formulas: extras.formulas } : {}),
+        ...(extras.propertyTypes !== undefined ? { propertyTypes: extras.propertyTypes } : {}),
+        onRowError: (info) => pushRowDiagnostic(node.span, node.source, info, row.file.path),
+      });
+      return truthy(value);
+    }
+    case "and":
+      return node.children.every((child) =>
+        evalFilter(child, row, limits, pushRowDiagnostic, extras),
+      );
+    case "or":
+      return node.children.some((child) =>
+        evalFilter(child, row, limits, pushRowDiagnostic, extras),
+      );
+    case "not":
+      return !node.children.some((child) =>
+        evalFilter(child, row, limits, pushRowDiagnostic, extras),
+      );
+  }
+}
