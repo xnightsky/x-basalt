@@ -1,0 +1,35 @@
+# oracle 争议语义⑦⑧：list/tag 分组键一行多组（GROUP-002）与自定义 summary 的 values 边界（SUM-002）
+# 样本：CaseF（tags=[project,area]、scores=[1,2,3]）、CaseB/C（sortable=1/2）。
+# 观察：list 键分组是一行多组还是拒绝/首元素；values 是否含 null/missing、是否仅当前结果集目标列。
+summaries:
+  meanOfValues: values.mean()
+views:
+  - type: table
+    name: group-by-tags
+    groupBy:
+      property: file.tags
+      direction: ASC
+    order:
+      - file.name
+  - type: table
+    name: group-by-list-prop
+    groupBy:
+      property: scores
+      direction: ASC
+    order:
+      - file.name
+  - type: table
+    name: summary-custom
+    order:
+      - file.name
+      - sortable
+    summaries:
+      sortable: meanOfValues
+  - type: table
+    name: summary-custom-limited
+    limit: 1
+    order:
+      - file.name
+      - sortable
+    summaries:
+      sortable: meanOfValues

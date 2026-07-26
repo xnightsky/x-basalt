@@ -1,0 +1,14 @@
+# oracle 争议语义③：if() 是否 lazy branch（设计 §9）
+# 未选分支 `1 < "x"` 是确定性的类型错误：若官方 eager 求值，应观察到错误/诊断/结果污染；
+# 若 lazy，view 应正常返回全部行且列值恒为 "ok"。
+views:
+  - type: table
+    name: if-lazy
+    filters: if(true, "ok", 1 < "x") == "ok"
+    order:
+      - file.name
+  - type: table
+    name: if-lazy-false-branch
+    filters: if(false, 1 < "x", "fallback") == "fallback"
+    order:
+      - file.name

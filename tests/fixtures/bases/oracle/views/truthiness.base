@@ -1,0 +1,44 @@
+# oracle 争议语义①：missing / 显式 null / 空串 / 0 / false / 空列表的 truthiness 与 equality（BASE-PROP-004）
+# 每个 view 一个裸属性条件，逐形态观察官方 truthiness；eq-* 观察 missing/null 的 == 合并。
+# 样本：CaseA（六形态显式值）/ CaseB、CaseC（这些属性缺失）/ CaseD（全缺）。
+views:
+  - type: table
+    name: truthy-missing
+    filters: missing_prop
+    order:
+      - file.name
+  - type: table
+    name: truthy-explicit-null
+    filters: explicit_null
+    order:
+      - file.name
+  - type: table
+    name: truthy-empty-string
+    filters: empty_str
+    order:
+      - file.name
+  - type: table
+    name: truthy-zero
+    filters: zero
+    order:
+      - file.name
+  - type: table
+    name: truthy-false
+    filters: false_prop
+    order:
+      - file.name
+  - type: table
+    name: truthy-empty-list
+    filters: empty_list
+    order:
+      - file.name
+  - type: table
+    name: eq-missing-null
+    filters: missing_prop == null
+    order:
+      - file.name
+  - type: table
+    name: eq-explicit-null-null
+    filters: explicit_null == null
+    order:
+      - file.name

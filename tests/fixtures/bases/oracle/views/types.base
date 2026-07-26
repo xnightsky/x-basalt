@@ -1,0 +1,32 @@
+# oracle 争议语义⑤⑥：date vs datetime 比较（BASE-TYPE-005）与 frontmatter wikilink → Link（BASE-TYPE-006）
+# 样本：CaseE（due="2026-07-27"、created="2026-07-01T10:30:00"、related="[[CaseB]]"）。
+# 观察：date 与 datetime 跨精度 == /< 的官方口径；wikilink 字符串是否成 Link 值、
+# `related == "[[CaseB]]"` 与裸字符串比较是否命中、投影呈现形态。
+views:
+  - type: table
+    name: date-eq-literal
+    filters: due == "2026-07-27"
+    order:
+      - file.name
+      - due
+  - type: table
+    name: date-lt-datetime
+    filters: due < created
+    order:
+      - file.name
+  - type: table
+    name: datetime-lt-date
+    filters: created < due
+    order:
+      - file.name
+  - type: table
+    name: link-eq-wikilink
+    filters: related == "[[CaseB]]"
+    order:
+      - file.name
+      - related
+  - type: table
+    name: link-projection
+    order:
+      - file.name
+      - related
