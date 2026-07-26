@@ -3,7 +3,7 @@
   // SkillRecall 召回自身用法，方便 AI / 使用者无需外部文档即可学会驱动本工具。
   // 与 obsidian-base-spec 一样由 loader 列为「始终可召回」内置兜底。完整版见 docs/guides/usage.md。
   name: "core",
-  description: "x-basalt CLI 自我说明书：parse/index/scan/query/skills/meta/watch/run/chat 各命令用法、变更编排管道、可选 AI 的自然语言 chat、DQL 子集、项目配置与示例。",
+  description: "x-basalt CLI 自我说明书：parse/index/scan/query/base/skills/meta/watch/run/chat 各命令用法、.base view 无头查询、变更编排管道、可选 AI 的自然语言 chat、DQL 子集、项目配置与示例。",
   triggers: [
     "usage",
     "help",
@@ -89,6 +89,7 @@
     "x-basalt parse <file>",
     "x-basalt index <vault> --db <path>",
     "x-basalt query <dql> --db <path>",
+    "x-basalt base <file.base> --vault <path> [--view <name>]",
     "x-basalt skills get <name>",
     "x-basalt meta set <file> <key> <value>",
     "x-basalt watch <vault> --on-change <cmd>",
@@ -97,8 +98,8 @@
   ],
   rules: [
     {
-      pattern: "x-basalt <parse|index|scan|query|skills|meta|watch|run>",
-      description: "零依赖 Obsidian 运行时的 Vault 工具。典型流程：index 建库 → query 查询；parse 看单文件 AST；scan 增量重扫；skills 召回规范；meta 读改 frontmatter（唯一写侧）；watch 监听增量；run 按声明式管道（源→去重→路由→动作链）处理一批变更。开发态 `pnpm run cli -- <command>`，构建后 `node dist/cli.js <command>`。出错统一打印 ✗ 并退出码 1。",
+      pattern: "x-basalt <parse|index|scan|query|base|skills|meta|watch|run>",
+      description: "零依赖 Obsidian 运行时的 Vault 工具。典型流程：index 建库 → query 查询；parse 看单文件 AST；scan 增量重扫；base 跑 .base view 无头查询；skills 召回规范；meta 读改 frontmatter（唯一写侧）；watch 监听增量；run 按声明式管道（源→去重→路由→动作链）处理一批变更。开发态 `pnpm run cli -- <command>`，构建后 `node dist/cli.js <command>`。出错统一打印 ✗ 并退出码 1。",
       examples: [
         "pnpm install && pnpm run build",
         "pnpm run cli -- index ./vault --db ./index.db",
@@ -139,6 +140,14 @@
       examples: [
         "x-basalt query 'TABLE count() FROM \"\" GROUP BY file.extension' --db ./index.db",
         "x-basalt query 'LIST FROM \"\"' --size 100 --offset 100 --db ./index.db",
+      ],
+    },
+    {
+      pattern: "base <file.base> [--view <name>] [--vault <path...>] [--db <path>] [--format json|yaml]",
+      description: "Bases 无头查询（conformance bases-markdown-2026-07）：对索引中的 Markdown 笔记执行 .base view，输出稳定 JSON { conformance, base, view, columns, total, rows, diagnostics }；total=filter 后 limit 前行数，未显式 sort 按 file.path 稳定序（附 info 诊断），md-only 数据集恒发 base/markdown-only-dataset warning（附件不为行）。退出码：diagnostics 含任一 error → 1（仍输出完整 JSON、rows 为空），仅 warning/info → 0。子集：table view 的 filters/order/sort/limit、递归 and/or/not、表达式 ==/&&/||/! 与白名单函数（if/list/number、string/list/object/file 方法）；Bases 表达式不是 DQL。inline fields 不进 Bases 属性。详见 docs/guides/querying-bases.md。",
+      examples: [
+        "x-basalt base views/projects.base --vault ./my-vault",
+        "x-basalt base views/projects.base --view Active --vault ./my-vault --db ./index.db",
       ],
     },
     {

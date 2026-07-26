@@ -29,6 +29,7 @@ import { runLinksCheck, runLinksSuggest } from "./links/index.js";
 import { renderHuman } from "./links/report.js";
 import { runLint } from "./lint/index.js";
 import { renderHuman as renderLintHuman } from "./lint/report.js";
+import { BaseEngine } from "./base/index.js";
 import { DataviewEngine } from "./query/index.js";
 import { SkillRecall } from "./skill/index.js";
 import { renderSkill, renderSkillList, renderSkills } from "./skill/render.js";
@@ -405,6 +406,47 @@ program
       engine.close();
     }
   });
+
+program
+  .command("base")
+  .description("执行 .base view 查询（Bases 无头引擎 P1；稳定 JSON 契约，不渲染表格）")
+  .argument("<file>", ".base 文件路径（vault 相对或绝对）")
+  .option("--view <name>", "指定 view 名（缺省取 views[0]）")
+  .option(
+    "--vault <path>",
+    "Vault 目录（可多个，重复 --vault；可回退配置 vault）",
+    collectVault,
+    [] as string[],
+  )
+  .option("--db <path>", "SQLite 索引文件路径（默认 .x-basalt/index.db，可由配置 db 覆盖）")
+  .option("--format <fmt>", "输出格式 json|yaml（默认 json，可由配置 format 覆盖）")
+  .action(
+    (
+      file: string,
+      opts: { view?: string; vault: string[]; db?: string; format?: string },
+    ) => {
+      // 薄出口（设计 §15 API 先于 CLI）：只装配，业务逻辑全在 BaseEngine。
+      // vaultRoots 非空是 SEC-008 路径防线的前置（.base 必须落在 vault 内）。
+      const vaultInput = requireVault(
+        opts.vault,
+        config.vault,
+        "需要 --vault 参数或在配置文件中设置 vault",
+      );
+      const vaultRoots = Array.isArray(vaultInput) ? vaultInput : [vaultInput];
+      const dbPath = opts.db ?? config.db ?? DEFAULT_DB;
+      const engine = new BaseEngine();
+      try {
+        const result = engine.query({ basePath: file, view: opts.view, dbPath, vaultRoots });
+        // JSON 即契约：BaseQueryResult 原样 emit（含 error 结果），不裁剪字段。
+        emit(result, opts.format ?? config.format ?? "json");
+        // 退出码策略：设计 §11 留给薄出口计划拍板——diagnostics 含任一 error 级 → 1；
+        // 仅 warning/info（如 md-only 恒发 warning）→ 0。query() 不 throw，此处是唯一判定点。
+        if (result.diagnostics.some((d) => d.severity === "error")) process.exitCode = 1;
+      } finally {
+        engine.close();
+      }
+    },
+  );
 
 const skills = program
   .command("skills")
