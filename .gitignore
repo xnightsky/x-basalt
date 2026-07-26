@@ -101,3 +101,5 @@ AGENTS.local.md
 .claude/skills/
 .claude/commands/
 .agents/skills/
+.pi/
+.pi-*/
