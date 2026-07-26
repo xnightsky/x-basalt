@@ -1,0 +1,11 @@
+# FORM-005 fixture：`status + 1` 对字符串 status 行产运行时类型错误（行级 warning + cell null），
+# 对 Numeric.md（status: 7）正常求值 8——「其余行正常」对照。
+formulas:
+  bad: status + 1
+views:
+  - type: table
+    name: main
+    order:
+      - file.name
+      - status
+      - formula.bad

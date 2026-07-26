@@ -1,0 +1,4 @@
+# 根目录 .base：作为「非 Markdown 文件」存在即可，断言不出现在任何查询行中（BASE-DATA-002）
+views:
+  - type: table
+    name: standalone

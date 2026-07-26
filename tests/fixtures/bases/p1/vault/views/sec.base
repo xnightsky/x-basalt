@@ -1,0 +1,11 @@
+# 安全对抗：SQL 注入串 / 恶意属性名 / 原型键——一律只按普通值处理，不进 SQL、不触原型
+views:
+  - type: table
+    name: injection
+    filters: "status == \"x' OR '1'='1'\""
+  - type: table
+    name: evil-prop
+    filters: 'note[''a"; DROP TABLE files;--''] == 1'
+  - type: table
+    name: proto
+    filters: 'file.hasProperty("__proto__")'

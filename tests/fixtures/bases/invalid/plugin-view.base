@@ -1,0 +1,4 @@
+# BASE-DOC-007：未知/插件 view type → base/unsupported-view-type（不按 table 猜测）
+views:
+  - type: kanban
+    name: Board

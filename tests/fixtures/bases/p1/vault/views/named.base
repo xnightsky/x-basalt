@@ -1,0 +1,7 @@
+# 命名 view：默认 all（无 filter）+ 命名 active（带 filter），BASE-VIEW-002 用例
+views:
+  - type: table
+    name: all
+  - type: table
+    name: active
+    filters: 'status == "active"'

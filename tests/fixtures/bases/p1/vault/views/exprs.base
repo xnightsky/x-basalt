@@ -1,0 +1,23 @@
+# 表达式运算符 / 优先级 / string 方法 / list 方法 / 全局函数（number/list/if-lazy）
+views:
+  - type: table
+    name: cmp-num
+    filters: 'priority >= 2'
+  - type: table
+    name: cmp-str
+    filters: 'file.name > "A.md" && file.name < "C.md"'
+  - type: table
+    name: logic-paren
+    filters: '!(status == "active") && type == "area"'
+  - type: table
+    name: str-methods
+    filters: 'status.startsWith("act") && status.endsWith("tive")'
+  - type: table
+    name: list-ops
+    filters: 'file.tags.contains("area")'
+  - type: table
+    name: globals
+    filters: 'number("2") == 2 && list(1, 2).contains(2)'
+  - type: table
+    name: if-lazy
+    filters: 'if(true, status == "active", priority > "x")'

@@ -1,0 +1,9 @@
+# BASE-DOC-001：最小合法 .base（单个 table view，首 view 即默认 view）
+filters: status == "active"
+views:
+  - type: table
+    name: All
+    limit: 10
+    order:
+      - file.name
+      - status

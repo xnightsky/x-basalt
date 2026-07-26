@@ -1,0 +1,35 @@
+# P2b 片三 BASE-GROUP-001 fixture：标量分组键 + 组序（ASC/DESC）+ 组内稳定顺序。
+# 组内行序 = view sort（priority DESC）+ file.path tie-break；顶层 rows 平铺行为不变。
+views:
+  - type: table
+    name: byStatusAsc
+    order:
+      - file.name
+      - status
+      - priority
+    sort:
+      - property: priority
+        direction: DESC
+    groupBy:
+      property: status
+      direction: ASC
+  - type: table
+    name: byStatusDesc
+    order:
+      - file.name
+      - status
+    sort:
+      - property: priority
+        direction: DESC
+    groupBy:
+      property: status
+      direction: DESC
+  # 无显式 sort：组内按 file.path ASC（default-sort-tiebreak info 照常）
+  - type: table
+    name: byStatusDescNoSort
+    order:
+      - file.name
+      - status
+    groupBy:
+      property: status
+      direction: DESC

@@ -1,0 +1,34 @@
+# 属性引用形态：裸属性 / note. 前缀 / note["带空格"] / Unicode 属性 / file.properties 对象
+views:
+  - type: table
+    name: bare
+    filters: 'status == "active"'
+    order:
+      - file.name
+      - status
+  - type: table
+    name: prefixed
+    filters: 'note.status == "active"'
+    order:
+      - file.name
+      - note.status
+  - type: table
+    name: spaced
+    filters: 'note["Review Status"] == "done"'
+    order:
+      - file.name
+      - 'note["Review Status"]'
+  - type: table
+    name: unicode
+    filters: '状态 == "启用"'
+    order:
+      - file.name
+      - 状态
+    sort:
+      - property: 状态
+        direction: ASC
+  - type: table
+    name: props-object
+    filters: 'file.name == "Alpha.md"'
+    order:
+      - file.properties

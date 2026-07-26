@@ -1,0 +1,7 @@
+# global filter + view filter 外层 AND 合并，BASE-VIEW-003 用例
+# global：status active（4 行）；view：priority >= 2（4 行）；合并后 3 行（Alpha priority=1 被排除）
+filters: 'status == "active"'
+views:
+  - type: table
+    name: merged
+    filters: 'priority >= 2'

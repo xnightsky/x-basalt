@@ -1,0 +1,5 @@
+# BASE-DOC-006：未知顶层 key（warning + 保留原值，不影响已知字段执行）
+x-custom: keep-me
+views:
+  - type: table
+    name: All

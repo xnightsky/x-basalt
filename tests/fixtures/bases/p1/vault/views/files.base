@@ -1,0 +1,35 @@
+# file 字段与 file 方法：fields/inFolder/hasTag/hasProperty/hasLink（bare/qualified/embed）
+views:
+  - type: table
+    name: fields
+    filters: 'file.name == "Alpha.md"'
+    order:
+      - file.path
+      - file.name
+      - file.basename
+      - file.folder
+      - file.ext
+      - file.size
+      - file.ctime
+      - file.mtime
+  - type: table
+    name: infolder
+    filters: 'file.inFolder("Projects")'
+  - type: table
+    name: hastag
+    filters: 'file.hasTag("area")'
+  - type: table
+    name: hastag-nested
+    filters: 'file.hasTag("area/x")'
+  - type: table
+    name: hasproperty
+    filters: 'file.hasProperty("status")'
+  - type: table
+    name: haslink-bare
+    filters: 'file.hasLink("Beta")'
+  - type: table
+    name: haslink-qualified
+    filters: 'file.hasLink("Projects/Gamma")'
+  - type: table
+    name: haslink-embed
+    filters: 'file.hasLink("assets/cover.png")'

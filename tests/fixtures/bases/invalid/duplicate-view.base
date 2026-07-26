@@ -1,0 +1,6 @@
+# BASE-DOC-004：两个同名 view（拒绝歧义选择）
+views:
+  - type: table
+    name: All
+  - type: table
+    name: All

@@ -1,0 +1,9 @@
+{
+  "types": {
+    "rating": "number",
+    "due": "date",
+    "done": "checkbox",
+    "tags": "tags",
+    "version": "text"
+  }
+}

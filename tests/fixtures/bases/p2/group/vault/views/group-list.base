@@ -1,0 +1,10 @@
+# P2b 片三 GROUP-002（暂定，待 oracle）fixture：list/tag 分组键 → base/unsupported-feature + 空结果。
+views:
+  - type: table
+    name: byTags
+    order:
+      - file.name
+      - tags
+    groupBy:
+      property: tags
+      direction: ASC

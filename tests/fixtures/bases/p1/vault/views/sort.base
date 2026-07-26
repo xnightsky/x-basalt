@@ -1,0 +1,22 @@
+# 多键 sort（优先级 + 方向）与单键 sort 稳定 tie-break（file.path ASC 兜底）
+views:
+  - type: table
+    name: multi
+    filters: 'type == "project"'
+    order:
+      - file.name
+      - priority
+    sort:
+      - property: priority
+        direction: DESC
+      - property: file.name
+        direction: ASC
+  - type: table
+    name: stable
+    filters: 'type == "project"'
+    order:
+      - file.path
+      - priority
+    sort:
+      - property: priority
+        direction: ASC

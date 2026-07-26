@@ -1,0 +1,11 @@
+# 递归 and/or/not：status inactive|pending 且不是 project → 仅 Beta，BASE-VIEW-004 用例
+views:
+  - type: table
+    name: logic
+    filters:
+      and:
+        - or:
+            - 'status == "inactive"'
+            - 'status == "pending"'
+        - not:
+            - 'type == "project"'

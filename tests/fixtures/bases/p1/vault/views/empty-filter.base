@@ -1,0 +1,6 @@
+# 空 filter 数组（and: []）：语义待官方 oracle 冻结，P1 直接拒绝（base/unsupported-feature）
+filters:
+  and: []
+views:
+  - type: table
+    name: empty
