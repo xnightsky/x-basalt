@@ -167,6 +167,8 @@ fixture 要求：
 6. 人工审查后转成 x-basalt 期望快照；原始 App 输出不是本项目公共 API。
 7. oracle 无法稳定重放的场景标 `implementation-defined`，不得靠单次观察冻结强结论。
 
+> 逐步操作手册（fixture vault + 逐 view 步骤 + 观察记录表）：[`2026-07-27-bases-oracle-runbook.md`](2026-07-27-bases-oracle-runbook.md)。
+
 优先需要 oracle 的编号：`BASE-PROP-004`、`BASE-RESULT-002`、`BASE-TYPE-004/005/006`、`BASE-GROUP-002`、`BASE-CTX-*`。
 
 ## 9. 阶段验收门

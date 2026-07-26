@@ -8,6 +8,7 @@
 
 ### Added
 
+- **Bases 无头引擎（`src/base/`）+ `base` 命令** —— 无 GUI、无 Obsidian 运行时执行 `.base` view 查询（conformance `bases-markdown-2026-07`）：独立 Chevrotain 表达式文法（与 DQL token/AST 零共用）、递归 `and`/`or`/`not` filter、note/file 属性、白名单函数（string/list/object/file/time/number）、`order`/`sort`/`limit`、稳定 JSON 契约（`total` 为 limit 前行数、`file.path` 稳定 tie-break、字节稳定）、执行预算（文档/深度/节点/行数/集合/操作数硬上限）。P2 增量：`formulas`（依赖图拓扑 + `base/formula-cycle`）、算术与 duration 字面量、Date/Duration/Link 值、`today`/`now`（clock 注入）、list 高阶（`filter`/`map`/`reduce`/`flat`/`sort`/`unique`/`join`/`mean`）、`.obsidian/types.json` 可选只读、view `groupBy`（`groups` 增量字段）与 15 内置汇总 + 自定义 `values` 汇总。数据集 md-only（恒发 `base/markdown-only-dataset` warning；附件不为行）；官方争议语义为暂定口径，待串行 oracle 冻结。
 - **`meta` 命令 —— 首个写侧能力**（只改 frontmatter、正文逐字节不动）：`get` / `set` / `unset` / `rename`；`normalize` 归一（tags/aliases/cssclasses 列表化、tags 去 `#`、去重、单数键→复数键迁移）；`profile list` / `show` 与 `apply <profile>`（内置 `pkm-note` / `llm-wiki` / `ssg-blog` 三套策略：机械补 created/modified/sha256 + `--set` 补语义 + 收尾自动归一）。YAML 往返保键序/注释、原子写、幂等、`--dry-run`、非法 YAML 拒写。
 - **`scan` 命令** —— 无常驻 watcher 的按需增量重索引：diff 文件系统 vs 库、只重扫变化的（`--rehash` 按内容、`--dry-run`、`--json`）。
 - **`skills` 子命令扩展**：`get <name>`（按名取整篇）、`get --all`、`path [name]`；所有读子命令支持 `--json`（默认输出人类 / AI 可读 Markdown）。

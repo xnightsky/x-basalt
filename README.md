@@ -12,6 +12,7 @@
 | `index` | 全量扫描 Vault → 单文件 SQLite 索引                                                                                               |
 | `scan`  | **按需增量重索引**：diff 文件系统 vs 库，只重扫新增/改动/删除（无需常驻进程）                                                     |
 | `query` | 自建 Dataview（DQL）子集 → 参数化 SQL → JSON 结果                                                                                 |
+| `base`  | `.base` view 无头查询（Bases Markdown conformance 2026-07）→ 稳定 JSON                                                            |
 | `skill` | 加载规范知识库，Fuse.js 模糊召回 Obsidian / DQL 语法                                                                              |
 | `watch` | chokidar 常驻监听，实时增量更新 + 变更联动命令                                                                                    |
 
@@ -44,7 +45,7 @@ x-basalt skills get obsidian-base-spec                      # 召回语法规范
 
 **[`docs/guides/usage.md`](docs/guides/usage.md)** 是教程总目录，分章覆盖：
 
-- [安装与运行](docs/guides/installation.md) · [命令参考](docs/guides/commands.md) · [DQL 查询指南](docs/guides/querying-dql.md)
+- [安装与运行](docs/guides/installation.md) · [命令参考](docs/guides/commands.md) · [DQL 查询指南](docs/guides/querying-dql.md) · [Bases 查询指南](docs/guides/querying-bases.md)
 - [索引与同步](docs/guides/indexing-and-sync.md) · [配置与基目录](docs/guides/configuration.md) · [Obsidian 语法](docs/guides/obsidian-syntax.md)
 - [与 AI 协作（技能召回 + 全局使用技能）](docs/guides/ai-and-skills.md) · [故障排查与限制](docs/guides/troubleshooting.md)
 

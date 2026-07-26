@@ -24,13 +24,14 @@ tags:
 2. [`index`](#index--全量建索引)
 3. [`scan`](#scan--增量重索引)
 4. [`query`](#query--执行-dql-查询)
-5. [`skills` — 规范召回](#skills--规范召回)
-6. [`meta`](#meta--读改-frontmatter)
-7. [`watch`](#watch--常驻监听)
-8. [`run`](#run--变更编排管道)
-9. [`chat`](#chat--自然语言驱动可选-ai)
-10. [`links`](#links--本地链接诊断)
-11. [`lint`](#lint--规则诊断metadata--links)
+5. [`base`](#base--base-view-查询)
+6. [`skills` — 规范召回](#skills--规范召回)
+7. [`meta`](#meta--读改-frontmatter)
+8. [`watch`](#watch--常驻监听)
+9. [`run`](#run--变更编排管道)
+10. [`chat`](#chat--自然语言驱动可选-ai)
+11. [`links`](#links--本地链接诊断)
+12. [`lint`](#lint--规则诊断metadata--links)
 
 ---
 
@@ -216,6 +217,51 @@ x-basalt query 'LIST FROM ""' --size 50 --offset 0 --db ./index.db              
 > **PowerShell 引号提示**：DQL 中的 `"folder"` 需原样传入程序。用**单引号**包整条语句，内部保留普通双引号（`'... FROM "Projects" ...'`）；不要写 `\"`，PowerShell 下会导致意外转义。
 
 DQL 完整语法（`FROM` / `WHERE` / `SORT` / `LIMIT` / 操作符 / 隐式字段映射）见 [querying-dql.md](querying-dql.md)。
+
+---
+
+## `base` — .base view 查询
+
+```
+x-basalt base <file.base> [--view <name>] [--vault <path...>] [--db <path>] [--format json|yaml]
+```
+
+执行 Obsidian `.base` view 的无头查询（Bases Markdown conformance 2026-07）：只读索引库，输出稳定 JSON，不渲染表格。
+
+| 参数/选项        | 默认                             | 说明                                                                       |
+| ---------------- | -------------------------------- | -------------------------------------------------------------------------- |
+| `<file.base>`    | 必填                             | vault 内 `.base` 路径（vault 相对或绝对；越出 vault 读取前拒绝）           |
+| `--view <name>`  | `views[0]`                       | 指定 view；不存在报 `base/view-not-found`（error，suggestions 列可用名）   |
+| `--vault <path>` | 配置 `vault`                     | 可重复传多个（多根 vault）                                                 |
+| `--db <path>`    | `.x-basalt/index.db` / 配置 `db` | 要查询的 SQLite 路径（只读打开）                                           |
+| `--format <fmt>` | `json`（或配置 `format`）        | 输出格式：`json`（缩进 2）或 `yaml`                                        |
+
+**输出形态**
+
+```json
+{
+  "conformance": "bases-markdown-2026-07",
+  "base": "views/projects.base",
+  "view": "Active",
+  "columns": ["file.name", "status"],
+  "total": 4,
+  "rows": [{ "file.name": "Alpha.md", "status": "active" }],
+  "diagnostics": [{ "rule": "base/markdown-only-dataset", "severity": "warning", "message": "…" }]
+}
+```
+
+- `total` = filter 后、limit 前行数；缺失属性投影为 `null` 且列保留。
+- 未显式 `sort` 按 `file.path` 升序稳定输出（附 `base/default-sort-tiebreak` info）；同库重复运行字节稳定。
+- **退出码**：`diagnostics` 含任一 `error` 级 → 输出完整 JSON（rows 为空）并退出码 1；仅 warning/info（如 md-only 恒发 warning）→ 0。
+
+**示例**
+
+```bash
+x-basalt base views/projects.base --vault ./my-vault
+x-basalt base views/projects.base --view Active --vault ./my-vault --db ./index.db
+```
+
+支持的 .base 子集（filter/表达式/函数白名单/file 属性）、输出契约细节与限制见 [querying-bases.md](querying-bases.md)。
 
 ---
 

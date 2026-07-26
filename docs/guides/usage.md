@@ -12,7 +12,7 @@ tags:
 
 # 使用指南 · x-basalt（教程总目录）
 
-> 面向使用者的教程**总目录**。x-basalt 是纯 Node.js CLI——**零依赖 Obsidian GUI / 运行时**，直接通过文件系统操作 Vault 目录，做五件事：解析 Obsidian 专有语法、把 Vault 索引进 SQLite、用 Dataview（DQL）子集查询、按关键字召回规范、读改笔记元数据头（frontmatter）。
+> 面向使用者的教程**总目录**。x-basalt 是纯 Node.js CLI——**零依赖 Obsidian GUI / 运行时**，直接通过文件系统操作 Vault 目录，做这几件事：解析 Obsidian 专有语法、把 Vault 索引进 SQLite、用 Dataview（DQL）子集查询、按关键字召回规范、读改笔记元数据头（frontmatter）、本地链接诊断、规则 lint、变更编排管道、可选 AI 的自然语言驱动（chat）。
 > 内容较多，已拆成下面各章；本页给概览 + 快速上手 + 章节路由。实现真相源见 `../specs/`、`../research/`。
 
 ## 它是什么
@@ -22,8 +22,13 @@ tags:
 | 解析     | `parse`                    | 单个 `.md` → 标准化 AST（wikilink/Markdown link/tag/callout/task/highlight/blockRef/inlineField + frontmatter；链接类节点含完整文件位置）                                  |
 | 索引     | `index` / `scan` / `watch` | 全量建库 / **按需增量重扫** / 常驻监听，写入单文件 SQLite                                                                                                                  |
 | 查询     | `query`                    | 自建 Dataview（DQL）子集 → 参数化 SQL → JSON 结果                                                                                                                          |
+| Bases    | `base`                     | `.base` view 无头查询（Bases Markdown conformance 2026-07）→ 稳定 JSON；md-only 数据集，不渲染表格                                                                        |
 | 召回     | `skill`                    | 加载规范知识库，Fuse.js 模糊召回                                                                                                                                           |
 | 改元数据 | `meta`                     | 读 / 改单文件 frontmatter（**唯一写侧**）：get/set/unset/rename + **normalize 归一** + **profile 元数据策略**（apply 按约定补缺/补全），YAML 往返保真、原子写、`--dry-run` |
+| 链接诊断 | `links`                    | 本地断链检查 / 修复建议（`check` / `suggest`）：白名单集合 + basename 建议 + JSON/人读输出 + CI 退出码                                                                  |
+| 规则 lint  | `lint`                   | 统一规则诊断壳（metadata / links）：内置 profile 校验 + 自定义 config profile（`extends` 合并 + enums）                                                                 |
+| 变更编排 | `run`                      | 声明式变更管道（`--pipe` 多段管线 + `--apply` 落盘闸 + if-exists）                                                                                                      |
+| 自然语言 | `chat`                     | 可选 AI 的自然语言驱动（单发 + REPL）：工具调用 vault 读侧 + 受闸写侧                                                                                                   |
 
 **硬约束（设计红线）**：不引入 `obsidian` npm 包、不调 `obsidian://`、不使用 dataview 的执行层、不依赖浏览器自动化；文件操作仅经 `fs`/`chokidar`；反向链接等隐式字段**一律在查询期由 SQLite JOIN 实时计算**，不假设任何外部缓存。
 
@@ -63,8 +68,9 @@ x-basalt skills recall wikilink
 | 章节                                                      | 内容                                                                                                                                      |
 | --------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------- |
 | [安装与运行](installation.md)                             | 要求（Node ≥ 22）、从源码构建、**全局安装（npm link）**、三种运行方式、改源码后重编译                                                     |
-| [命令参考](commands.md)                                   | 9 个命令逐项：`parse` / `index` / `scan` / `query` / `skills` / `meta` / `watch` / `run` / `chat`（签名、选项、默认、示例）               |
+| [命令参考](commands.md)                                   | 12 个命令逐项：`parse` / `index` / `scan` / `query` / `base` / `skills` / `meta` / `watch` / `run` / `chat` / `links` / `lint`（签名、选项、默认、示例） |
 | [DQL 查询指南](querying-dql.md)                           | 完整 Dataview 子集文法（LIST/TABLE/TASK + WHERE + GROUP BY/FLATTEN/WITHOUT ID + 多键 SORT + 函数）、隐式字段、报错口径                    |
+| [Bases 查询指南](querying-bases.md)                       | `.base` view 无头查询：支持子集（filter/表达式/函数白名单/file 属性）、稳定 JSON 契约、退出码、md-only 限制与 oracle 暂定口径           |
 | [教程：`rating::` 打分](tutorial-rating-inline-fields.md) | 10 分钟上手正文 inline fields（`key:: value` 三种写法、示例 vault 实测、坑清单：文本比较/last-wins/frontmatter 优先、该不该用的调研结论） |
 | [索引与同步](indexing-and-sync.md)                        | `index` vs `scan` vs `watch` 何时用；scan 深入（mtime/`--rehash`/`--dry-run`/分批断点续）；5 表数据模型；路径感知链接                     |
 | [配置与基目录](configuration.md)                          | 配置文件（cosmiconfig 向上查找、yaml/json5）、可配置项、**`X_BASALT_DIR`**、优先级                                                        |

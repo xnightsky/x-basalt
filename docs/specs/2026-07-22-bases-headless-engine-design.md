@@ -300,6 +300,7 @@ P1 每次执行可一次性读取候选 Markdown 行并在 evaluator 中 filter�
 
 - `base/invalid-yaml`
 - `base/invalid-schema`
+- `base/path-outside-vault`（P0 实现补充：§11 原列表未覆盖 BASE-SEC-008 路径越界场景）
 - `base/view-required`
 - `base/view-not-found`
 - `base/duplicate-view-name`
@@ -313,6 +314,7 @@ P1 每次执行可一次性读取候选 Markdown 行并在 evaluator 中 filter�
 - `base/formula-cycle`（P2）
 - `base/execution-budget`
 - `base/dynamic-context-required`
+- `base/default-sort-tiebreak`（P1 实现补充：无显式 sort 时按 `file.path ASC` 稳定 tie-break 的 info 诊断，§11 原列表未覆盖该 info 场景）
 
 位置规则：
 

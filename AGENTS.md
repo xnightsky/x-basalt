@@ -60,6 +60,7 @@ src/indexer/  索引层：调 parser 写 SQLite，chokidar 增量
 src/query/    查询层：手写 DQL tokenizer→ast→sql-generator，编译为参数化 SQL
 src/skill/    Skill 召回：json5 加载 + 模糊匹配，内置 obsidian-base-spec 兜底
 src/meta/     元数据写侧：frontmatter 往返内核(yaml Document) + CRUD + 原子写（唯一写 .md 的层）
+src/base/     Bases 无头引擎：.base 文档层 + 查询/公式/类型/分组汇总（P0..P2b 已落地；all-files/context 属 P3）
 src/utils/    路径等工具
 src/cli.ts    commander 入口
 skills-data/   产品运行时 Skill 数据（SkillRecall 加载，含 obsidian-base-spec.json5）
