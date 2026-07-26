@@ -14,17 +14,17 @@ test("checkVault: 报断链、跳过有效链、按 file/line 排序", async () 
       join(root, "notes", "Index.md"),
       ["[[Alpha]]", "[[Ghost]]", "[有效](./Alpha.md)", "[断](./Missing.md)"].join("\n"),
     );
-    const issues = await checkVault({ vault: root });
-    assert.equal(issues.length, 2);
+    const diagnostics = await checkVault({ vault: root });
+    assert.equal(diagnostics.length, 2);
     assert.deepEqual(
-      issues.map((i) => i.reason),
+      diagnostics.map((d) => d.reason),
       ["not_found", "not_found"],
     );
     assert.deepEqual(
-      issues.map((i) => i.line),
+      diagnostics.map((d) => d.line),
       [2, 4],
     );
-    assert.equal(issues[0]?.file, "notes/Index.md");
+    assert.equal(diagnostics[0]?.file, "notes/Index.md");
   } finally {
     rmSync(root, { recursive: true, force: true });
   }
@@ -35,8 +35,8 @@ test("checkVault: ignore.paths 过滤整文件", async () => {
   try {
     mkdirSync(join(root, "legacy"));
     writeFileSync(join(root, "legacy", "Old.md"), "[[Ghost]]");
-    const issues = await checkVault({ vault: root, ignore: { paths: ["legacy/**"] } });
-    assert.equal(issues.length, 0);
+    const diagnostics = await checkVault({ vault: root, ignore: { paths: ["legacy/**"] } });
+    assert.equal(diagnostics.length, 0);
   } finally {
     rmSync(root, { recursive: true, force: true });
   }

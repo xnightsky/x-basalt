@@ -1,5 +1,6 @@
 ---
 type: design
+status: partial
 title: 语义/全文检索融入设计评估（FTS5 + 可选 embedding）
 description: 评估把 qmd 式检索融入 x-basalt：FTS5 全文（core、无 AI、中文 trigram）为主，embedding 向量为最小可选 AI；含借鉴取舍
 tags:

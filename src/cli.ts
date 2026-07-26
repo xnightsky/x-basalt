@@ -27,6 +27,8 @@ import { Orchestrator } from "./orchestrator/index.js";
 import type { EventType, PipelineConfig, RunReport } from "./orchestrator/index.js";
 import { runLinksCheck, runLinksSuggest } from "./links/index.js";
 import { renderHuman } from "./links/report.js";
+import { runLint } from "./lint/index.js";
+import { renderHuman as renderLintHuman } from "./lint/report.js";
 import { DataviewEngine } from "./query/index.js";
 import { SkillRecall } from "./skill/index.js";
 import { renderSkill, renderSkillList, renderSkills } from "./skill/render.js";
@@ -794,9 +796,9 @@ links
       process.exitCode = 2;
       return;
     }
-    const { issues, exitCode } = await runLinksCheck({ vault, ignore: config.lint?.ignore });
-    if (opts.format === "json" || opts.format === "yaml") emit(issues, opts.format);
-    else console.log(renderHuman(issues));
+    const { diagnostics, exitCode } = await runLinksCheck({ vault, ignore: config.lint?.ignore });
+    if (opts.format === "json" || opts.format === "yaml") emit(diagnostics, opts.format);
+    else console.log(renderHuman(diagnostics));
     process.exitCode = exitCode;
   });
 
@@ -813,9 +815,42 @@ links
       process.exitCode = 2;
       return;
     }
-    const { issues, exitCode } = await runLinksSuggest(file, { vault, ignore: config.lint?.ignore });
-    if (opts.format === "json" || opts.format === "yaml") emit(issues, opts.format);
-    else console.log(renderHuman(issues));
+    const { diagnostics, exitCode } = await runLinksSuggest(file, { vault, ignore: config.lint?.ignore });
+    if (opts.format === "json" || opts.format === "yaml") emit(diagnostics, opts.format);
+    else console.log(renderHuman(diagnostics));
+    process.exitCode = exitCode;
+  });
+
+program
+  .command("lint")
+  .description("按规则集诊断 vault，产出统一 BasaltDiagnostic（KB compiler；规则：links、metadata）")
+  .argument("[vault...]", "Vault 目录（可多个；省略则回退配置 vault）")
+  .option("--rules <list>", "规则集，逗号分隔（默认 links；给 --profile 时默认 metadata）")
+  .option(
+    "--profile <name>",
+    "metadata 规则用的 profile：config profiles.<name> 优先（同名覆盖内置），否则内置 pkm-note|llm-wiki|ssg-blog",
+  )
+  .option("--format <fmt>", "输出格式 human|json|yaml（默认 human）")
+  .action(async (vaults: string[], opts: { rules?: string; profile?: string; format?: string }) => {
+    const vault = vaults.length > 0 ? vaults : config.vault;
+    if (vault === undefined) {
+      console.error("✗ 未指定 vault：传目录参数或在配置中设 vault");
+      process.exitCode = 2;
+      return;
+    }
+    const rules = opts.rules
+      ?.split(",")
+      .map((r) => r.trim())
+      .filter(Boolean);
+    const { diagnostics, exitCode } = await runLint({
+      vault,
+      rules,
+      profile: opts.profile,
+      profiles: config.profiles,
+      ignore: config.lint?.ignore,
+    });
+    if (opts.format === "json" || opts.format === "yaml") emit(diagnostics, opts.format);
+    else console.log(renderLintHuman(diagnostics));
     process.exitCode = exitCode;
   });
 

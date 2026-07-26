@@ -5,7 +5,7 @@ import type { LinkFinding, TargetIndex } from "./types.js";
 
 // === 自建实现: 链接目标判定（纯函数，吃白名单索引，不碰 fs）===
 //
-// 上游：src/links/check.ts 逐节点调用；下游：产出 LinkFinding（reason?/suggestions）交编排层组装 BasaltIssue。
+// 上游：src/links/check.ts 逐节点调用；下游：产出 LinkFinding（reason?/suggestions）交编排层组装 BasaltDiagnostic。
 // 规则真相源：docs/specs/2026-07-09-kb-compiler-lint-links-design.md §5。
 
 type WikilinkNode = Extract<ObsidianNode, { type: "wikilink" }>;

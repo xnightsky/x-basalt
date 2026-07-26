@@ -4,7 +4,7 @@ import { resolveVaultLayout } from "../utils/path.js";
 import { compileIgnore, type IgnoreMatcher, type LintIgnoreConfig } from "./ignore.js";
 import { resolveMarkdownLink, resolveWikilink } from "./resolve.js";
 import { buildTargetIndex, collectFiles } from "./scan.js";
-import type { BasaltIssue, LinkFinding, TargetIndex } from "./types.js";
+import type { BasaltDiagnostic, LinkFinding, TargetIndex } from "./types.js";
 
 // === 自建实现: links 检查编排（内存 per-run，不碰 SQLite）===
 //
@@ -25,14 +25,14 @@ const MESSAGES: Record<string, (target: string) => string> = {
   ambiguous_target: (t) => `链接目标同名多处，需限定路径：${t}`,
 };
 
-/** 由链接节点 + 判定结果组装 issue（reason 非空且非 external_skipped 才产出）。 */
-function toIssue(
+/** 由链接节点 + 判定结果组装诊断（reason 非空且非 external_skipped 才产出）。 */
+function toDiagnostic(
   fileRel: string,
   line: number,
   column: number,
   target: string,
   finding: LinkFinding,
-): BasaltIssue | undefined {
+): BasaltDiagnostic | undefined {
   if (!finding.reason || finding.reason === "external_skipped") return undefined;
   const message = (MESSAGES[finding.reason] ?? ((t: string) => t))(target);
   return {
@@ -49,22 +49,28 @@ function toIssue(
   };
 }
 
-/** 纯函数：吃已读内容 + 已建索引，产出该文件的断链 issue（已过 ignore）。 */
+/** 纯函数：吃已读内容 + 已建索引，产出该文件的断链诊断（已过 ignore）。 */
 export function checkFile(
   _fileAbs: string,
   fileRel: string,
   content: string,
   index: TargetIndex,
   ignore: IgnoreMatcher,
-): BasaltIssue[] {
+): BasaltDiagnostic[] {
   const { nodes } = new VaultParser().parse(content);
-  const out: BasaltIssue[] = [];
+  const diagnostics: BasaltDiagnostic[] = [];
   for (const node of nodes) {
-    let issue: BasaltIssue | undefined;
+    let diagnostic: BasaltDiagnostic | undefined;
     if (node.type === "wikilink") {
-      issue = toIssue(fileRel, node.line, node.column, node.raw, resolveWikilink(node, index, fileRel));
+      diagnostic = toDiagnostic(
+        fileRel,
+        node.line,
+        node.column,
+        node.raw,
+        resolveWikilink(node, index, fileRel),
+      );
     } else if (node.type === "markdownLink") {
-      issue = toIssue(
+      diagnostic = toDiagnostic(
         fileRel,
         node.line,
         node.column,
@@ -72,23 +78,23 @@ export function checkFile(
         resolveMarkdownLink(node, index, fileRel),
       );
     }
-    if (issue && !ignore.ignored(issue)) out.push(issue);
+    if (diagnostic && !ignore.ignored(diagnostic)) diagnostics.push(diagnostic);
   }
-  return out;
+  return diagnostics;
 }
 
 /** 编排全 vault 检查：枚举→建索引→逐 .md 解析判定→汇总排序。 */
-export async function checkVault(opts: CheckOptions): Promise<BasaltIssue[]> {
+export async function checkVault(opts: CheckOptions): Promise<BasaltDiagnostic[]> {
   const layout = resolveVaultLayout(opts.vault);
   const { all, markdown } = await collectFiles(layout.roots, layout.toKey);
   const index = buildTargetIndex(all);
   const ignore = compileIgnore(opts.ignore);
-  const issues: BasaltIssue[] = [];
+  const diagnostics: BasaltDiagnostic[] = [];
   for (const file of markdown) {
     const content = await readFile(file.abs, "utf8");
-    issues.push(...checkFile(file.abs, file.key, content, index, ignore));
+    diagnostics.push(...checkFile(file.abs, file.key, content, index, ignore));
   }
-  return issues.toSorted(
+  return diagnostics.toSorted(
     (a, b) => a.file.localeCompare(b.file) || a.line - b.line || a.column - b.column,
   );
 }

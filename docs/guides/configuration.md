@@ -1,6 +1,6 @@
 ---
-timestamp: 2026-06-30T03:21:41Z
-sha256: 7508c2868631163a2aca0ca3f2c585c3959eee02ae4324000e13b965d43f4dd7
+timestamp: 2026-07-22T07:41:55Z
+sha256: a9ed5e60a7cfc6e118b3cb15c37c8c31713ef6b110cd6f81143207e56229581e
 type: guide
 title: 配置与基目录 · x-basalt
 description: x-basalt 配置文件查找顺序、键说明与 X_BASALT_DIR 基目录
@@ -85,7 +85,7 @@ echo 'export X_BASALT_DIR="/home/user/vault-state/.x-basalt"' >> ~/.bashrc
 
 ## 4. 可配置项
 
-标量键**均可选**、**值须为字符串**（`vault` 额外支持**字符串列表 = 多目录**；未知键与非字符串值静默丢弃）；`pipelines` 是唯一的**结构化对象**键（变更编排器，见下）。
+标量键**均可选**、**值须为字符串**（`vault` 额外支持**字符串列表 = 多目录**；未知键与非字符串值静默丢弃）；`pipelines`、`lint`、`profiles` 是**结构化对象**键（分别对应变更编排器、links/lint ignore、自定义 metadata profile；见下）。
 
 | 键          | 对应 CLI 参数                                | 说明                                                                                                                                                                                                                   |
 | ----------- | -------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -95,6 +95,8 @@ echo 'export X_BASALT_DIR="/home/user/vault-state/.x-basalt"' >> ~/.bashrc
 | `format`    | `parse --format`                             | 默认输出格式，`json` 或 `yaml`                                                                                                                                                                                         |
 | `onChange`  | `watch --on-change`                          | 默认变更命令模板（`{file}` 占位）                                                                                                                                                                                      |
 | `pipelines` | `--pipe use=<name>`（run/scan/watch 共用）   | **结构化对象**：命名管道快照（`name → {actions, where, on, paths, concurrency, dryRun}`）。**命令行 `--pipe k=v` 与之一一对应**——命令行是规范落地、配置段是加速。见 [commands.md `run`](commands.md#run--变更编排管道) |
+| `lint`      | `links check` / `lint` 共用                  | **结构化对象**：`ignore.{paths,targets,rules}` 屏蔽历史附件 / 生成目录 / 外链，对 links 与 metadata 诊断同样生效。见 [commands.md `links`](commands.md#links--本地链接诊断) |
+| `profiles`  | `lint --profile <name>`                      | **结构化对象**：自定义 metadata profile（`name → {extends, required, enums, include}`），**同名覆盖内置**。`extends` 单父继承（子覆盖父、required 并集、enums 只加不减）。见 [commands.md `lint`](commands.md#lint--规则诊断metadata--links) |
 
 ---
 

@@ -1,6 +1,6 @@
 ---
-timestamp: 2026-07-09T05:53:07Z
-sha256: 27c7e1a2b6ea895b1000d9720164815760a335267bec3cc952985da5445696e1
+timestamp: 2026-07-22T07:41:34Z
+sha256: b4ab55ce0de770a1c8f81cc22d02411547c7f685a67de0f0e47c7809f3c95dc2
 type: guide
 title: 命令参考 · x-basalt
 description: x-basalt CLI 全部子命令的参数、输出形态与示例
@@ -30,6 +30,7 @@ tags:
 8. [`run`](#run--变更编排管道)
 9. [`chat`](#chat--自然语言驱动可选-ai)
 10. [`links`](#links--本地链接诊断)
+11. [`lint`](#lint--规则诊断metadata--links)
 
 ---
 
@@ -549,6 +550,79 @@ lint:
 ```
 
 `suggest` 与 `check` 内嵌的 `suggestions[]` 一致：按 basename 在 vault 内找同名文件，给相对当前文件的路径建议（多命中即 `ambiguous_target`）。
+
+---
+
+## `lint` — 规则诊断（metadata / links）
+
+按**规则集**诊断 vault，产出与 `links` 同一套 `BasaltDiagnostic`（KB compiler P2/P3）。同样**内存 per-run、不碰 SQLite、不写 `.md`**（metadata 规则只读 frontmatter）。
+
+```bash
+x-basalt lint [vault...] [--rules <list>] [--profile <name>] [--format human|json|yaml]
+```
+
+| 参数 | 默认 | 说明 |
+| --- | --- | --- |
+| `[vault...]` | 配置 `vault` | Vault 根目录，可多个；省略取配置 `vault` |
+| `--rules <list>` | 见下 | 逗号分隔规则集：`links` / `metadata`。省略时：**给了 `--profile` 默认 `metadata`，否则 `links`** |
+| `--profile <name>` | — | `metadata` 规则用的 profile：**config `profiles.<name>` 优先（同名覆盖内置），否则内置** `pkm-note`/`llm-wiki`/`ssg-blog` |
+| `--format <fmt>` | `human` | `human` / `json` / `yaml`（与 `links` 同构，按 `file:line:col` 稳定排序） |
+
+**规则与 `reason`**：
+
+| rule | severity | reason | 触发 |
+| --- | --- | --- | --- |
+| `links/no-broken-link` | error | `not_found` 等 | 同 [`links check`](#links--本地链接诊断)（`--rules links`） |
+| `metadata/required-missing` | error | `required_missing` | 文档缺 profile 的 required 字段 |
+| `metadata/enum-invalid` | error | `enum_invalid` | 字段值不在 profile 的 `enums` 允许集 |
+
+**退出码**：任一 `error` 级诊断 → `1`，否则 `0`（CI / 脚本闸门）。
+
+### 内置 profile（零 config，P3a）
+
+直接用内置 profile 校验 required 是否齐全——与写侧 [`meta apply <profile>`](#meta--读改-frontmatter) **同一套 profile 定义**（写侧补、读侧查）：
+
+```bash
+x-basalt lint docs --profile llm-wiki --format json   # 缺 type 的文档 → required-missing
+```
+
+### 自定义 config profile（`profiles` + `extends` + `enums`，P3b）
+
+在 `.x-basalt/config.*` 声明 `profiles.<name>`，即可**继承内置魔改**或**全新定义**，加上 `enums` 值域校验：
+
+```yaml
+# .x-basalt/config.yaml
+profiles:
+  my-wiki:
+    extends: llm-wiki                 # 继承内置 required 基线（type）
+    required: [author]                # 追加必填 → 与父并集 = type + author
+    enums:                            # 字段 → 允许值集（值越集即报 enum-invalid）
+      type: [note, person, project]
+      status: [draft, active, done]
+    include: "docs/**"               # 只查匹配这些 glob 的文件（可选；缺省 = 全 vault）
+  team-note:                          # 不 extends = 全新一套
+    required: [owner, area]
+    enums: { area: [infra, product, research] }
+```
+
+```bash
+x-basalt lint --profile my-wiki --format json
+# docs/x.md 若 type=gadget、缺 author → 报 enum-invalid(type) + required-missing(author)，退出 1
+```
+
+**`extends` 合并语义**（单父继承；父可是内置或另一个 config profile）：
+
+- **子覆盖父**；`required` 取**并集**、`enums` 按字段**取并集去重**——**只加不减**。
+- `include` 子有则用子、否则继承父。
+- **同名 config 覆盖内置**（如上再定义一个 `llm-wiki` 就以你的为准）。
+- **环**（`A→B→A`）、**未知父**（`extends` 指向不存在的名）→ **定向报错退出 `1`**，不静默。
+- 数组字段（如 `tags`）逐元素校验；字段**缺失或为空**跳过 `enums`（缺失交给 `required`，不双报）。
+
+> **glob 提醒**：`include` / `lint.ignore` 用同一套极简 glob。`docs/**/*.md` 的 `**/` 段要求至少一层子目录、**不匹配顶层 `docs/a.md`**；要含顶层用 `docs/*.md` 或 `docs/**`。
+
+**ignore 叠加**：`lint.ignore`（见 [`links`](#links--本地链接诊断) 段）对 metadata 诊断同样生效——`paths` 按文件、`targets`/`rules.<rule>` 按字段名（`target`）过滤。
+
+**后置（暂不做）**：`excludes`/减字段、多父数组 `extends`、`tagRules`、`--fix`、CI annotation / baseline、完整 JSON Schema。config `profiles` 配置见 [configuration.md](configuration.md#4-可配置项)。
 
 ---
 

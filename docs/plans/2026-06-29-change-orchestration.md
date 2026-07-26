@@ -124,106 +124,85 @@ export interface RunReport {
 
 ## 原子子步（TDD）
 
+> 最后同步：2026-07-22。代码已全部实现（含测试），checklist 更新到实际状态。
+
 ### P0-A：类型 + 去重折叠
 
-- [ ] **CO-A1 types.ts（无测试，被后续消费）**
-  - 动作：写 `src/orchestrator/types.ts`，定义上方契约全部类型。
-  - 验收：`pnpm run typecheck` 通过。前置：无。
+- [x] **CO-A1 types.ts（无测试，被后续消费）** ✅ 2026-06-29
+  - 文件：`src/orchestrator/types.ts`（9 个类型/interface 定义）。
+  - 证据：`pnpm run typecheck` 通过。前置：无。
 
-- [ ] **CO-A2 foldEvents 去重折叠（red→green）**
-  - 动作：`tests/orchestrator-dedup.test.ts` 先写期望；再实现 `dedup.ts`。
-  - 验收（L2+L3 折叠表，spec §6.3）：`add→change(×N)`=add；`change(×N)`=change；`add→unlink`=**抵消(丢弃)**；`change→unlink`=unlink；`unlink→add`=change；多文件互不干扰；按最新 mtime 取 LWW；空输入=空；幂等（再折叠不变）。
+- [x] **CO-A2 foldEvents 去重折叠（red→green）** ✅ 2026-06-29
+  - 文件：`src/orchestrator/dedup.ts` + `tests/orchestrator-dedup.test.ts`。
+  - 验收涵盖 L2/L3 折叠表全部场景。
   - 证据：`pnpm test tests/orchestrator-dedup.test.ts`。前置：CO-A1。
 
-- [ ] **CO-A3 commit**：`feat(orchestrator): 事件去重折叠（L2 路径+L3 类型）`。
+- [x] **CO-A3 commit** ✅
 
 ### P0-B：堆积
 
-- [ ] **CO-B1 Accumulator（red→green）**
-  - 动作：`tests/orchestrator-accumulate.test.ts`（注入假时钟/手动 tick）；实现 `accumulate.ts`：push(ev) 累积，静默 `wait` 后 flush；自首事件起超 `maxWait` 强制 flush；flush 产出一批并清空。
-  - 验收：连续 push 在 wait 内不 flush；静默 wait 后 flush 一次；持续 push 到 maxWait 强制 flush（防饿死）；flush 回调拿到累积批；flush 后状态清空；有界源（scan/手动）可旁路直接整批。
+- [x] **CO-B1 Accumulator（red→green）** ✅ 2026-06-29
+  - 文件：`src/orchestrator/accumulate.ts` + `tests/orchestrator-accumulate.test.ts`（注入假时钟）。
   - 证据：`pnpm test tests/orchestrator-accumulate.test.ts`。前置：CO-A1。
 
-- [ ] **CO-B2 commit**：`feat(orchestrator): 堆积 debounce+maxWait`。
+- [x] **CO-B2 commit** ✅
 
 ### P0-C：路由
 
-- [ ] **CO-C1 matchEvent 纯过滤（red→green）**
-  - 动作：`tests/orchestrator-route.test.ts`；实现 `route.ts` 的 `matchEvent(ev,{on,paths})`：事件类型命中 + glob 命中（用 minimatch 风格；若不引依赖则用现有 path 工具/正则实现简易 glob）。
-  - 验收：on 缺省=全放行；on 指定只放行对应类型；paths glob 命中/不命中；隐藏路径已被源滤除（不在此重复）。
+- [x] **CO-C1 matchEvent 纯过滤（red→green）** ✅ 2026-06-29
+  - 文件：`src/orchestrator/route.ts` + `tests/orchestrator-route.test.ts`。
   - 证据：`pnpm test tests/orchestrator-route.test.ts`。前置：CO-A1。
 
-- [ ] **CO-C2 selectByDql 语义路由（red→green）**
-  - 动作：扩 `route.ts`：`selectByDql(engine, dql): Set<string>`——执行 DQL 取命中文件相对路径集；管道用它对去重批做 where 过滤。
-  - 验收：给定库内 DQL，返回命中 path 集；语法错抛 DqlSyntaxError（不静默空选）；与 matchEvent 组合后只剩「类型∩glob∩dql」的事件。**索引新鲜度纪律**：注释标明 where 依赖索引，watch 流须先 index 再 where（在 P0-E/engine 落实）。
+- [x] **CO-C2 selectByDql 语义路由（red→green）** ✅ 2026-06-29
+  - 文件：扩 `route.ts`，复用 DataviewEngine。
   - 证据：`pnpm test tests/orchestrator-route.test.ts`。前置：CO-C1。
 
-- [ ] **CO-C3 commit**：`feat(orchestrator): 路由 match/glob + DQL 选择`。
+- [x] **CO-C3 commit** ✅
 
 ### P0-D：动作契约 + 内建动作
 
-- [ ] **CO-D1 内建动作（red→green）**
-  - 动作：`tests/orchestrator-actions.test.ts`（临时 vault）；实现 `actions.ts`：
-    - `index`：调 `indexer.update(path)`（unlink → `indexer.remove`）；write=false（写 DB 非 .md）。
-    - `normalize`：调 `editMeta(path, normalizeDoc, {dryRun})`；write=true。
-    - `parse`：只读解析（验证可解析）；write=false。
-    - 注册表 `getAction(name)`，未知名报错列可用。
-  - 验收：index 后查询能查到该文件；normalize dryRun 不落盘、非 dryRun 落盘且幂等；写动作 ctx.dryRun=true 时不写；unlink 事件 index 删除记录；未知动作报错。
+- [x] **CO-D1 内建动作（red→green）** ✅ 2026-06-29
+  - 文件：`src/orchestrator/actions.ts`（index/normalize/parse）+ `tests/orchestrator-actions.test.ts`。
   - 证据：`pnpm test tests/orchestrator-actions.test.ts`。前置：CO-A1。
 
-- [ ] **CO-D2 commit**：`feat(orchestrator): 内建动作 index/normalize/parse（写动作 dry-run）`。
+- [x] **CO-D2 commit** ✅
 
 ### P0-E：执行引擎
 
-- [ ] **CO-E1 Executor 串行管道 + 失败 continue + 报告（red→green）**
-  - 动作：`tests/orchestrator-run.test.ts`；实现 `run.ts`：对一批事件，每个事件按 `actions` 顺序串行跑（pipe），单动作失败按 onError 决定 continue/stop，汇总 RunReport。
-  - 验收：批内每文件按动作序执行；某文件某动作抛错 → onError=continue 跳过该文件剩余动作并记 failed、其余文件照常；onError=stop 停止；报告 total/changed/skipped/failed 正确；dryRun 透传动作。
+- [x] **CO-E1 Executor 串行管道 + 失败 continue + 报告（red→green）** ✅ 2026-06-29
+  - 文件：`src/orchestrator/run.ts` + `tests/orchestrator-run.test.ts`。
   - 证据：`pnpm test tests/orchestrator-run.test.ts`。前置：CO-D1。
 
-- [ ] **CO-E2 有界并发 limit + 超时 timeout（red→green）**
-  - 动作：扩 `run.ts`：`limit(N)` 控制同时在跑的文件数（自实现信号量，不引 p-limit 若要零依赖；或评估引入）；`timeout(ms)` 用 `Promise.race`+`AbortController` 兜底单动作卡死。
-  - 验收：并发不超过 N（用可观察的并发计数断言峰值≤N）；超时动作被中止并记 failed，不拖垮整批。
+- [x] **CO-E2 有界并发 limit + 超时 timeout（red→green）** ✅ 2026-06-29
+  - 文件：扩 `run.ts` 含并发限制。
   - 证据：`pnpm test tests/orchestrator-run.test.ts`。前置：CO-E1。
 
-- [ ] **CO-E3 commit**：`feat(orchestrator): 执行引擎 串行管道+并发+超时+失败策略`。
+- [x] **CO-E3 commit** ✅
 
 ### P0-F：源适配 + 引擎组装 + 防回环 + 优雅退出
 
-- [ ] **CO-F1 源适配（red→green）**
-  - 动作：`tests/orchestrator-sources.test.ts`；实现 `sources.ts`：
-    - `scanSource(indexer)`：`computeDiff` 投影成 `ChangeEvent[]`（added→add / modified→change / deleted→unlink），有界整批。
-    - `manualSource(paths|dql)`：文件列表 / DQL 命中 → `type=change` 事件批。
-    - `watchSource(indexer)`：包 `indexer.watch` 的 add/change/unlink 回调成事件流回调（接 accumulate）。
-  - 验收：scanSource 三类事件映射正确；manualSource 由 DQL/列表得批；watchSource 回调投影类型正确。
+- [x] **CO-F1 源适配（red→green）** ✅ 2026-06-29
+  - 首次提交：`492c84d` 2026-06-29。
   - 证据：`pnpm test tests/orchestrator-sources.test.ts`。前置：CO-A1。
 
-- [ ] **CO-F2 Orchestrator 组装 + 无限循环防护 + 优雅退出（red→green）**
-  - 动作：`tests/orchestrator-engine.test.ts`；实现 `engine.ts`：
-    - 组装：源 → (watch 经 accumulate) → dedup → route(match→[index 先行]→where) → run。
-    - **防回环**：写动作落盘后把 `path+mtime` 记入「自产生集」；watch 事件命中自产生集则跳过（叠加 meta「无变化不落盘」天然收敛 + debounce 兜底）。
-    - **优雅退出**：stop() 停止接新批 → await 当前批跑完 → 关 watcher/DB。
-    - **索引新鲜度**：watch/手动流在 where 之前先跑 index 动作落库，使 where 看到新鲜索引（spec §6.4）。
-  - 验收：scan 源端到端跑 index 管道后库内一致；写动作产生的变更不二次触发（自产生集生效）；stop() 后无新批执行、当前批完成；where 在 index 之后路由（断言新鲜）。
-  - 证据：`pnpm test tests/orchestrator-engine.test.ts`。前置：CO-E\*、CO-F1。
+- [x] **CO-F2 Orchestrator 组装 + 无限循环防护 + 优雅退出（red→green）** ✅ 2026-06-29
+  - 首次提交：`f2b0e0f` 2026-06-29。
+  - 证据：`pnpm test tests/orchestrator-engine.test.ts`。前置：CO-E*、CO-F1。
 
-- [ ] **CO-F3 commit**：`feat(orchestrator): 源适配+引擎组装+防回环+优雅退出`。
+- [x] **CO-F3 commit** ✅
 
 ### P0-G：配置 + CLI + 端到端 + 收口
 
-- [ ] **CO-G1 配置 pipelines 段（red→green）**
-  - 动作：扩 `src/config.ts` + `tests/config.test.ts`：读 `.x-basalt/config` 的 `pipelines:` 段为 `Record<string, PipelineConfig>`；缺省值（concurrency=4/onBusy=queue/onError=continue/dryRun=true）。
-  - 验收：解析含 pipelines 的配置；缺省填充；非法配置报错。
-  - 证据：`pnpm test tests/config.test.ts`。前置：CO-A1。
+- [x] **CO-G1 配置 pipelines 段（red→green）** ✅ 2026-06-29
+  - 首次提交：`3ad68cb` 2026-06-29。
+  - 证据：`pnpm test tests/orchestrator-config.test.ts`。前置：CO-A1。
 
-- [ ] **CO-G2 CLI 接线 + 端到端（red→green）**
-  - 动作：`cli.ts`：`scan --pipeline <name>` / `run <pipeline> [--where dql]`（手动源）/ `watch --pipeline <name>`；扩 `tests/cli.test.ts`（subprocess）。
-  - 验收：`run <pipeline>` 端到端对选中文件跑只读管道并出报告；写动作默认 dry-run（非 TTY 拒写）；未知 pipeline/动作报错退出码；`--pipeline` 与现有 scan/watch 兼容。
-  - 证据：`pnpm test tests/cli.test.ts`。前置：CO-F2、CO-G1。
+- [x] **CO-G2 CLI 接线 + 端到端（red→green）** ✅ 2026-06-29
+  - 首次提交：`3ad68cb` 2026-06-29（--pipeline），`738c6e6` 2026-06-29（scan 对称补齐）。
+  - 证据：`pnpm test tests/orchestrator-cli.test.ts`。前置：CO-F2、CO-G1。
 
-- [ ] **CO-G3 收口：质量门 + 文档 + skill**
-  - 动作：`typecheck`/`lint`/`build`/相关测试全绿；更新 `docs/guides/commands.md`+`usage.md` 加编排器命令；自我说明书 `skills-data/x-basalt.json5` 同步；TODO 标 P0 完成。
-  - 验收：全绿；命令签名在代码/文档/skill 一致。
-  - 证据：`pnpm run typecheck && pnpm test && pnpm run lint && pnpm run build`。前置：CO-G2。
+- [x] **CO-G3 收口：质量门 + 文档 + skill** ✅ 2026-06-29
+  - 首次提交：`1871dd4` 2026-06-29（doc/skill 同步 + TODO 标 P0 完成）。
 
 ---
 
