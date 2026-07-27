@@ -7,8 +7,8 @@ tags:
   - bases
   - testing
   - x-basalt
-timestamp: 2026-07-27T19:24:19Z
-sha256: 08f6ae9dc34e8d0f40bce8682c0894d83af3b3eb537559bc8a168088d3bbb13f
+timestamp: 2026-07-27T19:32:41Z
+sha256: fafa1b786a7b2c53cd684283a11961eab069cd89153fa5bd43a741d5bafccc7e
 ---
 # Bases 实现状态追踪
 
@@ -113,7 +113,7 @@ sha256: 08f6ae9dc34e8d0f40bce8682c0894d83af3b3eb537559bc8a168088d3bbb13f
 | list filter/map/reduce（value/index/acc 隐式作用域） | BASE-LIST-001 / BASE-SEC-005 | ✅ 2026-07-27（P2b；lazy 分派 + 作用域栈，flat/sort/unique/join 同批；迭代/collection/callDepth 预算） |
 | groupBy 标量 / 列表/tag | BASE-GROUP-001/002 | GROUP-001 ✅ 2026-07-27（P2b；`groups` 增量字段，组序方向 + 组内稳定）；GROUP-002 ⏸ oracle（list/link 键暂定报 `base/unsupported-feature` 拒绝） |
 | 默认汇总 / custom summary values | BASE-SUM-001/002 | SUM-001 ✅ 2026-07-27（P2b；15 内置，limit 前全量暂定）；SUM-002 ⏸ 暂定（`values` 作用域实现，空值剔除/越权口径待 oracle） |
-| regex（若支持必须 ReDoS 防护 + 长度预算） | BASE-SEC-004 | ⏸ P2 最后评估 |
+| regex（若支持必须 ReDoS 防护 + 长度预算） | BASE-SEC-004 | ✅ 2026-07-28（覆盖率片四：`string.matches(pattern)` + 三层防护；见 §6 片四明细） |
 
 ## 5. P3 all-files / context（P3a 附件数据集 ✅ 2026-07-27）
 
@@ -137,7 +137,7 @@ sha256: 08f6ae9dc34e8d0f40bce8682c0894d83af3b3eb537559bc8a168088d3bbb13f
 | 片一 | 机械叶子 16 个 + 渲染类 4 个显式拒绝 + `round` 归组 | ✅ 2026-07-28（`tests/base-functions-leaf.test.ts` 18 用例；838 全量绿） |
 | 片二 | Date/Duration 族 6 个（`date()`/`duration()`/`format`/`time`/`relative`/`isEmpty`），新增 `date` 分派组 | ✅ 2026-07-28（`tests/base-functions-date.test.ts` 11 用例；850 全量绿） |
 | 片三 | Link/File 互转 5 个（`asFile`/`linksTo`/`asLink`/`file()`/`link()`） | ✅ 2026-07-28（`tests/base-functions-link.test.ts` 8 用例；858 全量绿。**含文法改动**：`file(...)` 调用形态） |
-| 片四 | `matches`（regex）+ ReDoS 防护 | 🔜 BASE-SEC-004 |
+| 片四 | `matches`（regex）+ ReDoS 防护 | ✅ 2026-07-28（`tests/base-functions-regex.test.ts` 8 用例；866 全量绿） |
 | 片五 | list/link 当分组键 + 自定义汇总收口 | 🔜 BASE-GROUP-002 / BASE-SUM-002 |
 | 片六 | 显式 `contextFile` + `this.*` 求值 | 🔜 BASE-CTX-001（用户 2026-07-28 拍板**只做 contextFile**；CTX-002/003/004 判❌不做 + 诊断，见 §7） |
 
@@ -153,6 +153,19 @@ sha256: 08f6ae9dc34e8d0f40bce8682c0894d83af3b3eb537559bc8a168088d3bbb13f
 | 渲染类 `escapeHTML`/`html`/`image`/`icon` 白名单内显式拒绝 | 设计 §1 | ✅ 2026-07-28（新增 `BaseUnsupportedError` → `base/unsupported-feature`，与 `property-type-mismatch` 分开，读出方可据 rule 区分「用错类型」与「本引擎不做」） |
 | `repeat`/`replace`/`split` 产物规模预算（string 计字符数，`repeat` 分配前预检） | BASE-SEC-005 延伸 | ✅ 2026-07-28 |
 | `random()` × 字节稳定冲突 | 语法 §4.4 | ✅ 2026-07-28 **直接拒绝**（用户拍板；白名单内报 `base/unsupported-feature`，消息说明是契约冲突而非「不渲染」，与渲染类分开断言） |
+
+### 片四明细 ✅ 2026-07-28（BASE-SEC-004）
+
+> 测试：`tests/base-functions-regex.test.ts`（8 用例）。新增 `src/base/regexp.ts` 与 rule `base/invalid-regex`。
+
+| 项 | 场景编号 | 状态 |
+| ---- | ---- | ---- |
+| `string.matches(pattern)`（pattern 为**字符串**，子串命中语义） | BASE-EXPR-003 / BASE-SEC-004 | ✅ 2026-07-28（正则**字面量** `/…/` 仍在文法层拒绝，语法 §4.3 由「P2 最后评估」翻为「不做」） |
+| 防护①：静态拒绝灾难性回溯构造 | BASE-SEC-004 | ✅ 2026-07-28（判据 = **无界量词**作用于分组且分组体内含无界量词或顶层交替；命中 `(a+)+`/`(a*)*`/`(a\|a)*`/`(a\|ab)+`，放行 `(\d+)?`/`(foo)+`/`[a-z]+@[a-z]+`。充分不必要，故必须叠加防护②③） |
+| 防护①附：反向引用（`\1` / `\k<name>`）一律拒绝 | BASE-SEC-004 | ✅ 2026-07-28（先剥成对转义再检测，「转义反斜杠 + 字面 1」不被误杀，专项用例） |
+| 防护②：限长（pattern 200 / 被匹配串 10000，与 DQL 侧同档） | BASE-SEC-004 | ✅ 2026-07-28 |
+| 防护③：有界编译缓存（上限 64，超限整表清空） | 设计 §12 延伸 | ✅ 2026-07-28（逐行匹配不重复编译；不做无界增长——沿用 review 批次「解析缓存无界」的教训） |
+| 新 rule `base/invalid-regex`（非法/不安全一律行级诊断） | 设计 §11 | ✅ 2026-07-28（**与 DQL 侧 `regexmatch` 策略有意不同**：那边非法正则降级为「不匹配」且不报错，Bases 侧硬约束是不静默忽略） |
 
 ### 片二明细 ✅ 2026-07-28
 

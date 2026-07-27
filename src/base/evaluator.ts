@@ -19,6 +19,7 @@
 
 import { BASE_RULES, type BaseRuleId } from "./errors.js";
 import { lookupBaseFunction, type BaseFunctionContext } from "./functions.js";
+import { BaseInvalidRegexError } from "./regexp.js";
 import type { BaseExecutionLimits, BaseExpr } from "./types.js";
 import {
   BaseBudgetError,
@@ -702,6 +703,10 @@ function evalCall(
         e.message,
         expr.name,
       );
+    }
+    // 正则不合法/不安全（片四 matches）：转 base/invalid-regex，与类型错误分开。
+    if (e instanceof BaseInvalidRegexError) {
+      throw new BaseRowEvalError(BASE_RULES.invalidRegex, expr.offset, e.message, expr.name);
     }
     // 「官方有、无头引擎不做」（渲染类函数）：转 base/unsupported-feature，
     // 与「用错类型」的 property-type-mismatch 分开，读出方可据 rule 区分二者。

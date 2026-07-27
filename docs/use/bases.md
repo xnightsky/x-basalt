@@ -6,8 +6,8 @@ tags:
   - guide
   - bases
   - x-basalt
-timestamp: 2026-07-27T19:25:03Z
-sha256: ea428115463798811335a4bb28d23df99830a05e9b59858129ff01068886f99e
+timestamp: 2026-07-27T19:30:22Z
+sha256: cec5b89a1ff975d552db5ac6ee42e8ede784f497b091a69890c1630d91c455b6
 ---
 # Bases · 用 `.base` 无头查询你的 vault
 
@@ -581,6 +581,7 @@ duration 单位（单复数均可）：`millisecond` `second` `minute` `hour` `d
 | `s.split(sep)` | list | `sep` 为空串则逐字符切 |
 | `s.title()` | string | 按空白切词，词首大写、词余小写 |
 | `s.isEmpty()` | boolean | 只看长度，**不 trim**（`" "` 非空） |
+| `s.matches(pattern)` | boolean | 正则匹配（`pattern` 是**字符串**，不是 `/…/` 字面量）。**子串命中**即真，要整串请自己写 `^…$`。危险/非法正则会报错，见下 |
 
 **number 方法**
 
@@ -707,7 +708,7 @@ frontmatter 里整串恰为一个 wikilink 的字符串（`"[[目标]]"` / `"[[�
 | `random()` | `base/unsupported-feature`——与「同一输入必得同一输出」这条核心契约冲突。需要随机抽样请在拿到结果后自己洗牌 |
 | 任意标识符调用、动态成员调用 | 文法层拒绝 |
 | `constructor` / `prototype` / `__proto__` 访问 | 拒绝（安全白名单） |
-| regex 字面量、`%` 取模 | 文法层拒绝 |
+| regex **字面量** `/…/`、`%` 取模 | 文法层拒绝（正则请用 `s.matches("模式")`，传字符串） |
 | `this.*` | `base/dynamic-context-required` |
 | `cards` / `list` / `map` view、插件 view | `base/unsupported-feature` / `base/unsupported-view-type` |
 | 空 filter 数组、多值（list/tag）分组键 | `base/unsupported-feature`（官方语义未确认，不猜） |
@@ -829,6 +830,7 @@ missing/null/空串/0/false/空列表的 truthiness 精确合并；多键 sort �
 | `base/unsupported-view-type` | error | 未知/插件 view type（不按 table 猜测） |
 | `base/unsupported-feature` | error | `cards`/`list`/`map`、空 filter 数组、多值分组键等已知但未支持的特性；也用于 all-files 模式遇旧库无 `vault_entries` 表时的降级 compat warning（此时为 warning 级，数据集自动退回 md-only） |
 | `base/unknown-function` | error | 白名单外函数（含旧 snake_case，不静默迁移）；也用于未知汇总名 |
+| `base/invalid-regex` | warning | `matches()` 的正则非法、超长，或含灾难性回溯构造（`(a+)+`）/反向引用——**行级报错，不会静默当作「不匹配」** |
 | `base/expression-syntax` | error | 表达式文法错误（位置 = `.base` 文件行列）——**把 DQL 的 `=`/`AND` 写进 `.base` 会落这里** |
 | `base/formula-cycle` | error | 公式循环引用（message 含完整循环链） |
 | `base/path-outside-vault` | error | `.base` 路径越出 vault（读取前拒绝，不读任何字节） |

@@ -16,6 +16,7 @@
 
 import { linkKey, pathKey } from "../utils/path.js";
 import { BASE_FUNCTION_NAMES } from "./expressions.js";
+import { baseRegexTest } from "./regexp.js";
 import {
   BaseTypeError,
   BaseUnsupportedError,
@@ -965,6 +966,23 @@ const ENTRIES: readonly BaseFunctionEntry[] = [
         const [first, ...rest] = [...word];
         return (first ?? "").toUpperCase() + rest.join("").toLowerCase();
       });
+    },
+  },
+  {
+    name: "matches",
+    receiver: "string",
+    arity: { min: 1, max: 1 },
+    returnType: "boolean",
+    scenarioIds: ["BASE-EXPR-003", "BASE-SEC-004"],
+    // === Obsidian 规范来源: Bases string.matches(regex) ===
+    impl: (r, args, _ctx, entry) => {
+      const s = expectStringReceiver(entry, r);
+      const pattern = expectString(entry, args[0] as BaseValue, "正则源");
+      // pattern 是**字符串**而非 regex 字面量——文法层继续拒绝 `/…/` 字面量（语法 §4.3）。
+      // ReDoS 三层防护（静态拒绝灾难性构造 / 限长 / 有界编译缓存）见 regexp.ts；
+      // 不合法或不安全 → BaseInvalidRegexError → 行级 base/invalid-regex，**不静默不匹配**
+      // （与 DQL 侧 regexmatch 降级为 0 的策略有意不同，理由见 regexp.ts 文件头）。
+      return baseRegexTest(pattern, s);
     },
   },
   {

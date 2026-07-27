@@ -8,8 +8,8 @@ tags:
   - bases
   - functions
   - x-basalt
-timestamp: 2026-07-27T19:25:48Z
-sha256: 27e0e6afa9d94e08b0188bd612bdf5c240a5f0b4915df90e9d294850d171842e
+timestamp: 2026-07-27T19:32:34Z
+sha256: 69c330bc1f421be8cf0eb31dff3bc0482e51df2c2ff2f9c2b0572915d454f624
 ---
 # 计划：Bases 函数覆盖率（51% → ~90%）
 
@@ -36,7 +36,7 @@ sha256: 27e0e6afa9d94e08b0188bd612bdf5c240a5f0b4915df90e9d294850d171842e
 | 1 | 机械叶子函数 16 个 + 4 个渲染类拒绝 + `round` 归组 | 新增 receiver 组 `number` | ✅ |
 | 2 | Date/Duration 族 6 个（`date()`/`duration()`/`format`/`time`/`relative`/`isEmpty`） | 新增 receiver 组 `date`，扩 duration 格式化 | ✅ |
 | 3 | Link/File 互转 5 个（`asFile`/`linksTo`/`asLink`/`file()`/`link()`） | 行集 file 解析器 + **文法：`file(...)` 调用形态** | ✅ |
-| 4 | `matches`（regex）+ ReDoS 防护（BASE-SEC-004） | 正则执行预算 | ⏳ |
+| 4 | `matches`（regex）+ ReDoS 防护（BASE-SEC-004） | 新增 `src/base/regexp.ts` + rule `base/invalid-regex` | ✅ |
 | 5 | BASE-GROUP-002（list/link 分组键）+ BASE-SUM-002 收口 | engine 分组层 | ⏳ |
 | 6 | BASE-CTX-001 显式 `contextFile` + `this.*`（CTX-002/003/004 判❌不做 + 诊断） | engine/CLI 入参，**不动 parser**（2026-07-28 拍板缩范围后） | ⏳ |
 
@@ -168,3 +168,18 @@ sha256: 27e0e6afa9d94e08b0188bd612bdf5c240a5f0b4915df90e9d294850d171842e
 21. **`file()` 只在当前查询行集内解析**，不查库、不碰文件系统。理由：行集已在内存（零额外 IO），且语义自洽——`file()` 看得见的与查询数据集口径一致（markdown 模式解析不到附件，all-files 才能）。同键多文件取 path 升序第一个（行集本就 path ASC，「首次写入者胜」），不用「最近修改优先」这类会漂的规则。
 22. **`file()` 解析不到 → MISSING；`link()` 悬空 → 合法 link 值**。两种口径有意不同：file 是「找一个存在的东西」，link 是「记一个指向」——wikilink 本就允许悬空。
 23. **无解析器语境报 `unsupported-feature` 而非静默 MISSING**。唯一触发点是自定义汇总的 `values` 作用域（禁止访问行外状态）；静默 MISSING 会让用户以为「文件不存在」，而实际是「这里不许查」。
+
+### 片 4 ✅ 2026-07-28（BASE-SEC-004）
+
+**四门**（全绿）：typecheck / lint 零 warning / format:check / `pnpm test` **866 pass / 0 fail**（片三后基线 858，+8）。
+
+**测试**：新增 `tests/base-functions-regex.test.ts` 8 用例。**改动落点**：新增 `src/base/regexp.ts`；`errors.ts` 追加 rule `base/invalid-regex`；`evaluator.ts` 的 `evalCall` catch 增一条映射分支；`functions.ts` +1 条注册项。
+
+**关键取舍**：`matches` 的 pattern 是**字符串**，正则**字面量** `/…/` 继续在文法层拒绝——语法 §4.3 的「regex literal【P2 最后评估】」由此翻为「不做」（字面量形态要给文法层再加一套转义规则，收益不抵成本）。
+
+### 片 4 新增 Decision Log
+
+24. **ReDoS 三层防护，缺一不可**。JS 正则无超时机制，单靠任何一层都不够：①静态拒绝只挡经典形态（判据 = 无界量词作用于分组且分组体内含无界量词或顶层交替），是**充分不必要**条件；②限长让指数回溯没有足够输入触发；③有界缓存避免逐行重复编译成为新的开销面。根治需 re2 类线性引擎（外部依赖），本片不引入。
+25. **静态判据刻意保守**：只在**外层量词无界**时才查分组体，于是 `(\d+)?`（外层 `?` 有上界）、`(foo)+`（体内无量词无交替）、`[a-z]+@[a-z]+`（量词不作用于分组）全部放行。过度激进会把常用正则误杀，那比不做防护更糟——放行集合有专项用例锁定。
+26. **反向引用一律拒绝**（`\1`/`\k<name>`）：强制回溯且与量词组合极易指数化。检测前先剥掉成对转义，避免把「转义反斜杠 + 字面数字」误判成反向引用。
+27. **非法正则报诊断而非静默不匹配**——与 DQL 侧 `regexmatch` 有意不同。那边在 SQLite 自定义函数内不便产诊断，只能降级为 0；Bases 侧的硬约束是「不支持/不合法的写法必须报诊断」，故新增专用 rule `base/invalid-regex`（而不是复用 `property-type-mismatch`：「正则写错了」和「值类型不对」是两类完全不同的修法）。

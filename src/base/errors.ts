@@ -40,6 +40,10 @@ export const BASE_RULES = {
   defaultSortTiebreak: "base/default-sort-tiebreak",
   // P2a planner 增量（纯追加）：公式依赖循环（FORM-004，message 含完整循环链）。
   formulaCycle: "base/formula-cycle",
+  // 2026-07-28 覆盖率片四增量（纯追加）：`matches` 的正则不合法/不安全（BASE-SEC-004）。
+  // 单列一条而非复用 property-type-mismatch：「你的正则写错了/太危险」与「值类型不对」
+  // 是两类完全不同的修法，读出方需要能区分。
+  invalidRegex: "base/invalid-regex",
 } as const;
 
 /** base/* rule id 联合类型（由 {@link BASE_RULES} 派生，保证常量与类型不漂移）。 */

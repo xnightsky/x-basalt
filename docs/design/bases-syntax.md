@@ -8,8 +8,8 @@ tags:
   - obsidian
   - syntax
   - x-basalt
-timestamp: 2026-07-27T19:24:35Z
-sha256: 3608c512c4ca41d1a7d0ad55114fb5e20c7debf65e1acc618116537b8f254604
+timestamp: 2026-07-27T19:30:42Z
+sha256: 5c6a3272ac58ac4efc71ac910d1db532f382f96771bbebb3f84a8160f31aa520
 ---
 # Bases 语法参考（x-basalt 口径）
 
@@ -135,7 +135,7 @@ note property 来自 Markdown frontmatter；file property 对所有受支持文�
 - 优先级（低 → 高）：`||` → `&&` → `== !=` → `< > <= >=` → `+ -` → `* /` → 一元 `!` / `-` → postfix 属性/索引/调用 → primary。【P1 ✅ + P2a ✅ 算术层】
 - 算术（`+ - * /`、一元 `-`）与 duration 字面量（`<number><unit>`，单位 millisecond/second/minute/hour/day/week/month/year 含复数）。【P2a ✅】
 - Link/File 构造字面量。【不做（P2a 评估：无真实需求；frontmatter wikilink 值 → Link 的机制见 §5.3）】
-- regex literal。【P2 最后评估】
+- regex literal（`/…/`）。【不做：正则以**字符串**入参走 `string.matches(pattern)`，见 §4.4；字面量形态会让文法层多一套转义规则，收益不抵成本】
 
 ### 4.4 函数/方法白名单
 
@@ -148,6 +148,7 @@ note property 来自 Markdown frontmatter；file property 对所有受支持文�
 | any    | `isTruthy`、`isType`、`toString`                                                    | 【P1 ✅】 |
 | string | `contains`、`containsAll`、`containsAny`、`startsWith`、`endsWith`、`lower`、`trim` | 【P1 ✅】 |
 | string | `replace`、`repeat`、`reverse`、`slice`、`split`、`title`、`isEmpty`                | 【2026-07-28 ✅】 |
+| string | `matches(pattern)`（正则，pattern 为字符串）                                        | 【2026-07-28 ✅ BASE-SEC-004】子串命中语义；ReDoS 三层防护（静态拒绝无界量词套无界量词/交替与反向引用 → 限长 pattern 200 / 被匹配串 10000 → 有界编译缓存）；非法或不安全一律行级 `base/invalid-regex`，**不静默降级为不匹配**（与 DQL 侧 `regexmatch` 有意不同） |
 | list   | `contains`、`containsAll`、`containsAny`、`isEmpty`                                 | 【P1 ✅】 |
 | list   | `reverse`、`slice`                                                                  | 【2026-07-28 ✅】 |
 | object | `isEmpty`、`keys`、`values`                                                         | 【P1 ✅】 |
@@ -163,7 +164,7 @@ note property 来自 Markdown frontmatter；file property 对所有受支持文�
 | number | `abs`、`ceil`、`floor`、`toFixed`（返 string）、`isEmpty`（恒 false）               | 【2026-07-28 ✅】 |
 | 渲染   | `escapeHTML`（string）、`html`/`image`/`icon`（global）                             | 【2026-07-28 ✅ 白名单内显式拒绝：`base/unsupported-feature`「无头内核不渲染」，不再报 unknown-function】 |
 | 杂项   | `random`                                                                            | 【2026-07-28 ❌ 白名单内显式拒绝：`base/unsupported-feature`「与字节稳定保证冲突」。用户拍板不注入种子、不放弃字节稳定——「同一输入必得同一输出」是本引擎核心契约】 |
-| 杂项   | regex（`matches`）                                                                  | 【🔜 片 4：需 ReDoS 防护 + 长度预算，BASE-SEC-004】 |
+
 
 语义要点：`if()` lazy branch（只计算被选择分支）【P1 ✅ 暂定 lazy 实现，待 oracle 校正】；list 成员比较用 typed equality；`number()` 转换失败行为【P1 ✅ 冻结为行级类型错误】。
 
