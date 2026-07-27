@@ -357,7 +357,8 @@ program
             if (entries.length === 0) {
               console.log("  （无变更，按目录明细为空）");
             } else {
-              for (const [dir, c] of entries) console.log(`  ${dir}  +${c.added} ~${c.modified} -${c.deleted}`);
+              for (const [dir, c] of entries)
+                console.log(`  ${dir}  +${c.added} ~${c.modified} -${c.deleted}`);
             }
           }
         }
@@ -421,10 +422,7 @@ program
   .option("--db <path>", "SQLite 索引文件路径（默认 .x-basalt/index.db，可由配置 db 覆盖）")
   .option("--format <fmt>", "输出格式 json|yaml（默认 json，可由配置 format 覆盖）")
   .action(
-    (
-      file: string,
-      opts: { view?: string; vault: string[]; db?: string; format?: string },
-    ) => {
+    (file: string, opts: { view?: string; vault: string[]; db?: string; format?: string }) => {
       // 薄出口（设计 §15 API 先于 CLI）：只装配，业务逻辑全在 BaseEngine。
       // vaultRoots 非空是 SEC-008 路径防线的前置（.base 必须落在 vault 内）。
       const vaultInput = requireVault(
@@ -857,7 +855,10 @@ links
       process.exitCode = 2;
       return;
     }
-    const { diagnostics, exitCode } = await runLinksSuggest(file, { vault, ignore: config.lint?.ignore });
+    const { diagnostics, exitCode } = await runLinksSuggest(file, {
+      vault,
+      ignore: config.lint?.ignore,
+    });
     if (opts.format === "json" || opts.format === "yaml") emit(diagnostics, opts.format);
     else console.log(renderHuman(diagnostics));
     process.exitCode = exitCode;
@@ -865,7 +866,9 @@ links
 
 program
   .command("lint")
-  .description("按规则集诊断 vault，产出统一 BasaltDiagnostic（KB compiler；规则：links、metadata）")
+  .description(
+    "按规则集诊断 vault，产出统一 BasaltDiagnostic（KB compiler；规则：links、metadata）",
+  )
   .argument("[vault...]", "Vault 目录（可多个；省略则回退配置 vault）")
   .option("--rules <list>", "规则集，逗号分隔（默认 links；给 --profile 时默认 metadata）")
   .option(

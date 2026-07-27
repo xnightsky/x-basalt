@@ -582,7 +582,8 @@ export function generateListSql(filter: ListFilter): CompiledList {
     params.push(`%${escapeLike(filter.name)}%`);
   }
 
-  let sql = "SELECT f.path AS path, f.name AS name, f.folder AS folder, f.mtime AS mtime FROM files f";
+  let sql =
+    "SELECT f.path AS path, f.name AS name, f.folder AS folder, f.mtime AS mtime FROM files f";
   if (whereSql.length) sql += ` WHERE ${whereSql.join(" AND ")}`;
   sql += " ORDER BY f.path";
   return { sql, params };

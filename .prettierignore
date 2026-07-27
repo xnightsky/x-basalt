@@ -1,0 +1,9 @@
+# oxfmt 默认读取 .gitignore 与 .prettierignore（无 .oxfmtignore 机制）。
+#
+# tests/fixtures/ 必须逐字节保持原样：里面有**故意非法**的样例（如
+# bases/p2/types/vault-invalid-json/.obsidian/types.json 是刻意写坏的 JSON，
+# 用于 BASE-TYPE-003 回退路径），格式化器解析即报错并中止整次检查；
+# 其余 fixture 的缩进/引号形态也常常本身就是被断言的对象。
+# 与 .oxlintrc.json 的 ignorePatterns 保持同一豁免口径。
+tests/fixtures/
+dist/

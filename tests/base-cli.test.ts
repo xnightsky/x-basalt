@@ -120,16 +120,7 @@ test("CLI 层字节稳定：同一命令连跑两次 stdout 全等", () => {
 });
 
 test("--format yaml：输出非 JSON 且含 conformance 字样", () => {
-  const r = run([
-    "base",
-    defaultBase,
-    "--vault",
-    vaultPath,
-    "--db",
-    dbPath,
-    "--format",
-    "yaml",
-  ]);
+  const r = run(["base", defaultBase, "--vault", vaultPath, "--db", dbPath, "--format", "yaml"]);
   assert.equal(r.status, 0, r.stderr);
   assert.throws(() => JSON.parse(r.stdout), "yaml 输出不应是合法 JSON");
   assert.ok(r.stdout.includes("conformance"));

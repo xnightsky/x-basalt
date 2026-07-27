@@ -41,7 +41,8 @@ export function resolveWikilink(
     }
     const hits = index.filesByBasename.get(basename(target).toLowerCase());
     if (!hits) return { reason: "not_found" };
-    if (hits.length > 1) return { reason: "ambiguous_target", suggestions: suggestFrom(fileRel, hits) };
+    if (hits.length > 1)
+      return { reason: "ambiguous_target", suggestions: suggestFrom(fileRel, hits) };
     return {};
   }
 
@@ -51,7 +52,8 @@ export function resolveWikilink(
   }
   const hits = index.notesByStem.get(linkKey(target));
   if (!hits) return { reason: "not_found" };
-  if (hits.length > 1) return { reason: "ambiguous_target", suggestions: suggestFrom(fileRel, hits) };
+  if (hits.length > 1)
+    return { reason: "ambiguous_target", suggestions: suggestFrom(fileRel, hits) };
   return {};
 }
 
@@ -72,7 +74,8 @@ export function resolveMarkdownLink(
 ): LinkFinding {
   const rawTarget = node.target;
   if (rawTarget === "") return {};
-  if (EXTERNAL_RE.test(rawTarget) || rawTarget.startsWith("#")) return { reason: "external_skipped" };
+  if (EXTERNAL_RE.test(rawTarget) || rawTarget.startsWith("#"))
+    return { reason: "external_skipped" };
 
   const backslash = rawTarget.includes("\\");
   const normalized = backslash ? rawTarget.replaceAll("\\", "/") : rawTarget;

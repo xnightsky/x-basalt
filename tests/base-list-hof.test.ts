@@ -305,7 +305,12 @@ after(() => {
 });
 
 test("BASE-LIST-001(e2e): filter 中 map+contains 作用于 file.tags（命中恰 Alpha）", () => {
-  const r = e2eEngine.query({ basePath: e2eBase, view: "by-tag", dbPath: e2eDb, vaultRoots: [e2eVault] });
+  const r = e2eEngine.query({
+    basePath: e2eBase,
+    view: "by-tag",
+    dbPath: e2eDb,
+    vaultRoots: [e2eVault],
+  });
   assert.deepEqual(
     r.rows.map((row) => row["file.name"]),
     ["Alpha.md"],
@@ -314,7 +319,12 @@ test("BASE-LIST-001(e2e): filter 中 map+contains 作用于 file.tags（命中�
 });
 
 test("BASE-LIST-001(e2e): formula 中 reduce 计数（Alpha=2、其余=0），sort DESC 生效", () => {
-  const r = e2eEngine.query({ basePath: e2eBase, view: "tag-count", dbPath: e2eDb, vaultRoots: [e2eVault] });
+  const r = e2eEngine.query({
+    basePath: e2eBase,
+    view: "tag-count",
+    dbPath: e2eDb,
+    vaultRoots: [e2eVault],
+  });
   assert.equal(r.rows[0]?.["file.name"], "Alpha.md");
   assert.equal(r.rows[0]?.["formula.tagcount"], 2);
   for (const row of r.rows.slice(1)) assert.equal(row["formula.tagcount"], 0);

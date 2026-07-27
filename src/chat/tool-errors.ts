@@ -55,7 +55,8 @@ export function classifyError(e: unknown): ErrorClass {
     if (code === "ENOENT" || code === "SQLITE_CANTOPEN") return "not-found";
   }
   const msg = e instanceof Error ? e.message : String(e);
-  if (/\bDQL\b|dataview|Expecting|NoViableAlt|MismatchedToken|EarlyExit|无法解析|语法/i.test(msg)) return "dql";
+  if (/\bDQL\b|dataview|Expecting|NoViableAlt|MismatchedToken|EarlyExit|无法解析|语法/i.test(msg))
+    return "dql";
   if (/ENOENT|no such file|unable to open database|不存在/i.test(msg)) return "not-found";
   if (/SQLITE_BUSY|database is locked|resource busy|EBUSY|EAGAIN/i.test(msg)) return "transient";
   if (/invalid|required|不合法|必填|缺少|类型/i.test(msg)) return "invalid";
@@ -107,7 +108,9 @@ export function wrapToolErrors<T extends Record<string, unknown>>(tools: T): T {
   for (const [name, t] of Object.entries(tools)) {
     const exec = (t as { execute?: unknown }).execute;
     out[name] =
-      typeof exec === "function" ? { ...(t as object), execute: wrapExecute(exec as AnyExecute) } : t;
+      typeof exec === "function"
+        ? { ...(t as object), execute: wrapExecute(exec as AnyExecute) }
+        : t;
   }
   return out as T;
 }
