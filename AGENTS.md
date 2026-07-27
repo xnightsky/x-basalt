@@ -43,6 +43,7 @@
 | Runtime / 语言               | Node.js 22+（开发用 24.x）+ TypeScript 5.x（ESM / NodeNext）                                                 |
 | CLI                          | commander                                                                                                    |
 | Obsidian 专有语法 / 基础解析 | **自建提取**（wikilink/embed/callout/highlight/task/blockRef），纯正则、不建完整 mdast、无第三方 wikilink 库 |
+| 查询语言文法（DQL / Bases 表达式） | chevrotain（词法 + parser；两套 token/AST 完全独立，**自建 grammar**，不依赖 obsidian-dataview 执行层） |
 | Frontmatter                  | gray-matter                                                                                                  |
 | 文件监听                     | chokidar                                                                                                     |
 | 索引存储                     | better-sqlite3（单文件 SQLite，同步 API）                                                                    |
@@ -57,7 +58,7 @@
 ```
 src/parser/   解析层：内容 → ObsidianNode[]（纯函数，不碰 fs/DB）
 src/indexer/  索引层：调 parser 写 SQLite，chokidar 增量
-src/query/    查询层：手写 DQL tokenizer→ast→sql-generator，编译为参数化 SQL
+src/query/    查询层：DQL tokenizer→ast→sql-generator（chevrotain 文法），编译为参数化 SQL
 src/skill/    Skill 召回：json5 加载 + 模糊匹配，内置 obsidian-base-spec 兜底
 src/meta/     元数据写侧：frontmatter 往返内核(yaml Document) + CRUD + 原子写（唯一写 .md 的层）
 src/base/     Bases 无头引擎：.base 文档层 + 查询/公式/类型/分组汇总（P0..P2b 已落地；all-files/context 属 P3）
@@ -145,6 +146,7 @@ docs/         research / specs / plans / guides / architecture / testing（见 d
 - 读写路由见 `docs/README.md`；改动前读直接相关文档，结论写回对应目录。
 - 大改动记入对应 `specs/` 决策/设计文档（`-decision`/`-design`）或当前阶段 `plans/`；小改动至少同步直接受影响的规范/实现说明/计划，不静默覆盖原规则。
 - **文档元数据自举（dogfood）**：在 `docs/` 新增或重写文档后，用 x-basalt 自己给它补 frontmatter 元数据（默认 profile `llm-wiki`），不手写——机械字段（`timestamp`/`sha256`）由工具补，语义字段（`type`/`title`/`description`/`tags`）作为消费者读 `meta profile show` 后经 `--set` 补：`x-basalt meta apply llm-wiki <doc> --set type=… --set title=… --set description=… --set tags=…`。x-basalt 的文档由 x-basalt 维护，是写侧能力的持续 dogfood。
+  - **改动已有文档后必须带 `--refresh-derived`**（`x-basalt meta apply llm-wiki <doc> --refresh-derived`）：不带时 `apply` 只补**缺失**字段，已存在的 `timestamp`/`sha256` 原样保留——正文改了而 sha256 停在旧值，漂移检测就此失效。`created`/`pubDate` 恒定不动，无需担心被重写。
 
 ## 脱敏
 

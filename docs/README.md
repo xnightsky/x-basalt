@@ -1,6 +1,6 @@
 ---
-timestamp: 2026-07-09T05:27:46Z
-sha256: 2d3d32367cbe82f4f3bbb1a06e060271cebd7c5cfdc9b9bf68897ed0b1b307bf
+timestamp: 2026-07-27T03:10:21Z
+sha256: b3e82f85173ec71875db17a8ced83193758646117c4fdd041b6a3b7360005c2a
 type: index
 title: docs · 文档入口与路由
 description: x-basalt 文档真相源目录路由与三层口径
@@ -34,7 +34,7 @@ tags:
 
 ## 当前活跃文档
 
-- **Bases 无头引擎（当前核心线）**：语法真相源 [`specs/2026-07-26-bases-syntax.md`](specs/2026-07-26-bases-syntax.md)；实现状态追踪（living） [`testing/2026-07-26-bases-implementation-status.md`](testing/2026-07-26-bases-implementation-status.md)；设计 [`specs/2026-07-22-bases-headless-engine-design.md`](specs/2026-07-22-bases-headless-engine-design.md)；场景矩阵 [`testing/2026-07-22-bases-scenario-matrix.md`](testing/2026-07-22-bases-scenario-matrix.md)；使用指南 [`guides/querying-bases.md`](guides/querying-bases.md)；oracle 操作手册 [`testing/2026-07-27-bases-oracle-runbook.md`](testing/2026-07-27-bases-oracle-runbook.md)；P3 附件 schema 决策 [`specs/2026-07-27-bases-p3-vault-entries-decision.md`](specs/2026-07-27-bases-p3-vault-entries-decision.md)
+- **Bases 无头引擎（当前核心线）**：语法真相源 [`specs/2026-07-26-bases-syntax.md`](specs/2026-07-26-bases-syntax.md)；实现状态追踪（living） [`testing/2026-07-26-bases-implementation-status.md`](testing/2026-07-26-bases-implementation-status.md)；设计 [`specs/2026-07-22-bases-headless-engine-design.md`](specs/2026-07-22-bases-headless-engine-design.md)；场景矩阵 [`testing/2026-07-22-bases-scenario-matrix.md`](testing/2026-07-22-bases-scenario-matrix.md)；使用指南 [`guides/writing-bases.md`](guides/writing-bases.md)（是什么 / 教程 / **面向使用者的语法快照**）与 [`guides/querying-bases.md`](guides/querying-bases.md)（命令 / 契约 / 报错）；oracle 操作手册 [`testing/2026-07-27-bases-oracle-runbook.md`](testing/2026-07-27-bases-oracle-runbook.md)；P3 附件 schema 决策 [`specs/2026-07-27-bases-p3-vault-entries-decision.md`](specs/2026-07-27-bases-p3-vault-entries-decision.md)
 - **架构总览（架构图 + 组件清单，先读这个建立全局观）**：[`architecture/2026-06-28-overview.md`](architecture/2026-06-28-overview.md)——分层依赖/读写数据流/DQL 管线/SQLite 数据模型/组件目录
 - 使用指南（面向使用者，**教程总目录 + 分章**）：[`guides/usage.md`](guides/usage.md)——安装/命令/DQL/索引同步/配置/Obsidian语法/AI协作/排查
 - 选库与许可证避坑（选第三方库前必读）：[`guides/dependency-license-policy.md`](guides/dependency-license-policy.md)

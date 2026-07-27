@@ -1,7 +1,7 @@
 ---
 type: testing
 title: Bases P1 争议语义官方 oracle 操作手册
-description: 四项暂定口径（truthiness/null 排序/空 filter 数组/if lazy）的官方串行 oracle：fixture vault、13 个 view 逐步执行、观察记录表与校正工作流
+description: 九项暂定口径（truthiness/null 排序/空 filter 数组/if lazy/date-datetime/wikilink-Link/list 分组键/summary values/拼接语境日期推断）的官方串行 oracle：fixture vault、26 个 view 逐步执行、观察记录表与校正工作流
 tags:
   - testing
   - bases
@@ -28,6 +28,7 @@ sha256: f0e8c4a123b8efb3f1d8f0842235addaf42a0da1755ebb228eaa50cb107727dd
 | ⑥ | frontmatter wikilink → Link 值与相等 | BASE-TYPE-006 | `[[t]]`/`[[t\|d]]`/`[[t#sub]]` → Link value，按 path+subpath 相等（P2a 落地） | `views/types.base`（link-eq-wikilink / link-projection） |
 | ⑦ | list/tag 分组键一行多组 | BASE-GROUP-002 | 暂定拒绝（`base/unsupported-feature`，P2b 落地） | `views/group-summary.base`（group-by-tags / group-by-list-prop） |
 | ⑧ | 自定义 summary 的 `values` 边界（空值剔除 / limit 前后） | BASE-SUM-002 | 暂定剔除 null/missing、按 limit 前全量（P2b 落地） | `views/group-summary.base`（summary-custom / summary-custom-limited） |
+| ⑨ | 字符串→日期推断是否作用于 `+`（拼接语境） | 语法 §5.1 / 设计 §8.3 | 推断对全部非短路二元运算生效，故 `due + " 备注"` 报行级类型错误而非拼接（2026-07-27 review 登记） | `views/types.base`（concat-plain-string 对照 / concat-date-string） |
 
 ## 2. 前置（一次性）
 
@@ -44,7 +45,7 @@ sha256: f0e8c4a123b8efb3f1d8f0842235addaf42a0da1755ebb228eaa50cb107727dd
 1. 运行 `base:query`（view 名见下表），保存：原始 JSON、stderr、退出码。
 2. 每个 view **连跑两次**，确认结果一致；不一致即标 `implementation-defined`（协议 §8 第 7 条，不得靠单次观察冻结强结论）。
 
-view 清单（22 个）：truthiness.base × 8（truthy-missing / truthy-explicit-null / truthy-empty-string / truthy-zero / truthy-false / truthy-empty-list / eq-missing-null / eq-explicit-null-null）、sort-null.base × 2（sort-asc / sort-desc）、if-lazy.base × 2（if-lazy / if-lazy-false-branch）、empty-filter.base × 3（empty-and / empty-or / empty-not）、types.base × 5（date-eq-literal / date-lt-datetime / datetime-lt-date / link-eq-wikilink / link-projection，P2a 新增，样本 CaseE）、group-summary.base × 4（group-by-tags / group-by-list-prop / summary-custom / summary-custom-limited，P2b 新增，样本 CaseF 与 CaseB/C）。
+view 清单（26 个）：truthiness.base × 8（truthy-missing / truthy-explicit-null / truthy-empty-string / truthy-zero / truthy-false / truthy-empty-list / eq-missing-null / eq-explicit-null-null）、sort-null.base × 2（sort-asc / sort-desc）、if-lazy.base × 2（if-lazy / if-lazy-false-branch）、empty-filter.base × 3（empty-and / empty-or / empty-not）、types.base × 7（date-eq-literal / date-lt-datetime / datetime-lt-date / link-eq-wikilink / link-projection，P2a 新增；concat-plain-string / concat-date-string，2026-07-27 review 新增；样本 CaseE）、group-summary.base × 4（group-by-tags / group-by-list-prop / summary-custom / summary-custom-limited，P2b 新增，样本 CaseF 与 CaseB/C）。
 
 ## 4. 观察记录表（跑完逐项填写）
 
@@ -102,11 +103,22 @@ view 清单（22 个）：truthiness.base × 8（truthy-missing / truthy-explici
 | summary-custom | | | |
 | summary-custom-limited | | | |
 
+### ⑨ 拼接语境下的日期推断（2026-07-27 review 新增，样本 CaseE：due="2026-07-27"、label="报告"）
+
+> 读法：`concat-plain-string` 先验证官方 string+string 拼接可用；在此前提下，
+> `concat-date-string` 出错 ⇒ 官方拼接语境**同样**做日期推断（x-basalt 暂定口径正确）；
+> 得到 `"2026-07-27 备注"` ⇒ 官方在拼接语境**抑制**推断，需按官方收窄 `upgradeStringOperand`。
+
+| view | 官方结果 | 两次一致？ | 结论 |
+| --- | --- | --- | --- |
+| concat-plain-string | | | |
+| concat-date-string | | | |
+
 ## 5. 校正工作流（拿到结论后）
 
 1. 定位需改写的锁定测试（全部带「待 oracle」标注）：
    - `rg -n "oracle" tests/base-evaluator.test.ts tests/base-engine.test.ts`
-   - 语义实现落点：`src/base/values.ts`（truthiness/equality/sortKeyCompare）、`src/base/evaluator.ts`（if lazy）、`src/base/planner.ts`（空数组拒绝）。
+   - 语义实现落点：`src/base/values.ts`（truthiness/equality/sortKeyCompare）、`src/base/evaluator.ts`（if lazy、`upgradeStringOperand` 拼接语境推断）、`src/base/planner.ts`（空数组拒绝）。
 2. 按官方结论改写实现与测试，**删除对应「待 oracle」标注**，状态文档 [`2026-07-26-bases-implementation-status.md`](2026-07-26-bases-implementation-status.md) §3 对应行翻 ✅。
 3. 若某 view 两次结果不一致 → 该语义标 `implementation-defined`：x-basalt 维持暂定口径并注释「官方不稳定」，测试只锁定 x-basalt 自一致性。
 4. 原始 JSON/stderr/版本/hash 随校正提交一并留存（放 `docs/testing/oracle/` 新建日期目录）。

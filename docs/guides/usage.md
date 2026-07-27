@@ -1,6 +1,6 @@
 ---
-timestamp: 2026-07-09T05:53:07Z
-sha256: 88a52d7a27d4c4dfdd21ff242718b752412f1c8f2e2d72fd8abbdc787d85fba7
+timestamp: 2026-07-27T03:10:21Z
+sha256: 852e981b77e5f4e2977fed6904fe43d6e7a5a7164d88e4864aebeb3c797cb3b5
 type: guide
 title: 使用指南 · x-basalt（教程总目录）
 description: 面向使用者的教程总目录与分章导航
@@ -70,7 +70,8 @@ x-basalt skills recall wikilink
 | [安装与运行](installation.md)                             | 要求（Node ≥ 22）、从源码构建、**全局安装（npm link）**、三种运行方式、改源码后重编译                                                     |
 | [命令参考](commands.md)                                   | 12 个命令逐项：`parse` / `index` / `scan` / `query` / `base` / `skills` / `meta` / `watch` / `run` / `chat` / `links` / `lint`（签名、选项、默认、示例） |
 | [DQL 查询指南](querying-dql.md)                           | 完整 Dataview 子集文法（LIST/TABLE/TASK + WHERE + GROUP BY/FLATTEN/WITHOUT ID + 多键 SORT + 函数）、隐式字段、报错口径                    |
-| [Bases 查询指南](querying-bases.md)                       | `.base` view 无头查询：支持子集（filter/表达式/函数白名单/file 属性）、稳定 JSON 契约、退出码、md-only 限制与 oracle 暂定口径           |
+| [Bases 编写指南](writing-bases.md)                        | Bases 是什么（笔记即表 / 与 DQL 之别）、六步写出第一个 `.base`、**x-basalt 覆盖的完整语法快照**（顶层 key / view / filter / 表达式与优先级 / 函数全表 / 值与类型语义 / 明确不支持） |
+| [Bases 查询指南](querying-bases.md)                       | `x-basalt base` 怎么跑：选项、稳定 JSON 输出契约、退出码、限制与 oracle 暂定口径、报错速查                                                |
 | [教程：`rating::` 打分](tutorial-rating-inline-fields.md) | 10 分钟上手正文 inline fields（`key:: value` 三种写法、示例 vault 实测、坑清单：文本比较/last-wins/frontmatter 优先、该不该用的调研结论） |
 | [索引与同步](indexing-and-sync.md)                        | `index` vs `scan` vs `watch` 何时用；scan 深入（mtime/`--rehash`/`--dry-run`/分批断点续）；5 表数据模型；路径感知链接                     |
 | [配置与基目录](configuration.md)                          | 配置文件（cosmiconfig 向上查找、yaml/json5）、可配置项、**`X_BASALT_DIR`**、优先级                                                        |

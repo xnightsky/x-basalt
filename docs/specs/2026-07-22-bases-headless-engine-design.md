@@ -334,13 +334,18 @@ export interface BaseExecutionLimits {
   maxFilterDepth: number;
   maxExpressionNodes: number;
   maxCallDepth: number;
+  maxFormulaNodes: number; // P2a：公式依赖图节点数（SEC-006）
+  maxFormulaDepth: number; // P2a：公式依赖链深度（SEC-006）
   maxRows: number;
   maxCollectionItems: number;
-  maxOperations: number;
+  maxOperations: number; // 单次表达式求值上限（每次调用重置）
+  maxTotalOperations: number; // 单次查询总额（跨行累计）
 }
 ```
 
 首期默认值实现时通过 fixture/benchmark 校准，但必须存在硬上限。每次 AST 节点访问、函数调用、列表元素比较和行过滤都扣 operations；耗尽后抛 `base/execution-budget`，不得返回部分结果冒充成功。
+
+**operations 是两级预算**（2026-07-27 code review 修正）：`maxOperations` 的计数器随每次表达式求值重置，它约束的是「单行单表达式」的复杂度；只有它时最坏总量 = `maxRows × 列数 × maxOperations`（约 1e11），对抗输入可以让每行都恰好烧到单次上限，于是「预算从未耗尽」而查询已不可用。故另设 `maxTotalOperations`——由 engine 每次 query 建一个共享计数器，该次查询的全部行/列求值、groupBy 分桶与 summaries 迭代共用这一份总额（三者此前各自新建计数器，等于给同一次查询开了三份额度）。
 
 属性访问器禁止：
 

@@ -1,62 +1,53 @@
 ---
 type: guide
 title: Bases 查询指南 · x-basalt
-description: .base view 无头查询：支持子集、稳定 JSON 契约、退出码、md-only 限制与 oracle 暂定口径
+description: x-basalt base 命令怎么跑：选项、稳定 JSON 输出契约、退出码、限制与 oracle 暂定口径、常见报错速查
 tags:
   - guide
   - bases
   - query
   - x-basalt
-timestamp: 2026-07-26T17:40:07Z
-sha256: 80a42821bae59fb75ebc3aafc1a5e41260ec2939e25c1f84f30d748cf4c9909f
+timestamp: 2026-07-27T03:09:59Z
+sha256: 517b5eaf59cc0c2c09ea6ceaf39a872b66f8b23d4a0f7b00a490083c90fa8182
 ---
 # Bases 查询指南 · x-basalt
 
-> 上级索引：[使用指南](usage.md) · 同级：[命令参考](commands.md) · [DQL 查询指南](querying-dql.md) · [索引与同步](indexing-and-sync.md) · [故障排查](troubleshooting.md)
+> 上级索引：[使用指南](usage.md) · **前置**：[Bases 编写指南](writing-bases.md)（Bases 是什么、六步教程、**完整语法快照**）· 同级：[命令参考](commands.md) · [DQL 查询指南](querying-dql.md) · [索引与同步](indexing-and-sync.md) · [故障排查](troubleshooting.md)
 >
-> 真相源：`src/base/`（engine/planner/evaluator/functions/values/source/parser/tokens）、`docs/specs/2026-07-26-bases-syntax.md`（语法）、`docs/specs/2026-07-22-bases-headless-engine-design.md`（设计契约）、`docs/testing/2026-07-26-bases-implementation-status.md`（逐项实现状态）。
+> 本文管**怎么跑**：命令与选项 → 输出契约 → 限制 → 报错速查。
+> **`.base` 怎么写、支持哪些语法，全部在[编写指南](writing-bases.md)**——本文不重复语法，遇到「这个写法支不支持」一律去那边查 [§3 完整语法快照](writing-bases.md#3-完整语法快照x-basalt-覆盖范围)。
+
+`x-basalt base` 是 `.base` 文件的**无头查询出口**：不启动 Obsidian、不渲染表格，回答「对当前 SQLite 索引中的 Markdown 笔记，指定 view 会返回哪些行和列」。兼容级别 `bases-markdown-2026-07`（官方文档快照 2026-07-22）。
+
+**执行流水线**：`.base`（YAML + schema 校验）→ view 选择 + filter 合并（planner）→ SQLite 读候选 Markdown 行（source，固定 SQL 只读）→ 独立表达式 AST 内存求值（evaluator，带预算）→ 稳定 JSON。
 
 ---
 
-## 1. 概览
-
-`x-basalt base` 是 Obsidian `.base` 文件的**无头查询出口**：不启动 Obsidian、不渲染表格，回答「对当前 SQLite 索引中的 Markdown 笔记，指定 `.base` view 会返回哪些行和列」。兼容级别：
+## 1. 命令
 
 ```text
-x-basalt Bases Markdown conformance 2026-07
-```
-
-流水线：`.base`（YAML + schema 校验）→ view 选择 + filter 合并（planner）→ SQLite 读候选 Markdown 行（source，只读参数化）→ 独立表达式 AST 内存求值（evaluator，带预算）→ 稳定 JSON。**Bases 表达式不是 DQL**（`==`/`&&`/`||`/`!` vs `=`/`AND/OR/NOT`），两套 token/AST 完全独立。
-
-它不承诺：渲染 table/cards/list/map 布局、控制 Obsidian App、查询附件等非 Markdown 文件、运行任意 JavaScript/插件函数、模拟 GUI `this`。
-
-## 2. 快速上手
-
-```bash
-x-basalt index ./my-vault                                  # 先建索引（.base 查询只读索引）
-x-basalt base views/projects.base --vault ./my-vault       # 默认 view（views[0]）
-x-basalt base views/projects.base --view Active --vault ./my-vault
-```
-
-`.base` 路径必须落在 vault 内（读取前拒绝越界）。`--vault` 可省略回退配置 `vault`，`--db` 默认 `.x-basalt/index.db`。
-
-## 3. 命令
-
-```
 x-basalt base <file.base> [--view <name>] [--vault <path...>] [--db <path>] [--format json|yaml]
 ```
 
 | 参数/选项 | 默认 | 说明 |
 | --- | --- | --- |
-| `<file.base>` | 必填 | vault 内 `.base` 路径（vault 相对或绝对） |
-| `--view <name>` | `views[0]` | 指定 view；不存在报 `base/view-not-found`（error，suggestions 列可用名） |
+| `<file.base>` | 必填 | vault 内 `.base` 路径（vault 相对或绝对）；越出 vault 在读取前拒绝 |
+| `--view <name>` | `views[0]` | 指定 view；不存在报 `base/view-not-found`（error，`suggestions` 列可用名） |
 | `--vault <path>` | 配置 `vault` | 可重复传多个（多根 vault） |
 | `--db <path>` | `.x-basalt/index.db` | 索引文件（只读打开） |
 | `--format <fmt>` | `json` | `json`（缩进 2）或 `yaml` |
 
-**退出码**：结果 `diagnostics` 含任一 `error` 级 → 仍输出完整 JSON（rows 为空）并以 **1** 退出；仅 warning/info → **0**。
+```bash
+x-basalt index ./my-vault                                   # 先建索引（查询只读索引，不扫文件）
+x-basalt base views/projects.base --vault ./my-vault        # 默认 view（views[0]）
+x-basalt base views/projects.base --view Active --vault ./my-vault
+```
 
-## 4. 输出契约
+**退出码**：`diagnostics` 含任一 `error` 级 → 仍输出完整 JSON（`rows` 为空）并以 **1** 退出；仅 warning/info → **0**。CI 里可直接当 `.base` 校验器用。
+
+> 笔记改了要重建索引（`x-basalt index`）或增量重扫（`x-basalt scan`），否则查的是旧快照。
+
+## 2. 输出契约
 
 ```json
 {
@@ -72,41 +63,69 @@ x-basalt base <file.base> [--view <name>] [--vault <path...>] [--db <path>] [--f
 }
 ```
 
-- `total` = filter 后、limit 前的行数；`rows.length <= limit`。
-- 列 = view 的 `order` 原文（缺省 `["file.name"]`）；缺失属性投影为 `null`，列不消失。
-- 未显式 `sort` 时按 `file.path` 升序稳定输出，并附 `base/default-sort-tiebreak`（info）；显式多键 sort 稳定执行、最终也以 `file.path` 兜底 tie-break。
-- 每次查询恒发 `base/markdown-only-dataset`（warning）：声明 md-only conformance，附件不作为行。
-- 同一 DB + Base 重复运行结果**字节稳定**；输出值只含 JSON 形状，不泄漏内部对象。
-
-## 5. .base 支持子集（P1 + P2a + P2b）
-
-- view：`type: table` 的 `filters` / `order` / `sort`（ASC/DESC）/ `limit`（非负整数）/ `groupBy { property, direction }` / `summaries`；`cards`/`list`/`map` 与插件 view 报 `base/unsupported-feature` / `base/unsupported-view-type`。
-- filter：表达式字符串 + 递归 `and`/`or`/`not`（单键数组）；全局 `filters` 与 view filter 外层 AND 合并；**空数组（`and: []` 等）直接拒绝**（`base/unsupported-feature`，语义待官方 oracle）。
-- formulas：顶层 `formulas:` map（表达式字符串），以 `formula.name` 引用；依赖图拓扑排序（与 YAML 键序无关）、循环报 `base/formula-cycle`（含完整循环链）。
-- 表达式：字面量（null/boolean/number/字符串/list）、属性引用（`status` / `note.status` / `note["带空格"]` / Unicode 名 / `file.*` / `formula.*`）、`!` `&&` `||` `==` `!=` `<` `>` `<=` `>=`、算术 `+ - * /`（含字符串拼接与 date/duration 算术）、一元 `-`、duration 字面量（`1day`/`2weeks` 等）、括号、白名单函数/方法调用、只读属性/索引访问。无 regex、无 `%`。
-- 函数白名单：`if` / `list` / `number`；`isTruthy` / `isType` / `toString`；string `contains` / `containsAll` / `containsAny` / `startsWith` / `endsWith` / `lower` / `trim`；list `contains` / `containsAll` / `containsAny` / `isEmpty` / `filter` / `map` / `reduce` / `flat` / `sort` / `unique` / `join` / `mean`；object `isEmpty` / `keys` / `values`；file `hasTag` / `inFolder` / `hasLink` / `hasProperty`；time `today` / `now`；number `round`。
-- summaries：view 级 `<property-ref> → 汇总名`；15 个内置（Average/Min/Max/Sum/Range/Median/Stddev/Earliest/Latest/Checked/Unchecked/Empty/Filled/Unique）；顶层自定义（`values` 隐式作用域，如 `values.mean().round(3)`）。
-- groupBy：结果含增量 `groups` 字段（组序按 direction、组内按 sort + file.path tie-break）；list/tag 分组键暂拒绝（待 oracle）。
-- 类型：可选只读 `.obsidian/types.json`（显式类型优先；缺失/非法回退推断并给诊断，永不写回）；frontmatter 日期字符串（严格 ISO）与 wikilink 自动升级为 Date/Link 值（暂定机制，待 oracle）。
-- file 属性：`name`（带扩展名）/ `basename` / `path` / `folder` / `ext` / `size` / `ctime` / `mtime`（epoch 毫秒）/ `properties` / `tags` / `links`。
-- note 属性只来自 frontmatter；**Dataview inline fields（`key:: value`）不会进入 Bases 属性**（官方 Bases 不支持）。
-
-## 6. 限制与暂定口径
-
-- P3 未做：附件数据集（all-files）、嵌入 `base` code block、`this`（遇 `this` 报 `base/dynamic-context-required`）、regex。
-- **oracle 暂定项**（实现已落地、语义待官方串行 oracle 校正，校正后可能调整）：missing/null/空串/0/false/空列表的 truthiness 精确合并；多键 sort 的 null 排序位置（暂定恒排最后）；空 filter 数组（暂定拒绝）；`if()` lazy branch（暂定 lazy）；date vs datetime 跨精度比较（暂定统一 epoch）；frontmatter wikilink → Link（暂定机制）；types.json 声明冲突口径（暂定行级 warning）；GROUP-002 一行多组（暂定拒绝）；SUM-002 `values` 边界（暂定剔除空值）。逐项状态见 [实现状态追踪](../testing/2026-07-26-bases-implementation-status.md) 与 [oracle 操作手册](../testing/2026-07-27-bases-oracle-runbook.md)。
-- 执行预算（`base/execution-budget`）：文档大小、filter 深度、表达式节点、调用深度、行数、集合元素、操作数、公式图节点/深度均有硬上限，耗尽返回 error + 空结果，不返回部分结果。
-
-## 7. 常见报错速查
-
-| rule | 含义 |
+| 字段 | 语义 |
 | --- | --- |
-| `base/view-required` / `base/view-not-found` / `base/duplicate-view-name` | views 缺失/空；指定 view 不存在（suggestions 列可用名）；view 重名 |
-| `base/unsupported-view-type` / `base/unsupported-feature` | 未知/插件 view type；`cards`/`list`/`map`、空 filter 数组、list/tag 分组键等未支持特性 |
-| `base/unknown-function` / `base/expression-syntax` | 白名单外函数（含旧 snake_case，不静默迁移）；表达式文法错误（位置 = .base 文件行列） |
-| `base/unknown-property` / `base/property-type-mismatch` | 未知 file 属性；行级类型错误（该行不通过、查询继续，warning） |
-| `base/path-outside-vault` | `.base` 路径越出 vault（读取前拒绝） |
-| `base/execution-budget` | 任一预算耗尽（error，空结果） |
-| `base/dynamic-context-required` | 无显式 context 遇 `this`（P3 才支持） |
+| `conformance` | 恒为 `bases-markdown-2026-07`，声明数据集与语法快照口径 |
+| `base` | `.base` 的 vault 相对 POSIX 路径（见下方多根说明） |
+| `view` | 实际执行的 view 名 |
+| `columns` | view 的 `order` 原文（缺省 `["file.name"]`） |
+| `total` | **filter 后、limit 前**的行数（`rows.length <= limit`） |
+| `rows` | 行数组，key 为列原文 |
+| `groups` | 仅 view 配了 `groupBy` 时出现：`[{ key, rows }]`；顶层 `rows` 仍是平铺全部行 |
+| `summaries` | 仅 view 配了 `summaries` 时出现；按 filter 后、limit 前的全量行计算 |
+| `diagnostics` | 全量诊断（文档层 → planner → 引擎级 → 行级，顺序固定） |
 
-诊断完整契约（位置规则、severity 口径）见设计文档 §11。
+其它契约要点：
+
+- **路径键**：`base` 与诊断的 `file` 与行的 `file.path` **同一套键**。单根为根内相对路径（`views/projects.base`）；**多根**（重复 `--vault`）时带 `<根目录名>/` 命名空间前缀（`vault/views/projects.base`，与 `file.path` 的 `vault/Alpha.md` 一致）。任何情况下都不含物理绝对路径。
+- **缺失属性投影为 `null`，列不消失**。
+- **排序确定性**：未显式 `sort` 时按 `file.path` 升序，并附 `base/default-sort-tiebreak`（info）；显式多键 sort 也以 `file.path` 兜底 tie-break。
+- **带类型的值**用带 `type` 标签的对象表达：`{ "type": "date", "value": "2026-08-10" }`、`{ "type": "datetime", "value": "<ISO>" }`、`{ "type": "link", "path": …, "display"?: …, "subpath"?: … }`；duration 直出毫秒 number。
+- **md-only 声明**：每次查询恒发 `base/markdown-only-dataset`（warning），说明附件不作为行——这是声明不是错误，退出码不受影响。
+- **字节稳定**：同一 DB + 同一 `.base` + 同一注入时钟重复运行，结果逐字节一致；输出只含 JSON 形状，不泄漏内部对象。
+
+## 3. 限制与暂定口径
+
+### 3.1 已知缺陷
+
+- **不加引号的 YAML 日期当前不被识别为日期值**：`due: 2026-08-10` 经 YAML 解析为日期对象、入索引后成为 `"2026-08-10T00:00:00.000Z"`（含毫秒），不匹配严格 ISO 推断，于是留在字符串形态——`due < now()` 之类比较会产生 `base/property-type-mismatch`（warning）且该 cell 为 `null`，**查询不报错但结果不对**。绕法：frontmatter 里给日期加引号（`due: "2026-08-10"`），或在 `.obsidian/types.json` 里把该属性声明为 `date`。
+
+### 3.2 未做（P3 及以后）
+
+附件数据集（all-files）、嵌入式 ```` ```base ```` 代码块、`![[View.base#Name]]`、`this`（遇到报 `base/dynamic-context-required`）、regex。完整的「明确不支持」清单见[编写指南 §3.9](writing-bases.md#39-明确不支持报诊断不静默忽略)。
+
+### 3.3 oracle 暂定口径
+
+实现已落地，语义待官方串行 oracle 校正，校正后可能调整：
+
+missing/null/空串/0/false/空列表的 truthiness 精确合并；多键 sort 的 null 排序位置（暂定恒排最后）；空 filter 数组（暂定拒绝）；`if()` lazy branch（暂定 lazy）；date vs datetime 跨精度比较（暂定统一 epoch）；frontmatter wikilink → Link（暂定机制）；types.json 声明冲突口径（暂定行级 warning）；一行多组的 list/tag 分组键（暂定拒绝）；自定义 summary 的 `values` 边界（暂定剔除空值）；拼接语境下的日期推断（暂定 `"2026-01-01" + " 备注"` 报类型错误）。
+
+逐项状态见[实现状态追踪](../testing/2026-07-26-bases-implementation-status.md)，观察与校正流程见 [oracle 操作手册](../testing/2026-07-27-bases-oracle-runbook.md)。
+
+### 3.4 执行预算
+
+文档大小、filter 深度、表达式节点、调用深度、行数、集合元素、单次求值操作数、**单次查询操作数总额**、公式图节点/深度均有硬上限；任一耗尽返回 `base/execution-budget`（error）+ 空结果，**不返回部分结果冒充成功**。
+
+## 4. 常见报错速查
+
+| rule | severity | 含义与处理 |
+| --- | --- | --- |
+| `base/invalid-schema` | error | 结构不合法：view 缺 `type`/`name`、`order`/`sort` 项形态错、`limit` 非非负整数等 |
+| `base/view-required` | error | `views` 缺失或为空 |
+| `base/view-not-found` | error | `--view` 指定的名字不存在——看 `suggestions` 里的可用名 |
+| `base/duplicate-view-name` | error | 两个 view 重名，拒绝歧义选择 |
+| `base/unsupported-view-type` | error | 未知/插件 view type（不按 table 猜测） |
+| `base/unsupported-feature` | error | `cards`/`list`/`map`、空 filter 数组、多值分组键等已知但未支持的特性 |
+| `base/unknown-function` | error | 白名单外函数（含旧 snake_case，不静默迁移）；也用于未知汇总名 |
+| `base/expression-syntax` | error | 表达式文法错误（位置 = `.base` 文件行列）——**把 DQL 的 `=`/`AND` 写进 `.base` 会落这里** |
+| `base/formula-cycle` | error | 公式循环引用（message 含完整循环链） |
+| `base/path-outside-vault` | error | `.base` 路径越出 vault（读取前拒绝，不读任何字节） |
+| `base/execution-budget` | error | 任一预算耗尽（空结果） |
+| `base/dynamic-context-required` | error | 无显式 context 遇 `this` |
+| `base/unknown-property` | warning | 访问未知 `file.*` 属性（行级，该行不通过，查询继续） |
+| `base/property-type-mismatch` | warning | 行级类型错误（类型不可比较、声明类型冲突等；该 cell 为 `null`） |
+| `base/invalid-yaml` | error/warning | `.base` YAML 非法（error）；某行 frontmatter JSON 解析失败（warning，该行按空属性处理） |
+| `base/markdown-only-dataset` | warning | **恒发，不是错误**：声明本次为 md-only 数据集 |
+| `base/default-sort-tiebreak` | info | 未显式 sort，按 `file.path` 稳定排序（x-basalt 扩展） |
+
+行级诊断有条数上限（防洪），超出后补一条汇总诊断说明省略了多少条。诊断的完整契约（位置规则、severity 口径）见[设计文档](../specs/2026-07-22-bases-headless-engine-design.md) §11。

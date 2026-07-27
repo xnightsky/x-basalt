@@ -261,7 +261,7 @@ x-basalt base views/projects.base --vault ./my-vault
 x-basalt base views/projects.base --view Active --vault ./my-vault --db ./index.db
 ```
 
-支持的 .base 子集（filter/表达式/函数白名单/file 属性）、输出契约细节与限制见 [querying-bases.md](querying-bases.md)。
+`.base` 怎么写与支持的完整语法（顶层 key / view / filter / 表达式 / 函数全表 / 值语义）见 [writing-bases.md](writing-bases.md)；输出契约细节、限制与报错速查见 [querying-bases.md](querying-bases.md)。
 
 ---
 

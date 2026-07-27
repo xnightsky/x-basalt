@@ -65,8 +65,8 @@ views:
 
 | key       | 状态                                                            |
 | --------- | --------------------------------------------------------------- |
-| `type`    | 【P0 ✅ 校验】`table` 支持；`cards`/`list`/`map` 报 `base/unsupported-feature`；未知/插件 type 报 `base/unsupported-view-type`，不按 table 猜测 |
-| `name`    | 【P0 ✅ 校验】非空字符串；重名报 `base/duplicate-view-name`      |
+| `type`    | 【P0 ✅ 校验】**必填**；`table` 支持；`cards`/`list`/`map` 报 `base/unsupported-feature`；未知/插件 type 报 `base/unsupported-view-type`，不按 table 猜测；**键缺失报 `base/invalid-schema`——缺失与未知同口径，同样不按 table 猜测**（2026-07-27 review 修正：此前缺失静默当 table 执行） |
+| `name`    | 【P0 ✅ 校验】**必填**且为非空字符串；重名报 `base/duplicate-view-name`；**键缺失报 `base/invalid-schema`**（2026-07-27 review 修正：此前缺失得 `name=""` 且逃过重名判定） |
 | `filters` | 【P0 ✅ 结构校验】【P1 ✅ 求值】                                 |
 | `order`   | 【P0 ✅ 结构记录】【P1 ✅ 投影】                                 |
 | `sort`    | 【P0 ✅ 结构记录（direction 仅 ASC/DESC）】【P1 ✅ 执行】        |

@@ -144,7 +144,7 @@
     },
     {
       pattern: "base <file.base> [--view <name>] [--vault <path...>] [--db <path>] [--format json|yaml]",
-      description: "Bases 无头查询（conformance bases-markdown-2026-07）：对索引中的 Markdown 笔记执行 .base view，输出稳定 JSON { conformance, base, view, columns, total, rows, diagnostics }；total=filter 后 limit 前行数，未显式 sort 按 file.path 稳定序（附 info 诊断），md-only 数据集恒发 base/markdown-only-dataset warning（附件不为行）。退出码：diagnostics 含任一 error → 1（仍输出完整 JSON、rows 为空），仅 warning/info → 0。子集：table view 的 filters/order/sort/limit、递归 and/or/not、表达式 ==/&&/||/! 与白名单函数（if/list/number、string/list/object/file 方法）；Bases 表达式不是 DQL。inline fields 不进 Bases 属性。详见 docs/guides/querying-bases.md。",
+      description: "Bases 无头查询（conformance bases-markdown-2026-07）：对索引中的 Markdown 笔记执行 .base view，输出稳定 JSON { conformance, base, view, columns, total, rows, diagnostics }；total=filter 后 limit 前行数，未显式 sort 按 file.path 稳定序（附 info 诊断），md-only 数据集恒发 base/markdown-only-dataset warning（附件不为行）。退出码：diagnostics 含任一 error → 1（仍输出完整 JSON、rows 为空），仅 warning/info → 0。子集：table view 的 filters/order/sort/limit、递归 and/or/not、表达式 ==/&&/||/! 与白名单函数（if/list/number、string/list/object/file 方法）；Bases 表达式不是 DQL。inline fields 不进 Bases 属性。详见 docs/guides/writing-bases.md（语法快照）与 docs/guides/querying-bases.md（命令与契约）。",
       examples: [
         "x-basalt base views/projects.base --vault ./my-vault",
         "x-basalt base views/projects.base --view Active --vault ./my-vault --db ./index.db",

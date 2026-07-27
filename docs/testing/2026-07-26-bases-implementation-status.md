@@ -7,8 +7,8 @@ tags:
   - bases
   - testing
   - x-basalt
-timestamp: 2026-07-26T12:23:13Z
-sha256: ce3fa47340a5a1b7ee0bffb489c88834783ccd493f99a7f691093e03f5672182
+timestamp: 2026-07-27T02:40:50Z
+sha256: e1a59b00b5a2e486f33585516bfa6ab72cc30a2d8ef30320bc974e807cbd325f
 ---
 # Bases 实现状态追踪
 
@@ -26,6 +26,7 @@ sha256: ce3fa47340a5a1b7ee0bffb489c88834783ccd493f99a7f691093e03f5672182
 | P2a | formulas 核心（typed values + 算术 + 依赖图/cycle + clock） | ✅ 2026-07-27（[计划](../plans/2026-07-27-bases-p2a-formulas.md)） |
 | P2b | types.json / list 高阶 / groupBy / summaries | ✅ 2026-07-27（[计划](../plans/2026-07-27-bases-p2b-types-list-group-summary.md)） |
 | P3 | all-files / context / 嵌入 | 🔜 先做独立 indexer schema 决策 |
+| review 修复 | P0..P2b 收口后的评审修复（静默失败 + 资源模型） | ✅ 2026-07-27（[计划](../plans/2026-07-27-bases-code-review-fixes.md)） |
 
 ## 1. 文档层（P0）✅ 2026-07-26
 
@@ -67,6 +68,11 @@ sha256: ce3fa47340a5a1b7ee0bffb489c88834783ccd493f99a7f691093e03f5672182
 | `if()`/`list()`/`number()` | BASE-EXPR-005 | ✅ 2026-07-26（`if` lazy 为暂定实现，待 oracle；number 转换失败 = 行级类型错误） |
 | `order` 投影 / 多键 sort / limit / 默认 file.path tie-break | BASE-RESULT-001..004 | ✅ 2026-07-26（null 排序位置暂定恒排最后，⏸ 待 oracle；无显式 sort 给 `base/default-sort-tiebreak` info） |
 | 属性访问白名单 / 无 eval / 参数化 SQL | BASE-SEC-001/002/003 | ✅ 2026-07-26 |
+| view 必填字段（type/name 缺失即 error，不按 table 猜测） | 设计 §5 | ✅ 2026-07-27（review 修复；缺失校验移出 key 循环） |
+| `order`/`sort` 非法项报错而非静默丢弃 | 设计 §5 | ✅ 2026-07-27（review 修复） |
+| 越界防线跨平台（Windows 盘符大小写不假阳） | BASE-SEC-008 | ✅ 2026-07-27（review 修复；共享 `isPathInside`） |
+| 多根 `.base` 主键与行 `file.path` 同一命名空间键 | BASE-DATA-004 | ✅ 2026-07-27（review 修复；统一走 `resolveVaultLayout`） |
+| 查询级操作数总额（跨行累计，防「每行都烧到单次上限」） | 设计 §12 延伸 | ✅ 2026-07-27（review 修复；`maxTotalOperations` 默认 5e7） |
 | 恶意属性名入 JSON path/SQL | BASE-SEC-009 | ✅ 2026-07-26（属性名不进 SQL，own-property 白名单） |
 | 结果字节稳定（同 DB+Base+clock 重跑） | 矩阵 §9 P1 门 | ✅ 2026-07-26（两次 `JSON.stringify(query())` 全等专项用例） |
 | 1/100/10,000 篇基准（只记录不承诺） | 矩阵 §9 P1 门 | ✅ 2026-07-26（query 11ms/4ms/68ms，数值见计划「验证结论」，无需 SQL 下推） |
@@ -82,9 +88,10 @@ sha256: ce3fa47340a5a1b7ee0bffb489c88834783ccd493f99a7f691093e03f5672182
 | 多键 sort 的 null 位置 | BASE-RESULT-002 | 🔜 校正 P1 暂定口径（null/missing 恒排最后，与方向无关） |
 | 空 filter 数组（and:[]/or:[]/not:[]） | 设计 §6 | 🔜 P1 拒绝空数组；oracle 稳定后再放开 |
 | `if()` lazy branch | 设计 §9 | 🔜 校正 P1 暂定 lazy 实现 |
+| 二元运算操作数的字符串→日期推断是否作用于 `+`（拼接语境） | 语法 §5.1 / 设计 §8.3 | 🔜 校正 P2a 暂定口径（`upgradeStringOperand` 对全部非短路二元运算生效，故 `"2026-01-01" + " 备注"` 报类型错误而非拼接；2026-07-27 code review 登记，runbook 观察项 ⑨） |
 
 > oracle 协议见矩阵 §8：固定版本、无插件 fixture vault、预启动 App、串行 `base:query`、存原始 JSON + hash，人工审查后转期望快照。
-> **操作手册（fixture + 13 个 view 串行步骤 + 观察记录表 + 校正工作流）：[`2026-07-27-bases-oracle-runbook.md`](2026-07-27-bases-oracle-runbook.md)**；校正清单 `rg -n "oracle" tests/base-evaluator.test.ts tests/base-engine.test.ts`。
+> **操作手册（fixture + 26 个 view 串行步骤 + 观察记录表 + 校正工作流）：[`2026-07-27-bases-oracle-runbook.md`](2026-07-27-bases-oracle-runbook.md)**；校正清单 `rg -n "oracle" tests/base-evaluator.test.ts tests/base-engine.test.ts`。
 
 ## 4. P2 typed formulas / group / summary（P2a ✅ / P2b ✅ 2026-07-27）
 
@@ -94,6 +101,7 @@ sha256: ce3fa47340a5a1b7ee0bffb489c88834783ccd493f99a7f691093e03f5672182
 | 项 | 场景编号 | 状态 |
 | ---- | ---- | ---- |
 | `.obsidian/types.json` 读取 / 缺失回退 / 非法 warning | BASE-TYPE-001..003 | ✅ 2026-07-27（P2b；可选只读、永不写回、多根先根优先暂定） |
+| 不加引号的 YAML 日期（`due: 2026-08-10`）识别为日期值 | BASE-TYPE-005 延伸 | 🐞 **未做**（2026-07-27 写教程时实测：YAML 解析为日期对象 → 入索引成 `"…T00:00:00.000Z"`，`parseDateLike` 不接受小数秒 → 留字符串形态，日期比较静默失效仅给行级 warning。真实 vault 普遍命中，修法与口径见根 `TODO.md`） |
 | 声明类型与值冲突 → type-mismatch | BASE-TYPE-004 | ⏸ oracle（P2b 已落暂定口径：行级 warning + 值按运行时类型参与，不静默字符串比较） |
 | date vs datetime 比较（固定时区） | BASE-TYPE-005 | ⏸ oracle（P2a 已落暂定机制：严格 ISO 推断 + 统一 epoch 比较） |
 | frontmatter wikilink → Link value | BASE-TYPE-006 | ⏸ oracle（P2a 已落暂定机制：`[[target]]`/`[[t\|d]]`/`[[t#sub]]` → Link value，路径感知相等） |

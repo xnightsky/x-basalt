@@ -33,6 +33,13 @@
 
 ### Fixed
 
+- **Bases code review 修复批次**（[计划](docs/plans/2026-07-27-bases-code-review-fixes.md)），四类静默失败 + 两处资源模型缺口：
+  - `.base` 的 view **缺少 `type` / `name` 不再静默通过**——必填校验此前只在「键存在」时触发，缺 `type` 的 view 会被当 table 执行完（与「未知 type 不按 table 猜测」矛盾），缺 `name` 的两个 view 还能同时逃过重名判定。**（行为收紧：这类 `.base` 由静默执行改为 error + 空结果，CLI exit 1）**
+  - **Windows 下 vault 根盘符大小写不同不再误判路径越界**——`d:\vault` 配 `D:\vault\...` 此前触发 `base/path-outside-vault`，合法路径被安全门假阳拒绝。判定收敛为 `utils/path.ts` 新增的共享原语 `isPathInside`（Windows 大小写不敏感），indexer 的根归属判定与编排器路径还原一并复用（此前同样会在大小写不同时漏索引）。
+  - **多根 vault 下 `.base` 主键补齐 `<根目录名>/` 命名空间前缀**——此前同一个 `BaseQueryResult` 里 `base` / 诊断 `file` 与行 `file.path` 是两套键。改为统一经 `resolveVaultLayout`（indexer 写 `files.path` 用的同一函数）计算。**（多根输出契约变更；单根字节级不变）**
+  - `order` / `sort` 的非法项（非字符串 / 非 map / 空 property）**不再静默丢弃**，各产 `base/invalid-schema`。
+  - 新增 **`maxTotalOperations`** 查询级操作数总额（默认 5000 万，跨行累计）：此前 `maxOperations` 每次表达式求值即重置，最坏总量 `maxRows × 列数 × maxOperations` ≈ 1e11 而预算「从未耗尽」；groupBy 分桶与 summaries 迭代原本各自另开一份额度，现并入同一份总额。
+  - 表达式解析缓存改为有界 LRU（512 条）——此前模块级 `Map` 无淘汰，长驻进程（chat REPL）内存随会话累计的 `.base` 数量单调增长。
 - parser：剔除围栏代码块（` ``` `/`~~~`）与行内代码（成对反引号）内的 `#tag` 与 `==高亮==`，不再把代码里的 `# 注释`、字符串误识为标签 / 高亮（修复真实 vault 上 `FROM #tag` 静默多命中）。
 - skills 安装：frontmatter `scope` 检测兼容 CRLF 行尾（Windows `autocrlf`）——此前 CRLF 下正则匹配失败致 `scope` 永远落到 `project`，全局安装一个都装不上、项目安装误纳 global 技能。
 
