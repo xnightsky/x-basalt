@@ -8,8 +8,8 @@ tags:
   - obsidian
   - syntax
   - x-basalt
-timestamp: 2026-07-27T19:12:27Z
-sha256: 86e57089eb8b599edcab87127e7a8c9e6d23cb8eac53a8746ece441f02dadde0
+timestamp: 2026-07-27T19:24:35Z
+sha256: 3608c512c4ca41d1a7d0ad55114fb5e20c7debf65e1acc618116537b8f254604
 ---
 # Bases 语法参考（x-basalt 口径）
 
@@ -36,7 +36,8 @@ sha256: 86e57089eb8b599edcab87127e7a8c9e6d23cb8eac53a8746ece441f02dadde0
 诊断口径：`views` 缺失/空 → `base/view-required`；未知顶层 key → warning。
 
 > 官方快照漂移记录（2026-07-27 观察，2026-07-28 部分采纳）：现网官方文档新增 `%` 取模、`date()`/`link()` 构造、duration 字符串后缀形态（`"1 day"` 与短单位 y/M/d/w/h/m/s）——均晚于本仓 2026-07-22 冻结快照。
-> 采纳进度：**`date()`/`duration()` 已于 2026-07-28 采纳**（覆盖率片二）；duration 字符串形态**只在 `duration()` 入参处生效**，表达式字面量仍只认 `1day` 单 token 形态（§4.3 不变）；`link()`/`file()` 计划于片三采纳；**`%` 取模仍不采纳**（文法层继续拒绝）。
+> 采纳进度：**`date()`/`duration()`（片二）与 `link()`/`file()`（片三）已于 2026-07-28 采纳**；duration 字符串形态**只在 `duration()` 入参处生效**，表达式字面量仍只认 `1day` 单 token 形态（§4.3 不变）；**`%` 取模仍不采纳**（文法层继续拒绝）。
+> 文法注记：`file` 是关键字 token（根引用 `file.name`），`file(...)` 的调用形态由 `rootRef` 的专门分支支持；`note(`/`formula(`/`this(` 同样进入该分支，但名字不在白名单 → `base/unknown-function`。
 
 ### 1.2 properties 段
 
@@ -154,6 +155,9 @@ note property 来自 Markdown frontmatter；file property 对所有受支持文�
 | time   | `today`、`now`（clock 注入，测试必须注入固定 clock）                                | 【P2a ✅】 |
 | global | `date(v)`、`duration(v)` 构造                                                       | 【2026-07-28 ✅】`date`：严格 ISO 字符串（与 frontmatter 推断同一函数）/ date 幂等 / number 按 epoch 毫秒（自建扩展）。`duration`：`"1day"`/`"1 day"`/`"2 hours"` 长单位（大小写不敏感、允许复数）与官方短单位 `y M w d h m s`（**大小写敏感**：`M`=月、`m`=分）/ duration 幂等 / number 按毫秒（与输出形状互逆） |
 | date   | `format(fmt)`、`time()`、`relative()`、`isEmpty()`                                  | 【2026-07-28 ✅ 新增 `date` 分派组】 |
+| global | `file(path)`、`link(target, display?)` 构造                                          | 【2026-07-28 ✅】`file`：**在当前查询行集内**三级解析（精确 path → pathKey → bare basename），解析不到 → MISSING。`link`：纯值构造，**不解析行集**，悬空链接合法 |
+| link   | `asFile()`                                                                          | 【2026-07-28 ✅ 新增 `link` 分派组】悬空 → MISSING |
+| file   | `asLink(display?)`、`linksTo(x)`                                                     | 【2026-07-28 ✅】`linksTo` 收 string/link/file：前两者走与 `hasLink` 同一文本匹配，**file 入参走解析**（比解析后的 path，故 bare `[[A]]` 也算命中） |
 | list 高阶 | `filter`/`map`/`reduce`（隐式 `value`/`index`/`acc` 作用域，非 JS lambda）、`flat`/`sort`/`unique`/`join`、`mean` | 【P2b ✅】 |
 | number | `round`（0..1 参，小数位缺省 0）                                                   | 【P2b ✅；2026-07-28 由 `any` 组迁入独立 `number` 分派组】 |
 | number | `abs`、`ceil`、`floor`、`toFixed`（返 string）、`isEmpty`（恒 false）               | 【2026-07-28 ✅】 |

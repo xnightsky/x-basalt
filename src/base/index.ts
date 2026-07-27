@@ -94,9 +94,11 @@ export {
   type EvalContext,
 } from "./evaluator.js";
 export {
+  createFileResolver,
   hasVaultEntriesTable,
   readBaseRows,
   type BaseDataset,
+  type BaseFileResolver,
   type BaseSourceIssue,
   type ReadBaseRowsOptions,
 } from "./source.js";

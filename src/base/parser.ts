@@ -456,6 +456,12 @@ class BaseExprChevParser extends EmbeddedActionsParser {
   /**
    * 根引用：`note` / `file` / `formula` / `this`，可选首段 `.name` 或 `["名字"]` 归入
    * property.path（语法真相源 §4.1）。更深段落与后续调用由 postfix 生成 member/index/call。
+   *
+   * 2026-07-28 覆盖率片三增量：根 token 后直接跟 `(` 视为**全局函数调用**，使 `file("a.md")`
+   * 可解析——`file` 是关键字 token，不走 identifierPrimary 那条调用分支，不在此处开口子就
+   * 只能得到「Expecting EOF but found '('」这种与用户意图无关的语法错误。
+   * `note(` / `formula(` / `this(` 同样进入该分支，但名字不在白名单内 → `base/unknown-function`
+   * （与任意未知标识符调用同一口径，不额外造一条诊断）。
    */
   rootRef = this.RULE("rootRef", (): BaseExpr => {
     const rootTok = this.OR([
@@ -464,12 +470,30 @@ class BaseExprChevParser extends EmbeddedActionsParser {
       { ALT: () => this.CONSUME(Formula) },
       { ALT: () => this.CONSUME(This) },
     ]);
+    // ⚠ 本规则必须**单出口**：chevrotain 的语法录制阶段会真的执行 OPTION 的 DEF，
+    // 若在此处按 callArgs 提前 return，后半段（属性路径 OPTION）就永远不会被录进语法，
+    // 运行期报「Cannot read properties of undefined (reading 'call')」——曾实测踩到。
+    let callArgs: BaseExpr[] | undefined;
+    this.OPTION2({
+      GATE: () => this.LA(1).tokenType === LParen,
+      DEF: () => {
+        this.CONSUME(LParen);
+        this.ACTION(() => this.enterDepth(rootTok.startOffset));
+        callArgs = this.SUBRULE(this.callArgs);
+        this.CONSUME(RParen);
+        this.ACTION(() => this.exitDepth());
+      },
+    });
     let firstSeg: string | undefined;
     this.OPTION({
-      // GATE：`.name(` 形态是方法调用（如 `file.hasTag("area")` 的 hasTag），不得吞进
-      // 属性路径，留给 postfix 生成 call(receiver=property(file,[]))。
-      // 此处 LA(1)=`.`、LA(2)=成员名、LA(3)=`(`。
-      GATE: () => !(this.LA(1).tokenType === Dot && this.LA(3).tokenType === LParen),
+      // GATE 两件事：
+      // ① 已消费调用实参时不得再吞属性路径——`file("a").path` 的 `.path` 归 postfix 的
+      //    member 分支，否则会被误并进根引用的 property.path；
+      // ② `.name(` 形态是方法调用（如 `file.hasTag("area")` 的 hasTag），不得吞进属性路径，
+      //    留给 postfix 生成 call(receiver=property(file,[]))。此处 LA(1)=`.`、LA(3)=`(`。
+      GATE: () =>
+        callArgs === undefined &&
+        !(this.LA(1).tokenType === Dot && this.LA(3).tokenType === LParen),
       DEF: () => {
         this.OR1([
           {
@@ -496,6 +520,16 @@ class BaseExprChevParser extends EmbeddedActionsParser {
     });
     return this.ACTION((): BaseExpr => {
       this.spendNode(rootTok.startOffset);
+      if (callArgs !== undefined) {
+        this.checkFunctionName(rootTok);
+        return {
+          kind: "call",
+          offset: rootTok.startOffset,
+          name: rootTok.image,
+          receiver: null,
+          args: callArgs,
+        };
+      }
       return {
         kind: "property",
         offset: rootTok.startOffset,

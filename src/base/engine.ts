@@ -62,7 +62,12 @@ import {
   type CompiledCustomSummary,
   type CompiledFilter,
 } from "./planner.js";
-import { hasVaultEntriesTable, readBaseRows, type BaseDataset } from "./source.js";
+import {
+  createFileResolver,
+  hasVaultEntriesTable,
+  readBaseRows,
+  type BaseDataset,
+} from "./source.js";
 import { BUILTIN_SUMMARIES, runBuiltinSummary } from "./summaries.js";
 import { loadBaseTypeSchema } from "./typeschema.js";
 import {
@@ -525,6 +530,11 @@ export class BaseEngine {
        * 收在此处的原因：这五个语境的可选字段展开逐字相同，此前各写一遍，
        * 其中 formulaAccessorFor(row) 还被判定与取值各调一次；漏传任一字段都是静默行为差异。
        */
+      // 行集内 file 解析器（片三：`file(path)` / `link.asFile()`）。索引按需构建，
+      // 用不到这两个函数的查询零成本。**有意只给行求值上下文**——自定义汇总的
+      // `values` 作用域不注入，那里访问行外状态属越权（见 evaluator EvalContext.resolveFile）。
+      const fileResolver = createFileResolver(rows);
+
       const rowEvalContext = (
         row: BaseRow,
         onRowError: (info: BaseRowErrorInfo) => void,
@@ -536,6 +546,7 @@ export class BaseEngine {
           ...(formulas !== undefined ? { formulas } : {}),
           propertyTypes: typeSchema.table,
           sharedBudget: opsBudget,
+          resolveFile: (target) => fileResolver.resolve(target),
           onRowError,
         };
       };

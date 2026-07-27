@@ -7,8 +7,8 @@ tags:
   - bases
   - testing
   - x-basalt
-timestamp: 2026-07-27T19:13:03Z
-sha256: a26464ee0110ba789770bbe57374128fa115dc2a0a30c88d47808fd15b74f556
+timestamp: 2026-07-27T19:24:19Z
+sha256: 08f6ae9dc34e8d0f40bce8682c0894d83af3b3eb537559bc8a168088d3bbb13f
 ---
 # Bases 实现状态追踪
 
@@ -27,7 +27,7 @@ sha256: a26464ee0110ba789770bbe57374128fa115dc2a0a30c88d47808fd15b74f556
 | P2b | types.json / list 高阶 / groupBy / summaries | ✅ 2026-07-27（[计划](../history/plans/2026-07-27-bases-p2b-types-list-group-summary.md)） |
 | P3 | all-files / context / 嵌入 | 🔀 P3a 附件数据集 ✅ 2026-07-27（[计划](../history/plans/2026-07-27-bases-p3-attachments.md)）；context/嵌入仍 🔜 待开 |
 | review 修复 | P0..P2b 收口后的评审修复（静默失败 + 资源模型） | ✅ 2026-07-27（[计划](../history/plans/2026-07-27-bases-code-review-fixes.md)） |
-| 函数覆盖率 | 官方 68 条目 51% → ~90%（六片） | 🚧 进行中（[计划](../plans/2026-07-28-bases-functions.md)）：片一 ✅ 2026-07-28；片二..六 🔜 |
+| 函数覆盖率 | 官方 68 条目 51% → ~90%（六片） | 🚧 进行中（[计划](../plans/2026-07-28-bases-functions.md)）：片一/片二/片三 ✅ 2026-07-28；片四..六 🔜 |
 
 ## 1. 文档层（P0）✅ 2026-07-26
 
@@ -136,7 +136,7 @@ sha256: a26464ee0110ba789770bbe57374128fa115dc2a0a30c88d47808fd15b74f556
 | ---- | ---- | ---- |
 | 片一 | 机械叶子 16 个 + 渲染类 4 个显式拒绝 + `round` 归组 | ✅ 2026-07-28（`tests/base-functions-leaf.test.ts` 18 用例；838 全量绿） |
 | 片二 | Date/Duration 族 6 个（`date()`/`duration()`/`format`/`time`/`relative`/`isEmpty`），新增 `date` 分派组 | ✅ 2026-07-28（`tests/base-functions-date.test.ts` 11 用例；850 全量绿） |
-| 片三 | Link/File 互转 5 个（`asFile`/`linksTo`/`asLink`/`file()`/`link()`） | 🔜 |
+| 片三 | Link/File 互转 5 个（`asFile`/`linksTo`/`asLink`/`file()`/`link()`） | ✅ 2026-07-28（`tests/base-functions-link.test.ts` 8 用例；858 全量绿。**含文法改动**：`file(...)` 调用形态） |
 | 片四 | `matches`（regex）+ ReDoS 防护 | 🔜 BASE-SEC-004 |
 | 片五 | list/link 当分组键 + 自定义汇总收口 | 🔜 BASE-GROUP-002 / BASE-SUM-002 |
 | 片六 | 显式 `contextFile` + `this.*` 求值 | 🔜 BASE-CTX-001（用户 2026-07-28 拍板**只做 contextFile**；CTX-002/003/004 判❌不做 + 诊断，见 §7） |
@@ -167,6 +167,23 @@ sha256: a26464ee0110ba789770bbe57374128fa115dc2a0a30c88d47808fd15b74f556
 | `date.time()` → 当日 UTC 零点起的 duration | BASE-TYPE-005 | ✅ 2026-07-28（暂定口径：选 duration 而非 `"HH:mm"` 字符串，可比较可算术；date 精度恒 0） |
 | `date.relative()` | BASE-TYPE-005 / BASE-FORM-006 | ✅ 2026-07-28（固定英文 + 固定阶梯，时间源恒为注入 clock；官方输出随界面语言变，不复刻） |
 | `date.isEmpty()` 恒 false | BASE-TYPE-005 | ✅ 2026-07-28 |
+
+### 片三明细 ✅ 2026-07-28
+
+> 测试：`tests/base-functions-link.test.ts`（8 用例）。**含文法改动**（片六原本被认为是唯一动 parser 的一片，实际本片先动了）：`file` 是关键字 token，`file(...)` 此前直接语法错误；`rootRef` 增加「根 token 后随 `(` → 全局调用」分支。
+
+| 项 | 场景编号 | 状态 |
+| ---- | ---- | ---- |
+| 文法：`file(...)` 调用形态；`note(`/`formula(`/`this(` 走同一分支报 `base/unknown-function` | 设计 §7 | ✅ 2026-07-28（既有 `file.name` / 裸 `file` / `file["name"]` / `file.hasTag(...)` 零回归，专项用例锁定） |
+| global `file(path)`：行集内三级解析（精确 path → pathKey → bare basename） | BASE-FILE-001 | ✅ 2026-07-28（新增 `createFileResolver`；解析范围 = 当前查询行集，不查库不碰 FS，故 markdown 模式解析不到附件；解析不到 → MISSING 不伪造空 file 值） |
+| global `link(target, display?)`：纯值构造 | BASE-TYPE-006 | ✅ 2026-07-28（**不解析行集**，悬空链接合法——与 `file()` 的「解析不到 → MISSING」是有意的两种口径） |
+| link 分派组新增 + `link.asFile()` | BASE-TYPE-006 / BASE-FILE-001 | ✅ 2026-07-28（用原始 target 走三级解析，bare `[[A]]` 可命中；悬空 → MISSING） |
+| `file.asLink(display?)` | BASE-TYPE-006 | ✅ 2026-07-28（target 用完整 vault 相对路径，不受同名文件影响；`file → link → file` 往返用例锁定） |
+| `file.linksTo(x)` | BASE-FILE-005 | ✅ 2026-07-28（string/link 入参走与 `hasLink` 同一匹配函数 `matchesAnyLink`；**file 入参走解析**，见下） |
+| 无行集解析器语境（自定义汇总 `values` 作用域）→ `base/unsupported-feature` | SUM-002 延伸 | ✅ 2026-07-28（不静默 MISSING；`link()` 纯值构造在该语境照常可用） |
+
+> **片三实测非显然点**：`file.linksTo(file("Beta"))` 起初返回 **false**——Alpha 里写的是 bare `[[Beta]]`，而 `file("Beta").path` 是 `Projects/Beta.md`，文本匹配走 qualified 分支比 `pathKey`（`"beta"` ≠ `"projects/beta"`），明明链上了却判否。定为两种入参两种语义：string/link = 文本目标（同 `hasLink`），**file = 那个具体文件**（把每条出链解析一遍比解析后的 path）。
+> **另一处**（文法）：`rootRef` 里按 `callArgs` 提前 `return` 会让后半段属性路径 `OPTION` **永远不被录进 chevrotain 语法**（录制阶段会真的执行 OPTION 的 DEF，callArgs 被赋成 dummy 值），运行期 `file.name` 直接抛 `Cannot read properties of undefined`。规则必须单出口。
 
 > **片二实测非显然点**（已在代码注释与测试里存证）：`format` 若按「最长已知 token 优先」扫描，`MMMM` 会被贪婪切成 `MM`+`MM` **静默输出 `0808`**——用户写 `MMMM` 要的是月名，静默给错数字比报错糟得多。改为按同字符最长游程整体查表后才落到正确诊断，测试用 `MMMM`/`dddd`/`DDDD`/`YYY` 四个游程锁定。
 

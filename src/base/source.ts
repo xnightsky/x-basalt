@@ -23,6 +23,7 @@
  */
 
 import type { Database } from "better-sqlite3";
+import { linkKey, pathKey } from "../utils/path.js";
 import type { BaseRow } from "./evaluator.js";
 import type { BaseExecutionLimits } from "./types.js";
 import {
@@ -269,4 +270,60 @@ export function readBaseRows(
     const pb = b.file.path;
     return pa < pb ? -1 : pa > pb ? 1 : 0;
   });
+}
+
+// ---------------------------------------------------------------------------
+// 2026-07-28 覆盖率片三：路径 → file 值解析（`file(path)` / `link.asFile()` 用）
+// ---------------------------------------------------------------------------
+
+/**
+ * 行集内的 file 解析器（引擎每次查询建一个，注入 {@link EvalContext.files}）。
+ *
+ * 只在**当前查询的行集**内解析——不额外查库、不碰文件系统：这既是性能取舍
+ * （行集已在内存），也是语义取舍（`file()` 能看到的与查询数据集口径一致：
+ * markdown 模式解析不到附件，all-files 模式才能）。
+ */
+export interface BaseFileResolver {
+  /** 解析一个路径/链接目标；解析不到返回 undefined（调用方转 MISSING，不伪造空 file 值）。 */
+  resolve(target: string): BaseFileValue | undefined;
+}
+
+/**
+ * 建立按需索引的 file 解析器（三级匹配，逐级放宽，与 `file.hasLink` 同一套路径原语）：
+ *
+ * 1. **精确 path**（`file("Projects/A.md")`）；
+ * 2. **pathKey**（POSIX + 去扩展名 + 小写，故 `file("projects/a")` 命中 `Projects/A.md`）；
+ * 3. **linkKey**（小写 basename，故 `[[A]]` 这种 bare wikilink 能解析）。
+ *
+ * 索引**首次调用时才构建**：绝大多数查询用不到 file()/asFile()，不为它们付出建表成本。
+ * 同键多文件（bare basename 撞名）取 **path 升序第一个**——行集本就按 path ASC，
+ * 建索引时「首次写入者胜」即为该口径，保证字节稳定（不做「最近修改优先」这类会漂的规则）。
+ */
+export function createFileResolver(rows: readonly BaseRow[]): BaseFileResolver {
+  let byPath: Map<string, BaseFileValue> | undefined;
+  let byPathKey: Map<string, BaseFileValue> | undefined;
+  let byLinkKey: Map<string, BaseFileValue> | undefined;
+  const build = (): void => {
+    byPath = new Map();
+    byPathKey = new Map();
+    byLinkKey = new Map();
+    for (const row of rows) {
+      const f = row.file;
+      if (!byPath.has(f.path)) byPath.set(f.path, f);
+      const pk = pathKey(f.path);
+      if (!byPathKey.has(pk)) byPathKey.set(pk, f);
+      const lk = linkKey(f.path);
+      if (!byLinkKey.has(lk)) byLinkKey.set(lk, f);
+    }
+  };
+  return {
+    resolve: (target: string): BaseFileValue | undefined => {
+      if (byPath === undefined) build();
+      return (
+        (byPath as Map<string, BaseFileValue>).get(target) ??
+        (byPathKey as Map<string, BaseFileValue>).get(pathKey(target)) ??
+        (byLinkKey as Map<string, BaseFileValue>).get(linkKey(target))
+      );
+    },
+  };
 }

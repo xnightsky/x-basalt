@@ -90,6 +90,15 @@ export const BASE_FUNCTION_NAMES: ReadonlySet<string> = new Set([
   "format",
   "time",
   "relative",
+  // file/link 互转（2026-07-28 覆盖率片三）：global 构造 file()/link() +
+  // file 方法 asLink/linksTo + link 方法 asFile。
+  // 注意 `file` 与根引用 `file.xxx` 同名——两者由文法区分（后随 `(` 才是调用），
+  // 见 parser.ts 的 rootRef 分支。
+  "file",
+  "link",
+  "asFile",
+  "asLink",
+  "linksTo",
   // random 同理进白名单显式拒绝——但理由不是「不渲染」而是**与字节稳定保证冲突**
   // （用户 2026-07-28 拍板：直接拒绝，不注入种子、不放弃字节稳定）。
   "random",

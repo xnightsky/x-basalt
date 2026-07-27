@@ -6,8 +6,8 @@ tags:
   - guide
   - bases
   - x-basalt
-timestamp: 2026-07-27T19:13:32Z
-sha256: f3696960adac4bab7c3c6e4c0fea7e54d1c7ef09d160d842e1cebc40ab6e8238
+timestamp: 2026-07-27T19:25:03Z
+sha256: ea428115463798811335a4bb28d23df99830a05e9b59858129ff01068886f99e
 ---
 # Bases · 用 `.base` 无头查询你的 vault
 
@@ -41,7 +41,7 @@ Bases 仍在快速演进（1.9 early access 期间已发生 snake_case → camel
 | --- | --- |
 | `%` 取模运算符 | **未采纳**（文法层拒绝） |
 | `date()` / `duration()` 构造函数 | **已采纳**（2026-07-28，[§3.6](#36-函数与方法全表)） |
-| `link()` / `file()` 构造函数 | 未采纳（计划中） |
+| `link()` / `file()` 构造函数 | **已采纳**（2026-07-28，[§3.6](#36-函数与方法全表)） |
 | duration 字符串后缀形态（`"1 day"`、短单位 `y/M/d/w/h/m/s`） | **只在 `duration(...)` 入参处生效**；表达式**字面量**仍只支持 `1day` 单 token 形态（[§3.4](#34-字面量与运算符)） |
 | `file.backlinks` | 未采纳（待评估） |
 
@@ -554,6 +554,8 @@ duration 单位（单复数均可）：`millisecond` `second` `minute` `hour` `d
 | `max(a, b, …)` / `min(a, b, …)` | number | 变长 number 参数（至少 1 个）；**不收单个 list 参**，非 number 参报错 |
 | `date(v)` | date | 严格 ISO 字符串（`YYYY-MM-DD` / `YYYY-MM-DDTHH:mm[:ss]`，可带 `Z`/`±hh:mm`）；已是 date 则原样返回；number 按 epoch 毫秒（`date(file.ctime)` 可用） |
 | `duration(v)` | duration | `"1day"` / `"1 day"` / `"2 hours"`（长单位不分大小写、可加复数 `s`），或官方短单位 `y M w d h m s`（**大小写敏感**：`M`=月、`m`=分）；number 按毫秒 |
+| `file(path)` | file | 在**本次查询的行集里**找这个文件：先按完整路径，再按去扩展名/忽略大小写的路径，最后按文件名。找不到 → `null`。同名多个时取路径升序第一个 |
+| `link(target, display?)` | link | 纯构造，**不检查文件存不存在**（wikilink 本来就允许悬空）——这跟 `file()` 找不到就给 `null` 是有意的两种行为 |
 
 **任意接收者**
 
@@ -643,6 +645,10 @@ duration 单位（单复数均可）：`millisecond` `second` `minute` `hour` `d
 | `file.inFolder(f)` | 该目录本身及其子目录；不命中同前缀的兄弟目录（`Projects` 不命中 `Projects2`）；大小写敏感 |
 | `file.hasLink(t)` | `t` 含 `/` 走完整路径匹配，否则按 basename 匹配；均忽略扩展名与大小写 |
 | `file.hasProperty(k)` | 只看 frontmatter 里 key **是否存在**，不看值真假 |
+| `file.asLink(display?)` | 转成 link 值（target 用完整路径） |
+| `file.linksTo(x)` | `x` 可以是字符串、link 值或 **file 值**。字符串/link 走和 `hasLink` 完全一样的匹配；**file 值走解析**——`[[Beta]]` 这种简写也算链到了 `Projects/Beta.md` |
+
+**link 方法**：`l.asFile()` → 把链接解析成 file 值（悬空链接 → `null`）。frontmatter 里整串是 wikilink 的属性天然就是 link 值，可以直接 `ref.asFile().mtime`。
 
 ### 3.7 formulas 与 summaries
 

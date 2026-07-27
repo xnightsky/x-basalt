@@ -27,6 +27,8 @@ import {
   isDateValue,
   isDurationValue,
   isFileValue,
+  isLinkValue,
+  createLinkValue,
   parseDateLike,
   parseDurationLike,
   safeGetOwn,
@@ -34,6 +36,8 @@ import {
   typedEqual,
   typeNameOf,
   type BaseDateValue,
+  type BaseFileValue,
+  type BaseLinkValue,
   type BaseValue,
 } from "./values.js";
 
@@ -55,6 +59,7 @@ export type BaseFunctionReceiver =
   | "string"
   | "number"
   | "date"
+  | "link"
   | "list"
   | "object"
   | "file";
@@ -75,6 +80,12 @@ export interface BaseFunctionContext {
   spendElementCompare(): void;
   /** 注入时钟（today/now 的时间来源；测试注入固定 clock 保证字节稳定，FORM-006）。 */
   clock(): Date;
+  /**
+   * 行集内的 file 解析（片三；`file(path)` / `link.asFile()`）。
+   * **缺省表示本上下文不提供数据集解析**——impl 须报 `BaseUnsupportedError` 而非静默 MISSING
+   * （自定义汇总语境有意不注入，见 evaluator 的 EvalContext.resolveFile）。
+   */
+  resolveFile?: (target: string) => BaseFileValue | undefined;
 }
 
 /** 白名单注册项（设计 §9 要求的声明字段全量）。 */
@@ -325,6 +336,50 @@ function relativeFromNow(epochMs: number, now: number): string {
   return diff > 0 ? `${phrase} ago` : `in ${phrase}`;
 }
 
+/** 同 {@link expectListReceiver}：link 组分派后的剩余防线。 */
+function expectLinkReceiver(entry: BaseFunctionEntry, r: BaseValue | null): BaseLinkValue {
+  if (r === null || !isLinkValue(r)) {
+    throw argTypeError(entry, `receiver 须为 link，实为 ${typeNameOf(r as BaseValue)}`);
+  }
+  return r;
+}
+
+/** 同 {@link expectListReceiver}：file 组分派后的剩余防线。 */
+function expectFileReceiver(entry: BaseFunctionEntry, r: BaseValue | null): BaseFileValue {
+  if (r === null || !isFileValue(r)) {
+    throw argTypeError(entry, `receiver 须为 file，实为 ${typeNameOf(r as BaseValue)}`);
+  }
+  return r;
+}
+
+/**
+ * 取「链接目标字符串」：接受 string / link / file 三种形态（片三 `linksTo`/`file()`/`link()` 共用）。
+ * 这是 `linksTo` 相对既有 `hasLink(string)` 的增量——后者只收字符串，前者收**类型化的**目标，
+ * 于是 `file.linksTo(link(...))` / `file.linksTo(file(...))` 可写。
+ */
+function linkTargetOf(entry: BaseFunctionEntry, v: BaseValue, what: string): string {
+  if (typeof v === "string") return v;
+  if (isLinkValue(v)) return v.target;
+  if (isFileValue(v)) return v.path;
+  throw argTypeError(entry, `${what} 须为 string/link/file，实为 ${typeNameOf(v)}`);
+}
+
+/**
+ * 取行集 file 解析器；未注入即「本上下文不提供数据集解析」→ unsupported，而非静默 MISSING。
+ * 触发点只有一个：自定义汇总求值（禁止访问行外状态，见 evaluator 的 EvalContext.resolveFile）。
+ */
+function requireResolver(
+  entry: BaseFunctionEntry,
+  ctx: BaseFunctionContext,
+): (target: string) => BaseFileValue | undefined {
+  if (ctx.resolveFile === undefined) {
+    throw new BaseUnsupportedError(
+      `函数 "${entry.name}" 需要数据集行集才能解析文件，当前求值上下文不提供（自定义汇总的 values 作用域禁止访问行外状态）`,
+    );
+  }
+  return ctx.resolveFile;
+}
+
 /**
  * `slice` 共用的索引校验（string/list 两组同款）：start 必传、end 可选，均须为整数。
  * 负索引与越界钳制**沿用 JS `slice` 语义**（自建口径，官方未定义；标注待 oracle）。
@@ -569,6 +624,62 @@ const ENTRIES: readonly BaseFunctionEntry[] = [
         return createDurationValue(v, "millisecond");
       }
       throw argTypeError(entry, `不可转换为 duration，实为 ${typeNameOf(v)}`);
+    },
+  },
+
+  // ---- file/link 构造（2026-07-28 覆盖率片三）----
+  // 快照说明：`link()`/`file()` 同 date()/duration()，晚于 2026-07-22 冻结快照，本片采纳。
+  // 文法说明：`file` 是关键字 token，`file(...)` 的调用形态由 parser 的 rootRef 分支支持。
+  {
+    name: "file",
+    receiver: "global",
+    arity: { min: 1, max: 1 },
+    returnType: "any",
+    scenarioIds: ["BASE-FILE-001"],
+    // === Obsidian 规范来源: Bases file(path) 构造 ===
+    impl: (_r, args, ctx, entry) => {
+      const v = args[0] as BaseValue;
+      if (isFileValue(v)) return v; // 幂等
+      const target = linkTargetOf(entry, v, "路径");
+      // 解析范围 = **当前查询的行集**（不查库、不碰文件系统）：markdown 模式解析不到附件，
+      // all-files 模式才能——`file()` 看得见的东西与查询数据集口径一致。
+      // 解析不到 → MISSING（读侧不塌缩；投影时才成 null），不伪造空 file 值。
+      return requireResolver(entry, ctx)(target) ?? MISSING;
+    },
+  },
+  {
+    name: "link",
+    receiver: "global",
+    arity: { min: 1, max: 2 },
+    returnType: "any",
+    scenarioIds: ["BASE-TYPE-006"],
+    // === Obsidian 规范来源: Bases link(target, display?) 构造 ===
+    impl: (_r, args, _ctx, entry) => {
+      const v = args[0] as BaseValue;
+      const display =
+        args.length === 2 ? expectString(entry, args[1] as BaseValue, "显示文本") : undefined;
+      // 幂等分支：已是 link 且未换显示文本 → 原样；给了 display → 换显示文本的新 link。
+      if (isLinkValue(v) && display === undefined) return v;
+      const target = linkTargetOf(entry, v, "链接目标");
+      // link 是**纯值构造**，不解析行集：指向不存在的文件也合法（wikilink 本就允许悬空），
+      // 与 file() 的「解析不到 → MISSING」是有意的两种口径。
+      return createLinkValue({ target, ...(display !== undefined ? { display } : {}) });
+    },
+  },
+
+  // ---- link 方法组（2026-07-28 覆盖率片三新增分派组）----
+  {
+    name: "asFile",
+    receiver: "link",
+    arity: { min: 0, max: 0 },
+    returnType: "any",
+    scenarioIds: ["BASE-TYPE-006", "BASE-FILE-001"],
+    // === Obsidian 规范来源: Bases link.asFile() ===
+    impl: (r, _args, ctx, entry) => {
+      const link = expectLinkReceiver(entry, r);
+      // 用原始 target（未归一）走解析器三级匹配：bare `[[A]]` 也能命中 `Projects/A.md`。
+      // 悬空链接 → MISSING（与 file() 同口径）。
+      return requireResolver(entry, ctx)(link.target) ?? MISSING;
     },
   },
 
@@ -1285,15 +1396,9 @@ const ENTRIES: readonly BaseFunctionEntry[] = [
     scenarioIds: ["BASE-FILE-005"],
     impl: (r, args, _ctx, entry) => {
       const t = expectString(entry, args[0] as BaseValue, "链接目标");
-      const links = (r as { links: readonly string[] }).links;
-      // 路径感知匹配（复用 utils/path 共享原语，设计 §3 允许）：
-      // t 含 `/` → qualified 分支，pathKey 精确相等；否则 bare 分支，linkKey（小写 basename）相等。
-      if (t.includes("/")) {
-        const tk = pathKey(t);
-        return links.some((target) => pathKey(target) === tk);
-      }
-      const tk = linkKey(t);
-      return links.some((target) => linkKey(target) === tk);
+      // 路径感知匹配（复用 utils/path 共享原语，设计 §3 允许）；与 `linksTo` 共用
+      // matchesAnyLink，两者对同一目标必给同一答案。
+      return matchesAnyLink((r as { links: readonly string[] }).links, t);
     },
   },
   {
@@ -1310,7 +1415,64 @@ const ENTRIES: readonly BaseFunctionEntry[] = [
       return safeGetOwn(properties, k).status === "ok";
     },
   },
+
+  // ---- file 互转（2026-07-28 覆盖率片三）----
+  {
+    name: "asLink",
+    receiver: "file",
+    arity: { min: 0, max: 1 },
+    returnType: "any",
+    scenarioIds: ["BASE-TYPE-006"],
+    // === Obsidian 规范来源: Bases file.asLink(display?) ===
+    impl: (r, args, _ctx, entry) => {
+      const f = expectFileReceiver(entry, r);
+      const display =
+        args.length === 1 ? expectString(entry, args[0] as BaseValue, "显示文本") : undefined;
+      // target 用完整 vault 相对路径（而非 basename）：路径唯一、不受同名文件影响；
+      // Link 值的相等比较本就走归一后的 pathKey，带不带扩展名不影响命中。
+      return createLinkValue({ target: f.path, ...(display !== undefined ? { display } : {}) });
+    },
+  },
+  {
+    name: "linksTo",
+    receiver: "file",
+    arity: { min: 1, max: 1 },
+    returnType: "boolean",
+    scenarioIds: ["BASE-FILE-005"],
+    // === Obsidian 规范来源: Bases file.linksTo(target) ===
+    impl: (r, args, ctx, entry) => {
+      const f = expectFileReceiver(entry, r);
+      const arg = args[0] as BaseValue;
+      // === 自建实现：两种入参 → 两种匹配语义（实测踩到，注释存证）===
+      // string / link 入参 = **文本目标**：走与 `hasLink` 完全相同的路径感知文本匹配
+      // （两者对同一字符串必给同一答案，测试锁定）。
+      //
+      // file 入参 = **那个具体文件**：必须走解析，不能走文本匹配。
+      // 反例：Alpha 里写的是 bare `[[Beta]]`，而 `file("Beta").path` 是 `Projects/Beta.md`；
+      // 文本匹配时目标含 `/` 会进 qualified 分支，pathKey("Beta")="beta" ≠ "projects/beta"
+      // → 明明链上了却判 false。改为「把每条出链解析一遍，比解析后的 path」才正确。
+      if (isFileValue(arg)) {
+        const resolve = requireResolver(entry, ctx);
+        return f.links.some((t) => resolve(t)?.path === arg.path);
+      }
+      const target = linkTargetOf(entry, arg, "链接目标");
+      return matchesAnyLink(f.links, target);
+    },
+  },
 ];
+
+/**
+ * 出链路径感知匹配（`hasLink` 与 `linksTo` 共用，防两处口径分叉）：
+ * target 含 `/` → qualified 分支，`pathKey` 精确相等；否则 bare 分支，`linkKey`（小写 basename）相等。
+ */
+function matchesAnyLink(links: readonly string[], target: string): boolean {
+  if (target.includes("/")) {
+    const tk = pathKey(target);
+    return links.some((t) => pathKey(t) === tk);
+  }
+  const tk = linkKey(target);
+  return links.some((t) => linkKey(t) === tk);
+}
 
 /**
  * object 的 own enumerable string key 条目（经 safeGetOwn 安全过滤）。

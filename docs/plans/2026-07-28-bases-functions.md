@@ -8,8 +8,8 @@ tags:
   - bases
   - functions
   - x-basalt
-timestamp: 2026-07-27T19:14:06Z
-sha256: 68176ad923c10fda436a46f8de4e067a05fc3936eed84d48f9c16d4e22e82c2d
+timestamp: 2026-07-27T19:25:48Z
+sha256: 27e0e6afa9d94e08b0188bd612bdf5c240a5f0b4915df90e9d294850d171842e
 ---
 # 计划：Bases 函数覆盖率（51% → ~90%）
 
@@ -33,9 +33,9 @@ sha256: 68176ad923c10fda436a46f8de4e067a05fc3936eed84d48f9c16d4e22e82c2d
 
 | 片 | 内容 | 关键改动 | 状态 |
 | --- | --- | --- | --- |
-| 1 | 机械叶子函数 16 个 + 4 个渲染类拒绝 + `round` 归组 | 新增 receiver 组 `number` | ⏳ |
-| 2 | Date/Duration 族 6 个（`date()`/`duration()`/`format`/`time`/`relative`/`isEmpty`） | 新增 receiver 组 `date`，扩 duration 格式化 | ⏳ |
-| 3 | Link/File 互转 5 个（`asFile`/`linksTo`/`asLink`/`file()`/`link()`） | links 表接线 | ⏳ |
+| 1 | 机械叶子函数 16 个 + 4 个渲染类拒绝 + `round` 归组 | 新增 receiver 组 `number` | ✅ |
+| 2 | Date/Duration 族 6 个（`date()`/`duration()`/`format`/`time`/`relative`/`isEmpty`） | 新增 receiver 组 `date`，扩 duration 格式化 | ✅ |
+| 3 | Link/File 互转 5 个（`asFile`/`linksTo`/`asLink`/`file()`/`link()`） | 行集 file 解析器 + **文法：`file(...)` 调用形态** | ✅ |
 | 4 | `matches`（regex）+ ReDoS 防护（BASE-SEC-004） | 正则执行预算 | ⏳ |
 | 5 | BASE-GROUP-002（list/link 分组键）+ BASE-SUM-002 收口 | engine 分组层 | ⏳ |
 | 6 | BASE-CTX-001 显式 `contextFile` + `this.*`（CTX-002/003/004 判❌不做 + 诊断） | engine/CLI 入参，**不动 parser**（2026-07-28 拍板缩范围后） | ⏳ |
@@ -147,3 +147,24 @@ sha256: 68176ad923c10fda436a46f8de4e067a05fc3936eed84d48f9c16d4e22e82c2d
 18. **`time()` 返回 duration 而非 `"HH:mm"` 字符串**。理由：duration 是既有类型，可比较（`t > 12hours`）、可算术；字符串需求由 `format("HH:mm")` 覆盖，不开两条路。暂定，待 oracle。
 19. **`relative()` 固定英文**、固定阶梯（year=365d / month=30d 沿用值域既有约定），时间源恒为注入 clock。理由：官方该函数输出随界面语言变，本就不是稳定 schema（设计 §14 已声明不复刻本地化显示串）；固定串至少保证字节稳定。
 20. **`format` 只做数字 token**，本地化 token 报错。理由同上，且「静默给一种语言」比报错更糟。
+
+### 片 3 ✅ 2026-07-28
+
+**四门**（全绿）：typecheck / lint 零 warning / format:check / `pnpm test` **858 pass / 0 fail**（片二后基线 850，+8）。
+
+**测试**：新增 `tests/base-functions-link.test.ts` 8 用例（BASE-FILE-001/005、BASE-TYPE-006 + 文法零回归专项 + 无解析器语境）。
+
+**改动落点**：`parser.ts` 的 `rootRef` 增「根 token 后随 `(` → 全局调用」分支；`source.ts` 新增 `createFileResolver`（按需建三级索引）；`evaluator.ts` 的 `EvalContext`/`EvalState`/`fnCtx` 增 `resolveFile`；`engine.ts` 每次查询建一个解析器注入行求值上下文（**有意不注入自定义汇总语境**）；`functions.ts` +5 条注册项 + `matchesAnyLink` 提取（`hasLink`/`linksTo` 共用，防口径分叉）。
+
+**⚠ 计划外的文法改动**：原以为片六是唯一动 parser 的一片，实际本片先动了——`file` 是关键字 token，`file(...)` 此前直接给「Expecting EOF but found '('」这种与用户意图无关的语法错误。改动被限制在 `rootRef` 一条规则内，并有「既有根引用形态零回归」专项用例。
+
+**实测到的两处非显然点**（代码注释 + 测试双存证）：
+
+1. **`file.linksTo(file("Beta"))` 起初返回 false**：Alpha 里写的是 bare `[[Beta]]`，而 `file("Beta").path` 是 `Projects/Beta.md`；文本匹配时目标含 `/` 会进 qualified 分支比 `pathKey`（`"beta"` ≠ `"projects/beta"`），明明链上了却判否。定为**两种入参两种语义**：string/link = 文本目标（同 `hasLink`），file = 那个具体文件（把每条出链解析一遍比解析后的 path）。
+2. **chevrotain 规则必须单出口**：`rootRef` 里按 `callArgs` 提前 `return`，会让后半段属性路径 `OPTION` 永远不被录进语法（**录制阶段会真的执行 OPTION 的 DEF**，`callArgs` 被赋成 dummy 值 → 提前 return 生效），运行期 `file.name` 直接抛 `Cannot read properties of undefined (reading 'call')`。
+
+### 片 3 新增 Decision Log
+
+21. **`file()` 只在当前查询行集内解析**，不查库、不碰文件系统。理由：行集已在内存（零额外 IO），且语义自洽——`file()` 看得见的与查询数据集口径一致（markdown 模式解析不到附件，all-files 才能）。同键多文件取 path 升序第一个（行集本就 path ASC，「首次写入者胜」），不用「最近修改优先」这类会漂的规则。
+22. **`file()` 解析不到 → MISSING；`link()` 悬空 → 合法 link 值**。两种口径有意不同：file 是「找一个存在的东西」，link 是「记一个指向」——wikilink 本就允许悬空。
+23. **无解析器语境报 `unsupported-feature` 而非静默 MISSING**。唯一触发点是自定义汇总的 `values` 作用域（禁止访问行外状态）；静默 MISSING 会让用户以为「文件不存在」，而实际是「这里不许查」。

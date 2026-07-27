@@ -122,6 +122,15 @@ export interface EvalContext {
    * （value/index/acc）照常优先于本绑定；formula.* / this.* 保持既有拒绝口径。
    */
   summaryValues?: BaseValue[];
+  /**
+   * 行集内的 file 解析器（2026-07-28 覆盖率片三，`file(path)` / `link.asFile()` 用）。
+   * 由 engine 每次查询用 `createFileResolver(rows)` 建一个注入。
+   *
+   * **缺省即「本上下文不提供数据集解析」**：两类函数报行级 `base/unsupported-feature`
+   * 而不是静默 MISSING。自定义汇总求值（`summaryValues` 语境）**有意不注入**——
+   * 那里禁止访问行外状态，`file()` 属于越权（与 note/file 属性一律 MISSING 同一原则）。
+   */
+  resolveFile?: (target: string) => BaseFileValue | undefined;
 }
 
 /** 行级求值错误内部信号：带 rule 与表达式内 offset，evaluateExpression 捕获后上报并返回 MISSING。 */
@@ -161,6 +170,8 @@ interface EvalState {
   summaryValues?: BaseValue[];
   /** 查询级共享操作数计数器（见 EvalContext.sharedBudget）。 */
   sharedBudget?: BaseSharedOperationBudget;
+  /** 行集内 file 解析器（片三；见 EvalContext.resolveFile）。 */
+  resolveFile?: (target: string) => BaseFileValue | undefined;
 }
 
 /**
@@ -247,17 +258,18 @@ function getFileField(file: BaseFileValue, name: string, offset: number): BaseVa
  */
 function receiverGroupOf(
   v: BaseValue,
-): "string" | "number" | "date" | "list" | "object" | "file" | null {
+): "string" | "number" | "date" | "link" | "list" | "object" | "file" | null {
   if (typeof v === "string") return "string";
   if (typeof v === "number") return "number";
   if (Array.isArray(v)) return "list";
   if (typeof v === "object" && v !== null) {
     if (isFileValue(v)) return "file";
-    // date 自 2026-07-28 覆盖率片二起有独立方法组（format/time/relative/isEmpty）；
-    // duration/link 仍无专属方法，只命中 "any" 组（isTruthy/isType/toString）。
+    // date（片二 format/time/relative/isEmpty）与 link（片三 asFile）各有独立方法组；
+    // duration 仍无专属方法，只命中 "any" 组（isTruthy/isType/toString）。
     // 三者的内部字段（epochMs/ms/path）一律不外露为成员（见 isBrandedTypedValue）。
     if (isDateValue(v)) return "date";
-    if (isDurationValue(v) || isLinkValue(v)) return null;
+    if (isLinkValue(v)) return "link";
+    if (isDurationValue(v)) return null;
     return "object";
   }
   return null;
@@ -677,6 +689,8 @@ function evalCall(
       },
       spendElementCompare: () => spend(state, expr.offset),
       clock: state.clock, // P2a：time 组（today/now）读注入时钟
+      // 片三：file()/asFile() 的行集解析；缺省时 impl 报 unsupported-feature（见 EvalContext）
+      ...(state.resolveFile !== undefined ? { resolveFile: state.resolveFile } : {}),
     };
     return entry.impl(receiverValue, args, fnCtx, entry);
   } catch (e) {
@@ -873,6 +887,7 @@ export function evaluateExpression(expr: BaseExpr, row: BaseRow, ctx: EvalContex
     ...(ctx.propertyTypes !== undefined ? { propertyTypes: ctx.propertyTypes } : {}),
     ...(ctx.summaryValues !== undefined ? { summaryValues: ctx.summaryValues } : {}),
     ...(ctx.sharedBudget !== undefined ? { sharedBudget: ctx.sharedBudget } : {}),
+    ...(ctx.resolveFile !== undefined ? { resolveFile: ctx.resolveFile } : {}),
     ...(ctx.onRowError !== undefined ? { onRowError: ctx.onRowError } : {}),
   };
   try {
