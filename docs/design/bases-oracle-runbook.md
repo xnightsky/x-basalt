@@ -7,8 +7,8 @@ tags:
   - bases
   - oracle
   - conformance
-timestamp: 2026-07-26T17:13:57Z
-sha256: f0e8c4a123b8efb3f1d8f0842235addaf42a0da1755ebb228eaa50cb107727dd
+timestamp: 2026-07-27T19:53:42Z
+sha256: a72f7b59d8017c9c753faba618c394f379f0016c822440f860eac0919cc89db3
 ---
 # Bases P1 争议语义官方 oracle 操作手册（runbook）
 
@@ -26,9 +26,31 @@ sha256: f0e8c4a123b8efb3f1d8f0842235addaf42a0da1755ebb228eaa50cb107727dd
 | ④ | 空 filter 数组 and/or/not | 设计 §6 | P1 拒绝（`base/unsupported-feature`） | `views/empty-filter.base`（3 个 view） |
 | ⑤ | date vs datetime 跨精度比较 | BASE-TYPE-005 | 统一按 UTC epoch 比较（P2a 落地） | `views/types.base`（date-eq-literal / date-lt-datetime / datetime-lt-date） |
 | ⑥ | frontmatter wikilink → Link 值与相等 | BASE-TYPE-006 | `[[t]]`/`[[t\|d]]`/`[[t#sub]]` → Link value，按 path+subpath 相等（P2a 落地） | `views/types.base`（link-eq-wikilink / link-projection） |
-| ⑦ | list/tag 分组键一行多组 | BASE-GROUP-002 | 暂定拒绝（`base/unsupported-feature`，P2b 落地） | `views/group-summary.base`（group-by-tags / group-by-list-prop） |
+| ⑦ | list/tag 分组键一行多组 | BASE-GROUP-002 | **扇出**：一行进入其每个元素的组；行内元素先去重、空 list 视同 MISSING 键（2026-07-28 覆盖率片五落地，此前为暂定拒绝） | `views/group-summary.base`（group-by-tags / group-by-list-prop） |
 | ⑧ | 自定义 summary 的 `values` 边界（空值剔除 / limit 前后） | BASE-SUM-002 | 暂定剔除 null/missing、按 limit 前全量（P2b 落地） | `views/group-summary.base`（summary-custom / summary-custom-limited） |
 | ⑨ | 字符串→日期推断是否作用于 `+`（拼接语境） | 语法 §5.1 / 设计 §8.3 | 推断对全部非短路二元运算生效，故 `due + " 备注"` 报行级类型错误而非拼接（2026-07-27 review 登记） | `views/types.base`（concat-plain-string 对照 / concat-date-string） |
+
+### 1.1 2026-07-28 函数覆盖率批次新增的暂定口径（⑩ 起）
+
+> 这批**没有现成 fixture view**——写 fixture 属 oracle 阶段的工作，本轮功能补齐未做。
+> 逐条实现细节见[实现状态追踪 §6](bases-status.md) 各片明细；跑 oracle 前需先为下表补 view。
+
+| # | 暂定口径 | 出处 |
+| --- | --- | --- |
+| ⑩ | `string.title()` = 按空白切词 + 词首大写 + 词余小写 | 片一 |
+| ⑪ | `slice(start, end?)`（string/list）负索引与越界钳制沿用 JS 语义 | 片一 |
+| ⑫ | `replace(a, b)` 为**字面子串全局替换**（非 regex，`$&` 不展开，空串报错） | 片一 |
+| ⑬ | `reverse()`（string）按 code point 反转（字素簇仍会拆） | 片一 |
+| ⑭ | `number.isEmpty()` / `date.isEmpty()` 恒 false | 片一/片二 |
+| ⑮ | `date.time()` 返回**当日 UTC 零点起的 duration**（而非 `"HH:mm"` 字符串） | 片二 |
+| ⑯ | `date.format()` 只做数字 token，本地化 token 报错；同字符游程分词 | 片二 |
+| ⑰ | `date.relative()` 固定英文 + 固定阶梯（month=30d / year=365d） | 片二 |
+| ⑱ | `date(number)` 按 epoch 毫秒、`duration(number)` 按毫秒（自建扩展） | 片二 |
+| ⑲ | `file(path)` 只在**当前查询行集**内解析；同键多文件取 path 升序第一个 | 片三 |
+| ⑳ | `linksTo(file 值)` 走解析、`linksTo(string/link)` 走文本匹配 | 片三 |
+| ㉑ | `matches` 的 ReDoS 静态判据（哪些正则被拒）与「非法即报诊断」 | 片四 |
+| ㉒ | 组级汇总 `groups[].summaries` 计算集 = 该组 **limit 后**的行 | 片五 |
+| ㉓ | 分组键组序：可比标量 < link < null/MISSING | 片五 |
 
 ## 2. 前置（一次性）
 

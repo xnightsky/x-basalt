@@ -8,8 +8,8 @@ tags:
   - bases
   - headless
   - query-engine
-timestamp: 2026-07-22T10:50:29Z
-sha256: fde5eb320fcc7b3164c05684b8a416b66bf0082a9d7c34fee55e74cd4f42ed91
+timestamp: 2026-07-27T19:53:20Z
+sha256: 216744c65de54503fc349148b19fbe6884dd0c02d5613348741e043485f623e0
 ---
 
 # Obsidian Bases 无头执行引擎设计
@@ -253,20 +253,17 @@ type BaseFilter =
 - 多键 sort 稳定执行，最终用 `file.path` tie-break；
 - null/missing/error 的排序位置在实现前由 oracle 固化，不能照搬 SQLite 默认。
 
-## 9. P1 函数白名单
+## 9. 函数白名单（契约；名单本身不在此复制）
 
-| 类型   | 函数/方法                                                                           |
-| ------ | ----------------------------------------------------------------------------------- |
-| global | `if`、`list`、`number`                                                              |
-| any    | `isTruthy`、`isType`、`toString`                                                    |
-| string | `contains`、`containsAll`、`containsAny`、`startsWith`、`endsWith`、`lower`、`trim` |
-| list   | `contains`、`containsAll`、`containsAny`、`isEmpty`                                 |
-| object | `isEmpty`、`keys`、`values`                                                         |
-| file   | `hasTag`、`inFolder`、`hasLink`、`hasProperty`                                      |
+**名单不写在这里**——单一真相源是 `src/base/expressions.ts` 的 `BASE_FUNCTION_NAMES`，逐条状态见[语法参考 §4.4](bases-syntax.md#44-函数方法白名单)。本节只定契约，避免第三处名单漂移（此前这里抄过一份 P1 名单，函数补齐后即过期）。
 
-函数注册项必须声明：name、receiver type、arity、return type、实现、P1 scenario IDs。未知函数按源位置报 `base/unknown-function`。
+契约：
 
-`if` 采用 lazy branch：只计算被选择分支，避免未选分支的错误污染结果；该行为需 oracle 验证。
+- 函数注册项必须声明 name、receiver 分派组、arity、return type、实现、scenario IDs；
+- `src/base/functions.ts` 的注册表**模块加载即与 `BASE_FUNCTION_NAMES` 对账**，缺名/多名直接 throw；
+- 分派组（`global` / `any` / `string` / `number` / `date` / `link` / `list` / `object` / `file`）新增时必须同步 `BaseFunctionReceiver` 与 evaluator 的 `receiverGroupOf()`，否则该组条目永远查不到；
+- 未知函数按源位置报 `base/unknown-function`；**「官方有、本引擎不做」的函数进白名单但显式拒绝**（渲染类 → `base/unsupported-feature`；`random` → 同 rule 但理由是与字节稳定契约冲突），让报错从「这函数不存在」升级为「本引擎不做」；
+- `if` 采用 lazy branch：只计算被选择分支，避免未选分支的错误污染结果；该行为需 oracle 验证。
 
 ## 10. 数据源
 
