@@ -188,11 +188,23 @@ export interface BaseQueryResult {
   rows: Record<string, BaseOutputValue>[];
   /**
    * 分组结果（P2b 片三增量可选字段；view 配置 groupBy 时存在，否则缺省）。
-   * 组序 = 组键 sortKeyCompare（direction 控制方向）；组内行序 = view sort + file.path
-   * tie-break（与顶层 rows 同一比较器）；rows 与顶层 rows 同一投影形状（向后兼容，
-   * 顶层 rows 平铺行为不变）。key 经 toOutputValue 序列化（稳定 JSON）。
+   * 组序 = 组键比较（`groupKeyCompare`，direction 控制方向）；组内行序 = view sort +
+   * file.path tie-break（与顶层 rows 同一比较器）；rows 与顶层 rows 同一投影形状
+   * （向后兼容，顶层 rows 平铺行为不变）。key 经 toOutputValue 序列化（稳定 JSON）。
+   *
+   * **⚠ list 键会扇出**（2026-07-28 片五 GROUP-002）：分组键求值为 list 时，一行进入
+   * 其**每个元素**的组（`groupBy: tags` 的自然语义），因此 **`groups` 各组行数之和可能
+   * 大于 `rows.length`**——需要「每行恰好一次」的读出方请用顶层 `rows`。
+   *
+   * `summaries`（2026-07-28 片五）：view 同时配置 groupBy 与 summaries 时存在。
+   * 计算集 = **该组在 limit 后的行**，与顶层 `summaries`（filter 后 **limit 前**全量）
+   * 有意不同——组本身就建立在 limit 后行集上。
    */
-  groups?: { key: BaseOutputValue; rows: Record<string, BaseOutputValue>[] }[];
+  groups?: {
+    key: BaseOutputValue;
+    rows: Record<string, BaseOutputValue>[];
+    summaries?: Record<string, BaseOutputValue>;
+  }[];
   /**
    * 汇总结果（P2b 片三增量可选字段；view 配置 summaries 时存在，否则缺省）。
    * key = view summaries 的 property-ref 原文（YAML 声明序）；计算集 = filter 后
@@ -201,6 +213,28 @@ export interface BaseQueryResult {
   summaries?: Record<string, BaseOutputValue>;
   /** 全量诊断（顺序：文档层 → planner → 引擎级 → 行级按行序，字节稳定）。 */
   diagnostics: BasaltDiagnostic[];
+}
+
+/**
+ * 分组键比较（2026-07-28 覆盖率片五）：分组专用，不能直接用 `sortKeyCompare`——
+ * 后者对 link **抛类型错误**（link 无排序语义），而分组只需要一个**确定性**的组序。
+ *
+ * 序：可比标量（按 sortKeyCompare 的 rank/值）< link < null/MISSING。
+ * link 之间按归一 `path` + `subpath` 字典序——只声称确定，不声称有语义。
+ */
+function groupKeyCompare(a: BaseValue, b: BaseValue): number {
+  const la = isLinkValue(a);
+  const lb = isLinkValue(b);
+  if (!la && !lb) return sortKeyCompare(a, b);
+  if (la && lb) {
+    const ka = `${a.path}#${a.subpath ?? ""}`;
+    const kb = `${b.path}#${b.subpath ?? ""}`;
+    return ka < kb ? -1 : ka > kb ? 1 : 0;
+  }
+  // 空值键恒最后（沿用 sortKeyCompare 的既有口径，link 不得插到它们后面）。
+  if (a === null || a === MISSING) return 1;
+  if (b === null || b === MISSING) return -1;
+  return la ? 1 : -1;
 }
 
 /** 诊断数组是否含 error 级（error 阻止结果，设计 §11）。 */
@@ -611,7 +645,15 @@ export class BaseEngine {
 
       // ---- groupBy（P2b 片三，计划「关键取舍」#9，BASE-GROUP-001）----
       // 作用于 limit 后行集（= 顶层 rows 同一集合，向后兼容：顶层 rows 平铺行为不变）。
-      let groups: { key: BaseOutputValue; rows: Record<string, BaseOutputValue>[] }[] | undefined;
+      let groups:
+        | {
+            key: BaseOutputValue;
+            rows: Record<string, BaseOutputValue>[];
+            summaries?: Record<string, BaseOutputValue>;
+          }[]
+        | undefined;
+      /** 分桶中间态（组级汇总要按桶取 limited 行下标，故与 groups 并行保留）。 */
+      let groupBuckets: { key: BaseValue; rowIdx: number[] }[] | undefined;
       if (plan.groupBy !== undefined) {
         const groupBy = plan.groupBy;
         // 分组键逐行求值（行级错误 → MISSING 键；公式/时钟/类型表同 sort 键求值接线）。
@@ -624,48 +666,54 @@ export class BaseEngine {
             ),
           ),
         );
-        // GROUP-002（暂定，待 oracle）：list/link（多值）分组键 → base/unsupported-feature
-        // （error）+ 空结果，与空 filter 数组同款拒绝口径，不猜官方语义。
-        if (keys.some((k) => Array.isArray(k) || isLinkValue(k))) {
-          flushSuppressed();
-          diagnostics.push(
-            baseDiagnostic(
-              base,
-              view.span,
-              BASE_RULES.unsupportedFeature,
-              "error",
-              `groupBy 分组键为 list/link（多值）暂不支持（GROUP-002 暂定，待官方 oracle 冻结）`,
-              { target: groupBy.property, reason: "list_group_key" },
-            ),
-          );
-          return emptyResult(view.name);
-        }
         // 分桶：typedEqual 相等即同组（MISSING 只等于 MISSING，故 missing 键与显式 null 键
         // 各自成组——序列化后 key 同为 null，读侧以组序区分；暂定口径，注释存证）。
         // 比较/迭代扣查询级共享总额（防大行数 × 多组 O(n·g) 耗尽）——与求值侧同一份预算，
         // 否则分桶自建计数器等于给同一次查询又开了一份 maxOperations 额度。
         const spendGroup = (): void => spendShared(opsBudget, limits);
         const buckets: { key: BaseValue; rowIdx: number[] }[] = [];
-        keys.forEach((key, i) => {
+        const putInBucket = (key: BaseValue, rowIdx: number): void => {
           spendGroup();
           const hit = buckets.find((b) => {
             spendGroup();
             return typedEqual(b.key, key);
           });
-          if (hit !== undefined) hit.rowIdx.push(i);
-          else buckets.push({ key, rowIdx: [i] });
+          if (hit !== undefined) hit.rowIdx.push(rowIdx);
+          else buckets.push({ key, rowIdx: [rowIdx] });
+        };
+        keys.forEach((key, i) => {
+          // GROUP-002（2026-07-28 覆盖率片五落地；暂定口径，待 oracle）：
+          // **list 键扇出**——一行进入其每个元素的组（`groupBy: tags` 的自然语义：
+          // 一篇多标签笔记应出现在每个标签下）。代价是「组内行数之和 ≥ rows.length」，
+          // 已在 BaseQueryResult.groups 契约里显式声明；顶层 rows 仍是平铺一份，不变。
+          if (Array.isArray(key)) {
+            // 行内元素先 typedEqual 去重：`[a, a]` 不得把同一行塞进同一组两次。
+            const seen: BaseValue[] = [];
+            for (const el of key) {
+              spendGroup();
+              if (seen.some((s) => typedEqual(s, el))) continue;
+              seen.push(el);
+            }
+            // 空 list 视同 MISSING 键（单独成组），**不静默丢行**。
+            if (seen.length === 0) putInBucket(MISSING, i);
+            else for (const el of seen) putInBucket(el, i);
+            return;
+          }
+          // link 是**标量**键（不是多值）：按路径感知相等分组，与 list 分道处理。
+          putInBucket(key, i);
         });
-        // 组序：组键 sortKeyCompare（恒 ASC 语义，DESC 整体取反——沿用顶层 sort 的既有口径，
+        // 组序：groupKeyCompare（恒 ASC 语义，DESC 整体取反——沿用顶层 sort 的既有口径，
         // null/MISSING/不可比键在同 rank 组内按首现序稳定）；桶内行序 = limited 顺序
         // （= view sort + file.path tie-break，与顶层 rows 同一比较器结果）。
         buckets.sort((a, b) => {
-          const c = sortKeyCompare(a.key, b.key);
+          const c = groupKeyCompare(a.key, b.key);
           return groupBy.direction === "DESC" ? -c : c;
         });
         groups = buckets.map((b) => ({
           key: toOutputValue(b.key),
           rows: b.rowIdx.map((i) => outRows[i] as Record<string, BaseOutputValue>),
         }));
+        groupBuckets = buckets;
       }
 
       // ---- summaries（P2b 片三，计划「关键取舍」#10/#11，BASE-SUM-001 / SUM-002 暂定）----
@@ -709,6 +757,50 @@ export class BaseEngine {
               pushRowDiagnostic(custom.span, custom.source, info, `汇总 ${s.name}`),
           });
           summariesOut[s.property] = toOutputValue(value);
+        }
+
+        // ---- 组级汇总（2026-07-28 覆盖率片五，SUM-002 收口）----
+        // 口径变更留档：P2b 曾判「组级汇总属官方 UI 形态，无头 JSON 暂不做」。片五 GROUP-002
+        // 落地后 groups 成为一等产物，「有组没有组的汇总」是半个功能，故补上。
+        // **计算集与顶层不同，有意为之**：顶层 summaries = filter 后 **limit 前**全量；
+        // 组级 = 该组在 **limit 后**的行——因为组本身就建立在 limit 后行集上，用 limit 前的
+        // 集合去配 limit 后的组会给出「组里看不见的行也算进汇总」的怪结果。
+        if (groups !== undefined && groupBuckets !== undefined) {
+          const perRowValues = plan.summaries.map((s) =>
+            limited.map(({ row }) =>
+              evaluateExpression(
+                s.ast,
+                row,
+                rowEvalContext(row, (info) =>
+                  pushRowDiagnostic(view.span, s.property, info, row.file.path),
+                ),
+              ),
+            ),
+          );
+          groups = groups.map((g, gi) => {
+            const idx = (groupBuckets as { rowIdx: number[] }[])[gi]?.rowIdx ?? [];
+            const out: Record<string, BaseOutputValue> = {};
+            for (let si = 0; si < plan.summaries.length; si += 1) {
+              const s = plan.summaries[si] as (typeof plan.summaries)[number];
+              const values = idx.map((i) => (perRowValues[si] as BaseValue[])[i] as BaseValue);
+              const builtin = BUILTIN_SUMMARIES.get(s.name);
+              if (builtin !== undefined) {
+                out[s.property] = toOutputValue(runBuiltinSummary(builtin, values, spendSummary));
+                continue;
+              }
+              const custom = plan.customSummaries[s.name] as CompiledCustomSummary;
+              const value = evaluateExpression(custom.ast, SUMMARY_ROW, {
+                limits,
+                ...(options.clock !== undefined ? { clock: options.clock } : {}),
+                summaryValues: values.filter((v) => v !== MISSING && v !== null),
+                sharedBudget: opsBudget,
+                onRowError: (info) =>
+                  pushRowDiagnostic(custom.span, custom.source, info, `汇总 ${s.name}`),
+              });
+              out[s.property] = toOutputValue(value);
+            }
+            return { ...g, summaries: out };
+          });
         }
       }
 

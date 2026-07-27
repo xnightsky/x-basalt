@@ -7,8 +7,8 @@ tags:
   - bases
   - testing
   - x-basalt
-timestamp: 2026-07-27T19:32:41Z
-sha256: fafa1b786a7b2c53cd684283a11961eab069cd89153fa5bd43a741d5bafccc7e
+timestamp: 2026-07-27T19:41:31Z
+sha256: 979a78dfc8cccdd6cd41ca34f634faaad341569e3fd3a92d9d227e8e4303d950
 ---
 # Bases 实现状态追踪
 
@@ -27,7 +27,7 @@ sha256: fafa1b786a7b2c53cd684283a11961eab069cd89153fa5bd43a741d5bafccc7e
 | P2b | types.json / list 高阶 / groupBy / summaries | ✅ 2026-07-27（[计划](../history/plans/2026-07-27-bases-p2b-types-list-group-summary.md)） |
 | P3 | all-files / context / 嵌入 | 🔀 P3a 附件数据集 ✅ 2026-07-27（[计划](../history/plans/2026-07-27-bases-p3-attachments.md)）；context/嵌入仍 🔜 待开 |
 | review 修复 | P0..P2b 收口后的评审修复（静默失败 + 资源模型） | ✅ 2026-07-27（[计划](../history/plans/2026-07-27-bases-code-review-fixes.md)） |
-| 函数覆盖率 | 官方 68 条目 51% → ~90%（六片） | 🚧 进行中（[计划](../plans/2026-07-28-bases-functions.md)）：片一/片二/片三 ✅ 2026-07-28；片四..六 🔜 |
+| 函数覆盖率 | 官方 68 条目 51% → ~90%（六片） | 🚧 进行中（[计划](../plans/2026-07-28-bases-functions.md)）：片一..片五 ✅ 2026-07-28；片六 🔜 |
 
 ## 1. 文档层（P0）✅ 2026-07-26
 
@@ -111,8 +111,8 @@ sha256: fafa1b786a7b2c53cd684283a11961eab069cd89153fa5bd43a741d5bafccc7e
 | 公式运行时类型错误行级诊断 | BASE-FORM-005 | ✅ 2026-07-27（P2a；行级 warning + cell null，不误伤他行） |
 | `today`/`now`（clock 注入） | BASE-FORM-006 | ✅ 2026-07-27（P2a；同 clock 两次 query 字节一致） |
 | list filter/map/reduce（value/index/acc 隐式作用域） | BASE-LIST-001 / BASE-SEC-005 | ✅ 2026-07-27（P2b；lazy 分派 + 作用域栈，flat/sort/unique/join 同批；迭代/collection/callDepth 预算） |
-| groupBy 标量 / 列表/tag | BASE-GROUP-001/002 | GROUP-001 ✅ 2026-07-27（P2b；`groups` 增量字段，组序方向 + 组内稳定）；GROUP-002 ⏸ oracle（list/link 键暂定报 `base/unsupported-feature` 拒绝） |
-| 默认汇总 / custom summary values | BASE-SUM-001/002 | SUM-001 ✅ 2026-07-27（P2b；15 内置，limit 前全量暂定）；SUM-002 ⏸ 暂定（`values` 作用域实现，空值剔除/越权口径待 oracle） |
+| groupBy 标量 / 列表/tag | BASE-GROUP-001/002 | GROUP-001 ✅ 2026-07-27（P2b；`groups` 增量字段，组序方向 + 组内稳定）；**GROUP-002 ✅ 2026-07-28**（覆盖率片五：list 键扇出、link 标量键；语义仍属暂定口径待 oracle，但已不再拒绝） |
+| 默认汇总 / custom summary values | BASE-SUM-001/002 | SUM-001 ✅ 2026-07-27（P2b；15 内置，limit 前全量暂定）；SUM-002 ✅ 2026-07-28 收口（`values` 作用域 + **组级汇总 `groups[].summaries`**；空值剔除/越权口径仍为暂定，待 oracle） |
 | regex（若支持必须 ReDoS 防护 + 长度预算） | BASE-SEC-004 | ✅ 2026-07-28（覆盖率片四：`string.matches(pattern)` + 三层防护；见 §6 片四明细） |
 
 ## 5. P3 all-files / context（P3a 附件数据集 ✅ 2026-07-27）
@@ -138,7 +138,7 @@ sha256: fafa1b786a7b2c53cd684283a11961eab069cd89153fa5bd43a741d5bafccc7e
 | 片二 | Date/Duration 族 6 个（`date()`/`duration()`/`format`/`time`/`relative`/`isEmpty`），新增 `date` 分派组 | ✅ 2026-07-28（`tests/base-functions-date.test.ts` 11 用例；850 全量绿） |
 | 片三 | Link/File 互转 5 个（`asFile`/`linksTo`/`asLink`/`file()`/`link()`） | ✅ 2026-07-28（`tests/base-functions-link.test.ts` 8 用例；858 全量绿。**含文法改动**：`file(...)` 调用形态） |
 | 片四 | `matches`（regex）+ ReDoS 防护 | ✅ 2026-07-28（`tests/base-functions-regex.test.ts` 8 用例；866 全量绿） |
-| 片五 | list/link 当分组键 + 自定义汇总收口 | 🔜 BASE-GROUP-002 / BASE-SUM-002 |
+| 片五 | list/link 当分组键 + 自定义汇总收口 | ✅ 2026-07-28（`tests/base-group-summary.test.ts` +4 用例；870 全量绿） |
 | 片六 | 显式 `contextFile` + `this.*` 求值 | 🔜 BASE-CTX-001（用户 2026-07-28 拍板**只做 contextFile**；CTX-002/003/004 判❌不做 + 诊断，见 §7） |
 
 ### 片一明细 ✅ 2026-07-28
@@ -153,6 +153,18 @@ sha256: fafa1b786a7b2c53cd684283a11961eab069cd89153fa5bd43a741d5bafccc7e
 | 渲染类 `escapeHTML`/`html`/`image`/`icon` 白名单内显式拒绝 | 设计 §1 | ✅ 2026-07-28（新增 `BaseUnsupportedError` → `base/unsupported-feature`，与 `property-type-mismatch` 分开，读出方可据 rule 区分「用错类型」与「本引擎不做」） |
 | `repeat`/`replace`/`split` 产物规模预算（string 计字符数，`repeat` 分配前预检） | BASE-SEC-005 延伸 | ✅ 2026-07-28 |
 | `random()` × 字节稳定冲突 | 语法 §4.4 | ✅ 2026-07-28 **直接拒绝**（用户拍板；白名单内报 `base/unsupported-feature`，消息说明是契约冲突而非「不渲染」，与渲染类分开断言） |
+
+### 片五明细 ✅ 2026-07-28（GROUP-002 + SUM-002 收口）
+
+> 测试：`tests/base-group-summary.test.ts`（+4 用例，共 22）。fixture `group-list.base` 由「拒绝场景」改写为扇出/link/空 list 五个 view。
+
+| 项 | 场景编号 | 状态 |
+| ---- | ---- | ---- |
+| list 分组键**扇出**（一行进入其每个元素的组） | BASE-GROUP-002 | ✅ 2026-07-28（`groupBy: tags` 的自然语义；**代价：组内行数之和 ≥ `rows.length`**，已写进 `BaseQueryResult.groups` 契约与 use 文档；顶层 `rows` 仍平铺一份不变。暂定口径待 oracle） |
+| 行内元素先 typedEqual 去重 | BASE-GROUP-002 | ✅ 2026-07-28（`[a, a]` 不得把同一行塞进同一组两次） |
+| 空 list 键视同 MISSING（单独成组） | BASE-GROUP-002 | ✅ 2026-07-28（**不静默丢行**——专项用例断言 6 行全在） |
+| link 为**标量**键（不扇出） | BASE-GROUP-002 | ✅ 2026-07-28（路径感知相等分组；新增 `groupKeyCompare`——`sortKeyCompare` 对 link **抛类型错误**，分组只需确定性组序，故按归一 `path`+`subpath` 定序，序为「可比标量 < link < null/MISSING」） |
+| 组级汇总 `groups[].summaries` | BASE-SUM-002 | ✅ 2026-07-28（**口径变更留档**：P2b 曾判「组级汇总属官方 UI 形态，无头 JSON 暂不做」，片五 GROUP-002 落地后 groups 成一等产物，「有组没有组的汇总」是半个功能故补上。计算集 = 该组 **limit 后**的行，与顶层的 **limit 前**全量有意不同） |
 
 ### 片四明细 ✅ 2026-07-28（BASE-SEC-004）
 

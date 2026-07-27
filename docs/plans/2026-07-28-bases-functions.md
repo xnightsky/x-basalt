@@ -8,8 +8,8 @@ tags:
   - bases
   - functions
   - x-basalt
-timestamp: 2026-07-27T19:32:34Z
-sha256: 69c330bc1f421be8cf0eb31dff3bc0482e51df2c2ff2f9c2b0572915d454f624
+timestamp: 2026-07-27T19:41:11Z
+sha256: 16fac84010dad9b2e71398abb64a48141b918848622ed6666f8fece81d2e64e7
 ---
 # 计划：Bases 函数覆盖率（51% → ~90%）
 
@@ -37,7 +37,7 @@ sha256: 69c330bc1f421be8cf0eb31dff3bc0482e51df2c2ff2f9c2b0572915d454f624
 | 2 | Date/Duration 族 6 个（`date()`/`duration()`/`format`/`time`/`relative`/`isEmpty`） | 新增 receiver 组 `date`，扩 duration 格式化 | ✅ |
 | 3 | Link/File 互转 5 个（`asFile`/`linksTo`/`asLink`/`file()`/`link()`） | 行集 file 解析器 + **文法：`file(...)` 调用形态** | ✅ |
 | 4 | `matches`（regex）+ ReDoS 防护（BASE-SEC-004） | 新增 `src/base/regexp.ts` + rule `base/invalid-regex` | ✅ |
-| 5 | BASE-GROUP-002（list/link 分组键）+ BASE-SUM-002 收口 | engine 分组层 | ⏳ |
+| 5 | BASE-GROUP-002（list/link 分组键）+ BASE-SUM-002 收口 | engine 分组层：扇出分桶 + `groupKeyCompare` + 组级汇总 | ✅ |
 | 6 | BASE-CTX-001 显式 `contextFile` + `this.*`（CTX-002/003/004 判❌不做 + 诊断） | engine/CLI 入参，**不动 parser**（2026-07-28 拍板缩范围后） | ⏳ |
 
 ### 片 1 明细
@@ -183,3 +183,18 @@ sha256: 69c330bc1f421be8cf0eb31dff3bc0482e51df2c2ff2f9c2b0572915d454f624
 25. **静态判据刻意保守**：只在**外层量词无界**时才查分组体，于是 `(\d+)?`（外层 `?` 有上界）、`(foo)+`（体内无量词无交替）、`[a-z]+@[a-z]+`（量词不作用于分组）全部放行。过度激进会把常用正则误杀，那比不做防护更糟——放行集合有专项用例锁定。
 26. **反向引用一律拒绝**（`\1`/`\k<name>`）：强制回溯且与量词组合极易指数化。检测前先剥掉成对转义，避免把「转义反斜杠 + 字面数字」误判成反向引用。
 27. **非法正则报诊断而非静默不匹配**——与 DQL 侧 `regexmatch` 有意不同。那边在 SQLite 自定义函数内不便产诊断，只能降级为 0；Bases 侧的硬约束是「不支持/不合法的写法必须报诊断」，故新增专用 rule `base/invalid-regex`（而不是复用 `property-type-mismatch`：「正则写错了」和「值类型不对」是两类完全不同的修法）。
+
+### 片 5 ✅ 2026-07-28（GROUP-002 + SUM-002 收口）
+
+**四门**（全绿）：typecheck / lint 零 warning / format:check / `pnpm test` **870 pass / 0 fail**（片四后基线 866，+4）。
+
+**测试**：`tests/base-group-summary.test.ts` +4 用例（共 22）；fixture `views/group-list.base` 由「list 分组键拒绝场景」改写为五个 view（扇出 / 跨行重叠 / 行内重复去重 / 空 list / link 标量键）。**未新增笔记 fixture**——改用 `list(status, area)`、`link(status)` 这类表达式分组键，避免动 vault 行数把其它测试的断言带偏。
+
+**改动落点**：`engine.ts` 的分桶段（扇出 + 行内去重 + 空 list → MISSING）、新增 `groupKeyCompare`、`BaseQueryResult.groups` 契约扩写（含扇出警告与 `summaries?`）、summaries 段追加组级汇总。
+
+### 片 5 新增 Decision Log
+
+28. **list 分组键取「扇出」而非「整个 list 当一个复合键」**。理由：`groupBy: tags` 想要的就是「一篇多标签笔记出现在每个标签下」；复合键会把 `[a,b]` 和 `[b,a]` 分成两组，几乎没有可用场景。代价是**组内行数之和 ≥ `rows.length`**——这条写进了 `BaseQueryResult.groups` 契约与 use 文档，需要「每行恰好一次」的读出方用顶层 `rows`（其平铺行为完全不变，向后兼容）。暂定口径，待 oracle。
+29. **link 是标量键，不扇出**。此前实现把 list 与 link 一并拒绝，容易让人以为 link 也是多值；实际它是单个值，按路径感知相等分组即可。
+30. **新增 `groupKeyCompare` 而不是复用 `sortKeyCompare`**。后者对 link **抛类型错误**（link 无排序语义，那是正确的排序口径）；而分组只需要一个**确定性**组序，不需要语义序。故 link 之间按归一 `path`+`subpath` 字典序，整体序为「可比标量 < link < null/MISSING」——空值恒最后的既有口径不被 link 插队。
+31. **组级汇总 `groups[].summaries` 的计算集 = 该组 limit 后的行**，与顶层 summaries 的「filter 后 **limit 前**全量」有意不同。理由：组本身就建立在 limit 后行集上，用 limit 前的集合去配 limit 后的组，会给出「组里看不见的行也算进了汇总」的怪结果。**这是对 P2b 决策的显式反转**（当时判「组级汇总属官方 UI 形态，无头 JSON 暂不做」）：片五后 groups 成为一等产物，有组没有组的汇总是半个功能。

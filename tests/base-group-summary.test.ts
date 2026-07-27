@@ -131,16 +131,85 @@ test("BASE-GROUP-001: missing 分组键成组并排最后（暂定口径）", ()
   );
 });
 
-// GROUP-002（暂定拒绝，待 oracle）：list/tag 分组键 → base/unsupported-feature + 空结果
-test("GROUP-002: list 分组键暂定拒绝（base/unsupported-feature + 空结果）", () => {
+// GROUP-002（2026-07-28 覆盖率片五落地；暂定口径，待 oracle）：list 分组键**扇出**
+test("GROUP-002: list 分组键扇出——一行进入其每个元素的组", () => {
   const r = query("group-list.base", "byTags");
-  const errors = errorsOf(r);
-  assert.equal(errors.length, 1);
-  assert.ok(errors[0]?.startsWith(`${BASE_RULES.unsupportedFeature}: `));
-  assert.ok(errors[0]?.includes("GROUP-002"));
-  assert.equal(r.total, 0);
-  assert.deepEqual(r.rows, []);
-  assert.equal(r.groups, undefined);
+  assert.deepEqual(errorsOf(r), []);
+  // 只有 Tagger 有 tags: [x, y] → 进 x 与 y 两组；其余 5 篇 tags 缺失 → MISSING 组（排最后）
+  assert.deepEqual(
+    r.groups?.map((g) => g.key),
+    ["x", "y", null],
+  );
+  assert.deepEqual(
+    r.groups?.[0]?.rows.map((row) => row["file.name"]),
+    ["Tagger.md"],
+  );
+  assert.deepEqual(
+    r.groups?.[1]?.rows.map((row) => row["file.name"]),
+    ["Tagger.md"],
+  );
+  assert.equal(r.groups?.[2]?.rows.length, 5);
+  // 顶层 rows 仍是平铺一份（扇出只影响 groups）——契约不变
+  assert.equal(r.total, 6);
+  assert.equal(r.rows.length, 6);
+  // 扇出的代价：组内行数之和 > rows.length（已在 BaseQueryResult.groups 契约声明）
+  const summed = r.groups?.reduce((n, g) => n + g.rows.length, 0);
+  assert.equal(summed, 7);
+});
+
+test("GROUP-002: 扇出跨行重叠 + 行内重复元素去重", () => {
+  // list(status, area)：status 值跨行重叠，area 部分行缺失（MISSING 也是一个键）
+  const r = query("group-list.base", "byMulti");
+  assert.deepEqual(errorsOf(r), []);
+  assert.deepEqual(
+    r.groups?.map((g) => g.key),
+    ["active", "back", "done", "front", "paused", null],
+  );
+  assert.deepEqual(
+    r.groups?.find((g) => g.key === "active")?.rows.map((row) => row["file.name"]),
+    ["Alpha.md", "Beta.md", "Tagger.md"],
+  );
+  // 行内重复元素去重：list(status, status) 不得把同一行塞进同一组两次
+  const dup = query("group-list.base", "byDup");
+  assert.deepEqual(errorsOf(dup), []);
+  assert.deepEqual(
+    dup.groups?.find((g) => g.key === "active")?.rows.map((row) => row["file.name"]),
+    ["Alpha.md", "Beta.md", "Tagger.md"],
+  );
+  assert.equal(
+    dup.groups?.reduce((n, g) => n + g.rows.length, 0),
+    dup.rows.length,
+    "每行恰好一个键 → 组内行数之和等于 rows.length",
+  );
+});
+
+test("GROUP-002: 空 list 键视同 MISSING，不静默丢行", () => {
+  const r = query("group-list.base", "byEmpty");
+  assert.deepEqual(errorsOf(r), []);
+  assert.deepEqual(
+    r.groups?.map((g) => g.key),
+    [null],
+  );
+  assert.equal(r.groups?.[0]?.rows.length, 6, "全部 6 行都在，未被丢弃");
+});
+
+test("GROUP-002: link 是标量键（按路径感知相等分组，组序按归一 path）", () => {
+  const r = query("group-list.base", "byLink");
+  assert.deepEqual(errorsOf(r), []);
+  // link(status)：status 缺失的行 link() 报类型错误 → MISSING 键；其余按归一 path 定序
+  assert.deepEqual(
+    r.groups?.map((g) => (g.key === null ? null : (g.key as { path: string }).path)),
+    ["active", "done", "paused"],
+  );
+  assert.deepEqual(
+    r.groups?.[0]?.rows.map((row) => row["file.name"]),
+    ["Alpha.md", "Beta.md", "Tagger.md"],
+  );
+  // 每行恰好一个键（link 不扇出）
+  assert.equal(
+    r.groups?.reduce((n, g) => n + g.rows.length, 0),
+    r.rows.length,
+  );
 });
 
 // groupBy 结构非法（direction 非 ASC/DESC）→ base/invalid-schema（error）+ 空结果
@@ -240,7 +309,21 @@ test("BASE-SUM-001: groupBy 与 summaries 同现，汇总按全量集一份", ()
     r.groups?.map((g) => g.key),
     ["active", "done", "paused"],
   );
-  assert.equal(r.summaries?.["score"], 20); // 全量集 Average（非组级）
+  assert.equal(r.summaries?.["score"], 20); // 全量集 Average（顶层口径不变）
+});
+
+// SUM-002 收口（2026-07-28 覆盖率片五）：groupBy 同现时补组级汇总 groups[].summaries
+test("SUM-002: 组级汇总 groups[].summaries（计算集 = 该组 limit 后的行）", () => {
+  const r = query("summaries-custom.base", "withGroup");
+  assert.deepEqual(errorsOf(r), []);
+  // score：Alpha 10 / Beta 20（active）；Gamma 30 / Delta 无（done）；Epsilon 无（paused）
+  // Tagger 无 score，也在 active 组 → active 的 Average 仍是 (10+20)/2（missing 被内置汇总跳过）
+  const byKey = new Map(r.groups?.map((g) => [g.key, g.summaries]));
+  assert.equal(byKey.get("active")?.["score"], 15);
+  assert.equal(byKey.get("done")?.["score"], 30);
+  assert.equal(byKey.get("paused")?.["score"], null, "组内全部跳过 → null（同顶层口径）");
+  // 顶层 summaries 与组级并存且互不影响（顶层 = 全量集 20，组级 = 各组自己的集合）
+  assert.equal(r.summaries?.["score"], 20);
 });
 
 // 未知汇总名 → base/unknown-function（error）+ 空结果

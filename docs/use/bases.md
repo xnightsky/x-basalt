@@ -6,8 +6,8 @@ tags:
   - guide
   - bases
   - x-basalt
-timestamp: 2026-07-27T19:30:22Z
-sha256: cec5b89a1ff975d552db5ac6ee42e8ede784f497b091a69890c1630d91c455b6
+timestamp: 2026-07-27T19:39:50Z
+sha256: d62f99ac89dfdb057fe0b11f2007ae23626403f1a751bab979a764b51f5b561b
 ---
 # Bases · 用 `.base` 无头查询你的 vault
 
@@ -711,7 +711,7 @@ frontmatter 里整串恰为一个 wikilink 的字符串（`"[[目标]]"` / `"[[�
 | regex **字面量** `/…/`、`%` 取模 | 文法层拒绝（正则请用 `s.matches("模式")`，传字符串） |
 | `this.*` | `base/dynamic-context-required` |
 | `cards` / `list` / `map` view、插件 view | `base/unsupported-feature` / `base/unsupported-view-type` |
-| 空 filter 数组、多值（list/tag）分组键 | `base/unsupported-feature`（官方语义未确认，不猜） |
+| 空 filter 数组 | `base/unsupported-feature`（官方语义未确认，不猜） |
 | Dataview inline fields（`key:: value`） | 不进入 Bases 属性（官方 Bases 即如此） |
 | 附件（图片/PDF/`.base`）作为行 | 默认不支持：markdown 模式每次查询恒发 `base/markdown-only-dataset` 声明；`--conformance bases-all-files-2026-07` 可开启附件为行，见[§6.2](#62-all-files-模式附件并入数据集) |
 | 嵌入式 ```` ```base ```` 代码块、`![[View.base#Name]]` | 首期只支持独立 `.base` 文件 |
@@ -775,8 +775,8 @@ x-basalt base views/projects.base --conformance bases-all-files-2026-07 --vault 
 | `columns` | view 的 `order` 原文（缺省 `["file.name"]`） |
 | `total` | **filter 后、limit 前**的行数（`rows.length <= limit`） |
 | `rows` | 行数组，key 为列原文 |
-| `groups` | 仅 view 配了 `groupBy` 时出现：`[{ key, rows }]`；顶层 `rows` 仍是平铺全部行 |
-| `summaries` | 仅 view 配了 `summaries` 时出现；按 filter 后、limit 前的全量行计算 |
+| `groups` | 仅 view 配了 `groupBy` 时出现：`[{ key, rows, summaries? }]`；顶层 `rows` 仍是平铺全部行。**分组键是 list 时会扇出**——一行进入它每个元素的组，所以各组行数之和可能**大于** `rows.length`（要「每行恰好一次」请用顶层 `rows`） |
+| `summaries` | 仅 view 配了 `summaries` 时出现；按 filter 后、limit 前的全量行计算。同时配了 `groupBy` 时，每个组另有 `groups[].summaries`，**计算集是该组 limit 后的行**（组本身就建立在 limit 后行集上） |
 | `diagnostics` | 全量诊断（文档层 → planner → 引擎级 → 行级，顺序固定） |
 
 其它契约要点：

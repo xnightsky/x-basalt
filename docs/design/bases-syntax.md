@@ -8,8 +8,8 @@ tags:
   - obsidian
   - syntax
   - x-basalt
-timestamp: 2026-07-27T19:30:42Z
-sha256: 5c6a3272ac58ac4efc71ac910d1db532f382f96771bbebb3f84a8160f31aa520
+timestamp: 2026-07-27T19:39:50Z
+sha256: 0138571cf3dda3fc2f0a37b4575f39fd29a7e8da6e5e56b5e15ece33c4ccc5f2
 ---
 # Bases 语法参考（x-basalt 口径）
 
@@ -73,8 +73,8 @@ views:
 | `order`   | 【P0 ✅ 结构记录】【P1 ✅ 投影】                                 |
 | `sort`    | 【P0 ✅ 结构记录（direction 仅 ASC/DESC）】【P1 ✅ 执行】        |
 | `limit`   | 【P0 ✅ 校验非负整数】【P1 ✅ 执行】                             |
-| `groupBy` | 【P2b ✅】view 级 `{ property, direction }`，标量键；list/tag 键暂定报 `base/unsupported-feature`（待 oracle GROUP-002） |
-| `summaries` | 【P2b ✅】view 级 `<property-ref> → 15 内置汇总名/顶层自定义名`（未知名报 `base/unknown-function`） |
+| `groupBy` | 【P2b ✅ 标量键】【2026-07-28 ✅ list/link 键，GROUP-002】`{ property, direction }`；**list 键扇出**（一行进入其每个元素的组，行内元素先去重、空 list 视同 MISSING 键），link 为标量键（路径感知相等，组序按归一 path）。扇出使「组内行数之和 ≥ rows.length」，顶层 rows 仍平铺一份。暂定口径，待 oracle |
+| `summaries` | 【P2b ✅】view 级 `<property-ref> → 15 内置汇总名/顶层自定义名`（未知名报 `base/unknown-function`）；【2026-07-28 ✅ SUM-002 收口】与 groupBy 同现时另产 `groups[].summaries`，**计算集 = 该组 limit 后的行**（顶层仍为 filter 后 limit 前全量） |
 
 view 选择规则：未指定取 `views[0]`（默认 view）；指定不存在报 `base/view-not-found`（suggestions 列可用名）。【P0 ✅】
 

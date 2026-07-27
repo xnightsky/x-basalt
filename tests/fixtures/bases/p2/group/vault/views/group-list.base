@@ -1,5 +1,7 @@
-# P2b 片三 GROUP-002（暂定，待 oracle）fixture：list/tag 分组键 → base/unsupported-feature + 空结果。
+# 2026-07-28 覆盖率片五 GROUP-002 fixture：list 分组键**扇出**、link 标量键、空 list 键。
+# （P2b 时期本文件用于「list 分组键暂定拒绝」场景，片五落地扇出语义后改写。）
 views:
+  # 扇出基本形：只有 Tagger 有 tags: [x, y] → 进 x 与 y 两组；其余 5 篇 tags 缺失 → MISSING 组。
   - type: table
     name: byTags
     order:
@@ -7,4 +9,36 @@ views:
       - tags
     groupBy:
       property: tags
+      direction: ASC
+  # 扇出 + 跨行重叠：list(status, area) 每行 2 个键，status 值在多行间重叠。
+  - type: table
+    name: byMulti
+    order:
+      - file.name
+    groupBy:
+      property: list(status, area)
+      direction: ASC
+  # 行内重复元素：list(status, status) 不得把同一行塞进同一组两次。
+  - type: table
+    name: byDup
+    order:
+      - file.name
+    groupBy:
+      property: list(status, status)
+      direction: ASC
+  # 空 list 键：视同 MISSING（单独一组），不静默丢行。
+  - type: table
+    name: byEmpty
+    order:
+      - file.name
+    groupBy:
+      property: list()
+      direction: ASC
+  # link 是**标量**键（不是多值）：按路径感知相等分组，组序按归一 path。
+  - type: table
+    name: byLink
+    order:
+      - file.name
+    groupBy:
+      property: link(status)
       direction: ASC
