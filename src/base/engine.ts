@@ -20,8 +20,9 @@
  * - 行级类型错误（onRowError 通道）不阻断查询：filter 语境该行按不通过处理、投影语境该
  *   cell 置 null，诊断 severity=warning、主位置指表达式（.base 完整文件位置）、
  *   message/target 附行 file.path（设计 §11 位置规则）；
- * - BaseBudgetError（maxRows/maxOperations/maxCallDepth/maxCollectionItems 任一耗尽）
- *   捕获后转 base/execution-budget（error）+ 空结果，绝不返回部分行冒充成功；
+ * - BaseBudgetError（maxRows/maxOperations/maxTotalOperations/maxCallDepth/maxCollectionItems
+ *   任一耗尽）捕获后转 base/execution-budget（error）+ 空结果，绝不返回部分行冒充成功；
+ *   其中 maxTotalOperations 为**查询级**总额（跨行累计），由 opsBudget 单点计数；
  * - 行级诊断设上限 {@link MAX_ROW_DIAGNOSTICS} 条（防洪），超出补一条汇总诊断。
  *
  * DB 连接：按 dbPath 缓存只读连接（readonly + fileMustExist；:memory: 例外不加这两个 flag，
@@ -40,8 +41,11 @@ import { loadBaseDocument } from "./document.js";
 import {
   evaluateExpression,
   isBaseBudgetError,
+  spendShared,
   type BaseRow,
   type BaseRowErrorInfo,
+  type BaseSharedOperationBudget,
+  type EvalContext,
 } from "./evaluator.js";
 import { BASE_RULES, baseDiagnostic } from "./errors.js";
 import {
@@ -59,7 +63,6 @@ import {
   type SourceSpan,
 } from "./types.js";
 import {
-  BaseBudgetError,
   MISSING,
   createFileValue,
   isLinkValue,
@@ -295,6 +298,10 @@ export class BaseEngine {
       );
     }
 
+    // 查询级共享操作数计数器（跨行累计，见 BaseExecutionLimits.maxTotalOperations）：
+    // 本次 query 的全部求值 + groupBy 分桶 + summaries 迭代共用这一份总额。
+    const opsBudget: BaseSharedOperationBudget = { used: 0 };
+
     // ---- 行级诊断收集（顺序 4：source 问题 → filter/sort/投影按行序）----
     let rowDiagCount = 0;
     let rowDiagSuppressed = 0;
@@ -401,6 +408,7 @@ export class BaseEngine {
                 ...(options.clock !== undefined ? { clock: options.clock } : {}),
                 formulas: acc as { get(name: string): BaseValue },
                 propertyTypes: typeSchema.table,
+                sharedBudget: opsBudget,
                 onRowError: (info) => pushRowDiagnostic(def.span, def.source, info, row.file.path),
               });
               cache.set(name, value);
@@ -412,29 +420,43 @@ export class BaseEngine {
         return acc;
       };
 
+      /**
+       * 逐行求值上下文装配（filter / sort / 投影 / groupBy / summaries 目标列共用一处）。
+       * 收在此处的原因：这五个语境的可选字段展开逐字相同，此前各写一遍，
+       * 其中 formulaAccessorFor(row) 还被判定与取值各调一次；漏传任一字段都是静默行为差异。
+       */
+      const rowEvalContext = (
+        row: BaseRow,
+        onRowError: (info: BaseRowErrorInfo) => void,
+      ): EvalContext => {
+        const formulas = formulaAccessorFor(row);
+        return {
+          limits,
+          ...(options.clock !== undefined ? { clock: options.clock } : {}),
+          ...(formulas !== undefined ? { formulas } : {}),
+          propertyTypes: typeSchema.table,
+          sharedBudget: opsBudget,
+          onRowError,
+        };
+      };
+
       // ---- filter：逐行求值合并 filter（无 filter 全量通过；行级错误该行按不通过处理）----
       const filtered = rows.filter((row) => {
         if (plan.filter === undefined) return true;
-        return evalFilter(plan.filter, row, limits, pushRowDiagnostic, {
-          clock: options.clock,
-          formulas: formulaAccessorFor(row),
-          propertyTypes: typeSchema.table,
-        });
+        return evalFilter(plan.filter, row, pushRowDiagnostic, rowEvalContext);
       });
 
       // ---- sort keys：逐行求值（行级错误 → MISSING 键，sortKeyCompare 恒排最后组）----
       const decorated = filtered.map((row) => ({
         row,
         keys: plan.sort.map((s) =>
-          evaluateExpression(s.ast, row, {
-            limits,
-            ...(options.clock !== undefined ? { clock: options.clock } : {}),
-            ...(formulaAccessorFor(row) !== undefined
-              ? { formulas: formulaAccessorFor(row) as { get(name: string): BaseValue } }
-              : {}),
-            propertyTypes: typeSchema.table,
-            onRowError: (info) => pushRowDiagnostic(view.span, s.property, info, row.file.path),
-          }),
+          evaluateExpression(
+            s.ast,
+            row,
+            rowEvalContext(row, (info) =>
+              pushRowDiagnostic(view.span, s.property, info, row.file.path),
+            ),
+          ),
         ),
       }));
 
@@ -466,15 +488,9 @@ export class BaseEngine {
           const value = evaluateExpression(
             plan.columnExprs[i] as (typeof plan.columnExprs)[number],
             row,
-            {
-              limits,
-              ...(options.clock !== undefined ? { clock: options.clock } : {}),
-              ...(formulaAccessorFor(row) !== undefined
-                ? { formulas: formulaAccessorFor(row) as { get(name: string): BaseValue } }
-                : {}),
-              propertyTypes: typeSchema.table,
-              onRowError: (info) => pushRowDiagnostic(view.span, column, info, row.file.path),
-            },
+            rowEvalContext(row, (info) =>
+              pushRowDiagnostic(view.span, column, info, row.file.path),
+            ),
           );
           // P2a：序列化走 toOutputValue（typed values 真相源）；P1 形状行为不回归。
           out[column] = toOutputValue(value);
@@ -489,16 +505,13 @@ export class BaseEngine {
         const groupBy = plan.groupBy;
         // 分组键逐行求值（行级错误 → MISSING 键；公式/时钟/类型表同 sort 键求值接线）。
         const keys = limited.map(({ row }) =>
-          evaluateExpression(groupBy.ast, row, {
-            limits,
-            ...(options.clock !== undefined ? { clock: options.clock } : {}),
-            ...(formulaAccessorFor(row) !== undefined
-              ? { formulas: formulaAccessorFor(row) as { get(name: string): BaseValue } }
-              : {}),
-            propertyTypes: typeSchema.table,
-            onRowError: (info) =>
+          evaluateExpression(
+            groupBy.ast,
+            row,
+            rowEvalContext(row, (info) =>
               pushRowDiagnostic(view.span, groupBy.property, info, row.file.path),
-          }),
+            ),
+          ),
         );
         // GROUP-002（暂定，待 oracle）：list/link（多值）分组键 → base/unsupported-feature
         // （error）+ 空结果，与空 filter 数组同款拒绝口径，不猜官方语义。
@@ -518,16 +531,9 @@ export class BaseEngine {
         }
         // 分桶：typedEqual 相等即同组（MISSING 只等于 MISSING，故 missing 键与显式 null 键
         // 各自成组——序列化后 key 同为 null，读侧以组序区分；暂定口径，注释存证）。
-        // 比较/迭代经 spendGroup 扣 maxOperations（防大行数 × 多组 O(n·g) 耗尽）。
-        let groupOps = 0;
-        const spendGroup = (): void => {
-          groupOps += 1;
-          if (groupOps > limits.maxOperations) {
-            throw new BaseBudgetError(
-              `groupBy 分桶比较次数超过预算上限 ${limits.maxOperations}（防资源耗尽）`,
-            );
-          }
-        };
+        // 比较/迭代扣查询级共享总额（防大行数 × 多组 O(n·g) 耗尽）——与求值侧同一份预算，
+        // 否则分桶自建计数器等于给同一次查询又开了一份 maxOperations 额度。
+        const spendGroup = (): void => spendShared(opsBudget, limits);
         const buckets: { key: BaseValue; rowIdx: number[] }[] = [];
         keys.forEach((key, i) => {
           spendGroup();
@@ -557,28 +563,18 @@ export class BaseEngine {
       let summariesOut: Record<string, BaseOutputValue> | undefined;
       if (plan.summaries.length > 0) {
         summariesOut = {};
-        // 汇总迭代/比较预算（Unique 的 O(n²) 去重等；与求值侧 maxOperations 同一上限）。
-        let sumOps = 0;
-        const spendSummary = (): void => {
-          sumOps += 1;
-          if (sumOps > limits.maxOperations) {
-            throw new BaseBudgetError(
-              `summaries 计算迭代/比较次数超过预算上限 ${limits.maxOperations}（防资源耗尽）`,
-            );
-          }
-        };
+        // 汇总迭代/比较预算（Unique 的 O(n²) 去重等）：扣查询级共享总额，同 groupBy 的理由。
+        const spendSummary = (): void => spendShared(opsBudget, limits);
         for (const s of plan.summaries) {
           // 目标列逐行求值（行级错误 → MISSING 进列表，由内置口径跳过/Empty 计数）。
           const values = filtered.map((row) =>
-            evaluateExpression(s.ast, row, {
-              limits,
-              ...(options.clock !== undefined ? { clock: options.clock } : {}),
-              ...(formulaAccessorFor(row) !== undefined
-                ? { formulas: formulaAccessorFor(row) as { get(name: string): BaseValue } }
-                : {}),
-              propertyTypes: typeSchema.table,
-              onRowError: (info) => pushRowDiagnostic(view.span, s.property, info, row.file.path),
-            }),
+            evaluateExpression(
+              s.ast,
+              row,
+              rowEvalContext(row, (info) =>
+                pushRowDiagnostic(view.span, s.property, info, row.file.path),
+              ),
+            ),
           );
           const builtin = BUILTIN_SUMMARIES.get(s.name);
           if (builtin !== undefined) {
@@ -597,6 +593,7 @@ export class BaseEngine {
             limits,
             ...(options.clock !== undefined ? { clock: options.clock } : {}),
             summaryValues: scopeValues,
+            sharedBudget: opsBudget,
             onRowError: (info) =>
               pushRowDiagnostic(custom.span, custom.source, info, `汇总 ${s.name}`),
           });
@@ -630,47 +627,35 @@ export class BaseEngine {
  * - and：全部通过（短路）；or：任一通过（短路）；
  * - not：不满足其中任何一项 = NOT(child1 OR child2 ...)（设计 §6）。
  * BaseBudgetError 不在此吞掉，继续上抛（engine 转 execution-budget + 空结果）。
- * P2a：extras 透传注入时钟与公式 accessor（filter 中可引用 formula.* / today()/now()）。
- * P2b：extras 透传 types.json 显式类型表（note 属性读取升级链首，见 evaluator.ts）。
+ *
+ * 求值上下文（注入时钟 / 公式 accessor / types.json 类型表 / 查询级共享预算）由调用方经
+ * `makeContext` 装配注入——与投影 / sort / groupBy / summaries 共用同一处装配，杜绝漏传字段。
  */
 function evalFilter(
   node: CompiledFilter,
   row: BaseRow,
-  limits: BaseExecutionLimits,
   pushRowDiagnostic: (
     span: SourceSpan,
     source: string,
     info: BaseRowErrorInfo,
     rowPath: string,
   ) => void,
-  extras: {
-    clock?: () => Date;
-    formulas?: { get(name: string): BaseValue };
-    propertyTypes?: Record<string, string>;
-  } = {},
+  makeContext: (row: BaseRow, onRowError: (info: BaseRowErrorInfo) => void) => EvalContext,
 ): boolean {
   switch (node.kind) {
     case "expr": {
-      const value = evaluateExpression(node.ast, row, {
-        limits,
-        ...(extras.clock !== undefined ? { clock: extras.clock } : {}),
-        ...(extras.formulas !== undefined ? { formulas: extras.formulas } : {}),
-        ...(extras.propertyTypes !== undefined ? { propertyTypes: extras.propertyTypes } : {}),
-        onRowError: (info) => pushRowDiagnostic(node.span, node.source, info, row.file.path),
-      });
+      const value = evaluateExpression(
+        node.ast,
+        row,
+        makeContext(row, (info) => pushRowDiagnostic(node.span, node.source, info, row.file.path)),
+      );
       return truthy(value);
     }
     case "and":
-      return node.children.every((child) =>
-        evalFilter(child, row, limits, pushRowDiagnostic, extras),
-      );
+      return node.children.every((child) => evalFilter(child, row, pushRowDiagnostic, makeContext));
     case "or":
-      return node.children.some((child) =>
-        evalFilter(child, row, limits, pushRowDiagnostic, extras),
-      );
+      return node.children.some((child) => evalFilter(child, row, pushRowDiagnostic, makeContext));
     case "not":
-      return !node.children.some((child) =>
-        evalFilter(child, row, limits, pushRowDiagnostic, extras),
-      );
+      return !node.children.some((child) => evalFilter(child, row, pushRowDiagnostic, makeContext));
   }
 }

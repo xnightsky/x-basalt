@@ -17,7 +17,7 @@
  */
 
 import { readFileSync, statSync } from "node:fs";
-import { relative, resolve, sep } from "node:path";
+import { resolve } from "node:path";
 import {
   isMap,
   isNode,
@@ -29,7 +29,7 @@ import {
   type Scalar,
 } from "yaml";
 import type { BasaltDiagnostic } from "../diagnostic.js";
-import { toPosix } from "../utils/path.js";
+import { isPathInside, resolveVaultLayout } from "../utils/path.js";
 import { BASE_RULES, baseDiagnostic } from "./errors.js";
 import { scanExpression } from "./expressions.js";
 import {
@@ -128,28 +128,34 @@ function emptyDocument(
   return { path, views: [], unknownKeys: {}, viewsSpan, diagnostics };
 }
 
+/** 路径解析结果：ok=落在 vault 内；否则 reason 为人读拒绝原因（不同原因不混成「越界」）。 */
+type VaultResolution =
+  | { ok: true; abs: string; rel: string }
+  | { ok: false; reason: string; detail: string };
+
 /**
  * 路径安全：resolve 后必须落在某个 vault root 内（先 resolve 再判定，读取前拒绝，
  * 覆盖 `..` 越界与绝对路径绕出，BASE-SEC-008）。
  *
- * @returns 命中时返回 { abs, rel }（rel = vault 相对 POSIX 路径）；未命中返回 undefined
+ * 根集合与 rel 主键一律经 {@link resolveVaultLayout} 计算，与 indexer 写入 `files.path`
+ * 用的是同一个函数——多根下 rel 因此带 `<根目录名>/` 命名空间前缀，与行的 `file.path`
+ * 同一套键（此前本函数自行 `relative()`，多根时 `.base` 路径缺前缀，同一结果里两套键）。
+ * 包含判定复用 {@link isPathInside}（Windows 盘符大小写不敏感，避免合法路径被安全门假阳拒绝）。
  */
-function resolveInsideVault(
-  basePath: string,
-  vaultRoots: string[],
-): { abs: string; rel: string } | undefined {
+function resolveInsideVault(basePath: string, vaultRoots: string[]): VaultResolution {
   const abs = resolve(basePath);
-  // 多根嵌套时取最长前缀根（更深的根优先），命名空间 keying 属 P1（BASE-DATA-004），P0 仅保证不越界。
-  let best: { abs: string; rel: string } | undefined;
-  for (const root of vaultRoots) {
-    const resolvedRoot = resolve(root);
-    if (abs !== resolvedRoot && !abs.startsWith(resolvedRoot + sep)) continue;
-    const rel = toPosix(relative(resolvedRoot, abs));
-    if (best === undefined || resolvedRoot.length > best.abs.length - rel.length) {
-      best = { abs, rel };
-    }
+  let layout: ReturnType<typeof resolveVaultLayout>;
+  try {
+    layout = resolveVaultLayout(vaultRoots);
+  } catch (e) {
+    // 空根 / 多根目录名冲突：无法判定归属，一律拒绝执行——但如实报真实原因，
+    // 不混进「路径越界」（读出方据此改的东西完全不同）。
+    return { ok: false, reason: "invalid_vault_roots", detail: (e as Error).message };
   }
-  return best;
+  if (!layout.roots.some((root) => isPathInside(abs, root))) {
+    return { ok: false, reason: "outside_vault", detail: `.base 路径越出 vault 根：${basePath}` };
+  }
+  return { ok: true, abs, rel: layout.toKey(abs) };
 }
 
 /**
@@ -180,15 +186,15 @@ export function loadBaseDocument(options: LoadBaseDocumentOptions): BaseDocument
 
   // 防线 1：路径越界（BASE-SEC-008）——读取前拒绝。文件位置未知，诊断定位 1:1、file 用原始输入。
   const resolved = resolveInsideVault(options.basePath, options.vaultRoots);
-  if (resolved === undefined) {
+  if (!resolved.ok) {
     return emptyDocument(options.basePath, [
       baseDiagnostic(
         options.basePath,
         { line: 1, column: 1 },
         BASE_RULES.pathOutsideVault,
         "error",
-        `.base 路径越出 vault 根（读取前拒绝）：${options.basePath}`,
-        { target: options.basePath, reason: "outside_vault" },
+        `${resolved.detail}（读取前拒绝）`,
+        { target: options.basePath, reason: resolved.reason },
       ),
     ]);
   }
@@ -523,7 +529,8 @@ function parseFormulas(
   return out;
 }
 
-/** views 段校验：缺失/空 → view-required；逐项校验 view map。 */ function validateViews(
+/** views 段校验：缺失/空 → view-required；逐项校验 view map。 */
+function validateViews(
   viewsPair: Pair | undefined,
   result: BaseDocument,
   file: string,
@@ -608,6 +615,10 @@ function validateView(
   const span = nodeSpan(lineCounter, item);
   let type = "";
   let name = "";
+  // 必填项的「键是否出现过」与其位置：缺失校验必须在 key 循环**之外**做（见循环后注释）。
+  let sawType = false;
+  let sawName = false;
+  let nameSpan: SourceSpan | undefined;
   let filters: BaseFilter | undefined;
   let order: string[] | undefined;
   let sort: BaseViewSort[] | undefined;
@@ -650,6 +661,7 @@ function validateView(
 
     switch (key) {
       case "type": {
+        sawType = true;
         type = isScalar(value) && typeof value.value === "string" ? value.value : "";
         if (UNSUPPORTED_VIEW_TYPES.has(type)) {
           diagnostics.push(
@@ -677,32 +689,11 @@ function validateView(
         break;
       }
       case "name": {
+        // 空值/重名判定统一放到循环外：与「name 键整个缺失」共用一条出口，
+        // 否则缺 name 的 view 拿到 name=""，既不报错也不参与重名判定。
+        sawName = true;
+        nameSpan = valueSpan;
         name = isScalar(value) && typeof value.value === "string" ? value.value : "";
-        if (name === "") {
-          diagnostics.push(
-            baseDiagnostic(
-              file,
-              valueSpan,
-              BASE_RULES.invalidSchema,
-              "error",
-              "view name 必须是非空字符串",
-            ),
-          );
-        } else if (seenNames.has(name)) {
-          // 重名直接 error：避免命名选择歧义（设计 §5）。
-          diagnostics.push(
-            baseDiagnostic(
-              file,
-              valueSpan,
-              BASE_RULES.duplicateViewName,
-              "error",
-              `view 重名 "${name}"（拒绝歧义选择）`,
-              { target: name },
-            ),
-          );
-        } else {
-          seenNames.add(name);
-        }
         break;
       }
       case "limit": {
@@ -757,6 +748,49 @@ function validateView(
         break;
       }
     }
+  }
+
+  // 必填项校验只能在 key 循环之外做：上面的 switch 按「出现的 key」分派，
+  // 键**整个缺失**时一条分支都不跑。曾因此漏掉两类静默失败——
+  //   缺 type → type=""，engine 照 table 执行完（与 unsupported-view-type「不按 table 猜测」矛盾）；
+  //   缺 name → name=""，零诊断且逃过重名判定（两个无名 view 都能进 views）。
+  if (!sawType) {
+    diagnostics.push(
+      baseDiagnostic(
+        file,
+        span,
+        BASE_RULES.invalidSchema,
+        "error",
+        "view 缺少必填字段 type（缺失不按 table 猜测，同未知 type 口径）",
+        { target: "type", reason: "missing_view_type", suggestions: [...SUPPORTED_VIEW_TYPES] },
+      ),
+    );
+  }
+  if (name === "") {
+    diagnostics.push(
+      baseDiagnostic(
+        file,
+        nameSpan ?? span,
+        BASE_RULES.invalidSchema,
+        "error",
+        sawName ? "view name 必须是非空字符串" : "view 缺少必填字段 name",
+        { target: "name", reason: sawName ? "empty_view_name" : "missing_view_name" },
+      ),
+    );
+  } else if (seenNames.has(name)) {
+    // 重名直接 error：避免命名选择歧义（设计 §5）。
+    diagnostics.push(
+      baseDiagnostic(
+        file,
+        nameSpan ?? span,
+        BASE_RULES.duplicateViewName,
+        "error",
+        `view 重名 "${name}"（拒绝歧义选择）`,
+        { target: name },
+      ),
+    );
+  } else {
+    seenNames.add(name);
   }
 
   return { type, name, filters, order, sort, limit, groupBy, summaries, span };
@@ -902,7 +936,21 @@ function parseStringSeq(
   }
   const out: string[] = [];
   for (const item of value.items) {
-    if (isScalar(item) && typeof item.value === "string") out.push(item.value);
+    if (isScalar(item) && typeof item.value === "string") {
+      out.push(item.value);
+      continue;
+    }
+    // 非字符串项不静默丢弃：静默会让 `order: [file.name, 42]` 少投影一列且无从察觉。
+    diagnostics.push(
+      baseDiagnostic(
+        file,
+        nodeSpan(lineCounter, item),
+        BASE_RULES.invalidSchema,
+        "error",
+        `${label} 的每一项都必须是字符串 property-ref`,
+        { reason: "non_string_item" },
+      ),
+    );
   }
   return out;
 }
@@ -928,10 +976,36 @@ function parseSort(
   }
   const out: BaseViewSort[] = [];
   for (const item of value.items) {
-    if (!isMap(item)) continue;
+    if (!isMap(item)) {
+      // 非 map 项不静默跳过：静默会让排序键悄悄少一个，结果顺序变了却无诊断。
+      diagnostics.push(
+        baseDiagnostic(
+          file,
+          nodeSpan(lineCounter, item),
+          BASE_RULES.invalidSchema,
+          "error",
+          "sort 的每一项都必须是 { property, direction } map",
+          { reason: "non_map_sort_item" },
+        ),
+      );
+      continue;
+    }
     const property = item.get("property", true);
     const direction = item.get("direction", true);
     const prop = isScalar(property) && typeof property.value === "string" ? property.value : "";
+    if (prop === "") {
+      diagnostics.push(
+        baseDiagnostic(
+          file,
+          isScalar(property) ? nodeSpan(lineCounter, property) : nodeSpan(lineCounter, item),
+          BASE_RULES.invalidSchema,
+          "error",
+          "sort.property 必须是非空字符串（property-ref）",
+          { reason: "empty_sort_property" },
+        ),
+      );
+      continue;
+    }
     const dir =
       isScalar(direction) && typeof direction.value === "string" ? direction.value : "ASC";
     if (dir !== "ASC" && dir !== "DESC") {

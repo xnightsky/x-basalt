@@ -172,8 +172,20 @@ export interface BaseExecutionLimits {
   maxRows: number;
   /** 列表/对象等集合元素数上限（list 字面量与运行时集合共用）。 */
   maxCollectionItems: number;
-  /** 求值操作数总预算：每次 AST 节点求值/函数调用/列表元素比较/行过滤扣一。 */
+  /**
+   * **单次表达式求值**的操作数上限：每次 AST 节点求值/函数调用/列表元素比较扣一。
+   * 计数器随每次 evaluateExpression 重置，故它约束的是「单行单表达式」的复杂度，
+   * 不是整次查询的总量——查询总量见 {@link maxTotalOperations}。
+   */
   maxOperations: number;
+  /**
+   * **单次查询**的操作数总额（跨行、跨列、跨 filter/sort/groupBy/summaries 累计）。
+   *
+   * 单列 maxOperations 挡不住「每行都恰好烧到单次上限」的对抗输入：
+   * 最坏总量 = maxRows × 列数 × maxOperations ≈ 1e11，预算「从未耗尽」但查询已不可用。
+   * 本字段是该场景唯一的兜底，耗尽同样产 `base/execution-budget` + 空结果。
+   */
+  maxTotalOperations: number;
 }
 
 /** 执行预算默认值（计划「关键取舍」#9 拍板值；文档层四项复用 P0 默认）。 */
@@ -188,6 +200,9 @@ export const DEFAULT_BASE_EXECUTION_LIMITS: BaseExecutionLimits = {
   maxRows: 100_000,
   maxCollectionItems: 10_000,
   maxOperations: 1_000_000,
+  // 远超真实负载（P1 基准：10 000 篇 × 全列投影为 1e5 量级操作），只挡对抗输入；
+  // 与 maxOperations 的 50 倍差保证「单表达式够用」不被总额提前掐断。
+  maxTotalOperations: 50_000_000,
 };
 
 /**

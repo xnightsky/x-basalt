@@ -130,13 +130,32 @@ const DEFAULT_COLUMNS: readonly string[] = ["file.name"];
  */
 const EXPR_PARSE_CACHE = new Map<string, BaseExpressionParseResult>();
 
+/**
+ * 缓存条目上限（LRU，超限淘汰最久未用）。
+ *
+ * 必须有界：key 含表达式原文，长驻进程（chat REPL / 未来 watch）里查询过的每条不同表达式
+ * 都会留一份 AST，无淘汰则内存随会话累计的 .base 数量单调增长。512 远超单个 .base 的
+ * 表达式数（filter + order + sort + formulas + summaries 通常 < 50），热路径不会被穿透。
+ */
+const EXPR_PARSE_CACHE_MAX = 512;
+
 /** 带缓存解析一条表达式字符串（节点预算上限随调用方 limits）。 */
 function parseCached(expr: string, maxNodes: number): BaseExpressionParseResult {
   const key = `${maxNodes} ${expr}`;
   const hit = EXPR_PARSE_CACHE.get(key);
-  if (hit !== undefined) return hit;
+  if (hit !== undefined) {
+    // 命中即挪到队尾：Map 保插入序，delete+set 把它变成「最近使用」，
+    // 否则常用表达式会被一串一次性表达式挤出去（退化成 FIFO）。
+    EXPR_PARSE_CACHE.delete(key);
+    EXPR_PARSE_CACHE.set(key, hit);
+    return hit;
+  }
   const result = parseBaseExpression(expr, maxNodes);
   EXPR_PARSE_CACHE.set(key, result);
+  if (EXPR_PARSE_CACHE.size > EXPR_PARSE_CACHE_MAX) {
+    const oldest = EXPR_PARSE_CACHE.keys().next();
+    if (!oldest.done) EXPR_PARSE_CACHE.delete(oldest.value);
+  }
   return result;
 }
 
@@ -563,7 +582,12 @@ function findFormulaCycle(
     if (at !== undefined) return path.slice(at); // 首次重复点即循环起点
     seenAt.set(cur, path.length);
     path.push(cur);
-    const next = [...(deps.get(cur) ?? [])].filter((n) => remaining.has(n)).toSorted()[0] as string;
+    const next = [...(deps.get(cur) ?? [])].filter((n) => remaining.has(n)).toSorted()[0];
+    // 不变量兜底：next 缺失说明 cur 在剩余子图内出度为 0，本该已被 Kahn 剥离。
+    // 不加这一步则 cur 变 undefined，循环再也命中不了 seenAt → 死循环（比抛错难查得多）。
+    if (next === undefined) {
+      throw new Error(`公式循环还原失败：节点 "${cur}" 在剩余子图内无出边（Kahn 不变量被破）`);
+    }
     cur = next;
   }
 }

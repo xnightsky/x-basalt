@@ -100,9 +100,37 @@ export interface VaultLayout {
   toAbs(input: string): string;
 }
 
-/** p 是否严格位于 q 之下（同分隔符前缀；q 自身不算其子）。 */
+/**
+ * 平台感知的路径比较键：Windows 文件系统默认大小写不敏感（NTFS），POSIX 敏感。
+ *
+ * 不做大小写归一时，同一目录写成 `d:\vault` 与 `D:\vault`（盘符大小写取决于用户从
+ * shell / 环境变量 / 复制粘贴哪种来源拿到）会被判成两个不同的根——对 indexer 表现为
+ * 漏索引，对 base 的 vault 越界防线表现为**合法路径被安全门拒绝**（假阳）。
+ */
+function pathCaseKey(p: string): string {
+  return process.platform === "win32" ? p.toLowerCase() : p;
+}
+
+/**
+ * `abs` 是否落在 `root` 之内（含 root 自身）。
+ *
+ * 本仓「路径包含」判定的单一真相源：indexer 的根归属、编排器的路径还原、
+ * base 的 vault 越界防线（BASE-SEC-008）共用同一口径，避免各处 `startsWith` 各自漂移。
+ * 以 {@link pathCaseKey} 归一后按分隔符边界前缀匹配——靠 `root + sep` 边界保证
+ * `/vault` 不命中 `/vault2`。
+ *
+ * @param abs - 已 resolve 的绝对路径
+ * @param root - 已 resolve 的根绝对路径（尾部分隔符可有可无）
+ */
+export function isPathInside(abs: string, root: string): boolean {
+  const a = pathCaseKey(abs);
+  const r = pathCaseKey(root.endsWith(sep) ? root.slice(0, -1) : root);
+  return a === r || a.startsWith(r + sep);
+}
+
+/** p 是否严格位于 q 之下（q 自身不算其子）。 */
 function isStrictlyUnder(p: string, q: string): boolean {
-  return p !== q && p.startsWith(q.endsWith(sep) ? q : q + sep);
+  return pathCaseKey(p) !== pathCaseKey(q) && isPathInside(p, q);
 }
 
 /**
@@ -152,7 +180,7 @@ export function resolveVaultLayout(input: string | string[]): VaultLayout {
       toAbs: (p) => {
         if (isAbsolute(p)) return p;
         const fromCwd = resolve(p);
-        return fromCwd === root || fromCwd.startsWith(root + sep) ? fromCwd : join(root, p);
+        return isPathInside(fromCwd, root) ? fromCwd : join(root, p);
       },
     };
   }
@@ -172,8 +200,7 @@ export function resolveVaultLayout(input: string | string[]): VaultLayout {
   const rootToLabel = new Map([...labelToRoot].map(([l, r]) => [r, l] as [string, string]));
   // longest-prefix 找 owning root（按路径长度降序，先匹配更深的根）。
   const byLen = roots.toSorted((a, b) => b.length - a.length);
-  const ownerOf = (abs: string): string | undefined =>
-    byLen.find((r) => abs === r || abs.startsWith(r + sep));
+  const ownerOf = (abs: string): string | undefined => byLen.find((r) => isPathInside(abs, r));
 
   return {
     roots,

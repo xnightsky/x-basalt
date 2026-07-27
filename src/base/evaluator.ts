@@ -81,10 +81,22 @@ export interface BaseRowErrorInfo {
   target?: string;
 }
 
+/**
+ * 查询级共享操作数计数器：由 engine 每次 query 建一个、传给该次查询的**全部**行/列求值，
+ * 使 {@link BaseExecutionLimits.maxTotalOperations} 能跨行累计（单次求值的 maxOperations
+ * 每次调用重置，挡不住「每行都烧到上限」）。engine 侧的 groupBy 分桶与 summaries 迭代
+ * 也扣同一个计数器，保证一次查询只有一份总额。
+ */
+export interface BaseSharedOperationBudget {
+  used: number;
+}
+
 /** 求值上下文：执行预算 + 行级错误回调 + 注入时钟（P2a）。 */
 export interface EvalContext {
   limits: BaseExecutionLimits;
   onRowError?: (info: BaseRowErrorInfo) => void;
+  /** 查询级共享操作数计数器（缺省时只受单次 maxOperations 约束，用于单元测试直调场景）。 */
+  sharedBudget?: BaseSharedOperationBudget;
   /**
    * 注入时钟（P2a；today/now 的时间来源，缺省 `() => new Date()`）。
    * 测试必须注入固定 clock，保证重复运行字节一致（FORM-006）。
@@ -146,6 +158,8 @@ interface EvalState {
   scopes: HofScopeFrame[];
   /** 自定义汇总隐式 `values` 作用域（P2b 片三，SUM-002 暂定；见 EvalContext.summaryValues）。 */
   summaryValues?: BaseValue[];
+  /** 查询级共享操作数计数器（见 EvalContext.sharedBudget）。 */
+  sharedBudget?: BaseSharedOperationBudget;
 }
 
 /**
@@ -158,12 +172,31 @@ interface HofScopeFrame {
   acc?: BaseValue;
 }
 
-/** 扣 operations 预算（每次 AST 节点求值 / 函数调用 / typedEqual 元素比较计一，设计 §12）。 */
+/**
+ * 扣 operations 预算（每次 AST 节点求值 / 函数调用 / typedEqual 元素比较计一，设计 §12）。
+ * 两级同时扣：单次求值的 maxOperations（本行本表达式复杂度）与查询级
+ * maxTotalOperations（跨行累计总额，见 {@link BaseSharedOperationBudget}）。
+ */
 function spend(state: EvalState, offset: number): void {
   state.ops += 1;
   if (state.ops > state.limits.maxOperations) {
     throw new BaseBudgetError(
       `表达式求值操作数超过预算上限 ${state.limits.maxOperations}（offset ${offset}，防资源耗尽）`,
+    );
+  }
+  spendShared(state.sharedBudget, state.limits);
+}
+
+/** 扣查询级共享操作数总额（engine 的 groupBy/summaries 迭代亦复用本函数，口径统一）。 */
+export function spendShared(
+  budget: BaseSharedOperationBudget | undefined,
+  limits: BaseExecutionLimits,
+): void {
+  if (budget === undefined) return;
+  budget.used += 1;
+  if (budget.used > limits.maxTotalOperations) {
+    throw new BaseBudgetError(
+      `本次查询累计操作数超过总预算上限 ${limits.maxTotalOperations}（跨行累计，防资源耗尽）`,
     );
   }
 }
@@ -709,6 +742,12 @@ function evalListHof(
  * 二元运算操作数的字符串升级（P2a，对称性拍板）：字面量字符串与 note 属性走同一升级
  * （`due == "2026-07-27"` 右侧字面量同样过 parseDateLike/parseWikilinkValue），保证
  * `a == b` 与 `b == a` 结果一致；非严格匹配原样返回字符串。
+ *
+ * **暂定口径，待 oracle（已登记于 implementation-status.md §3）**：升级对全部非短路二元
+ * 运算生效，`+` 也不例外——于是 `"2026-01-01" + " 备注"` 左侧升为 Date，落进
+ * arithAdd(date, string) 报行级类型错误，而不是走 string+string 拼接分支。
+ * 取「一致性优先」而非「按运算符区别对待」：后者会让 `==` 与 `+` 看到不同形态的同一个值。
+ * 官方是否对拼接语境抑制日期推断未知，故不自行收窄，留 oracle 校正。
  */
 function upgradeStringOperand(v: BaseValue): BaseValue {
   return upgradeNoteString(v);
@@ -816,6 +855,7 @@ export function evaluateExpression(expr: BaseExpr, row: BaseRow, ctx: EvalContex
     ...(ctx.formulas !== undefined ? { formulas: ctx.formulas } : {}),
     ...(ctx.propertyTypes !== undefined ? { propertyTypes: ctx.propertyTypes } : {}),
     ...(ctx.summaryValues !== undefined ? { summaryValues: ctx.summaryValues } : {}),
+    ...(ctx.sharedBudget !== undefined ? { sharedBudget: ctx.sharedBudget } : {}),
     ...(ctx.onRowError !== undefined ? { onRowError: ctx.onRowError } : {}),
   };
   try {
