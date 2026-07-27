@@ -132,6 +132,13 @@ export interface EvalContext {
    * 那里禁止访问行外状态，`file()` 属于越权（与 note/file 属性一律 MISSING 同一原则）。
    */
   resolveFile?: (target: string) => BaseFileValue | undefined;
+  /**
+   * `this.*` 的上下文行（2026-07-28 覆盖率片六，BASE-CTX-001）：由 engine 依据
+   * {@link BaseQueryOptions.contextFile} 在行集内解析后注入。
+   * **缺省即保持既有拒绝口径**（`base/dynamic-context-required`）——无头执行没有
+   * 「当前活动文件」，隐式环境状态一律不做（CTX-004）。
+   */
+  contextRow?: BaseRow;
 }
 
 /** 行级求值错误内部信号：带 rule 与表达式内 offset，evaluateExpression 捕获后上报并返回 MISSING。 */
@@ -173,6 +180,8 @@ interface EvalState {
   sharedBudget?: BaseSharedOperationBudget;
   /** 行集内 file 解析器（片三；见 EvalContext.resolveFile）。 */
   resolveFile?: (target: string) => BaseFileValue | undefined;
+  /** `this.*` 上下文行（片六；见 EvalContext.contextRow）。 */
+  contextRow?: BaseRow;
 }
 
 /**
@@ -501,6 +510,44 @@ function applyDeclaredType(
   }
 }
 
+/**
+ * 读一行的 note 属性（`note.<key>` 与 `this.<key>` 共用，防两处升级链分叉）。
+ * 升级链（语法 §5.1 优先级）：types.json 显式类型（P2b）→ parseDateLike/parseWikilinkValue
+ * 推断（P2a，upgradeNoteString）→ 原样。显式声明命中时不再走推断（含冲突场景，值按运行时类型）。
+ */
+function evalNoteKey(row: BaseRow, key: string, offset: number, state: EvalState): BaseValue {
+  const r = safeGetOwn(row.note, key);
+  if (r.status === "ok") {
+    const raw = wrapValue(r.value);
+    return applyDeclaredType(key, raw, offset, state) ?? upgradeNoteString(raw);
+  }
+  if (r.status === "missing") return MISSING;
+  throw new BaseRowEvalError(
+    BASE_RULES.unknownProperty,
+    offset,
+    `属性 "${key}" 被安全白名单拒绝（禁原型链/getter 访问）`,
+    key,
+  );
+}
+
+/**
+ * 取上下文行（`this.*` 的数据源，片六 BASE-CTX-001）；未注入即保持既有拒绝口径。
+ *
+ * 无头执行**没有**「当前活动文件」——官方 `this` 随 GUI 宿主变化（独立打开 / 嵌入 note /
+ * sidebar 各不相同），那种隐式环境状态不可重复、不可测。x-basalt 只接受**显式**
+ * `contextFile`：给了就按它求值，没给就报 `base/dynamic-context-required`，不猜。
+ */
+function requireContextRow(offset: number, state: EvalState): BaseRow {
+  if (state.contextRow === undefined) {
+    throw new BaseRowEvalError(
+      BASE_RULES.dynamicContextRequired,
+      offset,
+      "this.* 需要显式动态上下文：无头执行没有「当前活动文件」，请传 contextFile（CLI: --context-file <vault 内路径>）",
+    );
+  }
+  return state.contextRow;
+}
+
 /** property 根引用求值：note/file/formula/this 四源分派（path 只含首段，更深落 member/index）。 */
 function evalProperty(
   expr: Extract<BaseExpr, { kind: "property" }>,
@@ -534,33 +581,28 @@ function evalProperty(
   if (expr.path.length === 0) {
     if (expr.base === "file") return row.file;
     if (expr.base === "note") return wrapValue(row.note);
-    // 裸 formula/this 根无可求值形态：按未支持处理（formula.* 须带属性名；this 见下方分支）。
+    // 裸 `this`（2026-07-28 覆盖率片六，BASE-CTX-001）：等价于上下文行的 note 对象
+    // （与裸 `note` 同形，只是换一行数据）；未提供 contextFile 时保持既有拒绝口径。
+    if (expr.base === "this") return wrapValue(requireContextRow(expr.offset, state).note);
+    // 裸 formula 根无可求值形态（formula.* 须带公式名）。
     throw new BaseRowEvalError(
-      expr.base === "formula" ? BASE_RULES.unsupportedFeature : BASE_RULES.dynamicContextRequired,
+      BASE_RULES.unsupportedFeature,
       expr.offset,
-      expr.base === "formula"
-        ? "裸 formula 根引用不可求值（须 formula.<公式名>）"
-        : `this.* 需要显式动态上下文（无头执行无当前活动文件，P3 支持）`,
+      "裸 formula 根引用不可求值（须 formula.<公式名>）",
     );
+  }
+  // `this.<段>`（片六 BASE-CTX-001）：把求值目标换成上下文行，其余分派与 note/file 完全一致。
+  // `this.file` → 上下文行的 file 值（后续 `.name` 等由 postfix member 访问处理）；
+  // `this.<属性>` → 上下文行的 note 属性（走同一条类型升级链）。
+  if (expr.base === "this") {
+    const ctxRow = requireContextRow(expr.offset, state);
+    const key = expr.path[0] as string;
+    if (key === "file") return ctxRow.file;
+    return evalNoteKey(ctxRow, key, expr.offset, state);
   }
   if (expr.base === "note" || expr.base === "file") {
     const key = expr.path[0] as string;
-    if (expr.base === "note") {
-      const r = safeGetOwn(row.note, key);
-      if (r.status === "ok") {
-        const raw = wrapValue(r.value);
-        // 升级链（语法 §5.1 优先级）：types.json 显式类型（P2b）→ parseDateLike/parseWikilinkValue
-        // 推断（P2a，upgradeNoteString）→ 原样。显式声明命中时不再走推断（含冲突场景，值按运行时类型）。
-        return applyDeclaredType(key, raw, expr.offset, state) ?? upgradeNoteString(raw);
-      }
-      if (r.status === "missing") return MISSING;
-      throw new BaseRowEvalError(
-        BASE_RULES.unknownProperty,
-        expr.offset,
-        `属性 "${key}" 被安全白名单拒绝（禁原型链/getter 访问）`,
-        key,
-      );
-    }
+    if (expr.base === "note") return evalNoteKey(row, key, expr.offset, state);
     return getFileField(row.file, key, expr.offset);
   }
   const key = expr.path[0] as string;
@@ -893,6 +935,7 @@ export function evaluateExpression(expr: BaseExpr, row: BaseRow, ctx: EvalContex
     ...(ctx.summaryValues !== undefined ? { summaryValues: ctx.summaryValues } : {}),
     ...(ctx.sharedBudget !== undefined ? { sharedBudget: ctx.sharedBudget } : {}),
     ...(ctx.resolveFile !== undefined ? { resolveFile: ctx.resolveFile } : {}),
+    ...(ctx.contextRow !== undefined ? { contextRow: ctx.contextRow } : {}),
     ...(ctx.onRowError !== undefined ? { onRowError: ctx.onRowError } : {}),
   };
   try {

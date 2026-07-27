@@ -7,8 +7,8 @@ tags:
   - bases
   - testing
   - x-basalt
-timestamp: 2026-07-27T19:41:31Z
-sha256: 979a78dfc8cccdd6cd41ca34f634faaad341569e3fd3a92d9d227e8e4303d950
+timestamp: 2026-07-27T19:51:08Z
+sha256: 2b808e410e71f55df6d765375a20a3eab8ccc502a23f0ca7a0ecc765ec3e5eb1
 ---
 # Bases 实现状态追踪
 
@@ -25,9 +25,9 @@ sha256: 979a78dfc8cccdd6cd41ca34f634faaad341569e3fd3a92d9d227e8e4303d950
 | P1 oracle | 官方串行差分（争议语义冻结） | 🔜 待开（需用户侧 Obsidian App 环境，人工触发） |
 | P2a | formulas 核心（typed values + 算术 + 依赖图/cycle + clock） | ✅ 2026-07-27（[计划](../history/plans/2026-07-27-bases-p2a-formulas.md)） |
 | P2b | types.json / list 高阶 / groupBy / summaries | ✅ 2026-07-27（[计划](../history/plans/2026-07-27-bases-p2b-types-list-group-summary.md)） |
-| P3 | all-files / context / 嵌入 | 🔀 P3a 附件数据集 ✅ 2026-07-27（[计划](../history/plans/2026-07-27-bases-p3-attachments.md)）；context/嵌入仍 🔜 待开 |
+| P3 | all-files / context / 嵌入 | 🔀 P3a 附件数据集 ✅ 2026-07-27（[计划](../history/plans/2026-07-27-bases-p3-attachments.md)）；context ✅ 2026-07-28（覆盖率片六 CTX-001）；嵌入形态 ❌ 不做 + 诊断（CTX-002/003） |
 | review 修复 | P0..P2b 收口后的评审修复（静默失败 + 资源模型） | ✅ 2026-07-27（[计划](../history/plans/2026-07-27-bases-code-review-fixes.md)） |
-| 函数覆盖率 | 官方 68 条目 51% → ~90%（六片） | 🚧 进行中（[计划](../plans/2026-07-28-bases-functions.md)）：片一..片五 ✅ 2026-07-28；片六 🔜 |
+| 函数覆盖率 | 叶子函数补齐（六片） | ✅ 2026-07-28 六片全部落地（[计划](../history/plans/2026-07-28-bases-functions.md)）：注册表条目 **35 → 68**，其中 63 条可执行、5 条为白名单内显式拒绝（4 渲染类 + `random`）。四门全绿（test **880**，基线 820） |
 
 ## 1. 文档层（P0）✅ 2026-07-26
 
@@ -121,13 +121,13 @@ sha256: 979a78dfc8cccdd6cd41ca34f634faaad341569e3fd3a92d9d227e8e4303d950
 | ---- | ---- | ---- |
 | 附件作为行（图片/PDF/Canvas/.base） | BASE-ALL-001 | ✅ 2026-07-27（[P3a 计划](../history/plans/2026-07-27-bases-p3-attachments.md)：独立 `vault_entries` 表 + indexer 六条写入路径 + all-files 数据源 + CLI `--conformance`；「DQL 不变」证明 11①③④ 与跨表 path 唯一性 12 全部落成测试） |
 | 附件 links/backlinks/embeds | BASE-ALL-002 | ✅ 2026-07-27（P3a 满足线：附件行出链恒 `[]`、不伪造内容链接；附件作为链接 target 的命中关系可查询（笔记行 `file.links` 含原始 target，embed `![[img.png]]` 计入 links 表 is_embed=1）——暂定口径待 oracle） |
-| 独立 `.base` 的 `this`（显式 contextFile） | BASE-CTX-001 | 🔜 覆盖率片六（[计划](../plans/2026-07-28-bases-functions.md)） |
-| Markdown `base` code block | BASE-CTX-002 | ❌ 不做（用户 2026-07-28 拍板）：只在 Obsidian 界面里渲染才有意义，无头执行拿不到宿主上下文，产物无消费方；要改 parser 而收益为零。遇到时报 `base/unsupported-feature` + 理由 |
-| `![[View.base#Name]]` embed | BASE-CTX-003 | ❌ 不做（同上，2026-07-28） |
-| sidebar/active-file 语义（禁环境隐式状态） | BASE-CTX-004 | ❌ 不做（同上，2026-07-28）：无头执行没有「当前活动文件」，显式 `contextFile` 已覆盖可重复语义 |
+| 独立 `.base` 的 `this`（显式 contextFile） | BASE-CTX-001 | ✅ 2026-07-28（覆盖率片六；`this.file.*` / `this.<属性>` / 裸 `this`，公式体内可用；解析口径同 `file(path)`；给了却解析不到 → error + 空结果） |
+| Markdown `base` code block | BASE-CTX-002 | ❌ 不做（用户 2026-07-28 拍板）+ ✅ 诊断已落地：入口形态检查（**读文件之前**按路径形态判定，避免被 YAML 解析失败掩盖）报 `base/unsupported-feature`，消息含替代写法「把查询定义单独存成 .base 文件」 |
+| `![[View.base#Name]]` embed | BASE-CTX-003 | ❌ 不做（同上）+ ✅ 诊断已落地：路径含 `#` 锚点 → `base/unsupported-feature`，消息直接给出可照抄的 `--view <名>` 替代命令 |
+| sidebar/active-file 语义（禁环境隐式状态） | BASE-CTX-004 | ❌ 不做（同上）+ ✅ 由「不给 `contextFile` 即报 `base/dynamic-context-required`」覆盖——隐式环境状态不可重复、不可测，一律不猜 |
 | 插件 view/function | BASE-PLUGIN-001 | ⏸ 默认拒绝；显式注册纯函数扩展需真实需求再议 |
 
-## 6. 函数覆盖率补齐（2026-07-28 起，[计划](../plans/2026-07-28-bases-functions.md)）
+## 6. 函数覆盖率补齐 ✅ 2026-07-28（六片全部落地，[计划](../history/plans/2026-07-28-bases-functions.md)）
 
 > 缺口全在**叶子函数**：注册表 / 名字真相源 / 运行时分派三处骨架已成型，补函数 = 扩表 + 扩分派组 + 补用例。
 > 每片完成后本表翻标（日期 + 测试文件）。
@@ -139,7 +139,7 @@ sha256: 979a78dfc8cccdd6cd41ca34f634faaad341569e3fd3a92d9d227e8e4303d950
 | 片三 | Link/File 互转 5 个（`asFile`/`linksTo`/`asLink`/`file()`/`link()`） | ✅ 2026-07-28（`tests/base-functions-link.test.ts` 8 用例；858 全量绿。**含文法改动**：`file(...)` 调用形态） |
 | 片四 | `matches`（regex）+ ReDoS 防护 | ✅ 2026-07-28（`tests/base-functions-regex.test.ts` 8 用例；866 全量绿） |
 | 片五 | list/link 当分组键 + 自定义汇总收口 | ✅ 2026-07-28（`tests/base-group-summary.test.ts` +4 用例；870 全量绿） |
-| 片六 | 显式 `contextFile` + `this.*` 求值 | 🔜 BASE-CTX-001（用户 2026-07-28 拍板**只做 contextFile**；CTX-002/003/004 判❌不做 + 诊断，见 §7） |
+| 片六 | 显式 `contextFile` + `this.*` 求值 | ✅ 2026-07-28（`tests/base-context.test.ts` 10 用例；880 全量绿。CTX-002/003 落成**入口形态诊断**，CTX-004 由「不给即拒绝」覆盖） |
 
 ### 片一明细 ✅ 2026-07-28
 
@@ -153,6 +153,18 @@ sha256: 979a78dfc8cccdd6cd41ca34f634faaad341569e3fd3a92d9d227e8e4303d950
 | 渲染类 `escapeHTML`/`html`/`image`/`icon` 白名单内显式拒绝 | 设计 §1 | ✅ 2026-07-28（新增 `BaseUnsupportedError` → `base/unsupported-feature`，与 `property-type-mismatch` 分开，读出方可据 rule 区分「用错类型」与「本引擎不做」） |
 | `repeat`/`replace`/`split` 产物规模预算（string 计字符数，`repeat` 分配前预检） | BASE-SEC-005 延伸 | ✅ 2026-07-28 |
 | `random()` × 字节稳定冲突 | 语法 §4.4 | ✅ 2026-07-28 **直接拒绝**（用户拍板；白名单内报 `base/unsupported-feature`，消息说明是契约冲突而非「不渲染」，与渲染类分开断言） |
+
+### 片六明细 ✅ 2026-07-28（BASE-CTX-001；CTX-002/003/004 ❌ 不做 + 诊断）
+
+> 测试：`tests/base-context.test.ts`（10 用例）+ fixture `views/context.base`。CLI 增 `--context-file`。
+
+| 项 | 场景编号 | 状态 |
+| ---- | ---- | ---- |
+| 显式 `contextFile` 驱动 `this.*`（filter / 投影 / 公式体内） | BASE-CTX-001 | ✅ 2026-07-28（`this.file.*` 取上下文行 file 字段、`this.<属性>` 取其 note 属性、裸 `this` 为其 note 对象；note 读取与 `note.<key>` **共用 `evalNoteKey`**，防两处类型升级链分叉） |
+| contextFile 路径解析口径 = `file(path)` | BASE-CTX-001 | ✅ 2026-07-28（复用同一个 `createFileResolver`，不造第二套路径口径；完整路径 / 去扩展名忽略大小写 / bare basename 三种写法等价，专项用例） |
+| 给了 contextFile 却解析不到 → error + 空结果 | BASE-CTX-001 | ✅ 2026-07-28（**不静默当没给**——否则 `this.*` 会退化成「需要上下文」的误导性诊断） |
+| 自定义汇总 `values` 作用域内 `this.*` 仍拒绝 | SUM-002 延伸 | ✅ 2026-07-28（该语境有意不注入 contextRow，与 note/file/`file()` 同一「禁访问行外状态」原则） |
+| 入口形态检查（CTX-002/003 的诊断落点） | BASE-CTX-002/003 | ✅ 2026-07-28（**在读文件之前**按路径形态判定：带 `#` → 指向 `--view`；非 `.base` 扩展名 → 指向「单独存成 .base」。专项用例断言指向不存在的 `.md` 时仍给形态诊断而非 ENOENT/invalid-yaml） |
 
 ### 片五明细 ✅ 2026-07-28（GROUP-002 + SUM-002 收口）
 

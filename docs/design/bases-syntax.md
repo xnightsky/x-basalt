@@ -8,8 +8,8 @@ tags:
   - obsidian
   - syntax
   - x-basalt
-timestamp: 2026-07-27T19:39:50Z
-sha256: 0138571cf3dda3fc2f0a37b4575f39fd29a7e8da6e5e56b5e15ece33c4ccc5f2
+timestamp: 2026-07-27T19:48:46Z
+sha256: f987294b271b288332376c4011b6eedee9ba8cbaa200f4416e4f7b5b4f25ae36
 ---
 # Bases 语法参考（x-basalt 口径）
 
@@ -118,7 +118,7 @@ Bases 表达式**不是 DQL**：比较用 `==`，布尔用 `&& || !`（DQL 用 `
 | `note["Review Status"]` | 带空格/特殊字符属性名                  | 【P1 ✅】 |
 | `file.name` 等          | file property（§4.2）                  | 【P1 ✅】 |
 | `formula.name`          | 公式属性                               | 【P2a ✅】 |
-| `this.*`                | 动态上下文（§7）                       | 【P3】 |
+| `this.*`                | 显式动态上下文（§7）                   | 【2026-07-28 ✅ BASE-CTX-001】需显式 `contextFile`；不给则报 `base/dynamic-context-required` |
 
 Unicode 属性名合法（`note["状态"]` / `状态`）。
 
@@ -174,7 +174,7 @@ note property 来自 Markdown frontmatter；file property 对所有受支持文�
 
 ### 4.5 明确不支持（报诊断，不静默忽略）
 
-任意标识符调用、成员动态调用、`constructor`/`prototype`/`__proto__` 访问、regex literal、`this`（无显式 context 时报 `base/dynamic-context-required`）。【P0 ✅ 浅扫描覆盖未知函数名；其余 P1 ✅ 文法/求值层拒绝；`formula.*` 自 P2a 起可求值】
+任意标识符调用、成员动态调用、`constructor`/`prototype`/`__proto__` 访问、regex literal、`this`（**无显式 `contextFile` 时**报 `base/dynamic-context-required`）、Markdown 内嵌 ` ```base ` 代码块与 `![[View.base#Name]]` embed（入口形态检查处报 `base/unsupported-feature`，消息含替代写法）。【P0 ✅ 浅扫描覆盖未知函数名；其余 P1 ✅ 文法/求值层拒绝；`formula.*` 自 P2a 起可求值】
 
 ## 5. 值与类型语义
 
@@ -207,9 +207,8 @@ formulas:
 ## 7. 数据集与动态上下文边界
 
 - **数据集**：官方默认包含 vault 全部文件；x-basalt 首期只含 Markdown 笔记，查询恒附 `base/markdown-only-dataset` conformance warning，附件不作为行。【P1 ✅：BASE-DATA-001/002】all-files（附件行、附件 links/backlinks）【P3，先独立 indexer schema 决策，证明不改既有 DQL `.md` 数据集】。
-- **`this`**：随 GUI 宿主变化（独立打开=Base 文件；嵌入 note/Canvas=嵌入者；sidebar=当前活动文件）。无头执行无「当前活动文件」：无显式 context 遇 `this` 报 `base/dynamic-context-required`；后续以显式 `contextFile` 参数实现可重复语义。【P3】
-- **嵌入 `base` code block**：Markdown fenced block 形态【P3】，首期只支持独立 `.base` 文件。
-- **`![[View.base#Name]]` embed**：view 名与显式宿主 context 解析【P3】。
+- **`this`**：官方随 GUI 宿主变化（独立打开=Base 文件；嵌入 note/Canvas=嵌入者；sidebar=当前活动文件）——那种隐式环境状态不可重复、不可测，x-basalt **不做**（BASE-CTX-004 ❌）。取而代之：**显式 `contextFile` 参数**（CLI `--context-file`），在当前查询行集内解析（口径同 `file(path)`：完整路径 / 去扩展名忽略大小写 / bare basename）；`this.file.*` 取上下文行 file 字段、`this.<属性>` 取其 note 属性、裸 `this` 为其 note 对象；公式体内同样可用，自定义汇总的 `values` 作用域仍拒绝（禁访问行外状态）。给了却解析不到 → `base/dynamic-context-required`（error）+ 空结果，不静默当没给。【2026-07-28 ✅ BASE-CTX-001】
+- **嵌入 `base` code block**（BASE-CTX-002）与 **`![[View.base#Name]]` embed**（BASE-CTX-003）：【2026-07-28 ❌ 不做】两者本质是「在 Obsidian 界面里渲染」的形态，无头执行拿不到宿主上下文、产物无消费方（用户拍板）。但**不静默**：入口形态检查（读文件之前，按路径形态判定）报 `base/unsupported-feature`，消息说清不做的理由与替代写法（`#锚点` → 改用 `--view`；非 `.base` 扩展名 → 把查询定义单独存成 `.base`）。
 
 ## 8. 演进与版本政策
 

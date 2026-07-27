@@ -6,8 +6,8 @@ tags:
   - guide
   - bases
   - x-basalt
-timestamp: 2026-07-27T19:39:50Z
-sha256: d62f99ac89dfdb057fe0b11f2007ae23626403f1a751bab979a764b51f5b561b
+timestamp: 2026-07-27T19:49:01Z
+sha256: 1415bc732a6acb80bc21b4b4e162d63cd2b0a77e8d7401fd6bb7dfeb966a8575
 ---
 # Bases · 用 `.base` 无头查询你的 vault
 
@@ -519,7 +519,7 @@ duration 单位（单复数均可）：`millisecond` `second` `minute` `hour` `d
 | `note["状态"]` / `状态` | Unicode 属性名合法 |
 | `file.name` 等 | file 属性（下表） |
 | `formula.<名>` | 引用顶层 `formulas` 定义的公式 |
-| `this.*` | **不支持**——无头执行没有「当前活动文件」，报 `base/dynamic-context-required` |
+| `this.*` | 指**你显式指定的上下文文件**（`--context-file`）：`this.file.name` 取它的 file 字段、`this.status` 取它的 frontmatter、裸 `this` 是它的整个 frontmatter。不传 `--context-file` 就报 `base/dynamic-context-required`——无头执行没有「当前活动文件」这回事，我们不猜 |
 
 **file 属性全集**：
 
@@ -709,7 +709,8 @@ frontmatter 里整串恰为一个 wikilink 的字符串（`"[[目标]]"` / `"[[�
 | 任意标识符调用、动态成员调用 | 文法层拒绝 |
 | `constructor` / `prototype` / `__proto__` 访问 | 拒绝（安全白名单） |
 | regex **字面量** `/…/`、`%` 取模 | 文法层拒绝（正则请用 `s.matches("模式")`，传字符串） |
-| `this.*` | `base/dynamic-context-required` |
+| `this.*` **且没传** `--context-file` | `base/dynamic-context-required`（传了就正常求值，见 [§3.5](#35-属性引用)） |
+| 把 `.md` 或带 `#锚点` 的路径当 `.base` 传进来 | `base/unsupported-feature`——内嵌 ```` ```base ```` 代码块与 `![[View.base#Name]]` 嵌入都不做，诊断里会告诉你该怎么写 |
 | `cards` / `list` / `map` view、插件 view | `base/unsupported-feature` / `base/unsupported-view-type` |
 | 空 filter 数组 | `base/unsupported-feature`（官方语义未确认，不猜） |
 | Dataview inline fields（`key:: value`） | 不进入 Bases 属性（官方 Bases 即如此） |
@@ -728,7 +729,7 @@ frontmatter 里整串恰为一个 wikilink 的字符串（`"[[目标]]"` / `"[[�
 ## 4. 怎么跑
 
 ```text
-x-basalt base <file.base> [--view <name>] [--vault <path...>] [--db <path>] [--format json|yaml] [--conformance <id>]
+x-basalt base <file.base> [--view <name>] [--vault <path...>] [--db <path>] [--format json|yaml] [--conformance <id>] [--context-file <path>]
 ```
 
 | 参数/选项 | 默认 | 说明 |
@@ -736,6 +737,7 @@ x-basalt base <file.base> [--view <name>] [--vault <path...>] [--db <path>] [--f
 | `<file.base>` | 必填 | vault 内 `.base` 路径（vault 相对或绝对）；越出 vault 在读取前拒绝 |
 | `--view <name>` | `views[0]` | 指定 view；不存在报 `base/view-not-found`（error，`suggestions` 列可用名） |
 | `--vault <path>` | 配置 `vault` | 可重复传多个（多根 vault） |
+| `--context-file <path>` | 无 | `this.*` 的上下文文件（vault 内路径；写法同 `file(path)`：完整路径 / 去扩展名 / 文件名）。不传则 `.base` 里的 `this.*` 报诊断；传了却找不到该文件 → error + 空结果 |
 | `--db <path>` | `.x-basalt/index.db` | 索引文件（只读打开） |
 | `--format <fmt>` | `json` | `json`（缩进 2）或 `yaml` |
 | `--conformance <id>` | `bases-markdown-2026-07` | 数据集口径：`bases-markdown-2026-07`（仅 Markdown 笔记）或 `bases-all-files-2026-07`（附件并入为行，见 [§3.2](#62-all-files-模式附件并入数据集)）；未知值报 `base/invalid-schema`（error） |
@@ -792,7 +794,7 @@ x-basalt base views/projects.base --conformance bases-all-files-2026-07 --vault 
 
 ### 6.1 未做（P3 及以后）
 
-嵌入式 ```` ```base ```` 代码块、`![[View.base#Name]]`、`this`（遇到报 `base/dynamic-context-required`）、regex。完整的「明确不支持」清单见[§3.9](#39-明确不支持报诊断不静默忽略)。
+嵌入式 ```` ```base ```` 代码块、`![[View.base#Name]]`（两者都只在 Obsidian 界面里渲染才有意义，无头执行拿不到宿主上下文）。完整的「明确不支持」清单见[§3.9](#39-明确不支持报诊断不静默忽略)。
 
 ### 6.2 all-files 模式（附件并入数据集）
 
@@ -835,7 +837,7 @@ missing/null/空串/0/false/空列表的 truthiness 精确合并；多键 sort �
 | `base/formula-cycle` | error | 公式循环引用（message 含完整循环链） |
 | `base/path-outside-vault` | error | `.base` 路径越出 vault（读取前拒绝，不读任何字节） |
 | `base/execution-budget` | error | 任一预算耗尽（空结果） |
-| `base/dynamic-context-required` | error | 无显式 context 遇 `this` |
+| `base/dynamic-context-required` | warning/error | 没传 `--context-file` 却用了 `this.*`（行级 warning，该行按不通过）；传了却在数据集里找不到那个文件（error + 空结果） |
 | `base/unknown-property` | warning | 访问未知 `file.*` 属性（行级，该行不通过，查询继续） |
 | `base/property-type-mismatch` | warning | 行级类型错误（类型不可比较、声明类型冲突等；该 cell 为 `null`） |
 | `base/invalid-yaml` | error/warning | `.base` YAML 非法（error）；某行 frontmatter JSON 解析失败（warning，该行按空属性处理） |

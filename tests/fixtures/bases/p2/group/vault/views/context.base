@@ -1,0 +1,34 @@
+# 2026-07-28 覆盖率片六 BASE-CTX-001 fixture：显式 contextFile 驱动的 this.*。
+# 无 --context-file 时 this.* 一律报 base/dynamic-context-required（无头执行没有「当前活动文件」）。
+formulas:
+  ctxOwner: 'this.status'
+views:
+  # 「与上下文文件同状态的笔记」——this 最典型的用法
+  - type: table
+    name: sameStatus
+    filters: status == this.status
+    order:
+      - file.name
+  # 上下文字段投影：this.file.* 与 this.<属性> 两条路径
+  - type: table
+    name: ctxFields
+    order:
+      - file.name
+      - this.file.name
+      - this.status
+      - this.priority
+    limit: 1
+  # this.* 走公式（公式体内同样可用）
+  - type: table
+    name: viaFormula
+    order:
+      - file.name
+      - formula.ctxOwner
+    limit: 1
+  # 裸 this = 上下文行的 note 对象（与裸 note 同形，只是换一行数据）
+  - type: table
+    name: bareThis
+    order:
+      - file.name
+      - this
+    limit: 1

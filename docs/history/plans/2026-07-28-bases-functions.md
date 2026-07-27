@@ -1,6 +1,6 @@
 ---
 type: plan
-status: in-progress
+status: done
 title: Bases 函数覆盖率计划（51% → ~90%）
 description: 官方 68 个函数条目中未实现的 33 个分六片补齐——机械叶子函数、Date/Duration 族、Link/File 互转、regex+ReDoS、list 分组键、contextFile 上下文
 tags:
@@ -8,8 +8,8 @@ tags:
   - bases
   - functions
   - x-basalt
-timestamp: 2026-07-27T19:41:11Z
-sha256: 16fac84010dad9b2e71398abb64a48141b918848622ed6666f8fece81d2e64e7
+timestamp: 2026-07-27T19:50:41Z
+sha256: 9985d3309f1d6907d08f655298f4c57f725863a6608a2a345864b75ed29b11d8
 ---
 # 计划：Bases 函数覆盖率（51% → ~90%）
 
@@ -38,7 +38,7 @@ sha256: 16fac84010dad9b2e71398abb64a48141b918848622ed6666f8fece81d2e64e7
 | 3 | Link/File 互转 5 个（`asFile`/`linksTo`/`asLink`/`file()`/`link()`） | 行集 file 解析器 + **文法：`file(...)` 调用形态** | ✅ |
 | 4 | `matches`（regex）+ ReDoS 防护（BASE-SEC-004） | 新增 `src/base/regexp.ts` + rule `base/invalid-regex` | ✅ |
 | 5 | BASE-GROUP-002（list/link 分组键）+ BASE-SUM-002 收口 | engine 分组层：扇出分桶 + `groupKeyCompare` + 组级汇总 | ✅ |
-| 6 | BASE-CTX-001 显式 `contextFile` + `this.*`（CTX-002/003/004 判❌不做 + 诊断） | engine/CLI 入参，**不动 parser**（2026-07-28 拍板缩范围后） | ⏳ |
+| 6 | BASE-CTX-001 显式 `contextFile` + `this.*`（CTX-002/003/004 判❌不做 + 诊断） | engine/CLI 入参 + 入口形态检查，**未动 parser**（拍板缩范围后成立） | ✅ |
 
 ### 片 1 明细
 
@@ -198,3 +198,28 @@ sha256: 16fac84010dad9b2e71398abb64a48141b918848622ed6666f8fece81d2e64e7
 29. **link 是标量键，不扇出**。此前实现把 list 与 link 一并拒绝，容易让人以为 link 也是多值；实际它是单个值，按路径感知相等分组即可。
 30. **新增 `groupKeyCompare` 而不是复用 `sortKeyCompare`**。后者对 link **抛类型错误**（link 无排序语义，那是正确的排序口径）；而分组只需要一个**确定性**组序，不需要语义序。故 link 之间按归一 `path`+`subpath` 字典序，整体序为「可比标量 < link < null/MISSING」——空值恒最后的既有口径不被 link 插队。
 31. **组级汇总 `groups[].summaries` 的计算集 = 该组 limit 后的行**，与顶层 summaries 的「filter 后 **limit 前**全量」有意不同。理由：组本身就建立在 limit 后行集上，用 limit 前的集合去配 limit 后的组，会给出「组里看不见的行也算进了汇总」的怪结果。**这是对 P2b 决策的显式反转**（当时判「组级汇总属官方 UI 形态，无头 JSON 暂不做」）：片五后 groups 成为一等产物，有组没有组的汇总是半个功能。
+
+### 片 6 ✅ 2026-07-28（BASE-CTX-001；CTX-002/003/004 ❌ 不做 + 诊断）
+
+**四门**（全绿）：typecheck / lint 零 warning / format:check / `pnpm test` **880 pass / 0 fail**（片五后基线 870，+10）。
+
+**测试**：新增 `tests/base-context.test.ts` 10 用例 + fixture `views/context.base`。
+
+**改动落点**：`evaluator.ts` 新增 `evalNoteKey`（`note.<key>` 与 `this.<key>` 共用，防升级链分叉）与 `requireContextRow`，`EvalContext.contextRow` 打通；`engine.ts` 依 `contextFile` 在行集内解析上下文行并注入行求值/公式上下文，新增 `checkEntryForm` 入口形态检查；`cli.ts` 增 `--context-file`。**未动 parser**——拍板缩范围后这一片确实不需要文法改动（真正动 parser 的是片三的 `file(...)`）。
+
+### 片 6 新增 Decision Log
+
+32. **contextFile 复用 `file(path)` 的解析器**，不造第二套路径口径。于是「`--context-file` 能指到的」与「`file()` 能解析到的」永远是同一集合；完整路径 / 去扩展名 / bare basename 三种写法等价（专项用例）。
+33. **给了 contextFile 却解析不到 → error + 空结果**，不静默当没给。静默会让后续 `this.*` 抛出「需要显式上下文」这条**误导性**诊断——用户明明给了。
+34. **CTX-002/003 的诊断放在「读文件之前」的入口形态检查**，只看路径形态不读内容。否则把 `.md` 当 `.base` 传进来只会得到一句 YAML 解析失败，与用户意图完全无关；现在得到的是「不做 + 为什么 + 该怎么写」，`#锚点` 那条还直接给出可照抄的 `--view` 命令。
+35. **自定义汇总的 `values` 作用域不注入 contextRow**：与 note/file 属性、`file()` 解析器同一条「禁止访问行外状态」原则，三者口径一致。
+
+## 收口结论（2026-07-28）
+
+- **注册表条目 35 → 68**：63 条可执行 + 5 条白名单内显式拒绝（`escapeHTML`/`html`/`image`/`icon` 渲染类、`random` 字节稳定冲突）。以本仓注册表口径计约 **93%**；与官方清单逐条对齐属 oracle 阶段的事，此处不声称。
+- **新增分派组 3 个**：`number`（片一）、`date`（片二）、`link`（片三）。
+- **新增诊断 rule 1 条**：`base/invalid-regex`（片四）。
+- **契约扩展**：`groups[].summaries`（片五）、`BaseQueryOptions.contextFile` 起效 + CLI `--context-file`（片六）。
+- **文法改动 1 处**：`rootRef` 支持 `file(...)` 调用形态（片三，非计划内——原以为片六才动 parser）。
+- **四门**：typecheck / lint / format:check / test **880**（基线 820，+60）。
+- **遗留**：本轮新增的自建口径（`title`、`slice` 负索引、`replace` 字面替换、`time()` 返 duration、`relative()` 固定英文、`format` token 子集、list 分组扇出、组级汇总计算集…）全部标注「暂定，待 oracle」，逐条见实现状态追踪 §6 各片明细。

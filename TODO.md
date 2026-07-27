@@ -15,7 +15,7 @@
 
 定位：实现真正无 GUI、无 Obsidian 运行时的 `.base` 查询库层；官方 `base:query` 只作串行语义 oracle，不进入运行时依赖。首期明确为 **Bases Markdown conformance 2026-07**，不冒充 all-files 完整兼容。
 
-> **下一步（2026-07-27 收口后）**：P0/P1/P2a/P2b 与 review 修复批次全部落地，四门（typecheck / lint / format / test 793）皆绿。**建议下一件事做 P1 oracle 而不是 P3**——理由见下方 oracle 条目；oracle 需用户侧 Obsidian App 环境，AI 侧无法自行推进。
+> **下一步（2026-07-28 收口后）**：P0/P1/P2a/P2b/P3a、review 修复、**函数覆盖率六片**全部落地，四门（typecheck / lint / format / test **880**）皆绿。功能面已无明显缺口，**剩下的唯一硬阻塞是 P1 oracle**——9 项暂定口径 + 本轮新增的一批自建口径（`title`/`slice` 负索引/`time()` 返 duration/`relative()` 固定英文/list 分组扇出等，逐条见[实现状态追踪](./docs/design/bases-status.md) §6）全都没与官方比对过。oracle 需用户侧 Obsidian App 环境，AI 侧无法自行推进。
 
 - [x] **P0 · document/schema/diagnostic**：`.base` YAML + view 选择 + filter 结构校验 + expression source span；先完成 `BASE-DOC-001..009`。计划：[`docs/plans/2026-07-26-bases-p0-document-schema.md`](./docs/history/plans/2026-07-26-bases-p0-document-schema.md)（2026-07-26 落地，含 SEC-007/008）
 - [x] **P1 · Markdown query vertical slice**：独立 Bases AST/evaluator，支持 global+view filters、note/file properties、常用 file/string/list 方法、order/sort/limit 与稳定 JSON；不复用 DQL AST，不用 `eval`。计划：[`docs/plans/2026-07-26-bases-p1-markdown-query.md`](./docs/history/plans/2026-07-26-bases-p1-markdown-query.md)（2026-07-26 落地，含 SEC-001/002/003/009 与字节稳定；oracle 冻结项为暂定口径）
@@ -30,10 +30,10 @@
   - [x] **P2b · types.json / list 高阶 / groupBy / summaries**（BASE-TYPE-001..003、LIST-001、GROUP-001、SUM-001/002；TYPE-004 与 GROUP-002 待 oracle）计划：[`docs/plans/2026-07-27-bases-p2b-types-list-group-summary.md`](./docs/history/plans/2026-07-27-bases-p2b-types-list-group-summary.md)（2026-07-27 落地）
 - [x] **P0..P2b 收口 · code review 修复批次**：view 必填字段静默通过、Windows 盘符大小写误判越界、多根 `.base` 主键缺命名空间、`order`/`sort` 静默丢项、`maxOperations` 非查询总额、解析缓存无界。计划：[`docs/plans/2026-07-27-bases-code-review-fixes.md`](./docs/history/plans/2026-07-27-bases-code-review-fixes.md)（2026-07-27 落地）
 - [x] **收口附带修复**（2026-07-27，同批次外的两笔）：①**不加引号的 frontmatter 日期静默失去日期语义**——读侧 YAML 引擎改用 `yaml` 包（YAML 1.2 core 无 timestamp 隐式类型），与写侧 `src/meta` 统一；②**`format:check` 门禁此前从未可通过**——`.prettierignore` 豁免 fixtures + 作用域收敛为 `src tests scripts` + 一次性格式化 13 个文件。全量 **793 测试绿**。
-- [ ] **P3 · all-files/context（建议等 oracle 之后再开）**：附件数据集、embedded `base` code block、显式 `contextFile`/`this`；先做独立 indexer schema 决策，证明不改变既有 DQL `.md` 数据集。schema 决策已冻结：[`docs/specs/2026-07-27-bases-p3-vault-entries-decision.md`](./docs/design/bases-vault-entries.md)（2026-07-27；实施另开计划）。**软序而非硬依赖**：真有 dogfood 需求可以先动，但要接受届时 oracle 结论可能同时推翻 P1/P2 与 P3 两层的暂定口径。
+- [x] **P3 · all-files/context**（附件数据集 ✅ P3a；显式 `contextFile`/`this` ✅ 覆盖率片六；embedded `base` code block 与 `![[View.base#Name]]` ❌ 判不做 + 入口形态诊断）：先做独立 indexer schema 决策，证明不改变既有 DQL `.md` 数据集。schema 决策已冻结：[`docs/specs/2026-07-27-bases-p3-vault-entries-decision.md`](./docs/design/bases-vault-entries.md)（2026-07-27；实施另开计划）。**软序而非硬依赖**：真有 dogfood 需求可以先动，但要接受届时 oracle 结论可能同时推翻 P1/P2 与 P3 两层的暂定口径。
   - [x] **P3a · 附件数据集（vault_entries + all-files 模式，BASE-ALL-001/002）**：schema+indexer 六条写入路径 → base all-files 数据源 → DQL 不变证明 + CLI `--conformance`，三片全部落地。计划：[`docs/plans/2026-07-27-bases-p3-attachments.md`](./docs/history/plans/2026-07-27-bases-p3-attachments.md)（2026-07-27 用户拍板「附件数据集优先」开片；片一 schema+indexer、片二 all-files 数据源 + conformance 开关、片三 DDL 防漂移锁 + DQL 不变回归 + CLI + 基准全部落地。embedded code block 与 contextFile/this 仍另开计划）
 
-- [ ] **⭐ 函数覆盖率 51% → ~90%（进行中，2026-07-28 开）**：官方 68 个条目已实现 35，缺口全在叶子函数（骨架已齐）。分六片：①机械叶子 16 个 + 渲染类拒绝 + `round` 归组 → ②Date/Duration 族 → ③Link/File 互转 → ④`matches` regex + ReDoS → ⑤GROUP-002 + SUM-002 收口 → ⑥CTX-001..004（唯一动 parser 的一片）。计划：[`docs/plans/2026-07-28-bases-functions.md`](./docs/plans/2026-07-28-bases-functions.md)
+- [x] **函数覆盖率补齐（六片全部落地，2026-07-28）**：注册表条目 **35 → 68**（63 条可执行 + 5 条白名单内显式拒绝）。①机械叶子 16 个 + 渲染类/`random` 拒绝 + `round` 归 number 组 → ②date/duration 构造 + date 方法组 → ③file/link 互转 + 行集解析器（含 `file(...)` 文法增量）→ ④`matches` + 三层 ReDoS 防护 → ⑤GROUP-002 扇出 + 组级汇总 → ⑥显式 `contextFile` 驱动 `this.*`（CTX-002/003 判不做 + 入口形态诊断）。四门全绿（test 880）。计划：[`docs/history/plans/2026-07-28-bases-functions.md`](./docs/history/plans/2026-07-28-bases-functions.md)
 
 **暂缓**：内置 chat 打磨、DQL 函数全集、task emoji 全字段、lint CI/baseline、embedding、复杂编排器。它们不能优先于 **Bases oracle**（原文写「P0/P1」，两者均已完成，优先级基准顺延至 oracle），除非 dogfood 出现阻断性缺陷。
 

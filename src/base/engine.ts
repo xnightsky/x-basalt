@@ -152,8 +152,12 @@ export interface BaseQueryOptions {
   /** 允许的 vault 根（多根时索引键为 `<根目录名>/<相对>` 命名空间路径）。 */
   vaultRoots: string[];
   /**
-   * P1 接受但不消费：`this.*` 仍报 base/dynamic-context-required（显式 context 属 P3）。
-   * 参数先行入契约，避免 P3 破签名。
+   * `this.*` 的显式动态上下文（2026-07-28 覆盖率片六，BASE-CTX-001；P1 起就在契约里占位）。
+   *
+   * 取值为 vault 内文件路径（与 `file.path` 同一套键：单根为根内相对路径，多根带
+   * `<根目录名>/` 前缀；也接受 bare basename / 省略扩展名，解析口径同 `file(path)`）。
+   * 在**当前查询行集内**解析：给了但解析不到 → `base/dynamic-context-required`（error）
+   * + 空结果，**不静默忽略**。不给则 `this.*` 保持既有拒绝口径。
    */
   contextFile?: string;
   /**
@@ -213,6 +217,33 @@ export interface BaseQueryResult {
   summaries?: Record<string, BaseOutputValue>;
   /** 全量诊断（顺序：文档层 → planner → 引擎级 → 行级按行序，字节稳定）。 */
   diagnostics: BasaltDiagnostic[];
+}
+
+/**
+ * 入口形态检查（2026-07-28 覆盖率片六，BASE-CTX-002/003 的「不做 + 诊断」）。
+ *
+ * 只支持**独立 `.base` 文件**。另两种官方形态显式拒绝并说清替代写法：
+ * - `![[View.base#Name]]` embed（CTX-003）：路径里带 `#` 锚点 → 让用户改用 `--view`；
+ * - Markdown 内嵌 ` ```base ` 代码块（CTX-002）：扩展名不是 `.base` → 直说不做。
+ *
+ * 判据只看**路径形态**，不读文件——诊断要在读取之前给出，避免「先报 YAML 解析失败」
+ * 这种与用户意图无关的误导。
+ */
+function checkEntryForm(basePath: string): { message: string; reason: string } | undefined {
+  const hash = basePath.indexOf("#");
+  if (hash !== -1) {
+    return {
+      message: `不支持 \`![[View.base#Name]]\` 形态的 view 嵌入引用（BASE-CTX-003 ❌ 不做：嵌入只在 Obsidian 界面里渲染才有意义，无头执行拿不到宿主上下文）。请去掉 "#" 锚点、改用 --view 指定 view 名：${basePath.slice(0, hash)} --view ${basePath.slice(hash + 1)}`,
+      reason: "base_embed_reference",
+    };
+  }
+  if (!basePath.toLowerCase().endsWith(".base")) {
+    return {
+      message: `只支持独立 \`.base\` 文件，收到 "${basePath}"。Markdown 内嵌的 \`\`\`base 代码块不做（BASE-CTX-002 ❌：同样只在 Obsidian 界面里渲染才有意义）——请把查询定义单独存成 .base 文件`,
+      reason: "base_code_block",
+    };
+  }
+  return undefined;
 }
 
 /**
@@ -318,6 +349,32 @@ export class BaseEngine {
     let effectiveConformance: BaseConformance = requested;
     /** 数据集口径（conformance 的数据侧体现）：降级判定后透传到 readBaseRows。 */
     let dataset: BaseDataset = requested === CONFORMANCE_ALL_FILES ? "all-files" : "markdown";
+
+    // ---- 入口形态检查（2026-07-28 覆盖率片六：CTX-002/003 的「不做 + 诊断」落地点）----
+    // 这两项官方形态只在 Obsidian 界面里渲染才有意义，无头执行拿不到宿主上下文、产物无
+    // 消费方，故判❌不做（用户 2026-07-28 拍板）。但**不能静默**：用户真写成这两种形态时
+    // 必须得到一条说清楚「不做 + 为什么 + 该怎么写」的诊断，而不是一句 YAML 解析失败。
+    const entryIssue = checkEntryForm(options.basePath);
+    if (entryIssue !== undefined) {
+      return {
+        conformance: effectiveConformance,
+        base: options.basePath,
+        view: options.view ?? "",
+        columns: [],
+        total: 0,
+        rows: [],
+        diagnostics: [
+          baseDiagnostic(
+            options.basePath,
+            { line: 1, column: 1 },
+            BASE_RULES.unsupportedFeature,
+            "error",
+            entryIssue.message,
+            { target: options.basePath, reason: entryIssue.reason },
+          ),
+        ],
+      };
+    }
 
     // ---- 文档层（诊断顺序 1：文档层）----
     const doc = loadBaseDocument({
@@ -548,6 +605,9 @@ export class BaseEngine {
                 formulas: acc as { get(name: string): BaseValue },
                 propertyTypes: typeSchema.table,
                 sharedBudget: opsBudget,
+                // 片六：公式体内同样可用 this.*（与 filter/投影/sort 同一上下文行）；
+                // 自定义汇总的 values 作用域仍有意不注入（禁止访问行外状态）。
+                ...(contextRow !== undefined ? { contextRow } : {}),
                 onRowError: (info) => pushRowDiagnostic(def.span, def.source, info, row.file.path),
               });
               cache.set(name, value);
@@ -569,6 +629,32 @@ export class BaseEngine {
       // `values` 作用域不注入，那里访问行外状态属越权（见 evaluator EvalContext.resolveFile）。
       const fileResolver = createFileResolver(rows);
 
+      // ---- contextFile → this.* 的上下文行（片六 BASE-CTX-001）----
+      // 走与 `file(path)` 同一个解析器（精确 path → pathKey → bare basename），保证
+      // 「`--context-file` 能指到的」与「`file()` 能解析到的」是同一集合，不造第二套路径口径。
+      let contextRow: BaseRow | undefined;
+      if (options.contextFile !== undefined) {
+        const hit = fileResolver.resolve(options.contextFile);
+        const found = hit === undefined ? undefined : rows.find((r) => r.file === hit);
+        if (found === undefined) {
+          // 给了 contextFile 却解析不到 = 用户意图明确但落空，必须报错而不是当没给
+          // （静默忽略会让 `this.*` 退化成「需要上下文」的误导性诊断）。
+          flushSuppressed();
+          diagnostics.push(
+            baseDiagnostic(
+              base,
+              { line: 1, column: 1 },
+              BASE_RULES.dynamicContextRequired,
+              "error",
+              `contextFile "${options.contextFile}" 在当前数据集中找不到（路径解析口径同 file(path)：完整路径 / 去扩展名忽略大小写路径 / 文件名）`,
+              { target: options.contextFile, reason: "context_file_not_found" },
+            ),
+          );
+          return emptyResult(view.name);
+        }
+        contextRow = found;
+      }
+
       const rowEvalContext = (
         row: BaseRow,
         onRowError: (info: BaseRowErrorInfo) => void,
@@ -581,6 +667,7 @@ export class BaseEngine {
           propertyTypes: typeSchema.table,
           sharedBudget: opsBudget,
           resolveFile: (target) => fileResolver.resolve(target),
+          ...(contextRow !== undefined ? { contextRow } : {}),
           onRowError,
         };
       };

@@ -425,6 +425,10 @@ program
     "--conformance <id>",
     "数据集 conformance id（默认 bases-markdown-2026-07；bases-all-files-2026-07 附件作为行）",
   )
+  .option(
+    "--context-file <path>",
+    "this.* 的显式上下文文件（vault 内路径；无头执行没有「当前活动文件」，不给则 this.* 报诊断）",
+  )
   .action(
     (
       file: string,
@@ -434,6 +438,7 @@ program
         db?: string;
         format?: string;
         conformance?: string;
+        contextFile?: string;
       },
     ) => {
       // 薄出口（设计 §15 API 先于 CLI）：只装配，业务逻辑全在 BaseEngine。
@@ -455,6 +460,8 @@ program
           // CLI 薄透传（P3 片三）：不做白名单校验，未知 id 由引擎诊断
           // （base/invalid-schema error → exit 1），契约单点留在 BaseEngine。
           conformance: opts.conformance as BaseQueryOptions["conformance"],
+          // 片六薄透传：解析与「找不到即 error」的口径单点留在 BaseEngine。
+          ...(opts.contextFile !== undefined ? { contextFile: opts.contextFile } : {}),
         });
         // JSON 即契约：BaseQueryResult 原样 emit（含 error 结果），不裁剪字段。
         emit(result, opts.format ?? config.format ?? "json");
