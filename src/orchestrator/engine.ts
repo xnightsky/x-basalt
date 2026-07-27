@@ -11,7 +11,7 @@ import { resolveVaultLayout, type VaultLayout } from "../utils/path.js";
 
 // === 自建实现: 编排引擎（组装五段 + 防回环 + 优雅退出）===
 //
-// 设计：docs/specs/2026-06-29-change-orchestration-design.md §4/§6/§9。
+// 设计：docs/design/change-orchestration.md §4/§6/§9。
 // 组装：源 → (watch 经堆积) → 去重(foldEvents) → 路由(matchEvent + [index 先行 → where]) → 执行(runPipeline)。
 // 三种源（scan/手动/watch）复用同一 runBatch 核心；watch 额外有堆积、防回环、优雅退出。
 

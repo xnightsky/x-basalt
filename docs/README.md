@@ -1,61 +1,44 @@
 ---
-timestamp: 2026-07-27T03:10:21Z
-sha256: b3e82f85173ec71875db17a8ced83193758646117c4fdd041b6a3b7360005c2a
 type: index
-title: docs · 文档入口与路由
-description: x-basalt 文档真相源目录路由与三层口径
+title: x-basalt 文档入口
+description: 按读者分流的文档总入口：use/ 怎么用、design/ 怎么改、history/ 查历史；含三层口径与维护规则
 tags:
   - docs
   - index
   - x-basalt
+timestamp: 2026-07-27T18:12:28Z
+sha256: 5f1f398a0746ee190f4136c27b8370b5ebcbf4691cbe4930f402cf0a97607103
 ---
-# docs · 文档入口与路由
+# x-basalt 文档
 
-本目录是 x-basalt 的文档真相源。改动前先按下表定位「该读哪些 / 结论往哪写」。
+三个目录，按**你是谁**分：
 
-## 目录路由
+| 我想…… | 去 |
+| --- | --- |
+| **用这个 CLI** —— 安装、查笔记、改元数据、报错了 | [`use/`](use/README.md) |
+| **改这个 CLI** —— 架构、模块设计、为什么这么定 | [`design/`](design/README.md) |
+| **查历史** —— 当初怎么调研的、旧计划、被推翻的决策 | [`history/`](history/README.md) |
 
-| 目录            | 内容                                                            | 何时写                   |
-| --------------- | --------------------------------------------------------------- | ------------------------ |
-| `research/`     | 调研：外部规范、依赖核实、技术选型论证、不确定项与假设          | 进入设计前的事实收集     |
-| `specs/`        | 设计/规格：模块划分、接口契约、数据模型、DQL 子集边界           | 架构确认后、实现前       |
-| `plans/`        | 实现计划：`YYYY-MM-DD-<topic>.md`，分阶段切口 + 验收 + Evidence | 大型任务开始实现前       |
-| `architecture/` | 稳定后的目标架构（允许阶段性滞后）                              | 边界稳定或用户要求校准时 |
-| `guides/`       | 操作指南：代码质量、注释规范、测试手法等                        | 沉淀可复用工作口径时     |
-| `testing/`      | 测试策略、fixtures 说明、用例清单                               | 测试分层/清单变化时      |
+## 三层口径（改文档前先分清）
 
-> **specs/ 内三分**（按 frontmatter `type` + 文件名后缀区分）：冻结契约（`-frozen`，type: spec）、设计（`-design`，type: design）、跨领域决策（`-decision`/`-vs-`，type: decision）。三者同放 `specs/`，不另立 rfc/ 或 adr/ 或 design/ 目录。
+| 层 | 在哪 | 要求 |
+| --- | --- | --- |
+| **当前实现** | `src/` + `design/` | 必须互相验证，对不上就是文档坏了 |
+| **使用方式** | `use/` | 写在这里的必须能跑通，示例要真实跑过 |
+| **历史** | `history/` | 只进不出，不代表当前事实 |
 
-## 三层口径
+## 现在的主线
 
-- **当前实现**：代码 + `specs/` + 当前 active `plans/`，必须可互相验证。
-- **目标架构**：`architecture/`，允许滞后于实现。
-- **迁移约束**：跨阶段不变量写在对应 `plans/` 或 ADR。
+**Bases 无头引擎**——不启动 Obsidian 查询 `.base` 文件。
 
-## 当前活跃文档
-
-- **Bases 无头引擎（当前核心线）**：语法真相源 [`specs/2026-07-26-bases-syntax.md`](specs/2026-07-26-bases-syntax.md)；实现状态追踪（living） [`testing/2026-07-26-bases-implementation-status.md`](testing/2026-07-26-bases-implementation-status.md)；设计 [`specs/2026-07-22-bases-headless-engine-design.md`](specs/2026-07-22-bases-headless-engine-design.md)；场景矩阵 [`testing/2026-07-22-bases-scenario-matrix.md`](testing/2026-07-22-bases-scenario-matrix.md)；使用指南 [`guides/writing-bases.md`](guides/writing-bases.md)（是什么 / 教程 / **面向使用者的语法快照**）与 [`guides/querying-bases.md`](guides/querying-bases.md)（命令 / 契约 / 报错）；oracle 操作手册 [`testing/2026-07-27-bases-oracle-runbook.md`](testing/2026-07-27-bases-oracle-runbook.md)；P3 附件 schema 决策 [`specs/2026-07-27-bases-p3-vault-entries-decision.md`](specs/2026-07-27-bases-p3-vault-entries-decision.md)
-- **架构总览（架构图 + 组件清单，先读这个建立全局观）**：[`architecture/2026-06-28-overview.md`](architecture/2026-06-28-overview.md)——分层依赖/读写数据流/DQL 管线/SQLite 数据模型/组件目录
-- 使用指南（面向使用者，**教程总目录 + 分章**）：[`guides/usage.md`](guides/usage.md)——安装/命令/DQL/索引同步/配置/Obsidian语法/AI协作/排查
-- 选库与许可证避坑（选第三方库前必读）：[`guides/dependency-license-policy.md`](guides/dependency-license-policy.md)
-- Markdown 知识库编译器调研（lint / links / profile 分层路线）：[`research/2026-07-09-markdown-kb-compiler-lint-links-research.md`](research/2026-07-09-markdown-kb-compiler-lint-links-research.md)
-- Markdown 知识库编译器设计（parser 定位 / links / lint / profile 分层契约）：[`specs/2026-07-09-kb-compiler-lint-links-design.md`](specs/2026-07-09-kb-compiler-lint-links-design.md)
-- 发布时机决策（先 dogfood 还是先开源）：[`specs/2026-06-28-release-vs-dogfood.md`](specs/2026-06-28-release-vs-dogfood.md)
-- 设计：[`specs/2026-06-25-x-basalt-design.md`](specs/2026-06-25-x-basalt-design.md)
-- 调研：[`research/2026-06-25-obsidian-spec-and-deps.md`](research/2026-06-25-obsidian-spec-and-deps.md)
-- 计划（MVP）：[`plans/2026-06-25-x-basalt-mvp.md`](plans/2026-06-25-x-basalt-mvp.md)
-
-### 复盘真相源（2026-06-26）
-
-> 复盘结论：自建未违规，但「零依赖运行时」被执行成「全部手撸」，规范未完全落地、缺集中真相源。
-
-- 依赖与「自建 vs 用库」决策：[`specs/2026-06-26-deps-build-vs-buy.md`](specs/2026-06-26-deps-build-vs-buy.md)
-- 现状体检报告（分模块发现）：[`testing/2026-06-26-audit.md`](testing/2026-06-26-audit.md)
-- 规范覆盖矩阵（黑盒消除）：[`specs/2026-06-26-coverage-matrix.md`](specs/2026-06-26-coverage-matrix.md)
-- 文档落地计划：[`plans/2026-06-26-docs-grounding.md`](plans/2026-06-26-docs-grounding.md)
-- **▶ 可执行路线图（全模块收口 + 做深内核，逐步带验收标准）**：[`plans/2026-06-26-execution-roadmap.md`](plans/2026-06-26-execution-roadmap.md)
+- 会用 → [`use/bases.md`](use/bases.md)
+- 懂原理 → [`design/bases-vs-official.md`](design/bases-vs-official.md)
+- 做到哪了 → [`design/bases-status.md`](design/bases-status.md)
+- 待办 → 仓库根 [`TODO.md`](../TODO.md)
 
 ## 维护规则
 
-- 大改动记入对应 `specs/` 决策/设计文档（`-decision`/`-design`）或当前阶段 `plans/`；小改动至少同步直接受影响的规范/实现说明/计划，不静默覆盖原规则。
+- 改了行为，同步改 `design/` 对应文档和 `use/` 对应章节；小改动也要同步，不静默覆盖原规则。
+- 设计被推翻时：移进 `history/decisions/`，标 `superseded_by`，**不删文件**。
 - 入仓文档禁止出现仓库根目录之外的绝对本机路径（见 `AGENTS.md`「脱敏」）。
+- 文件名：`use/` 和 `design/` 不带日期（名字即内容）；`history/` 保留 `YYYY-MM-DD-` 前缀。

@@ -2,7 +2,7 @@ import { createHash } from "node:crypto";
 
 // === 自建实现: profile 机械预填来源（derive · Phase 3）===
 //
-// 设计：docs/plans/2026-06-28-meta-derive-profiles.md
+// 设计：docs/history/plans/2026-06-28-meta-derive-profiles.md
 // 只做"无需理解文档"的确定性字段：created(birthtime)、modified(mtime)、正文 sha256。
 // 语义字段（type/title/description/tags…）不在此机械补——交给消费者（AI 读文档+规范 / 人按判断）。
 // 纯函数：fs 数据由调用方读好传入，derive 不碰 fs。

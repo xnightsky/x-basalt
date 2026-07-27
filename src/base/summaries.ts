@@ -13,8 +13,8 @@
  * DateValue（保精度）；Unique 去重用 typedEqual（每比较一对元素经 spend 扣预算，防 O(n²) 耗尽）。
  *
  * 上游：planner.ts（名字集合核验）/ engine.ts（求值接线）。
- * 设计真相源：docs/specs/2026-07-22-bases-headless-engine-design.md §13；
- * 计划：docs/plans/2026-07-27-bases-p2b-types-list-group-summary.md 片三 #10。
+ * 设计真相源：docs/design/bases-engine.md §13；
+ * 计划：docs/history/plans/2026-07-27-bases-p2b-types-list-group-summary.md 片三 #10。
  */
 
 import { MISSING, createDurationValue, isDateValue, typedEqual, type BaseValue } from "./values.js";

@@ -2,7 +2,7 @@ import type { DeriveSource } from "./derive.js";
 
 // === 自建实现: 元数据策略 profile（模板 + 规范 · Phase 3）===
 //
-// 设计：docs/plans/2026-06-28-meta-derive-profiles.md ；调研：docs/research/2026-06-28-metadata-profiles-research.md
+// 设计：docs/history/plans/2026-06-28-meta-derive-profiles.md ；调研：docs/history/research/2026-06-28-metadata-profiles-research.md
 // 一套 profile = 模板（字段及其角色/类型/含义）+ 规范文本。x-basalt 只负责把它「告知」给消费者读，
 // 补不补 / 补什么 / AI 还是人，x-basalt 不介入、不调 LLM。机械字段（derive 非空）由 apply 顺手预填。
 // 上游：src/meta/index.ts（getProfile/listProfiles via barrel）、src/meta/apply.ts（Profile 类型）。

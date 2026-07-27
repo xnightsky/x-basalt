@@ -3,7 +3,7 @@ import type { BasaltDiagnostic } from "./types.js";
 // === 自建实现: links ignore 匹配（极简 glob，无外部依赖）===
 //
 // 上游：src/links/check.ts 用 config.lint.ignore 编译后逐诊断过滤；
-// 语义真相源：docs/specs/2026-07-09-kb-compiler-lint-links-design.md §7。
+// 语义真相源：docs/design/kb-compiler.md §7。
 
 export interface LintIgnoreConfig {
   paths?: string[]; // 被检查文件（diagnostic.file）glob

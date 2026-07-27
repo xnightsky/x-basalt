@@ -23,7 +23,7 @@ export {
 
 // === 自建实现: 元数据写侧编排（唯一碰 fs 的层）===
 //
-// 设计：docs/plans/2026-06-28-meta-frontmatter-write.md
+// 设计：docs/history/plans/2026-06-28-meta-frontmatter-write.md
 // 上游：cli.ts meta 命令组；下游：document（往返内核）+ operations（CRUD）+ fs。
 // 边界：parser/indexer 不依赖本模块；本模块只读写单个 .md，不碰 SQLite。
 // 不变量：src/meta 是整个进程中唯一写 .md 文件的层；非法 YAML 拒写、原子写、归一在 profile 之上。

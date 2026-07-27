@@ -6,7 +6,7 @@ import type { ChangeEvent } from "./types.js";
 
 // === 自建实现: 源适配（watch/scan/手动 → 统一 ChangeEvent）===
 //
-// 设计：docs/specs/2026-06-29-change-orchestration-design.md §6.1、§14.1 源算子。
+// 设计：docs/design/change-orchestration.md §6.1、§14.1 源算子。
 // 三种源只是「事件来源」不同：scan=拉（FS↔DB diff）、手动=点（DQL/列表）、watch=推（chokidar 流）；
 // 产出统一 ChangeEvent 后，堆积/去重/路由/执行四段完全复用。源不落库——落库交给管道的 index 动作。
 

@@ -8,7 +8,7 @@
  *
  * 上游：src/base/parser.ts 消费 allTokens / BaseExpressionLexer。
  * 下游：产出 IToken[] 交 parser；token 的 startOffset 即表达式内 UTF-16 offset（诊断定位用）。
- * 语法真相源：docs/specs/2026-07-26-bases-syntax.md §4。
+ * 语法真相源：docs/design/bases-syntax.md §4。
  */
 
 import { createToken, Lexer } from "chevrotain";

@@ -5,7 +5,7 @@
  *
  * 上游：src/links/scan（建索引）、resolve（判定）、check（编排）。
  * 下游：src/cli.ts links 命令输出。
- * 设计真相源：docs/specs/2026-07-09-kb-compiler-lint-links-design.md §5/§6。
+ * 设计真相源：docs/design/kb-compiler.md §5/§6。
  */
 
 // 公共契约真相源在 src/diagnostic.ts（中立叶子）；links 侧 re-export，消费方可从任一处引入。

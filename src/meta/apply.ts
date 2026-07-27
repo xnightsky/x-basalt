@@ -8,7 +8,7 @@ const CONTENT_DERIVED: ReadonlySet<DeriveSource> = new Set<DeriveSource>(["mtime
 
 // === 自建实现: profile 应用（apply · Phase 3）===
 //
-// 设计：docs/plans/2026-06-28-meta-derive-profiles.md
+// 设计：docs/history/plans/2026-06-28-meta-derive-profiles.md
 // 纯函数层：在 yaml Document 上做 diff / 机械预填 / 消费者 kwargs 补缺。全部 top-up（已有不动），
 // x-basalt 不补语义字段、不调 LLM——语义/额外字段由消费者经 --set 传入或事后 meta set。
 // 上游：src/meta/index.ts（applyProfile 按顺序调 applySets → prefillTrivial → normalizeDoc → diffProfile）。

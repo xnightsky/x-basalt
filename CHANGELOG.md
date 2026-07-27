@@ -21,6 +21,7 @@
 
 ### Changed
 
+- **`docs/` 按读者重组**（原按文档类型分 `guides`/`specs`/`plans`/`research`/`testing`/`architecture`）：`use/`（怎么用，文件名去日期）、`design/`（当前有效的设计，去日期）、`history/`（归档，保留日期前缀，只进不出）、`plans/`（仅活跃计划，完成后 `git mv` 进 `history/plans/`）。**Bases 三份指南合一** —— `writing-bases.md` + `querying-bases.md` + 总纲 → 一份 `use/bases.md`（是什么 → 六步教程 → 语法速查 → 命令与输出契约 → 报错速查，一份读完就会用），原理部分独立为 `design/bases-vs-official.md`（官方 CLI 架构与五个实测坑 / 我们的流水线与六个关键决策 / 9 项待 oracle 暂定语义）。四份 README 全部重写为分流入口而非文件清单。72 份文件经 `git mv` 保留历史；内链按 git 重命名记录批量重写，docs 断链 85 → 50（剩余全部为归档内既有断链，`design/` 与 `use/` 零断链）。
 - **`format` / `format:check` 作用域收敛为 `src tests scripts`**（原 `oxfmt .`），并新增 `.prettierignore` 豁免 `tests/fixtures/`（oxfmt 只认 `.gitignore` / `.prettierignore`，无 `.oxfmtignore`）。此前该门禁**从未可通过**：fixtures 里有故意写坏的 JSON（BASE-TYPE-003 回退用例），格式化器解析即报错中止整次检查。同时一次性格式化了此前从未被覆盖的 13 个代码文件（纯换行合并/拆分）。docs 的 80 个 md 暂不纳入作用域——markdown 重排与本轮无关且会淹没内容改动。
 - **skills-def 入口薄化 + `cli/`/`dev/` 目录分组**：外层 `x-basalt` 入口 skill 改为薄「触发 + 指路」——用法一律 `x-basalt skills get core`，不再重抄命令表/DQL 细节，消开发文档与运行时 `core` 的二次漂移。`skills-def/` 按受众分 `cli/`（消费侧入口，装宿主全局）与 `dev/`（`biz-*` 开发侧，装本仓）；`install-skills.mjs` 改按**目录**路由（原按 `scope` frontmatter），`skills:install` / `skills:install:global` 两脚本语义不变。运行时 `core` 补 `X_BASALT_DIR` 说明。
 - **（breaking）`skill` 命令组改名为 `skills`**（复数，**不保留单数别名**），对齐 agent-browser / Gemini CLI / Claude Code 等生态惯例。
@@ -35,7 +36,7 @@
 
 ### Fixed
 
-- **Bases code review 修复批次**（[计划](docs/plans/2026-07-27-bases-code-review-fixes.md)），四类静默失败 + 两处资源模型缺口：
+- **Bases code review 修复批次**（[计划](./docs/history/plans/2026-07-27-bases-code-review-fixes.md)），四类静默失败 + 两处资源模型缺口：
   - `.base` 的 view **缺少 `type` / `name` 不再静默通过**——必填校验此前只在「键存在」时触发，缺 `type` 的 view 会被当 table 执行完（与「未知 type 不按 table 猜测」矛盾），缺 `name` 的两个 view 还能同时逃过重名判定。**（行为收紧：这类 `.base` 由静默执行改为 error + 空结果，CLI exit 1）**
   - **Windows 下 vault 根盘符大小写不同不再误判路径越界**——`d:\vault` 配 `D:\vault\...` 此前触发 `base/path-outside-vault`，合法路径被安全门假阳拒绝。判定收敛为 `utils/path.ts` 新增的共享原语 `isPathInside`（Windows 大小写不敏感），indexer 的根归属判定与编排器路径还原一并复用（此前同样会在大小写不同时漏索引）。
   - **多根 vault 下 `.base` 主键补齐 `<根目录名>/` 命名空间前缀**——此前同一个 `BaseQueryResult` 里 `base` / 诊断 `file` 与行 `file.path` 是两套键。改为统一经 `resolveVaultLayout`（indexer 写 `files.path` 用的同一函数）计算。**（多根输出契约变更；单根字节级不变）**

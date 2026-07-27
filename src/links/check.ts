@@ -9,7 +9,7 @@ import type { BasaltDiagnostic, LinkFinding, TargetIndex } from "./types.js";
 // === 自建实现: links 检查编排（内存 per-run，不碰 SQLite）===
 //
 // 上游：src/links/index.ts 的 runLinksCheck / runLinksSuggest；
-// 下游：report.ts 渲染、CLI emit。设计真相源：docs/specs/2026-07-09-kb-compiler-lint-links-design.md §3.2/§5。
+// 下游：report.ts 渲染、CLI emit。设计真相源：docs/design/kb-compiler.md §3.2/§5。
 
 export interface CheckOptions {
   vault: string | string[];

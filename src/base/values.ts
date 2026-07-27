@@ -16,8 +16,8 @@
  * 上游：P1 evaluator / functions 消费；row 构造（P1 source.ts）经 {@link wrapValue}
  * 把 frontmatter 原始 JSON 值包装进值域。
  * 下游：P1 evaluator.ts / functions.ts / engine.ts。
- * 设计真相源：docs/specs/2026-07-22-bases-headless-engine-design.md §8；
- * 语法真相源：docs/specs/2026-07-26-bases-syntax.md §5。
+ * 设计真相源：docs/design/bases-engine.md §8；
+ * 语法真相源：docs/design/bases-syntax.md §5。
  */
 
 // === 自建实现 ===

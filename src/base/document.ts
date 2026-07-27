@@ -13,7 +13,7 @@
  *
  * 上游：P1 engine / 未来 CLI 薄出口；下游：src/diagnostic.ts 契约、src/base/{types,errors,expressions}。
  * 不变量：本模块是 .base 的唯一读取边界——只经 fs 读、不写任何 vault 文件、无 eval/new Function。
- * 设计真相源：docs/specs/2026-07-22-bases-headless-engine-design.md §5/§6/§11/§12。
+ * 设计真相源：docs/design/bases-engine.md §5/§6/§11/§12。
  */
 
 import { readFileSync, statSync } from "node:fs";

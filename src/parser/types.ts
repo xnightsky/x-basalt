@@ -59,7 +59,7 @@ export type ObsidianNode =
   // inlineField：Dataview 扩展的行内元数据 `key:: value`（整行 / [方括号] / (圆括号) 三形态）。
   // key 保留原始大小写（v1 仅 [A-Za-z0-9_]+，D4）；value 为原始文本 trim 后（v1 不类型化，D2）；
   // line 沿用 task/blockRef 的 1-based 正文行号——同名 key last-wins 去重后为最后一次出现行（D3）。
-  // 设计真相源：docs/specs/2026-07-02-inline-fields-design.md §4/§6.1。
+  // 设计真相源：docs/design/inline-fields.md §4/§6.1。
   | { type: "inlineField"; key: string; value: string; line: number };
 
 /**

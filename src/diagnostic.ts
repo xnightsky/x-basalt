@@ -4,7 +4,7 @@
  * 冻结程度：**公共稳定 API**——一旦进入 `lint --format json` / CI 即长期契约，字段只增不改、不改语义。
  * 命名对齐本仓工具链 oxc/oxlint `OxcDiagnostic` 与 LSP / TypeScript `Diagnostic`（字段形状即 LSP
  * `Diagnostic`：file/line/column/severity/rule/message），并规避与 GitHub Issue 撞词。
- * 设计真相源：docs/specs/2026-07-09-kb-compiler-lint-links-design.md §6。
+ * 设计真相源：docs/design/kb-compiler.md §6。
  *
  * 消费者：src/links/（links check/suggest 产出）、src/lint/（lint 壳汇聚）、src/cli.ts（JSON/人读输出）。
  * 中立叶子模块（对齐 src/config.ts / src/format.ts）：不 import 任何规则模块，避免依赖倒挂。

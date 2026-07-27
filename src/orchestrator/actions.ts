@@ -17,7 +17,7 @@ import type { Action } from "./types.js";
 
 // === 自建实现: 内建动作（被编排的强类型动词）===
 //
-// 设计：docs/specs/2026-06-29-change-orchestration-design.md §7 动作清单、§14.6 动作算子。
+// 设计：docs/design/change-orchestration.md §7 动作清单、§14.6 动作算子。
 // 动作只**包装**现有 indexer/meta/parser 能力，不新造 vault 能力，也不绕过其写边界
 // （index 写 DB 经 indexer；normalize 写 .md 经 meta 的 editMeta 原子写）。
 // 写动作（write=true）受 ctx.dryRun 安全闸约束：dryRun 时只预览不落盘。

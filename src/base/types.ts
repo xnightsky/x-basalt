@@ -8,7 +8,7 @@
  *
  * 上游：src/base/document.ts 产出、src/base/index.ts 出口。
  * 下游：P1 planner / engine 消费；诊断形状复用 src/diagnostic.ts 公共契约。
- * 设计真相源：docs/specs/2026-07-22-bases-headless-engine-design.md §5/§6/§12。
+ * 设计真相源：docs/design/bases-engine.md §5/§6/§12。
  */
 
 // === 自建实现 ===

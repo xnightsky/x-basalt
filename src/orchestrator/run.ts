@@ -2,7 +2,7 @@ import type { Action, ActionContext, ActionResult, ChangeEvent, RunReport } from
 
 // === 自建实现: 执行引擎（串行管道 + 有界并发 + 失败策略 + 超时）===
 //
-// 设计：docs/specs/2026-06-29-change-orchestration-design.md §6.6、§14.5 执行算子（pipe/limit/timeout/onError）。
+// 设计：docs/design/change-orchestration.md §6.6、§14.5 执行算子（pipe/limit/timeout/onError）。
 // 每个文件按动作序串行跑（pipe，顺序即依赖）；文件之间有界并发（limit，自实现 worker 池，零依赖）；
 // 单动作超时用 Promise 竞速兜底（P0 不真正中止动作，仅丢弃其结果记 failed）；失败按 onError 续/停。
 

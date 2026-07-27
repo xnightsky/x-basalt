@@ -7,8 +7,8 @@ import type { ProfileConfig } from "./profile.js";
 // === 自建实现: lint 壳（规则注册表分发；P2 links / P3a metadata）===
 //
 // 上游：src/cli.ts lint 命令；下游：按 rule 分发到 runner（links → checkVault，metadata → checkMetadata）。
-// 设计真相源：docs/specs/2026-07-09-kb-compiler-lint-links-design.md §3.3/§8/§9；计划见
-// docs/plans/2026-07-22-kb-compiler-p2-diagnostic-contract.md（P2）与 -p3a-profile-lint.md（P3a）。
+// 设计真相源：docs/design/kb-compiler.md §3.3/§8/§9；计划见
+// docs/history/plans/2026-07-22-kb-compiler-p2-diagnostic-contract.md（P2）与 -p3a-profile-lint.md（P3a）。
 // 边界：不做自定义 profile / fix / ci / baseline（P3b–P5）；纯内存 per-run，不碰 SQLite。
 
 export interface LintRunOptions {

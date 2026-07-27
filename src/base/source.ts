@@ -18,8 +18,8 @@
  *
  * 上游：indexer 写入的 files/tags/links 表 + vault_entries 附件表（schema 见 src/indexer/schema.ts 连接键注释）。
  * 下游：P1 engine.ts 消费 BaseRow 做 filter/sort/投影。
- * 设计真相源：docs/specs/2026-07-22-bases-headless-engine-design.md §10/§12；
- * all-files 决策真相源：docs/specs/2026-07-27-bases-p3-vault-entries-decision.md §3。
+ * 设计真相源：docs/design/bases-engine.md §10/§12；
+ * all-files 决策真相源：docs/design/bases-vault-entries.md §3。
  */
 
 import type { Database } from "better-sqlite3";

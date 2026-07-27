@@ -58,7 +58,7 @@ export interface ScanAttachmentCounts {
 export interface ScanReport extends ScanDiff {
   /**
    * 按目录聚合的标量计数（key = 相对 Vault 的 POSIX 目录路径，根目录下的文件归 `"."`）。
-   * 对治「按子目录统计」误路由到逐文件列举、灌爆 context 撞顶（见 docs/plans/2026-07-02-deterministic-eval-gaps.md）：
+   * 对治「按子目录统计」误路由到逐文件列举、灌爆 context 撞顶（见 docs/history/plans/2026-07-02-deterministic-eval-gaps.md）：
    * 这里只给计数、不给文件名，规模再大也是常数大小。仅在最终报告投影一次（scan()），
    * scanIter 每批 yield 的 {@link ScanProgress} 不含此字段，避免每批重复聚合。
    */
@@ -386,7 +386,7 @@ export class VaultIndexer {
    *
    * 对治场景库 scale/doc-migration-count 坐实的缺口：多根 vault 含尚未创建的目录（如迁移目标）
    * 时，旧行为是 `readdir` 直接 ENOENT、整条 index/scan 全量失败（见
-   * docs/plans/2026-07-02-deterministic-eval-gaps.md [冲突提示]，并非该场景原描述的"静默接受"）。
+   * docs/history/plans/2026-07-02-deterministic-eval-gaps.md [冲突提示]，并非该场景原描述的"静默接受"）。
    *
    * @behavior
    * Given 多根中一个目录不存在

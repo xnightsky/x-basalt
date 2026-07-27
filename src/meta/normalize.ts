@@ -3,7 +3,7 @@ import { renameMeta } from "./operations.js";
 
 // === 自建实现: frontmatter 归一（normalize · Phase 2）===
 //
-// 设计：docs/plans/2026-06-28-meta-normalize.md
+// 设计：docs/history/plans/2026-06-28-meta-normalize.md
 // 把"裸/乱"的 frontmatter 归一成对 Obsidian 合法有效的形态。纯函数，在 yaml Document 上原位改，
 // 返回应用了哪些变更（供报告）。建立在 Phase 1 往返内核之上（正文/原子写/幂等由 editMeta 复用）。
 // 上游：src/meta/index.ts（applyProfile 在机械预填后调 normalizeDoc 收尾）；下游：src/meta/operations.ts（renameMeta）。

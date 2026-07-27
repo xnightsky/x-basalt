@@ -14,7 +14,7 @@
  *
  * 上游：P1 planner 逐条解析 BaseFilter.expr 原始字符串（本任务只交付文法层）。
  * 下游：P1 evaluator 消费 BaseExpr；诊断 rule 复用 errors.ts 的 BASE_RULES。
- * 语法真相源：docs/specs/2026-07-26-bases-syntax.md §4；预算语义：计划「关键取舍」#9。
+ * 语法真相源：docs/design/bases-syntax.md §4；预算语义：计划「关键取舍」#9。
  */
 
 import { EmbeddedActionsParser, EOF, type IToken } from "chevrotain";

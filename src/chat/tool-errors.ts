@@ -2,7 +2,7 @@
 //
 // 上游：tools.ts（buildTools 末尾包裹每个工具的 execute）；下游：被包裹的原工具 execute。
 //
-// 定位（据 dogfood 实测修正，见 docs/research/2026-06-30-chat-gap-vs-agent-browser.md §2.1 取舍）：
+// 定位（据 dogfood 实测修正，见 docs/history/research/2026-06-30-chat-gap-vs-agent-browser.md §2.1 取舍）：
 //   chat 读多写少、工具皆一次性独立调用（无会话级读写事务/状态），并发写锁竞争几乎不存在——
 //   故「对同一调用机械精准重试」收益低，**不做退避重试循环**。
 //   真正值钱的是：失败时给模型一条**结构化、可据以换策略**的错误（分类标签 + 自纠方向），

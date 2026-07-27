@@ -3,8 +3,8 @@ import type { DataviewEngine } from "../query/index.js";
 
 // === 自建实现: 变更编排器类型契约 ===
 //
-// 设计：docs/specs/2026-06-29-change-orchestration-design.md（§6 P0 骨架、§14 算子集）
-// 计划：docs/plans/2026-06-29-change-orchestration.md
+// 设计：docs/design/change-orchestration.md（§6 P0 骨架、§14 算子集）
+// 计划：docs/history/plans/2026-06-29-change-orchestration.md
 // 纯类型层，无运行时逻辑；被 dedup/accumulate/route/actions/run/engine 共同消费。
 // 边界：编排器只调度现有 indexer/meta/query，不绕过其写边界（indexer 唯一写 SQLite、meta 唯一写 .md）。
 

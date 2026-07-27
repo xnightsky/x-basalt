@@ -14,7 +14,7 @@
  *
  * 上游：P1 planner 解析出的 BaseExpr；row 由 P1 source.ts 构造（note 为 frontmatter 原始对象）。
  * 下游：P1 engine.ts（filter/projection/sort 均经本入口）。
- * 设计真相源：docs/specs/2026-07-22-bases-headless-engine-design.md §7/§8/§9/§12。
+ * 设计真相源：docs/design/bases-engine.md §7/§8/§9/§12。
  */
 
 import { BASE_RULES, type BaseRuleId } from "./errors.js";

@@ -2,7 +2,7 @@ import { type Document, isMap, isScalar } from "yaml";
 
 // === 自建实现: frontmatter CRUD（顶层扁平键）===
 //
-// 设计：docs/plans/2026-06-28-meta-frontmatter-write.md
+// 设计：docs/history/plans/2026-06-28-meta-frontmatter-write.md
 // 在 yaml Document 上原位操作：set/unset 走 Document API（保留键序）；rename 改 Pair 的 key 节点
 // （保位置 + 值节点连同其注释）。类型推断保守（避开 YAML 1.1 yes/no/on/off 的 Norway 陷阱）。
 // 上游：src/meta/index.ts（editMeta/applyProfile）、src/meta/normalize.ts（renameMeta）、src/meta/apply.ts（hasMeta/setMeta）。

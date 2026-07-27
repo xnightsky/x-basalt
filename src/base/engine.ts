@@ -39,7 +39,7 @@
  * 上游：P0 文档层（document.ts）、planner.ts、source.ts、evaluator.ts。
  * 下游：未来 CLI 薄出口（本阶段不加 CLI 命令）。
  * 不变量：不写任何 vault 文件；无 eval/new Function；SQL 全部固定无拼接（见 source.ts）。
- * 设计真相源：docs/specs/2026-07-22-bases-headless-engine-design.md §4/§10/§11/§12。
+ * 设计真相源：docs/design/bases-engine.md §4/§10/§11/§12。
  */
 
 import Database from "better-sqlite3";

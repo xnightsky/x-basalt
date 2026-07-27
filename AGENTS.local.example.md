@@ -20,7 +20,7 @@ if (Get-Command x-basalt -ErrorAction SilentlyContinue) { $XB = "x-basalt" } els
 
 # 示例：docs 新增/重写后
 & $XB meta profile show llm-wiki
-& $XB meta apply llm-wiki docs/guides/foo.md --set type=guide --set title="…" --set description="…" --set tags=guide,docs
+& $XB meta apply llm-wiki docs/use/foo.md --set type=guide --set title="…" --set description="…" --set tags=guide,docs
 ```
 
 ## 本机环境

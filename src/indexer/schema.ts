@@ -81,7 +81,7 @@ CREATE TABLE IF NOT EXISTS blocks (
 );
 CREATE INDEX IF NOT EXISTS idx_blocks_file_path ON blocks(file_path);
 
--- inline fields（Dataview \`key:: value\`，docs/specs/2026-07-02-inline-fields-design.md §6.2）：
+-- inline fields（Dataview \`key:: value\`，docs/design/inline-fields.md §6.2）：
 -- 仅存 parser 的原始提取文本；查询期与 frontmatter 标量 COALESCE 合并（D1 frontmatter 胜），
 -- 无物化视图（硬约束 6）。parser 提取期 last-wins 去重（D3），每 file × key_norm 至多一行。
 CREATE TABLE IF NOT EXISTS inline_fields (
@@ -95,7 +95,7 @@ CREATE TABLE IF NOT EXISTS inline_fields (
 CREATE INDEX IF NOT EXISTS idx_inline_fields_file_path ON inline_fields(file_path);
 CREATE INDEX IF NOT EXISTS idx_inline_fields_key_norm  ON inline_fields(key_norm);
 
--- vault_entries（Bases P3 附件数据集，docs/specs/2026-07-27-bases-p3-vault-entries-decision.md §3 原样 DDL）：
+-- vault_entries（Bases P3 附件数据集，docs/design/bases-vault-entries.md §3 原样 DDL）：
 -- 附件（非 .md 文件）独立成表，files 保持 .md-only 语义不动——DQL 不读本表，「DQL 不变」可机械证明。
 -- 无 content/frontmatter/name_key/path_key：附件不解析内容、不参与 wikilink 解析键。
 CREATE TABLE IF NOT EXISTS vault_entries (

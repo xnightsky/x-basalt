@@ -20,7 +20,7 @@
  * 实际值」冲突（TYPE-004，见 evaluator.ts applyDeclaredType），两层语义不混。
  *
  * 不变量：本模块只读 `<root>/.obsidian/types.json` 一个路径，不读 vault 其他配置、不写任何文件。
- * 设计真相源：docs/specs/2026-07-22-bases-headless-engine-design.md §8.2 / §14（不写 types.json）。
+ * 设计真相源：docs/design/bases-engine.md §8.2 / §14（不写 types.json）。
  */
 
 import { readFileSync } from "node:fs";

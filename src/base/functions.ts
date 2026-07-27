@@ -10,8 +10,8 @@
  *
  * 上游：P1 evaluator.ts 查表分派；预算回调经 {@link BaseFunctionContext} 注入。
  * 下游：P1 engine.ts（间接）。
- * 设计真相源：docs/specs/2026-07-22-bases-headless-engine-design.md §9；
- * 语法真相源：docs/specs/2026-07-26-bases-syntax.md §4.4。
+ * 设计真相源：docs/design/bases-engine.md §9；
+ * 语法真相源：docs/design/bases-syntax.md §4.4。
  */
 
 import { linkKey, pathKey } from "../utils/path.js";
@@ -55,7 +55,7 @@ export interface BaseFunctionEntry {
   readonly arity: { readonly min: number; readonly max: number };
   /** 返回类型的可读声明（文档/诊断用途；P1 不做静态类型检查；P2a 补 date/datetime）。 */
   readonly returnType: "boolean" | "number" | "string" | "list" | "any" | "date" | "datetime";
-  /** 场景矩阵编号（docs/testing/2026-07-22-bases-scenario-matrix.md §4）。 */
+  /** 场景矩阵编号（docs/design/bases-scenarios.md §4）。 */
   readonly scenarioIds: readonly string[];
   /**
    * lazy 分派：arg 表达式不预求值，evaluator 走特殊路径不调 impl。
