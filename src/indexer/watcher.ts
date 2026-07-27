@@ -1,11 +1,12 @@
 import chokidar from "chokidar";
 import { basename, resolve } from "node:path";
 
-// === 自建实现: chokidar 监听封装。跳过 .obsidian/ 与隐藏文件，仅关心 .md ===
+// === 自建实现: chokidar 监听封装。跳过 .obsidian/ 与隐藏文件，.md 与附件分派回调 ===
 //
 // 上游：VaultIndexer.watch()；下游：把 add/change/unlink 投影成增量索引调用。
-// 跳过策略放在 ignored（隐藏路径）+ 回调内 .md 过滤两道：ignored 拦目录/隐藏项，
-// 回调过滤确保只有 Markdown 触发索引（chokidar 的 ignored 难以可靠区分目录与文件）。
+// 跳过策略放在 ignored（隐藏路径）+ 回调内扩展名分派两道：ignored 拦目录/隐藏项，
+// 回调分派确保 .md 走 onAdd/onChange/onUnlink、其余文件（附件，Bases P3）走 onEntry* 可选回调
+// （chokidar 的 ignored 难以可靠区分目录与文件）。
 
 /** 文件事件回调集合。 */
 export interface WatchHandlers {
@@ -15,6 +16,12 @@ export interface WatchHandlers {
   onChange(filePath: string): void;
   /** `.md` 文件被删除时调用；`filePath` 为绝对路径；此时文件已不在 FS 上，不可再读。 */
   onUnlink(filePath: string): void;
+  /** 非 `.md` 文件（附件）出现时调用；缺省空操作（向后兼容，Bases P3 片一）。 */
+  onEntryAdd?(filePath: string): void;
+  /** 非 `.md` 文件（附件）内容变更时调用；缺省空操作。 */
+  onEntryChange?(filePath: string): void;
+  /** 非 `.md` 文件（附件）被删除时调用；缺省空操作。 */
+  onEntryUnlink?(filePath: string): void;
   /** 监听器错误（句柄耗尽/权限等）。不提供则仅吞掉，避免未处理 error 事件崩进程（I1）。 */
   onError?(err: unknown): void;
   /** 初始扫描完成（chokidar ready）：此后的文件变更才是真正的增量。 */
@@ -34,10 +41,11 @@ function isMarkdown(p: string): boolean {
 
 /**
  * 启动对一个或多个 Vault 根目录的监听，返回停止函数。
- * 仅就 `.md` 触发回调，忽略 `.obsidian/` 与隐藏文件；`ignoreInitial` 避免启动时把存量文件当新增。
+ * `.md` 事件走 onAdd/onChange/onUnlink，非 `.md` 文件（附件）事件走 onEntry* 可选回调（缺省空操作）；
+ * 忽略 `.obsidian/` 与隐藏文件；`ignoreInitial` 避免启动时把存量文件当新增。
  *
  * @param roots - Vault 根目录（单个或多个；chokidar 支持监听数组）
- * @param handlers - add/change/unlink 回调
+ * @param handlers - add/change/unlink 回调（.md 必填，附件可选）
  * @returns 调用以停止监听
  *
  * @behavior
@@ -49,6 +57,11 @@ function isMarkdown(p: string): boolean {
  * Given 同一文件被连续写入（编辑器多次 flush）
  * When 100ms 稳定窗口内仍有写操作
  * Then 仅在最后一次写操作稳定后触发一次 onChange，避免索引读到半写文件
+ *
+ * @behavior
+ * Given 新增/变更/删除一个非 .md 附件（如 cover.png）
+ * When startWatch 已就绪
+ * Then 触发 onEntryAdd/onEntryChange/onEntryUnlink（若提供），不触碰 .md 回调
  */
 export function startWatch(roots: string | string[], handlers: WatchHandlers): () => void {
   const paths = (Array.isArray(roots) ? roots : [roots]).map((r) => resolve(r));
@@ -62,12 +75,15 @@ export function startWatch(roots: string | string[], handlers: WatchHandlers): (
 
   watcher.on("add", (p) => {
     if (isMarkdown(p)) handlers.onAdd(p);
+    else handlers.onEntryAdd?.(p);
   });
   watcher.on("change", (p) => {
     if (isMarkdown(p)) handlers.onChange(p);
+    else handlers.onEntryChange?.(p);
   });
   watcher.on("unlink", (p) => {
     if (isMarkdown(p)) handlers.onUnlink(p);
+    else handlers.onEntryUnlink?.(p);
   });
   // I1：chokidar 的 error 事件若无监听器，Node 会作为未处理错误抛出并可能崩进程。
   watcher.on("error", (err) => handlers.onError?.(err));

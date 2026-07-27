@@ -1,7 +1,7 @@
 import type { Database } from "better-sqlite3";
 
 // === 自建实现: SQLite 索引 Schema（禁止假设外部缓存，inlinks/outlinks 查询期 JOIN 计算）===
-// 表：files / links / tags / tasks / blocks / inline_fields。
+// 表：files / links / tags / tasks / blocks / inline_fields / vault_entries（附件数据集，不参与 DQL）。
 //
 // 相对设计文档的列扩展（均为查询/解析必需，故刻意加入并在此说明）：
 // - files.name_key：name 的小写无扩展名形式，bare 链接（[[Note]]）按 basename 大小写不敏感解析的连接键（调研 §3.3#1）。
@@ -94,6 +94,21 @@ CREATE TABLE IF NOT EXISTS inline_fields (
 );
 CREATE INDEX IF NOT EXISTS idx_inline_fields_file_path ON inline_fields(file_path);
 CREATE INDEX IF NOT EXISTS idx_inline_fields_key_norm  ON inline_fields(key_norm);
+
+-- vault_entries（Bases P3 附件数据集，docs/specs/2026-07-27-bases-p3-vault-entries-decision.md §3 原样 DDL）：
+-- 附件（非 .md 文件）独立成表，files 保持 .md-only 语义不动——DQL 不读本表，「DQL 不变」可机械证明。
+-- 无 content/frontmatter/name_key/path_key：附件不解析内容、不参与 wikilink 解析键。
+CREATE TABLE IF NOT EXISTS vault_entries (
+  id        INTEGER PRIMARY KEY AUTOINCREMENT,
+  path      TEXT NOT NULL UNIQUE,   -- 与 files.path 同一命名空间（多根 <根目录名>/<相对>）
+  name      TEXT NOT NULL,          -- 文件名（无扩展名）
+  extension TEXT NOT NULL,          -- 扩展名（不含点，小写归一）
+  folder    TEXT NOT NULL,          -- 父目录（POSIX，根为空串），与 files.folder 同口径
+  size      INTEGER NOT NULL,
+  mtime     INTEGER NOT NULL,       -- 修改时间（epoch 毫秒，与 files 同 floor 口径）
+  ctime     INTEGER NOT NULL        -- 创建时间（epoch 毫秒，birthtime 为 0 回退 ctime）
+);
+CREATE INDEX IF NOT EXISTS idx_vault_entries_folder ON vault_entries(folder);
 
 -- 通用 KV 配置表：目前仅存 fts_version（FTS5 分词策略版本号，见 indexer/index.ts ensureFts），
 -- 抄 qmd 的版本号迁移模式——分词/归一规则升级时递增版本号，靠此判定需重建 files_fts，避免新旧索引混用。

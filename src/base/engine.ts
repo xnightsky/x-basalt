@@ -1,11 +1,19 @@
 /**
- * base 模块 P1 执行引擎：BaseEngine.query() —— 对 SQLite 索引中的 Markdown 笔记执行 .base view，
- * 返回行/列（conformance id `bases-markdown-2026-07`）。
+ * base 模块 P1 执行引擎：BaseEngine.query() —— 对 SQLite 索引执行 .base view，返回行/列。
+ *
+ * conformance（数据集口径，P3 片二开关，缺省 `bases-markdown-2026-07`）：
+ * - `bases-markdown-2026-07`：md-only 数据集（files 表），附件不作为行；
+ * - `bases-all-files-2026-07`：files ∪ vault_entries 合并数据集，附件作为行
+ *   （note fields 缺失、file fields 可用、file.tags/file.links 恒 []）；
+ *   旧库无 vault_entries 表 → 降级 md-only + compat warning，回传实际生效口径。
  *
  * 执行流程（顺序即诊断顺序，保证字节稳定）：
- *   loadBaseDocument（文档层诊断）→ 任一 error 即空结果短路
+ *   conformance 选项校验（未知 id → base/invalid-schema error 空结果短路）
+ *   → loadBaseDocument（文档层诊断）→ 任一 error 即空结果短路
  *   → planBaseQuery（planner 诊断；view 选择 + filter 合并 + 表达式编译）→ 同上短路
- *   → markdown-only-dataset warning（每次查询恒发，BASE-DATA-001/002）
+ *   → all-files 降级判定（旧库无 vault_entries 表 → compat warning + 生效口径改写）
+ *   → markdown-only-dataset warning（markdown 模式每次查询恒发，BASE-DATA-001/002；
+ *     all-files 模式不发）
  *   → types.json 显式类型表读取（P2b，可选只读，BASE-TYPE-001..003）
  *   → 无显式 sort 时 default-sort-tiebreak info（x-basalt 扩展，BASE-RESULT-004）
  *   → readBaseRows（SQLite → BaseRow；maxRows 预算在此截断）
@@ -54,7 +62,7 @@ import {
   type CompiledCustomSummary,
   type CompiledFilter,
 } from "./planner.js";
-import { readBaseRows } from "./source.js";
+import { hasVaultEntriesTable, readBaseRows, type BaseDataset } from "./source.js";
 import { BUILTIN_SUMMARIES, runBuiltinSummary } from "./summaries.js";
 import { loadBaseTypeSchema } from "./typeschema.js";
 import {
@@ -75,8 +83,18 @@ import {
 
 // === 自建实现 ===
 
-/** Markdown conformance id（md-only 数据集；附件不作为行，all-files 属 P3）。 */
+/** Markdown conformance id（md-only 数据集；附件不作为行，缺省口径）。 */
 const CONFORMANCE = "bases-markdown-2026-07" as const;
+
+/** all-files conformance id（P3 片二：files ∪ vault_entries，附件作为行、note fields 缺失）。 */
+const CONFORMANCE_ALL_FILES = "bases-all-files-2026-07" as const;
+
+/**
+ * BaseEngine 支持的 conformance id 联合（P3 片二数据集开关）。
+ * `BaseQueryResult.conformance` 回传**实际生效**口径：all-files 遇旧库降级时回传 markdown
+ * 并附 compat warning（口径见 query() 降级段注释）。
+ */
+export type BaseConformance = typeof CONFORMANCE | typeof CONFORMANCE_ALL_FILES;
 
 /**
  * 行级诊断条数上限（防洪）：单行单表达式至多一条，但行数 × 表达式数仍可膨胀；
@@ -140,11 +158,19 @@ export interface BaseQueryOptions {
   clock?: () => Date;
   /** 执行预算覆盖（缺省 DEFAULT_BASE_EXECUTION_LIMITS）。 */
   limits?: Partial<BaseExecutionLimits>;
+  /**
+   * 数据集 conformance 开关（P3 片二）：缺省 `bases-markdown-2026-07`（md-only，附件不为行）；
+   * `bases-all-files-2026-07` = files ∪ vault_entries 合并数据集（附件作为行，note fields
+   * 经 MISSING 传播为缺失、file fields 可用、file.tags/file.links 恒 []）。
+   * 未知 id → base/invalid-schema（error）空结果短路（rule 复用口径见 query() 校验段注释）。
+   */
+  conformance?: BaseConformance;
 }
 
 /** BaseEngine.query() 结果（设计 §4，签名与契约一字不差）。 */
 export interface BaseQueryResult {
-  conformance: typeof CONFORMANCE;
+  /** 实际生效的数据集 conformance（all-files 降级旧库时回传 markdown 并附降级诊断）。 */
+  conformance: BaseConformance;
   /** .base 的 vault 相对 POSIX 路径。 */
   base: string;
   /** 实际执行的 view 名。 */
@@ -224,6 +250,36 @@ export class BaseEngine {
   query(options: BaseQueryOptions): BaseQueryResult {
     const limits: BaseExecutionLimits = { ...DEFAULT_BASE_EXECUTION_LIMITS, ...options.limits };
 
+    // ---- 查询选项校验（诊断顺序 0：先于文档层）----
+    // 未知 conformance id → error + 空结果短路。rule 复用 base/invalid-schema（不新增无谓 rule）：
+    // 与 types.json 的「配置形状不合法」同族（见 typeschema.ts 模块头复用口径）。
+    const requested = options.conformance ?? CONFORMANCE;
+    if (requested !== CONFORMANCE && requested !== CONFORMANCE_ALL_FILES) {
+      return {
+        conformance: CONFORMANCE, // 未执行任何数据集，回传缺省口径
+        base: options.basePath, // 文档层未运行，无法 resolve 出 vault 相对路径，原样回传入参
+        view: options.view ?? "",
+        columns: [],
+        total: 0,
+        rows: [],
+        diagnostics: [
+          baseDiagnostic(
+            options.basePath,
+            { line: 1, column: 1 },
+            BASE_RULES.invalidSchema,
+            "error",
+            `未知 conformance id：${String(options.conformance)}` +
+              `（支持 "${CONFORMANCE}" / "${CONFORMANCE_ALL_FILES}"）`,
+            { reason: "unknown_conformance" },
+          ),
+        ],
+      };
+    }
+    /** 实际生效的 conformance：all-files 遇旧库（无 vault_entries 表）降级时改写为 markdown。 */
+    let effectiveConformance: BaseConformance = requested;
+    /** 数据集口径（conformance 的数据侧体现）：降级判定后透传到 readBaseRows。 */
+    let dataset: BaseDataset = requested === CONFORMANCE_ALL_FILES ? "all-files" : "markdown";
+
     // ---- 文档层（诊断顺序 1：文档层）----
     const doc = loadBaseDocument({
       basePath: options.basePath,
@@ -235,7 +291,7 @@ export class BaseEngine {
 
     /** 空结果（error 短路 / 预算耗尽共用）：rows=[]/total=0/columns=[]，诊断全量。 */
     const emptyResult = (view: string): BaseQueryResult => ({
-      conformance: CONFORMANCE,
+      conformance: effectiveConformance,
       base,
       view,
       columns: [],
@@ -244,8 +300,8 @@ export class BaseEngine {
       diagnostics,
     });
 
-    // md-only conformance warning：每次查询恒发（成功/短路/预算耗尽路径都发），
-    // 声明附件不作为行的数据集差异（BASE-DATA-001/002）。
+    // md-only conformance warning：markdown 模式每次查询恒发（成功/短路/预算耗尽路径都发），
+    // 声明附件不作为行的数据集差异（BASE-DATA-001/002）；all-files 模式不发（附件作为行）。
     const pushMarkdownOnly = (): void => {
       diagnostics.push(
         baseDiagnostic(
@@ -254,14 +310,37 @@ export class BaseEngine {
           BASE_RULES.markdownOnlyDataset,
           "warning",
           "本次查询为 md-only conformance（bases-markdown-2026-07）：仅 Markdown 笔记作为行，" +
-            "附件（图片/PDF/.base 等）不作为行（BASE-DATA-001/002；all-files 属 P3）",
+            "附件（图片/PDF/.base 等）不作为行（BASE-DATA-001/002）",
           { reason: "markdown_only_dataset" },
         ),
       );
     };
 
+    /**
+     * all-files → md-only 降级（旧库无 vault_entries 表，决策 §3）：改写生效口径 +
+     * compat warning 一条（不崩）。rule 复用 base/unsupported-feature：该索引库（旧 schema）
+     * 不支持 all-files 数据集，与「特性不受支持」同族；severity=warning（降级可继续，非终止）。
+     */
+    const degradeAllFiles = (): void => {
+      dataset = "markdown";
+      effectiveConformance = CONFORMANCE;
+      diagnostics.push(
+        baseDiagnostic(
+          base,
+          { line: 1, column: 1 },
+          BASE_RULES.unsupportedFeature,
+          "warning",
+          "索引库无 vault_entries 表（旧 schema）：all-files 数据集降级为 md-only，" +
+            "附件不作为行（用当前版本 indexer 重建索引可启用 all-files）",
+          { reason: "all_files_degraded_no_vault_entries" },
+        ),
+      );
+    };
+
+    // 文档层 error 短路：数据集未实际执行，conformance 回传请求值；md-only warning 仅
+    // markdown 模式发（all-files 请求不发——附件口径声明对空结果无意义且会误导）。
     if (hasError(diagnostics)) {
-      pushMarkdownOnly();
+      if (dataset === "markdown") pushMarkdownOnly();
       return emptyResult(options.view ?? "");
     }
 
@@ -269,13 +348,18 @@ export class BaseEngine {
     const plan = planBaseQuery(doc, options.view, limits);
     diagnostics.push(...plan.diagnostics);
     if (hasError(plan.diagnostics) || plan.view === undefined) {
-      pushMarkdownOnly();
+      if (dataset === "markdown") pushMarkdownOnly();
       return emptyResult(options.view ?? "");
     }
     const view = plan.view;
 
-    // ---- 引擎级诊断（顺序 3）：md-only warning + types.json + 默认排序 info ----
-    pushMarkdownOnly();
+    // ---- 引擎级诊断（顺序 3）：all-files 降级判定 → md-only warning + types.json + 默认排序 info ----
+    // 降级判定放在 md-only warning 之前：保证降级后 md-only warning 的诊断位置与纯 markdown
+    // 模式一致（字节稳定）；markdown 模式对 vault_entries 存在性零感知（不查表）。
+    if (dataset === "all-files" && !hasVaultEntriesTable(this.getDb(options.dbPath))) {
+      degradeAllFiles();
+    }
+    if (dataset === "markdown") pushMarkdownOnly();
 
     // types.json 显式类型表（P2b 片二，BASE-TYPE-001..003，语法 §5.1 第 1 条）。
     // 每次 query 读一次、不做缓存：文件通常 <1KB，同步读成本远低于一次 SQLite 全表读；
@@ -364,18 +448,34 @@ export class BaseEngine {
     // ---- 数据源（source 问题诊断先于求值诊断；maxRows 预算在此截断）----
     let rows: BaseRow[];
     try {
-      rows = readBaseRows(this.getDb(options.dbPath), limits, (issue) => {
-        diagnostics.push(
-          baseDiagnostic(
-            base,
-            { line: 1, column: 1 },
-            BASE_RULES.invalidYaml,
-            "warning",
-            issue.message,
-            { target: issue.file, reason: issue.reason },
-          ),
-        );
-      });
+      rows = readBaseRows(
+        this.getDb(options.dbPath),
+        limits,
+        (issue) => {
+          diagnostics.push(
+            baseDiagnostic(
+              base,
+              { line: 1, column: 1 },
+              BASE_RULES.invalidYaml,
+              "warning",
+              issue.message,
+              { target: issue.file, reason: issue.reason },
+            ),
+          );
+        },
+        {
+          dataset,
+          // 防御兜底：正常不触发——engine 已在引擎级（顺序 3）做过降级判定并把 dataset
+          // 改写为 markdown；仅在「判定后表被并发删除」等极端路径到达。到达时保持同一降级
+          // 口径，并补发 md-only warning（顺序 3 时按 all-files 未发）。
+          onAllFilesDegraded: () => {
+            if (dataset === "all-files") {
+              degradeAllFiles();
+              pushMarkdownOnly();
+            }
+          },
+        },
+      );
     } catch (e) {
       const failure = budgetFailure(e);
       if (failure !== undefined) return failure;
@@ -603,7 +703,7 @@ export class BaseEngine {
 
       flushSuppressed();
       return {
-        conformance: CONFORMANCE,
+        conformance: effectiveConformance, // 实际生效口径（降级时已改写为 markdown）
         base,
         view: view.name,
         columns: plan.columns,

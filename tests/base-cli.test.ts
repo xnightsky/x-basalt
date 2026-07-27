@@ -125,3 +125,56 @@ test("--format yaml：输出非 JSON 且含 conformance 字样", () => {
   assert.throws(() => JSON.parse(r.stdout), "yaml 输出不应是合法 JSON");
   assert.ok(r.stdout.includes("conformance"));
 });
+
+// === P3 片三：--conformance 薄透传（计划 2026-07-27-bases-p3-attachments 条目 13） ===
+
+test("--conformance bases-all-files-2026-07：附件作为行，total = 7 篇 .md + 16 个附件", () => {
+  const r = run([
+    "base",
+    defaultBase,
+    "--vault",
+    vaultPath,
+    "--db",
+    dbPath,
+    "--conformance",
+    "bases-all-files-2026-07",
+  ]);
+  assert.equal(r.status, 0, r.stderr);
+  const result = parseJson(r.stdout);
+  assert.equal(result.conformance, "bases-all-files-2026-07");
+  assert.equal(result.total, 23);
+  assert.ok(
+    result.rows.some((row) => row["file.name"] === "cover.png"),
+    "应含附件行 assets/cover.png",
+  );
+  // all-files 模式附件作为行，不发 md-only 数据集 warning。
+  assert.ok(!result.diagnostics.some((d) => d.rule === "base/markdown-only-dataset"));
+});
+
+test("缺省 --conformance：markdown 口径，附件不为行（JSON 契约不变）", () => {
+  const r = run(["base", defaultBase, "--vault", vaultPath, "--db", dbPath]);
+  assert.equal(r.status, 0, r.stderr);
+  const result = parseJson(r.stdout);
+  assert.equal(result.conformance, "bases-markdown-2026-07");
+  assert.equal(result.total, 7);
+  assert.ok(!result.rows.some((row) => row["file.name"] === "cover.png"));
+});
+
+test("--conformance 未知 id：exit 1，JSON 含 base/invalid-schema error 且 rows 为空", () => {
+  const r = run([
+    "base",
+    defaultBase,
+    "--vault",
+    vaultPath,
+    "--db",
+    dbPath,
+    "--conformance",
+    "nope",
+  ]);
+  assert.equal(r.status, 1);
+  const result = parseJson(r.stdout);
+  assert.ok(
+    result.diagnostics.some((d) => d.rule === "base/invalid-schema" && d.severity === "error"),
+  );
+  assert.deepEqual(result.rows, []);
+});

@@ -29,7 +29,7 @@ import { runLinksCheck, runLinksSuggest } from "./links/index.js";
 import { renderHuman } from "./links/report.js";
 import { runLint } from "./lint/index.js";
 import { renderHuman as renderLintHuman } from "./lint/report.js";
-import { BaseEngine } from "./base/index.js";
+import { BaseEngine, type BaseQueryOptions } from "./base/index.js";
 import { DataviewEngine } from "./query/index.js";
 import { SkillRecall } from "./skill/index.js";
 import { renderSkill, renderSkillList, renderSkills } from "./skill/render.js";
@@ -421,8 +421,21 @@ program
   )
   .option("--db <path>", "SQLite 索引文件路径（默认 .x-basalt/index.db，可由配置 db 覆盖）")
   .option("--format <fmt>", "输出格式 json|yaml（默认 json，可由配置 format 覆盖）")
+  .option(
+    "--conformance <id>",
+    "数据集 conformance id（默认 bases-markdown-2026-07；bases-all-files-2026-07 附件作为行）",
+  )
   .action(
-    (file: string, opts: { view?: string; vault: string[]; db?: string; format?: string }) => {
+    (
+      file: string,
+      opts: {
+        view?: string;
+        vault: string[];
+        db?: string;
+        format?: string;
+        conformance?: string;
+      },
+    ) => {
       // 薄出口（设计 §15 API 先于 CLI）：只装配，业务逻辑全在 BaseEngine。
       // vaultRoots 非空是 SEC-008 路径防线的前置（.base 必须落在 vault 内）。
       const vaultInput = requireVault(
@@ -434,7 +447,15 @@ program
       const dbPath = opts.db ?? config.db ?? DEFAULT_DB;
       const engine = new BaseEngine();
       try {
-        const result = engine.query({ basePath: file, view: opts.view, dbPath, vaultRoots });
+        const result = engine.query({
+          basePath: file,
+          view: opts.view,
+          dbPath,
+          vaultRoots,
+          // CLI 薄透传（P3 片三）：不做白名单校验，未知 id 由引擎诊断
+          // （base/invalid-schema error → exit 1），契约单点留在 BaseEngine。
+          conformance: opts.conformance as BaseQueryOptions["conformance"],
+        });
         // JSON 即契约：BaseQueryResult 原样 emit（含 error 结果），不裁剪字段。
         emit(result, opts.format ?? config.format ?? "json");
         // 退出码策略：设计 §11 留给薄出口计划拍板——diagnostics 含任一 error 级 → 1；

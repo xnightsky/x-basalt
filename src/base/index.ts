@@ -8,6 +8,8 @@
  * P2b 片二：`.obsidian/types.json` 可选只读显式类型表（typeschema.ts，BASE-TYPE-001..003）；
  * P2b 片三：view groupBy 分组 + view/顶层 summaries 汇总（summaries.ts 内置 15 名，
  * BASE-GROUP-001 / BASE-SUM-001；GROUP-002 / SUM-002 暂定待 oracle）；
+ * P3 片二：all-files 数据集（source.ts files ∪ vault_entries 内存合并，旧库降级 md-only）
+ * + engine conformance 开关（bases-markdown-2026-07 / bases-all-files-2026-07）；
  * 无 CLI（P1 不加命令，薄出口属后续计划）。
  */
 
@@ -90,7 +92,13 @@ export {
   type BaseRowErrorInfo,
   type EvalContext,
 } from "./evaluator.js";
-export { readBaseRows, type BaseSourceIssue } from "./source.js";
+export {
+  hasVaultEntriesTable,
+  readBaseRows,
+  type BaseDataset,
+  type BaseSourceIssue,
+  type ReadBaseRowsOptions,
+} from "./source.js";
 export { loadBaseTypeSchema, type BaseTypeSchema } from "./typeschema.js";
 export {
   planBaseQuery,
@@ -112,6 +120,7 @@ export {
 export {
   BaseEngine,
   toBaseOutputValue,
+  type BaseConformance,
   type BaseOutputValue,
   type BaseQueryOptions,
   type BaseQueryResult,
