@@ -5,7 +5,7 @@
  * 本注册表必须恰好覆盖该集合——模块加载即做一致性自检，缺名/多名直接 throw，防两处漂移。
  *
  * 分派口径（设计 §9）：全局调用查 receiver="global"；方法调用按 receiver 运行时类型查
- * （string/list/object/file），查不到回退 "any" 组（isTruthy/isType/toString）；
+ * （string/number/list/object/file），查不到回退 "any" 组（isTruthy/isType/toString）；
  * 类型不匹配（如 `number.contains`）由 evaluator 转行级类型错误。
  *
  * 上游：P1 evaluator.ts 查表分派；预算回调经 {@link BaseFunctionContext} 注入。
@@ -18,6 +18,7 @@ import { linkKey, pathKey } from "../utils/path.js";
 import { BASE_FUNCTION_NAMES } from "./expressions.js";
 import {
   BaseTypeError,
+  BaseUnsupportedError,
   MISSING,
   compareValues,
   createDateValue,
@@ -31,8 +32,22 @@ import {
 
 // === 自建实现 ===
 
-/** 函数挂载点：global=全局函数；any=任意 receiver 可用；其余按 receiver 运行时类型分派。 */
-export type BaseFunctionReceiver = "global" | "any" | "string" | "list" | "object" | "file";
+/**
+ * 函数挂载点：global=全局函数；any=任意 receiver 可用；其余按 receiver 运行时类型分派。
+ *
+ * `"number"` 自 2026-07-28 覆盖率片一起独立成组（此前 number 方法挂 "any" 组并在 impl 内
+ * 自验 receiver）——组内已有 6 个方法（abs/ceil/floor/round/toFixed/isEmpty），独立分派后
+ * `"x".abs()` 得到「类型 string 不支持方法 abs」而非「参数类型错误」，诊断更准确。
+ * 新增分派组必须同步改 evaluator.ts 的 `receiverGroupOf()`，否则该组永远查不到。
+ */
+export type BaseFunctionReceiver =
+  | "global"
+  | "any"
+  | "string"
+  | "number"
+  | "list"
+  | "object"
+  | "file";
 
 /**
  * 函数实现上下文（evaluator 注入）：
@@ -40,7 +55,11 @@ export type BaseFunctionReceiver = "global" | "any" | "string" | "list" | "objec
  * P2a：`clock` 供 time 组（today/now）读注入时钟（EvalContext.clock，缺省 `() => new Date()`）。
  */
 export interface BaseFunctionContext {
-  /** 集合产物元素数硬上限检查（list(...) 参数数、keys()/values() 结果数）；超限抛 BaseBudgetError。 */
+  /**
+   * 产物规模硬上限检查；超限抛 BaseBudgetError。
+   * list 类计元素数（`list(...)` 参数数、`keys()`/`values()`/`split()` 结果数），
+   * string 类计字符数（`repeat()`/`replace()` 可放大长度，须在**分配之前**预检）。
+   */
   checkCollectionSize(count: number): void;
   /** list 成员比较（typedEqual）每比较一对元素回调一次（扣 maxOperations）。 */
   spendElementCompare(): void;
@@ -112,6 +131,81 @@ function expectListReceiver(entry: BaseFunctionEntry, r: BaseValue | null): Base
     throw argTypeError(entry, `receiver 须为 list，实为 ${typeNameOf(r as BaseValue)}`);
   }
   return r;
+}
+
+/** 同 {@link expectListReceiver}：string 组分派后的剩余防线（挡绕过 registry 直调 impl）。 */
+function expectStringReceiver(entry: BaseFunctionEntry, r: BaseValue | null): string {
+  if (typeof r !== "string") {
+    throw argTypeError(entry, `receiver 须为 string，实为 ${typeNameOf(r as BaseValue)}`);
+  }
+  return r;
+}
+
+/** 同 {@link expectListReceiver}：number 组分派后的剩余防线。 */
+function expectNumberReceiver(entry: BaseFunctionEntry, r: BaseValue | null): number {
+  if (typeof r !== "number") {
+    throw argTypeError(entry, `receiver 须为 number，实为 ${typeNameOf(r as BaseValue)}`);
+  }
+  return r;
+}
+
+/** 期望整数参数（可负；NaN/Infinity/小数/非 number 一律类型错误，不静默取整）。 */
+function expectInteger(entry: BaseFunctionEntry, v: BaseValue, what: string): number {
+  if (typeof v !== "number" || !Number.isInteger(v)) {
+    throw argTypeError(entry, `${what} 须为整数`);
+  }
+  return v;
+}
+
+/** 期望非负整数参数（同 {@link expectInteger} 再加 `>= 0`）。 */
+function expectNonNegativeInteger(entry: BaseFunctionEntry, v: BaseValue, what: string): number {
+  const n = expectInteger(entry, v, what);
+  if (n < 0) throw argTypeError(entry, `${what} 须为非负整数`);
+  return n;
+}
+
+/**
+ * 渲染类函数统一拒绝（`escapeHTML`/`html`/`image`/`icon`）：
+ * 它们进白名单**只为把报错从 `base/unknown-function`（「这函数不存在」，误导）
+ * 升级为 `base/unsupported-feature`（「官方有、本引擎不做」，准确）**。
+ * x-basalt 是无头查询内核，不产出 HTML/图标/图片（设计 §1）。
+ */
+function rejectRenderFunction(entry: BaseFunctionEntry): never {
+  throw new BaseUnsupportedError(
+    `函数 "${entry.name}" 是渲染类能力：x-basalt 为无头查询内核，不产出 HTML/图片/图标（设计 §1）`,
+  );
+}
+
+/**
+ * `max`/`min` 共用：变长 number 参数取极值。
+ *
+ * 自建口径：**只收变长 number 实参，不收单个 list 参**（官方签名即 `max(...values)`；
+ * `containsAll` 那种「单 list 也收」的糖是成员语义的历史包袱，不外扩）。
+ * 非 number 参 → 行级类型错误，不静默跳过。非有限值（YAML `.inf`）原样参与，
+ * 与既有 `round`/`mean` 的口径一致（不额外做有限性收窄）。
+ */
+function extremumOf(entry: BaseFunctionEntry, args: BaseValue[], kind: "max" | "min"): number {
+  let best: number | undefined;
+  for (const a of args) {
+    if (typeof a !== "number") {
+      throw argTypeError(entry, `参数须全为 number，实为 ${typeNameOf(a)}`);
+    }
+    if (best === undefined) best = a;
+    else best = kind === "max" ? Math.max(best, a) : Math.min(best, a);
+  }
+  // arity.min=1 已由 evaluator 先验，best 必已赋值；防御性兜底不静默返 0。
+  if (best === undefined) throw argTypeError(entry, `${kind} 至少需要一个参数`);
+  return best;
+}
+
+/**
+ * `slice` 共用的索引校验（string/list 两组同款）：start 必传、end 可选，均须为整数。
+ * 负索引与越界钳制**沿用 JS `slice` 语义**（自建口径，官方未定义；标注待 oracle）。
+ */
+function sliceArgs(entry: BaseFunctionEntry, args: BaseValue[]): [number, number | undefined] {
+  const start = expectInteger(entry, args[0] as BaseValue, "start");
+  const end = args.length >= 2 ? expectInteger(entry, args[1] as BaseValue, "end") : undefined;
+  return [start, end];
 }
 
 /**
@@ -187,6 +281,66 @@ const ENTRIES: readonly BaseFunctionEntry[] = [
       // null/MISSING/boolean/list/object/不可解析字符串一律类型错误，不静默塌 0。
       throw argTypeError(entry, "不可转换为 number");
     },
+  },
+  {
+    name: "max",
+    receiver: "global",
+    arity: { min: 1, max: Number.POSITIVE_INFINITY },
+    returnType: "number",
+    scenarioIds: ["BASE-EXPR-005"],
+    // === Obsidian 规范来源: Bases max(...values) ===
+    impl: (_r, args, _ctx, entry) => extremumOf(entry, args, "max"),
+  },
+  {
+    name: "min",
+    receiver: "global",
+    arity: { min: 1, max: Number.POSITIVE_INFINITY },
+    returnType: "number",
+    scenarioIds: ["BASE-EXPR-005"],
+    // === Obsidian 规范来源: Bases min(...values) ===
+    impl: (_r, args, _ctx, entry) => extremumOf(entry, args, "min"),
+  },
+
+  // ---- 渲染类（白名单 + 显式拒绝；2026-07-28 覆盖率片一）----
+  // arity 一律放宽到 0..∞：目的是让**任何**写法都命中「本引擎不做」这条诊断，
+  // 而不是先被 arity 校验挡成「参数个数不符」——后者会误导读出方以为改改参数就能用。
+  {
+    name: "html",
+    receiver: "global",
+    arity: { min: 0, max: Number.POSITIVE_INFINITY },
+    returnType: "any",
+    scenarioIds: ["BASE-EXPR-005"],
+    // === Obsidian 规范来源: Bases html()（渲染类，x-basalt 不做）===
+    impl: (_r, _args, _ctx, entry) => rejectRenderFunction(entry),
+  },
+  {
+    name: "image",
+    receiver: "global",
+    arity: { min: 0, max: Number.POSITIVE_INFINITY },
+    returnType: "any",
+    scenarioIds: ["BASE-EXPR-005"],
+    // === Obsidian 规范来源: Bases image()（渲染类，x-basalt 不做）===
+    impl: (_r, _args, _ctx, entry) => rejectRenderFunction(entry),
+  },
+  {
+    name: "icon",
+    receiver: "global",
+    arity: { min: 0, max: Number.POSITIVE_INFINITY },
+    returnType: "any",
+    scenarioIds: ["BASE-EXPR-005"],
+    // === Obsidian 规范来源: Bases icon()（渲染类，x-basalt 不做）===
+    impl: (_r, _args, _ctx, entry) => rejectRenderFunction(entry),
+  },
+  {
+    name: "escapeHTML",
+    // 挂 string 组而非 any：官方签名即 string 方法，`5.escapeHTML()` 应得
+    // 「类型 number 不支持方法」这条正确诊断，不该被 unsupported 掩盖。
+    receiver: "string",
+    arity: { min: 0, max: Number.POSITIVE_INFINITY },
+    returnType: "any",
+    scenarioIds: ["BASE-EXPR-003"],
+    // === Obsidian 规范来源: Bases string.escapeHTML()（渲染类，x-basalt 不做）===
+    impl: (_r, _args, _ctx, entry) => rejectRenderFunction(entry),
   },
 
   // ---- time（P2a；从 ctx.clock 读注入时钟，测试必须注入固定 clock——FORM-006）----
@@ -329,6 +483,184 @@ const ENTRIES: readonly BaseFunctionEntry[] = [
     returnType: "string",
     scenarioIds: ["BASE-EXPR-003"],
     impl: (r) => (r as string).trim(),
+  },
+
+  // ---- string 机械叶子（2026-07-28 覆盖率片一，计划 docs/plans/2026-07-28-bases-functions.md）----
+  {
+    name: "replace",
+    receiver: "string",
+    arity: { min: 2, max: 2 },
+    returnType: "string",
+    scenarioIds: ["BASE-EXPR-003"],
+    // === Obsidian 规范来源: Bases string.replace(pattern, replacement) ===
+    impl: (r, args, ctx, entry) => {
+      const s = expectStringReceiver(entry, r);
+      const needle = expectString(entry, args[0] as BaseValue, "被替换子串");
+      const replacement = expectString(entry, args[1] as BaseValue, "替换文本");
+      // === 自建实现 ===
+      // 字面子串**全局**替换，非 regex（regex 整体延后到 matches 片，需先做 ReDoS 防护
+      // BASE-SEC-004）。用 split/join 而非 String.replaceAll，是为了让替换文本里的
+      // `$&`/`$1` 保持字面量——replaceAll 会把它们当替换模式展开。
+      // 空 needle → 类型错误：JS 语义是「每个字符间插入」，属反直觉行为，不静默提供。
+      if (needle === "") throw argTypeError(entry, "被替换子串不可为空串");
+      const out = s.split(needle).join(replacement);
+      // 替换可放大长度（`"aaa".replace("a", <长串>)`），产物规模受硬上限约束。
+      ctx.checkCollectionSize(out.length);
+      return out;
+    },
+  },
+  {
+    name: "repeat",
+    receiver: "string",
+    arity: { min: 1, max: 1 },
+    returnType: "string",
+    scenarioIds: ["BASE-EXPR-003"],
+    // === Obsidian 规范来源: Bases string.repeat(count) ===
+    impl: (r, args, ctx, entry) => {
+      const s = expectStringReceiver(entry, r);
+      const n = expectNonNegativeInteger(entry, args[0] as BaseValue, "重复次数");
+      // 先按「结果长度」预检再构造：`"x".repeat(1e9)` 必须在分配之前被预算拦下。
+      ctx.checkCollectionSize(s.length * n);
+      return s.repeat(n);
+    },
+  },
+  {
+    name: "reverse",
+    receiver: "string",
+    arity: { min: 0, max: 0 },
+    returnType: "string",
+    scenarioIds: ["BASE-EXPR-003"],
+    // === Obsidian 规范来源: Bases string.reverse() ===
+    impl: (r, _args, _ctx, entry) => {
+      const s = expectStringReceiver(entry, r);
+      // === 自建实现 ===
+      // 按 Unicode code point 反转（[...s] 迭代按 code point），不按 UTF-16 code unit——
+      // 后者会拆坏代理对产出非法字符串。已知限制：组合字符簇（变音符、ZWJ emoji 序列）
+      // 仍会被拆散，无 Intl.Segmenter 依赖下不做字素簇分割，注释存证。
+      return [...s].toReversed().join("");
+    },
+  },
+  {
+    name: "slice",
+    receiver: "string",
+    arity: { min: 1, max: 2 },
+    returnType: "string",
+    scenarioIds: ["BASE-EXPR-003"],
+    // === Obsidian 规范来源: Bases string.slice(start, end?) ===
+    impl: (r, args, _ctx, entry) => {
+      const s = expectStringReceiver(entry, r);
+      // 自建口径（待 oracle）：负索引从尾部计、越界钳制，均沿用 JS slice 语义；
+      // 索引按 UTF-16 code unit（与 JS 一致），与 reverse 的 code point 口径不同——
+      // slice 保 JS 兼容（索引可预期），reverse 保字符串合法性，两处取舍不同故注释存证。
+      const [start, end] = sliceArgs(entry, args);
+      return end === undefined ? s.slice(start) : s.slice(start, end);
+    },
+  },
+  {
+    name: "split",
+    receiver: "string",
+    arity: { min: 1, max: 1 },
+    returnType: "list",
+    scenarioIds: ["BASE-EXPR-003"],
+    // === Obsidian 规范来源: Bases string.split(separator) ===
+    impl: (r, args, ctx, entry) => {
+      const s = expectStringReceiver(entry, r);
+      const sep = expectString(entry, args[0] as BaseValue, "分隔符");
+      // 空分隔符按 JS 语义逐 UTF-16 code unit 切分（与 replace 的「空串报错」取舍不同：
+      // split("") 是有意义且常用的行为，replace("") 不是）。产物元素数受硬上限。
+      const out = s.split(sep);
+      ctx.checkCollectionSize(out.length);
+      return out;
+    },
+  },
+  {
+    name: "title",
+    receiver: "string",
+    arity: { min: 0, max: 0 },
+    returnType: "string",
+    scenarioIds: ["BASE-EXPR-003"],
+    // === Obsidian 规范来源: Bases string.title()（title case）===
+    impl: (r, _args, _ctx, entry) => {
+      const s = expectStringReceiver(entry, r);
+      // === 自建实现（暂定口径，待 oracle）===
+      // 「按空白切词 → 词首大写 + 词余小写」，空白原样保留。官方精确口径未知
+      // （是否只大写首词、是否保留词内已有大写均未定义）；此实现确定性且幂等。
+      // 内部固定字面 regex（非用户输入、线性匹配），不涉 ReDoS 面。
+      return s.replace(/\S+/gu, (word) => {
+        const [first, ...rest] = [...word];
+        return (first ?? "").toUpperCase() + rest.join("").toLowerCase();
+      });
+    },
+  },
+  {
+    name: "isEmpty",
+    receiver: "string",
+    arity: { min: 0, max: 0 },
+    returnType: "boolean",
+    scenarioIds: ["BASE-EXPR-003"],
+    // === Obsidian 规范来源: Bases string.isEmpty() ===
+    // 长度 0 即空（不 trim——`" "` 非空，与 list/object 的「元素/键个数为 0」同层次口径）。
+    impl: (r, _args, _ctx, entry) => expectStringReceiver(entry, r).length === 0,
+  },
+
+  // ---- number（2026-07-28 覆盖率片一新增分派组；round 由 "any" 组迁入）----
+  {
+    name: "abs",
+    receiver: "number",
+    arity: { min: 0, max: 0 },
+    returnType: "number",
+    scenarioIds: ["BASE-EXPR-005"],
+    // === Obsidian 规范来源: Bases number.abs() ===
+    impl: (r, _args, _ctx, entry) => Math.abs(expectNumberReceiver(entry, r)),
+  },
+  {
+    name: "ceil",
+    receiver: "number",
+    arity: { min: 0, max: 0 },
+    returnType: "number",
+    scenarioIds: ["BASE-EXPR-005"],
+    // === Obsidian 规范来源: Bases number.ceil() ===
+    impl: (r, _args, _ctx, entry) => Math.ceil(expectNumberReceiver(entry, r)),
+  },
+  {
+    name: "floor",
+    receiver: "number",
+    arity: { min: 0, max: 0 },
+    returnType: "number",
+    scenarioIds: ["BASE-EXPR-005"],
+    // === Obsidian 规范来源: Bases number.floor() ===
+    impl: (r, _args, _ctx, entry) => Math.floor(expectNumberReceiver(entry, r)),
+  },
+  {
+    name: "toFixed",
+    receiver: "number",
+    arity: { min: 0, max: 1 },
+    returnType: "string",
+    scenarioIds: ["BASE-EXPR-005"],
+    // === Obsidian 规范来源: Bases number.toFixed(precision)（返回 string，与 round 返 number 不同）===
+    impl: (r, args, _ctx, entry) => {
+      const n = expectNumberReceiver(entry, r);
+      const digits =
+        args.length === 1 ? expectNonNegativeInteger(entry, args[0] as BaseValue, "digits") : 0;
+      // JS toFixed 定义域为 0..100，越界抛 RangeError（非 BaseTypeError，会穿透行级通道
+      // 变成引擎级异常）——前置拦成行级类型错误。
+      if (digits > 100) throw argTypeError(entry, "digits 须在 0..100（JS toFixed 定义域）");
+      return n.toFixed(digits);
+    },
+  },
+  {
+    name: "isEmpty",
+    receiver: "number",
+    arity: { min: 0, max: 0 },
+    returnType: "boolean",
+    scenarioIds: ["BASE-EXPR-005"],
+    // === Obsidian 规范来源: Bases number.isEmpty() ===
+    // 自建口径：number 恒非空（`0` 是有值的 0，不是「空」）。「属性缺失」是 MISSING，
+    // 走 receiver=MISSING 的既有路径（any 组查不到 → MISSING 传播），不由本条覆盖。
+    impl: (r, _args, _ctx, entry) => {
+      expectNumberReceiver(entry, r);
+      return false;
+    },
   },
 
   // ---- list ----
@@ -540,6 +872,35 @@ const ENTRIES: readonly BaseFunctionEntry[] = [
       return parts.join(sep);
     },
   },
+  {
+    name: "reverse",
+    receiver: "list",
+    arity: { min: 0, max: 0 },
+    returnType: "list",
+    scenarioIds: ["BASE-EXPR-004"],
+    // === Obsidian 规范来源: Bases list.reverse() ===
+    impl: (r, _args, _ctx, entry) => {
+      // 必须产新数组：receiver 可能是行的 note 属性数组，原地 reverse 会污染行状态
+      // （同 sort 的既有口径），破坏「同输入同输出」的字节稳定保证。
+      const list = expectListReceiver(entry, r);
+      return list.toReversed();
+    },
+  },
+  {
+    name: "slice",
+    receiver: "list",
+    arity: { min: 1, max: 2 },
+    returnType: "list",
+    scenarioIds: ["BASE-EXPR-004"],
+    // === Obsidian 规范来源: Bases list.slice(start, end?) ===
+    impl: (r, args, _ctx, entry) => {
+      const list = expectListReceiver(entry, r);
+      // 与 string.slice 同口径：负索引/越界钳制沿用 JS slice 语义（自建，待 oracle）。
+      // 产物不大于输入（输入已受限），无需 checkCollectionSize。
+      const [start, end] = sliceArgs(entry, args);
+      return end === undefined ? list.slice(start) : list.slice(start, end);
+    },
+  },
 
   // ---- list 聚合 / number 舍入（P2b 片三，BASE-SUM-001 / SUM-002；
   // 官方自定义汇总示例 `values.mean().round(3)` 必需）----
@@ -568,28 +929,22 @@ const ENTRIES: readonly BaseFunctionEntry[] = [
   },
   {
     name: "round",
-    receiver: "any", // number 无独立分派组（receiverGroupOf 对 number 返 null → 回退 any 组）
+    // 2026-07-28 覆盖率片一：由 "any" 组迁入 "number" 组（官方即 number 方法）。
+    // 可观察变化：`"x".round()` 的 message 由「参数类型错误：receiver 须为 number」
+    // 变为「类型 string 不支持方法 round」，rule 仍为 base/property-type-mismatch。
+    receiver: "number",
     arity: { min: 0, max: 1 },
     returnType: "number",
     scenarioIds: ["BASE-SUM-001"],
     // === Obsidian 规范来源: Bases number.round(digits=0)（官方示例 values.mean().round(3)）===
     impl: (r, args, _ctx, entry) => {
-      // receiver 落在 any 组（含非 number 类型）：impl 自验，非 number 一律行级类型错误。
-      if (typeof r !== "number") {
-        throw argTypeError(entry, `receiver 须为 number，实为 ${typeNameOf(r as BaseValue)}`);
-      }
+      const n = expectNumberReceiver(entry, r);
       // digits 缺省 0；须非负整数（NaN/Infinity/负数/小数/非 number 一律类型错误，不静默取整）。
-      let digits = 0;
-      if (args.length === 1) {
-        const d = args[0] as BaseValue;
-        if (typeof d !== "number" || !Number.isInteger(d) || d < 0) {
-          throw argTypeError(entry, "digits 须为非负整数");
-        }
-        digits = d;
-      }
+      const digits =
+        args.length === 1 ? expectNonNegativeInteger(entry, args[0] as BaseValue, "digits") : 0;
       // 放缩 Math.round；IEEE 754 边界（如 1.005 → 1）不做十进制修正，注释存证。
       const factor = 10 ** digits;
-      return Math.round(r * factor) / factor;
+      return Math.round(n * factor) / factor;
     },
   },
 

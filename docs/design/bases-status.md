@@ -7,8 +7,8 @@ tags:
   - bases
   - testing
   - x-basalt
-timestamp: 2026-07-27T04:46:23Z
-sha256: 3ef44b64043b0f45f3668a136621a689c27cd6c8700be1e9ac426db1ec3a634f
+timestamp: 2026-07-27T18:55:09Z
+sha256: 1205110636dec5ecd7143e0f31635f3208b1448780295d1c78962d13aca80217
 ---
 # Bases 实现状态追踪
 
@@ -27,6 +27,7 @@ sha256: 3ef44b64043b0f45f3668a136621a689c27cd6c8700be1e9ac426db1ec3a634f
 | P2b | types.json / list 高阶 / groupBy / summaries | ✅ 2026-07-27（[计划](../history/plans/2026-07-27-bases-p2b-types-list-group-summary.md)） |
 | P3 | all-files / context / 嵌入 | 🔀 P3a 附件数据集 ✅ 2026-07-27（[计划](../history/plans/2026-07-27-bases-p3-attachments.md)）；context/嵌入仍 🔜 待开 |
 | review 修复 | P0..P2b 收口后的评审修复（静默失败 + 资源模型） | ✅ 2026-07-27（[计划](../history/plans/2026-07-27-bases-code-review-fixes.md)） |
+| 函数覆盖率 | 官方 68 条目 51% → ~90%（六片） | 🚧 进行中（[计划](../plans/2026-07-28-bases-functions.md)）：片一 ✅ 2026-07-28；片二..六 🔜 |
 
 ## 1. 文档层（P0）✅ 2026-07-26
 
@@ -126,7 +127,34 @@ sha256: 3ef44b64043b0f45f3668a136621a689c27cd6c8700be1e9ac426db1ec3a634f
 | sidebar/active-file 语义（禁环境隐式状态） | BASE-CTX-004 | 🔜 P3 |
 | 插件 view/function | BASE-PLUGIN-001 | ⏸ 默认拒绝；显式注册纯函数扩展需真实需求再议 |
 
-## 6. 不做 / 暂缓（理由记录）
+## 6. 函数覆盖率补齐（2026-07-28 起，[计划](../plans/2026-07-28-bases-functions.md)）
+
+> 缺口全在**叶子函数**：注册表 / 名字真相源 / 运行时分派三处骨架已成型，补函数 = 扩表 + 扩分派组 + 补用例。
+> 每片完成后本表翻标（日期 + 测试文件）。
+
+| 片 | 内容 | 状态 |
+| ---- | ---- | ---- |
+| 片一 | 机械叶子 16 个 + 渲染类 4 个显式拒绝 + `round` 归组 | ✅ 2026-07-28（`tests/base-functions-leaf.test.ts` 18 用例；838 全量绿） |
+| 片二 | Date/Duration 族 6 个（`date()`/`duration()`/`format`/`time`/`relative`/`isEmpty`），新增 `date` 分派组 | 🔜 |
+| 片三 | Link/File 互转 5 个（`asFile`/`linksTo`/`asLink`/`file()`/`link()`） | 🔜 |
+| 片四 | `matches`（regex）+ ReDoS 防护 | 🔜 BASE-SEC-004 |
+| 片五 | list/link 当分组键 + 自定义汇总收口 | 🔜 BASE-GROUP-002 / BASE-SUM-002 |
+| 片六 | `contextFile`/`this`、` ```base ` 代码块、`![[View.base#Name]]` embed | 🔜 BASE-CTX-001..004（唯一动 parser 的一片，范围待用户拍板） |
+
+### 片一明细 ✅ 2026-07-28
+
+| 项 | 场景编号 | 状态 |
+| ---- | ---- | ---- |
+| string `replace`/`repeat`/`reverse`/`slice`/`split`/`title`/`isEmpty` | BASE-EXPR-003 | ✅ 2026-07-28（自建口径见语法 §4.4 尾注，待 oracle） |
+| number 分派组新增（`receiverGroupOf` 返 `"number"`）+ `abs`/`ceil`/`floor`/`toFixed`/`isEmpty` | BASE-EXPR-005 | ✅ 2026-07-28（`toFixed` 返 string；`isEmpty` 恒 false） |
+| `round` 由 `any` 组迁入 `number` 组 | BASE-SUM-001 | ✅ 2026-07-28（语义不变；`"x".round()` message 由「参数类型错误」变「类型 string 不支持方法」，rule 不变） |
+| list `reverse`/`slice`（`reverse` 产新数组，不污染行状态） | BASE-EXPR-004 | ✅ 2026-07-28 |
+| global `max`/`min`（变长 number 参） | BASE-EXPR-005 | ✅ 2026-07-28 |
+| 渲染类 `escapeHTML`/`html`/`image`/`icon` 白名单内显式拒绝 | 设计 §1 | ✅ 2026-07-28（新增 `BaseUnsupportedError` → `base/unsupported-feature`，与 `property-type-mismatch` 分开，读出方可据 rule 区分「用错类型」与「本引擎不做」） |
+| `repeat`/`replace`/`split` 产物规模预算（string 计字符数，`repeat` 分配前预检） | BASE-SEC-005 延伸 | ✅ 2026-07-28 |
+| `random()` × 字节稳定冲突 | 语法 §4.4 | ⏸ 待用户拍板（注入种子 / 直接拒绝 / 放弃字节稳定） |
+
+## 7. 不做 / 暂缓（理由记录）
 
 | 项 | 状态 | 理由 |
 | ---- | ---- | ---- |

@@ -33,6 +33,8 @@
 - [ ] **P3 · all-files/context（建议等 oracle 之后再开）**：附件数据集、embedded `base` code block、显式 `contextFile`/`this`；先做独立 indexer schema 决策，证明不改变既有 DQL `.md` 数据集。schema 决策已冻结：[`docs/specs/2026-07-27-bases-p3-vault-entries-decision.md`](./docs/design/bases-vault-entries.md)（2026-07-27；实施另开计划）。**软序而非硬依赖**：真有 dogfood 需求可以先动，但要接受届时 oracle 结论可能同时推翻 P1/P2 与 P3 两层的暂定口径。
   - [x] **P3a · 附件数据集（vault_entries + all-files 模式，BASE-ALL-001/002）**：schema+indexer 六条写入路径 → base all-files 数据源 → DQL 不变证明 + CLI `--conformance`，三片全部落地。计划：[`docs/plans/2026-07-27-bases-p3-attachments.md`](./docs/history/plans/2026-07-27-bases-p3-attachments.md)（2026-07-27 用户拍板「附件数据集优先」开片；片一 schema+indexer、片二 all-files 数据源 + conformance 开关、片三 DDL 防漂移锁 + DQL 不变回归 + CLI + 基准全部落地。embedded code block 与 contextFile/this 仍另开计划）
 
+- [ ] **⭐ 函数覆盖率 51% → ~90%（进行中，2026-07-28 开）**：官方 68 个条目已实现 35，缺口全在叶子函数（骨架已齐）。分六片：①机械叶子 16 个 + 渲染类拒绝 + `round` 归组 → ②Date/Duration 族 → ③Link/File 互转 → ④`matches` regex + ReDoS → ⑤GROUP-002 + SUM-002 收口 → ⑥CTX-001..004（唯一动 parser 的一片）。计划：[`docs/plans/2026-07-28-bases-functions.md`](./docs/plans/2026-07-28-bases-functions.md)
+
 **暂缓**：内置 chat 打磨、DQL 函数全集、task emoji 全字段、lint CI/baseline、embedding、复杂编排器。它们不能优先于 **Bases oracle**（原文写「P0/P1」，两者均已完成，优先级基准顺延至 oracle），除非 dogfood 出现阻断性缺陷。
 
 **实现前停点（已通过，留档）**：原定「若 P1 场景超过三分之一依赖附件 / 动态 UI `this` / 不可稳定观测的闭源语义，则退回 `.base` lint/inspect」。实际结论：P1 全部场景在 Markdown-only 口径下可实现且可测，未触发退回；附件与 `this` 划入 P3，争议语义走 oracle 校正而非猜测补齐。

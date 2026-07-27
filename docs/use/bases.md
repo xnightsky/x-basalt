@@ -6,8 +6,8 @@ tags:
   - guide
   - bases
   - x-basalt
-timestamp: 2026-07-27T18:15:05Z
-sha256: 7e6081fc1e6963d670d71f29fcfc2b270a20a7f7125e7ea2523dd087379fd916
+timestamp: 2026-07-27T18:55:43Z
+sha256: b37bc05417a77a521863ebc68417a0e107e80ff74bfc1008aafbe158b36ae74d
 ---
 # Bases · 用 `.base` 无头查询你的 vault
 
@@ -550,6 +550,7 @@ duration 单位（单复数均可）：`millisecond` `second` `minute` `hour` `d
 | `number(v)` | number | number 原样；字符串 trim 后整体可解析才转换（`"1px"` 报错）；其它类型报错，**不静默塌 0** |
 | `today()` | date | 当日 UTC 00:00 |
 | `now()` | datetime | 当前时刻 |
+| `max(a, b, …)` / `min(a, b, …)` | number | 变长 number 参数（至少 1 个）；**不收单个 list 参**，非 number 参报错 |
 
 **任意接收者**
 
@@ -558,17 +559,32 @@ duration 单位（单复数均可）：`millisecond` `second` `minute` `hour` `d
 | `x.isTruthy()` | boolean | 真值判定（[§3.8](#38-值与类型语义)） |
 | `x.isType(name)` | boolean | `name` ∈ `string`/`number`/`boolean`/`list`/`object`/`null`；未知类型名报错 |
 | `x.toString()` | string | string 原样；number/boolean 转字符串；null/missing → `""`；**list/object/file 报错** |
-| `x.round(digits?)` | number | 接收者须是 number；`digits` 非负整数，缺省 0 |
 
 **string 方法**
 
-| 签名 | 返回 |
-| --- | --- |
-| `s.contains(sub)` | boolean |
-| `s.containsAll(a, b, …)` 或 `s.containsAll([a, b])` | boolean（空集 → true） |
-| `s.containsAny(a, b, …)` 或 `s.containsAny([a, b])` | boolean（空集 → false） |
-| `s.startsWith(p)` / `s.endsWith(p)` | boolean |
-| `s.lower()` / `s.trim()` | string |
+| 签名 | 返回 | 说明 |
+| --- | --- | --- |
+| `s.contains(sub)` | boolean | |
+| `s.containsAll(a, b, …)` 或 `s.containsAll([a, b])` | boolean | 空集 → true |
+| `s.containsAny(a, b, …)` 或 `s.containsAny([a, b])` | boolean | 空集 → false |
+| `s.startsWith(p)` / `s.endsWith(p)` | boolean | |
+| `s.lower()` / `s.trim()` | string | |
+| `s.replace(sub, rep)` | string | **字面子串全局替换**，不是正则；`rep` 里的 `$&` 不展开；`sub` 为空串报错 |
+| `s.repeat(n)` | string | `n` 非负整数；结果过长会被执行预算拦下 |
+| `s.reverse()` | string | 按 Unicode 码点反转（不拆坏 emoji 的代理对；组合字符簇仍会被拆） |
+| `s.slice(start, end?)` | string | 负索引从尾部计、越界钳制（同 JS）；索引须为整数 |
+| `s.split(sep)` | list | `sep` 为空串则逐字符切 |
+| `s.title()` | string | 按空白切词，词首大写、词余小写 |
+| `s.isEmpty()` | boolean | 只看长度，**不 trim**（`" "` 非空） |
+
+**number 方法**
+
+| 签名 | 返回 | 说明 |
+| --- | --- | --- |
+| `n.abs()` / `n.ceil()` / `n.floor()` | number | |
+| `n.round(digits?)` | number | `digits` 非负整数，缺省 0 |
+| `n.toFixed(digits?)` | **string** | `digits` 0..100 整数，缺省 0；与 `round` 的区别是返回字符串 |
+| `n.isEmpty()` | boolean | 恒 `false`（`0` 是有值的 0；属性不存在是 missing，不是空） |
 
 **list 方法**
 
@@ -585,6 +601,8 @@ duration 单位（单复数均可）：`millisecond` `second` `minute` `hour` `d
 | `l.unique()` | list | typed equality 去重，保留首现 |
 | `l.join(sep?)` | string | 元素只许 string/number/boolean；`sep` 缺省 `""` |
 | `l.mean()` | number | 元素须全为 number；**空列表报错**（均值无定义） |
+| `l.reverse()` | list | 返回新列表，不改原属性 |
+| `l.slice(start, end?)` | list | 同 `s.slice`：负索引 / 越界钳制 |
 
 > `filter`/`map`/`reduce` 的参数是**表达式，不是 JS lambda**。表达式里用隐式变量：`value`（当前元素）、`index`（下标）、`reduce` 另有 `acc`（累计值）。例：`tags.filter(value != "草稿").join(", ")`。隐式变量会遮蔽同名 note 属性。
 
@@ -652,6 +670,7 @@ frontmatter 里整串恰为一个 wikilink 的字符串（`"[[目标]]"` / `"[[�
 | | 行为 |
 | --- | --- |
 | 白名单外的函数名（含旧 snake_case） | `base/unknown-function` |
+| 渲染类函数 `html()` / `image()` / `icon()` / `s.escapeHTML()` | `base/unsupported-feature`——官方有、查询内核不渲染。它们**在白名单内**，只为把报错从「这函数不存在」升级成「本引擎不做」 |
 | 任意标识符调用、动态成员调用 | 文法层拒绝 |
 | `constructor` / `prototype` / `__proto__` 访问 | 拒绝（安全白名单） |
 | regex 字面量、`%` 取模 | 文法层拒绝 |

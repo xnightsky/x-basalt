@@ -8,8 +8,8 @@ tags:
   - obsidian
   - syntax
   - x-basalt
-timestamp: 2026-07-26T12:22:02Z
-sha256: 66d39553c43b26d1d8e3851a549cff95c9183dc175cc8362b3fa8a7bb78f498a
+timestamp: 2026-07-27T18:54:40Z
+sha256: 0c11eadb4123aac5d43230c762ea610d48659f352467b117d83335afeba69bf8
 ---
 # Bases 语法参考（x-basalt 口径）
 
@@ -142,17 +142,24 @@ note property 来自 Markdown frontmatter；file property 对所有受支持文�
 | 类别   | 函数/方法                                                                           | 状态   |
 | ------ | ----------------------------------------------------------------------------------- | ------ |
 | global | `if`、`list`、`number`                                                              | 【P1 ✅】 |
+| global | `max`、`min`（变长 number 参，不收单 list 参）                                       | 【2026-07-28 ✅】 |
 | any    | `isTruthy`、`isType`、`toString`                                                    | 【P1 ✅】 |
 | string | `contains`、`containsAll`、`containsAny`、`startsWith`、`endsWith`、`lower`、`trim` | 【P1 ✅】 |
+| string | `replace`、`repeat`、`reverse`、`slice`、`split`、`title`、`isEmpty`                | 【2026-07-28 ✅】 |
 | list   | `contains`、`containsAll`、`containsAny`、`isEmpty`                                 | 【P1 ✅】 |
+| list   | `reverse`、`slice`                                                                  | 【2026-07-28 ✅】 |
 | object | `isEmpty`、`keys`、`values`                                                         | 【P1 ✅】 |
 | file   | `hasTag`、`inFolder`、`hasLink`、`hasProperty`                                      | 【P1 ✅】 |
 | time   | `today`、`now`（clock 注入，测试必须注入固定 clock）                                | 【P2a ✅】 |
 | list 高阶 | `filter`/`map`/`reduce`（隐式 `value`/`index`/`acc` 作用域，非 JS lambda）、`flat`/`sort`/`unique`/`join`、`mean` | 【P2b ✅】 |
-| number | `round`（0..1 参，小数位缺省 0）                                                   | 【P2b ✅】 |
-| 渲染/杂项 | `random`、HTML/image/icon、regex                                               | 【不做（首期）/P2 最后评估 regex】 |
+| number | `round`（0..1 参，小数位缺省 0）                                                   | 【P2b ✅；2026-07-28 由 `any` 组迁入独立 `number` 分派组】 |
+| number | `abs`、`ceil`、`floor`、`toFixed`（返 string）、`isEmpty`（恒 false）               | 【2026-07-28 ✅】 |
+| 渲染   | `escapeHTML`（string）、`html`/`image`/`icon`（global）                             | 【2026-07-28 ✅ 白名单内显式拒绝：`base/unsupported-feature`「无头内核不渲染」，不再报 unknown-function】 |
+| 杂项   | `random`、regex（`matches`）                                                        | 【`random` 与字节稳定冲突，待拍板；regex 见片 4 计划】 |
 
 语义要点：`if()` lazy branch（只计算被选择分支）【P1 ✅ 暂定 lazy 实现，待 oracle 校正】；list 成员比较用 typed equality；`number()` 转换失败行为【P1 ✅ 冻结为行级类型错误】。
+
+2026-07-28 覆盖率片一的自建口径（官方未定义，标注待 oracle）：`replace` 为**字面子串全局替换**（非 regex；替换文本内 `$&` 不展开；空子串报错）；`slice`（string/list）负索引与越界钳制沿用 JS 语义；`reverse`（string）按 code point 反转（不拆代理对，字素簇仍会拆）；`title` 为「按空白切词 + 词首大写 + 词余小写」；`repeat`/`replace`/`split` 的产物规模受 `maxCollectionItems` 约束（string 计字符数），`repeat` 在**分配之前**预检。
 
 ### 4.5 明确不支持（报诊断，不静默忽略）
 

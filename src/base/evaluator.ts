@@ -23,6 +23,7 @@ import type { BaseExecutionLimits, BaseExpr } from "./types.js";
 import {
   BaseBudgetError,
   BaseTypeError,
+  BaseUnsupportedError,
   MISSING,
   arithAdd,
   arithDiv,
@@ -237,9 +238,16 @@ function getFileField(file: BaseFileValue, name: string, offset: number): BaseVa
   }
 }
 
-/** 方法 receiver 的运行时分派组；number/boolean 返回 null（只能命中 "any" 组）。 */
-function receiverGroupOf(v: BaseValue): "string" | "list" | "object" | "file" | null {
+/**
+ * 方法 receiver 的运行时分派组；boolean 返回 null（只能命中 "any" 组）。
+ *
+ * `"number"` 自 2026-07-28 覆盖率片一起独立成组（abs/ceil/floor/round/toFixed/isEmpty），
+ * 此前 number 落 null → 回退 "any" 组。新增分派组必须与 functions.ts 的
+ * `BaseFunctionReceiver` 联动，否则注册表里该组条目永远查不到。
+ */
+function receiverGroupOf(v: BaseValue): "string" | "number" | "list" | "object" | "file" | null {
   if (typeof v === "string") return "string";
+  if (typeof v === "number") return "number";
   if (Array.isArray(v)) return "list";
   if (typeof v === "object" && v !== null) {
     if (isFileValue(v)) return "file";
@@ -659,7 +667,7 @@ function evalCall(
       checkCollectionSize: (count) => {
         if (count > state.limits.maxCollectionItems) {
           throw new BaseBudgetError(
-            `函数 "${expr.name}" 集合产物元素数 ${count} 超过预算上限 ${state.limits.maxCollectionItems}`,
+            `函数 "${expr.name}" 产物规模 ${count} 超过预算上限 ${state.limits.maxCollectionItems}（list 计元素数、string 计字符数）`,
           );
         }
       },
@@ -676,6 +684,11 @@ function evalCall(
         e.message,
         expr.name,
       );
+    }
+    // 「官方有、无头引擎不做」（渲染类函数）：转 base/unsupported-feature，
+    // 与「用错类型」的 property-type-mismatch 分开，读出方可据 rule 区分二者。
+    if (e instanceof BaseUnsupportedError) {
+      throw new BaseRowEvalError(BASE_RULES.unsupportedFeature, expr.offset, e.message, expr.name);
     }
     throw e;
   } finally {

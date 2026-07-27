@@ -242,6 +242,16 @@ export function isLinkValue(v: BaseValue): v is BaseLinkValue {
 export class BaseTypeError extends Error {}
 
 /**
+ * 「官方有、无头引擎不做」信号（值域内部，无位置信息）。
+ *
+ * 与 {@link BaseTypeError} 分开的理由：用错类型（`5.contains("a")`）与本引擎不做
+ * （`html(...)` 渲染类）在读出方眼里是两回事——前者是用户表达式的 bug，后者是
+ * x-basalt 的能力边界。evaluator 捕获后转 `base/unsupported-feature` 行级诊断，
+ * 而非 `base/property-type-mismatch`。
+ */
+export class BaseUnsupportedError extends Error {}
+
+/**
  * 执行预算耗尽内部信号（设计 §12：耗尽即中止，不返回部分结果冒充成功）。
  *
  * 定义在值域层（values.ts）的原因：functions.ts 的集合预算与 evaluator 的 operations
