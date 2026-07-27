@@ -1,6 +1,6 @@
 ---
-timestamp: 2026-07-22T07:41:34Z
-sha256: b4ab55ce0de770a1c8f81cc22d02411547c7f685a67de0f0e47c7809f3c95dc2
+timestamp: 2026-07-27T05:02:53Z
+sha256: 4e2b29bd485ba64e580cfd93f42ac1d6185b93774378a0d871450b29111b49ad
 type: guide
 title: 命令参考 · x-basalt
 description: x-basalt CLI 全部子命令的参数、输出形态与示例
@@ -223,7 +223,7 @@ DQL 完整语法（`FROM` / `WHERE` / `SORT` / `LIMIT` / 操作符 / 隐式字�
 ## `base` — .base view 查询
 
 ```
-x-basalt base <file.base> [--view <name>] [--vault <path...>] [--db <path>] [--format json|yaml]
+x-basalt base <file.base> [--view <name>] [--vault <path...>] [--db <path>] [--format json|yaml] [--conformance <id>]
 ```
 
 执行 Obsidian `.base` view 的无头查询（Bases Markdown conformance 2026-07）：只读索引库，输出稳定 JSON，不渲染表格。
@@ -235,6 +235,7 @@ x-basalt base <file.base> [--view <name>] [--vault <path...>] [--db <path>] [--f
 | `--vault <path>` | 配置 `vault`                     | 可重复传多个（多根 vault）                                                 |
 | `--db <path>`    | `.x-basalt/index.db` / 配置 `db` | 要查询的 SQLite 路径（只读打开）                                           |
 | `--format <fmt>` | `json`（或配置 `format`）        | 输出格式：`json`（缩进 2）或 `yaml`                                        |
+| `--conformance <id>` | `bases-markdown-2026-07`    | 数据集口径：缺省仅 Markdown；`bases-all-files-2026-07` 附件并入为行；未知值报 `base/invalid-schema` |
 
 **输出形态**
 
@@ -250,6 +251,7 @@ x-basalt base <file.base> [--view <name>] [--vault <path...>] [--db <path>] [--f
 }
 ```
 
+- `conformance` 回传**实际生效**口径：缺省 `bases-markdown-2026-07`（md-only，恒发 `base/markdown-only-dataset` warning）；`--conformance bases-all-files-2026-07` 时附件并入为行（附件行 note 属性投影 `null`、不发该 warning），旧库无 `vault_entries` 表自动降级回 md-only（compat warning）。
 - `total` = filter 后、limit 前行数；缺失属性投影为 `null` 且列保留。
 - 未显式 `sort` 按 `file.path` 升序稳定输出（附 `base/default-sort-tiebreak` info）；同库重复运行字节稳定。
 - **退出码**：`diagnostics` 含任一 `error` 级 → 输出完整 JSON（rows 为空）并退出码 1；仅 warning/info（如 md-only 恒发 warning）→ 0。
@@ -259,6 +261,7 @@ x-basalt base <file.base> [--view <name>] [--vault <path...>] [--db <path>] [--f
 ```bash
 x-basalt base views/projects.base --vault ./my-vault
 x-basalt base views/projects.base --view Active --vault ./my-vault --db ./index.db
+x-basalt base views/projects.base --conformance bases-all-files-2026-07 --vault ./my-vault   # all-files：附件也作为行
 ```
 
 `.base` 怎么写与支持的完整语法（顶层 key / view / filter / 表达式 / 函数全表 / 值语义）见 [writing-bases.md](writing-bases.md)；输出契约细节、限制与报错速查见 [querying-bases.md](querying-bases.md)。

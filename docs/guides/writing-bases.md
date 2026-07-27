@@ -8,8 +8,8 @@ tags:
   - syntax
   - tutorial
   - x-basalt
-timestamp: 2026-07-27T03:22:59Z
-sha256: b42a51475c96fd62585c333eceef56edefb0f95a9f841bfce9cc0b4f018ee993
+timestamp: 2026-07-27T05:03:24Z
+sha256: 2716baab3155fa0bb6375f5e36cbaf9b9060cfaea672b84b26cc7ab8885f7b4e
 ---
 # Bases 编写指南 · x-basalt
 
@@ -84,7 +84,7 @@ Bases 仍在快速演进（1.9 early access 期间已发生 snake_case → camel
 
 Obsidian 自己渲染 `.base` 需要开着 App。x-basalt 提供的是**无头执行**：不启动 Obsidian，直接回答「这个 view 会返回哪些行和列」，输出稳定 JSON。用途：CI 里校验 `.base` 写得对不对、脚本/AI 拿结构化结果做后续处理、不开 App 快速看结果。
 
-它**不做**：渲染表格/卡片布局、控制 Obsidian App、查询附件等非 Markdown 文件、运行插件函数。
+它**不做**：渲染表格/卡片布局、控制 Obsidian App、运行插件函数；查询上**默认只覆盖 Markdown 笔记**——附件（图片/PDF 等）需显式切 all-files 模式才作为行，见[查询指南 §3.2](querying-bases.md#32-all-files-模式附件并入数据集)。
 
 ---
 
@@ -557,7 +557,7 @@ frontmatter 里整串恰为一个 wikilink 的字符串（`"[[目标]]"` / `"[[�
 | `cards` / `list` / `map` view、插件 view | `base/unsupported-feature` / `base/unsupported-view-type` |
 | 空 filter 数组、多值（list/tag）分组键 | `base/unsupported-feature`（官方语义未确认，不猜） |
 | Dataview inline fields（`key:: value`） | 不进入 Bases 属性（官方 Bases 即如此） |
-| 附件（图片/PDF/`.base`）作为行 | 首期不支持，每次查询恒发 `base/markdown-only-dataset` 声明 |
+| 附件（图片/PDF/`.base`）作为行 | 默认不支持：markdown 模式每次查询恒发 `base/markdown-only-dataset` 声明；`--conformance bases-all-files-2026-07` 可开启附件为行，见[查询指南 §3.2](querying-bases.md#32-all-files-模式附件并入数据集) |
 | 嵌入式 ```` ```base ```` 代码块、`![[View.base#Name]]` | 首期只支持独立 `.base` 文件 |
 | 渲染 table/cards 布局 | 查询内核不渲染 |
 

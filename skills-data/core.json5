@@ -143,8 +143,8 @@
       ],
     },
     {
-      pattern: "base <file.base> [--view <name>] [--vault <path...>] [--db <path>] [--format json|yaml]",
-      description: "Bases 无头查询（conformance bases-markdown-2026-07）：对索引中的 Markdown 笔记执行 .base view，输出稳定 JSON { conformance, base, view, columns, total, rows, diagnostics }；total=filter 后 limit 前行数，未显式 sort 按 file.path 稳定序（附 info 诊断），md-only 数据集恒发 base/markdown-only-dataset warning（附件不为行）。退出码：diagnostics 含任一 error → 1（仍输出完整 JSON、rows 为空），仅 warning/info → 0。子集：table view 的 filters/order/sort/limit、递归 and/or/not、表达式 ==/&&/||/! 与白名单函数（if/list/number、string/list/object/file 方法）；Bases 表达式不是 DQL。inline fields 不进 Bases 属性。详见 docs/guides/writing-bases.md（语法快照）与 docs/guides/querying-bases.md（命令与契约）。",
+      pattern: "base <file.base> [--view <name>] [--vault <path...>] [--db <path>] [--format json|yaml] [--conformance <id>]",
+      description: "Bases 无头查询（默认 conformance bases-markdown-2026-07，可切 bases-all-files-2026-07）：对索引执行 .base view，输出稳定 JSON { conformance, base, view, columns, total, rows, diagnostics }；total=filter 后 limit 前行数，未显式 sort 按 file.path 稳定序（附 info 诊断）。数据集两口径：默认 md-only（仅 Markdown 笔记为行，恒发 base/markdown-only-dataset warning）；--conformance bases-all-files-2026-07 把附件并入为行（附件行 file.* stat 字段可用、note 属性缺失投影 null 且列保留、file.tags/file.links 恒 []、不发该 warning），旧库无 vault_entries 表自动降级回 md-only（compat warning），conformance 字段回传实际生效口径；未知 id 报 base/invalid-schema。退出码：diagnostics 含任一 error → 1（仍输出完整 JSON、rows 为空），仅 warning/info → 0。子集：table view 的 filters/order/sort/limit、递归 and/or/not、表达式 ==/&&/||/! 与白名单函数（if/list/number、string/list/object/file 方法）；Bases 表达式不是 DQL。inline fields 不进 Bases 属性。详见 docs/guides/writing-bases.md（语法快照）与 docs/guides/querying-bases.md（命令与契约）。",
       examples: [
         "x-basalt base views/projects.base --vault ./my-vault",
         "x-basalt base views/projects.base --view Active --vault ./my-vault --db ./index.db",

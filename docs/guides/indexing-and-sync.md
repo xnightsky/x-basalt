@@ -1,6 +1,6 @@
 ---
-timestamp: 2026-06-30T03:21:44Z
-sha256: 77884e9a406aa1c13b24f0c52d7877e7f8f927dcb9f873761c2ed49de0dc7304
+timestamp: 2026-07-27T05:05:18Z
+sha256: 84efc387e9423c635954346c5f1f8ec424bc4aaccf3b73deec3c532212877d5c
 type: guide
 title: 索引与同步 · x-basalt
 description: index/scan/watch 三种索引模式的行为、取舍与数据模型
@@ -12,7 +12,7 @@ tags:
 ---
 # 索引与同步 · x-basalt
 
-> 深入讲解三种索引维护方式（`index` / `scan` / `watch`）、增量检测细节、全量重建的原子性保证、SQLite 五表数据模型，以及路径感知链接解析。
+> 深入讲解三种索引维护方式（`index` / `scan` / `watch`）、增量检测细节、全量重建的原子性保证、SQLite 数据模型（五张笔记表 + `vault_entries` 附件表），以及路径感知链接解析。
 >
 > 返回：[使用指南](usage.md)
 > 相关章节：[命令参考](commands.md) · [DQL 查询语法](querying-dql.md) · [配置文件](configuration.md) · [故障排查](troubleshooting.md)
@@ -23,7 +23,7 @@ tags:
 
 | 方式     | 命令             | 适用场景                                    | 维护机制                                      |
 | -------- | ---------------- | ------------------------------------------- | --------------------------------------------- |
-| 全量重建 | `x-basalt index` | 首次建库；需要彻底重置索引                  | 清空五表，流式分批重写，单事务原子            |
+| 全量重建 | `x-basalt index` | 首次建库；需要彻底重置索引                  | 清空六表，流式分批重写，单事务原子            |
 | 按需增量 | `x-basalt scan`  | 无常驻进程；人/AI 周期触发                  | diff FS vs 库快照，只重扫新增/改动/删除的文件 |
 | 实时监听 | `x-basalt watch` | 有常驻进程；编辑 Vault 的同时需索引实时跟上 | chokidar 事件流，单文件增量更新               |
 
@@ -49,7 +49,7 @@ x-basalt scan [vault...] [--db <path>] [--rehash] [--dry-run] [--json] [--by-dir
 | `--db <path>` | `.x-basalt/index.db` | SQLite 索引文件（父目录自动创建）                                     |
 | `--rehash`    | 关                   | 按内容对比检测变更（慢但稳）；缺省用 mtime+size 快判                  |
 | `--dry-run`   | 关                   | 只报告差异，**绝不写库**（预览用）                                    |
-| `--json`      | 关                   | 结构化输出 `{added,modified,deleted,unchanged,byDir}`（AI 消费）      |
+| `--json`      | 关                   | 结构化输出 `{added,modified,deleted,unchanged,byDir,attachments}`（AI 消费） |
 | `--by-dir`    | 关                   | 人读模式下追加按目录标量计数明细（`--json` 恒含 `byDir`，与此开关无关）|
 
 默认（非 `--json`）输出示例：
@@ -110,12 +110,14 @@ x-basalt scan ./my-vault --rehash --json
   "byDir": {
     "Projects": { "added": 1, "modified": 0, "deleted": 0 },
     ".": { "added": 0, "modified": 1, "deleted": 0 }
-  }
+  },
+  "attachments": { "added": 1, "modified": 0, "deleted": 0, "unchanged": 5 }
 }
 ```
 
 - `added` / `modified` / `deleted`：`string[]`，已按字母序排序；
 - `unchanged`：`number`，未变文件**计数**（不列名，性能优先）；
+- `attachments`：附件（非 `.md` 文件，入 `vault_entries` 表，见 §5.6）的差异**计数** `{added,modified,deleted,unchanged}`——增量字段，与 `byDir` 同口径只给数量不给文件名，且不含在 `byDir` 聚合内；无附件时四项全 0；
 - `byDir`：`Record<目录路径, {added,modified,deleted}>`，按 `path.posix.dirname` 对上面三个数组分桶聚合的**标量计数**——同 `unchanged` 一样只给数量不给文件名，目录再多、库再大也是常数大小，不会撞 AI 工具调用的输出上限。根目录下的文件归 `"."` 桶；多根 vault 因主键带 `<根名>/` 前缀，天然按根分桶、互不混淆。CLI 人读模式配 `--by-dir` 追加同等明细。
 
 ### 2.4 分批处理与断点续扫
@@ -166,7 +168,7 @@ x-basalt index [vault...] [--db <path>] [--watch]
 | 行为           | 说明                                                                                               |
 | -------------- | -------------------------------------------------------------------------------------------------- |
 | **流式分批**   | 100 个/批并发读盘+解析，内存 O(批)，不随库规模膨胀                                                 |
-| **原子事务**   | 手动 `BEGIN` → 清空五表 → 分批写入 → `COMMIT`；任意批写入异常立即 `ROLLBACK`，保证「无半成品索引」 |
+| **原子事务**   | 手动 `BEGIN` → 清空六表 → 分批写入 → `COMMIT`；任意批写入异常立即 `ROLLBACK`，保证「无半成品索引」 |
 | **单文件容错** | 单文件读取/解析失败 → 跳过 + `warn`，其余照常入库，不中断全量重建                                  |
 | **`--watch`**  | 全量重建完成后继续进入监听模式（等价 `watch` 但先强制全量刷新）                                    |
 
@@ -185,7 +187,7 @@ x-basalt watch [vault...] [--db <path>] [--on-change <cmd>]
 | 机制             | 说明                                                                                |
 | ---------------- | ----------------------------------------------------------------------------------- |
 | **忽略隐藏路径** | 任意路径段以 `.` 开头均忽略，含 `.obsidian/`、`.git/`、`.DS_Store` 等               |
-| **只处理 `.md`** | 非 Markdown 文件的变更事件被过滤，不触发索引回调                                    |
+| **`.md` 进 `files`、附件进 `vault_entries`** | `.md` 变更走 `files` 等笔记表全解析路径；非 `.md` 附件变更以纯 stat 写入 `vault_entries` 表——两类都触发索引更新 |
 | **写稳定窗口**   | `awaitWriteFinish: { stabilityThreshold: 100ms }`，等编辑器写完再触发，避免半写状态 |
 | **先索引后回调** | `add`/`change` 先增量更新索引**再**触发 `--on-change`，保证回调看到的索引已是最新   |
 | **单文件容错**   | 单文件索引失败或监听器错误降级为 `warn`，不崩进程（幂等监听）                       |
@@ -198,7 +200,7 @@ x-basalt watch ./my-vault --db ./my-vault.db --on-change "node run-query.js {fil
 
 ## 5. SQLite 数据模型
 
-索引是**单文件 SQLite**，默认路径 `.x-basalt/index.db`。五张表，路径一律以 **POSIX 正斜杠**（`/`）存储，Windows 反斜杠在写入前由 `toPosix()` 转换（跨平台可移植）。
+索引是**单文件 SQLite**，默认路径 `.x-basalt/index.db`。六张表（五张笔记表 + `vault_entries` 附件表），路径一律以 **POSIX 正斜杠**（`/`）存储，Windows 反斜杠在写入前由 `toPosix()` 转换（跨平台可移植）。
 
 > **硬约束**：隐式字段（`file.inlinks` / `file.outlinks` / `file.tags` / `file.tasks`）**不建物化视图**，查询期路径感知 JOIN 实时计算。
 
@@ -259,6 +261,22 @@ x-basalt watch ./my-vault --db ./my-vault.db --on-change "node run-query.js {fil
 | `line_number` | INTEGER | 1-based 正文行号                             |
 
 `(file_path, block_id)` 有 `UNIQUE` 约束，写入用 `INSERT OR REPLACE` 保证幂等。
+
+### 5.6 `vault_entries` — 每个附件一行（纯 stat）
+
+非 `.md` 附件（图片 / PDF / `.base` / `.canvas` 等一切非隐藏文件）写入此表——**只取文件系统 stat 元数据，不读内容、不解析**：
+
+| 列          | 类型        | 说明                                                                                       |
+| ----------- | ----------- | ------------------------------------------------------------------------------------------ |
+| `path`      | TEXT UNIQUE | 与 `files` 同一套主键口径（多根带 `<根目录名>/` 前缀）；**跨表 path 唯一**——同一物理文件只进一张表 |
+| `name`      | TEXT        | 文件名无扩展名                                                                             |
+| `extension` | TEXT        | 扩展名不含点、小写                                                                         |
+| `folder`    | TEXT        | 父目录 POSIX（根为空串）                                                                   |
+| `size`      | INTEGER     | 字节数                                                                                     |
+| `mtime`     | INTEGER     | 修改时间 epoch 毫秒（同 `files` 口径）                                                     |
+| `ctime`     | INTEGER     | 创建时间 epoch 毫秒（同 `files` 口径）                                                     |
+
+只服务 **Bases all-files 模式**（`x-basalt base --conformance bases-all-files-2026-07`，见 [Bases 查询指南 §3.2](querying-bases.md#32-all-files-模式附件并入数据集)）；**DQL 数据集只读 `files` 等笔记表，附件永不进 `query` 结果**。隐藏路径过滤与 `.md` 相同（任意路径段以 `.` 开头均跳过）。
 
 ---
 

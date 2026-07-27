@@ -61,7 +61,7 @@ src/indexer/  索引层：调 parser 写 SQLite，chokidar 增量
 src/query/    查询层：DQL tokenizer→ast→sql-generator（chevrotain 文法），编译为参数化 SQL
 src/skill/    Skill 召回：json5 加载 + 模糊匹配，内置 obsidian-base-spec 兜底
 src/meta/     元数据写侧：frontmatter 往返内核(yaml Document) + CRUD + 原子写（唯一写 .md 的层）
-src/base/     Bases 无头引擎：.base 文档层 + 查询/公式/类型/分组汇总（P0..P2b 已落地；all-files/context 属 P3）
+src/base/     Bases 无头引擎：.base 文档层 + 查询/公式/类型/分组汇总 + all-files 附件数据集（P0..P2b 与 P3a 已落地；embedded code block/context 属 P3 余项）
 src/utils/    路径等工具
 src/cli.ts    commander 入口
 skills-data/   产品运行时 Skill 数据（SkillRecall 加载，含 obsidian-base-spec.json5）
@@ -160,3 +160,4 @@ docs/         research / specs / plans / guides / architecture / testing（见 d
 - 默认最小充分验证：优先跑受影响边界的 `typecheck`、`build` 与本次改动直接覆盖的测试；不把全量测试当默认动作。
 - 只有触及跨模块公共契约、根级脚本/配置、测试基础设施或用户明确要求时，才升级到全量 lint/typecheck/build/test。
 - 声称「完成 / 通过 / 可用」前，必须运行与改动风险匹配的验证命令，并依据实际输出说明结果；跳过的全量项要列出原因与剩余风险。
+- **提交 / 收口前必须同步受影响的教学文档**（`docs/guides/` 命令与教程、`README.md`、`CHANGELOG.md`、运行时自我说明书 `skills-data/core.json5`）：命令签名 / 选项 / 输出契约 / 不支持清单有任何变化，这些消费侧说明必须同批更新，文档缺口视为未完成——不等用户提醒。

@@ -12,7 +12,7 @@
 | `index` | 全量扫描 Vault → 单文件 SQLite 索引                                                                                               |
 | `scan`  | **按需增量重索引**：diff 文件系统 vs 库，只重扫新增/改动/删除（无需常驻进程）                                                     |
 | `query` | 自建 Dataview（DQL）子集 → 参数化 SQL → JSON 结果                                                                                 |
-| `base`  | `.base` view 无头查询（Bases Markdown conformance 2026-07）→ 稳定 JSON                                                            |
+| `base`  | `.base` view 无头查询（Bases Markdown conformance 2026-07，可选 all-files 模式将附件并入为行）→ 稳定 JSON |
 | `skill` | 加载规范知识库，Fuse.js 模糊召回 Obsidian / DQL 语法                                                                              |
 | `watch` | chokidar 常驻监听，实时增量更新 + 变更联动命令                                                                                    |
 

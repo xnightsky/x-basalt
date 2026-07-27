@@ -7,8 +7,8 @@ tags:
   - bases
   - testing
   - x-basalt
-timestamp: 2026-07-27T03:23:42Z
-sha256: 6912b0ba0ddb7edf435d467943c8015cbe749c5bf13ecd5b126b62a6ff932cc5
+timestamp: 2026-07-27T04:46:23Z
+sha256: 3ef44b64043b0f45f3668a136621a689c27cd6c8700be1e9ac426db1ec3a634f
 ---
 # Bases 实现状态追踪
 
@@ -25,7 +25,7 @@ sha256: 6912b0ba0ddb7edf435d467943c8015cbe749c5bf13ecd5b126b62a6ff932cc5
 | P1 oracle | 官方串行差分（争议语义冻结） | 🔜 待开（需用户侧 Obsidian App 环境，人工触发） |
 | P2a | formulas 核心（typed values + 算术 + 依赖图/cycle + clock） | ✅ 2026-07-27（[计划](../plans/2026-07-27-bases-p2a-formulas.md)） |
 | P2b | types.json / list 高阶 / groupBy / summaries | ✅ 2026-07-27（[计划](../plans/2026-07-27-bases-p2b-types-list-group-summary.md)） |
-| P3 | all-files / context / 嵌入 | 🔜 先做独立 indexer schema 决策 |
+| P3 | all-files / context / 嵌入 | 🔀 P3a 附件数据集 ✅ 2026-07-27（[计划](../plans/2026-07-27-bases-p3-attachments.md)）；context/嵌入仍 🔜 待开 |
 | review 修复 | P0..P2b 收口后的评审修复（静默失败 + 资源模型） | ✅ 2026-07-27（[计划](../plans/2026-07-27-bases-code-review-fixes.md)） |
 
 ## 1. 文档层（P0）✅ 2026-07-26
@@ -114,12 +114,12 @@ sha256: 6912b0ba0ddb7edf435d467943c8015cbe749c5bf13ecd5b126b62a6ff932cc5
 | 默认汇总 / custom summary values | BASE-SUM-001/002 | SUM-001 ✅ 2026-07-27（P2b；15 内置，limit 前全量暂定）；SUM-002 ⏸ 暂定（`values` 作用域实现，空值剔除/越权口径待 oracle） |
 | regex（若支持必须 ReDoS 防护 + 长度预算） | BASE-SEC-004 | ⏸ P2 最后评估 |
 
-## 5. P3 all-files / context ❔ 先做独立 schema 决策
+## 5. P3 all-files / context（P3a 附件数据集 ✅ 2026-07-27）
 
 | 项 | 场景编号 | 状态 |
 | ---- | ---- | ---- |
-| 附件作为行（图片/PDF/Canvas/.base） | BASE-ALL-001 | 📋 2026-07-27 schema 决策已冻结（[`../specs/2026-07-27-bases-p3-vault-entries-decision.md`](../specs/2026-07-27-bases-p3-vault-entries-decision.md)，独立 `vault_entries` 表 + DQL 不变证明清单）；实施另开计划 |
-| 附件 links/backlinks/embeds | BASE-ALL-002 | 🔜 P3 |
+| 附件作为行（图片/PDF/Canvas/.base） | BASE-ALL-001 | ✅ 2026-07-27（[P3a 计划](../plans/2026-07-27-bases-p3-attachments.md)：独立 `vault_entries` 表 + indexer 六条写入路径 + all-files 数据源 + CLI `--conformance`；「DQL 不变」证明 11①③④ 与跨表 path 唯一性 12 全部落成测试） |
+| 附件 links/backlinks/embeds | BASE-ALL-002 | ✅ 2026-07-27（P3a 满足线：附件行出链恒 `[]`、不伪造内容链接；附件作为链接 target 的命中关系可查询（笔记行 `file.links` 含原始 target，embed `![[img.png]]` 计入 links 表 is_embed=1）——暂定口径待 oracle） |
 | 独立 `.base` 的 `this`（显式 contextFile） | BASE-CTX-001 | 🔜 P3 |
 | Markdown `base` code block | BASE-CTX-002 | 🔜 P3（parser 新节点） |
 | `![[View.base#Name]]` embed | BASE-CTX-003 | 🔜 P3 |

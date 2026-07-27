@@ -31,6 +31,7 @@
 - [x] **P0..P2b 收口 · code review 修复批次**：view 必填字段静默通过、Windows 盘符大小写误判越界、多根 `.base` 主键缺命名空间、`order`/`sort` 静默丢项、`maxOperations` 非查询总额、解析缓存无界。计划：[`docs/plans/2026-07-27-bases-code-review-fixes.md`](docs/plans/2026-07-27-bases-code-review-fixes.md)（2026-07-27 落地）
 - [x] **收口附带修复**（2026-07-27，同批次外的两笔）：①**不加引号的 frontmatter 日期静默失去日期语义**——读侧 YAML 引擎改用 `yaml` 包（YAML 1.2 core 无 timestamp 隐式类型），与写侧 `src/meta` 统一；②**`format:check` 门禁此前从未可通过**——`.prettierignore` 豁免 fixtures + 作用域收敛为 `src tests scripts` + 一次性格式化 13 个文件。全量 **793 测试绿**。
 - [ ] **P3 · all-files/context（建议等 oracle 之后再开）**：附件数据集、embedded `base` code block、显式 `contextFile`/`this`；先做独立 indexer schema 决策，证明不改变既有 DQL `.md` 数据集。schema 决策已冻结：[`docs/specs/2026-07-27-bases-p3-vault-entries-decision.md`](docs/specs/2026-07-27-bases-p3-vault-entries-decision.md)（2026-07-27；实施另开计划）。**软序而非硬依赖**：真有 dogfood 需求可以先动，但要接受届时 oracle 结论可能同时推翻 P1/P2 与 P3 两层的暂定口径。
+  - [x] **P3a · 附件数据集（vault_entries + all-files 模式，BASE-ALL-001/002）**：schema+indexer 六条写入路径 → base all-files 数据源 → DQL 不变证明 + CLI `--conformance`，三片全部落地。计划：[`docs/plans/2026-07-27-bases-p3-attachments.md`](docs/plans/2026-07-27-bases-p3-attachments.md)（2026-07-27 用户拍板「附件数据集优先」开片；片一 schema+indexer、片二 all-files 数据源 + conformance 开关、片三 DDL 防漂移锁 + DQL 不变回归 + CLI + 基准全部落地。embedded code block 与 contextFile/this 仍另开计划）
 
 **暂缓**：内置 chat 打磨、DQL 函数全集、task emoji 全字段、lint CI/baseline、embedding、复杂编排器。它们不能优先于 **Bases oracle**（原文写「P0/P1」，两者均已完成，优先级基准顺延至 oracle），除非 dogfood 出现阻断性缺陷。
 
