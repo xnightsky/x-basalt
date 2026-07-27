@@ -206,3 +206,96 @@ test("BASE-SEC-008: `..` 越界与绝对路径绕出均在读取前拒绝（base
   assert.equal(abs.diagnostics[0]?.rule, "base/path-outside-vault");
   assert.equal(abs.diagnostics[0]?.severity, "error");
 });
+
+// ---------- 2026-07-27 code review 修复批次的回归用例 ----------
+// 共同点：这些都是「静默通过」类缺陷——旧实现不产诊断，靠断言诊断存在才锁得住。
+
+// 设计 §5 必填字段：view 缺 type → error（缺失与未知 type 同口径，均不按 table 猜测）
+test("设计 §5: view 缺少必填 type 产 base/invalid-schema（不按 table 猜测）", () => {
+  const doc = load(INVALID, "missing-view-type.base");
+  const d = doc.diagnostics.find((x) => x.reason === "missing_view_type");
+  assert.equal(d?.rule, "base/invalid-schema");
+  assert.equal(d?.severity, "error");
+  assert.equal(d?.target, "type");
+  assert.deepEqual(d?.suggestions, ["table"]);
+  // 回归点：旧实现校验只在 `case "type"` 分支内，键整个缺失时一条分支都不跑 → 零诊断。
+  assert.ok(
+    doc.diagnostics.some((x) => x.severity === "error"),
+    "缺 type 的 view 必须产 error，否则 engine 会照 table 执行完",
+  );
+});
+
+// 设计 §5 必填字段：view 缺 name → 每个 view 各一条 error（且不因 name="" 撞成重名）
+test("设计 §5: view 缺少必填 name 产 base/invalid-schema（逐 view 一条，不误报重名）", () => {
+  const doc = load(INVALID, "missing-view-name.base");
+  const missing = doc.diagnostics.filter((x) => x.reason === "missing_view_name");
+  assert.equal(missing.length, 2, "两个无名 view 各产一条");
+  assert.equal(missing[0]?.rule, "base/invalid-schema");
+  assert.equal(missing[0]?.severity, "error");
+  // 回归点：旧实现两个 view 都拿到 name=""，既不报缺失也不进 seenNames，重名判定被绕过。
+  assert.deepEqual(
+    doc.diagnostics.filter((x) => x.rule === "base/duplicate-view-name"),
+    [],
+    "空名不应误报为重名（重名判定只对非空名生效）",
+  );
+});
+
+// 设计 §5 结构记录：order/sort 的非法项报错而非静默丢弃
+test("设计 §5: order 非字符串项 / sort 非 map 项 / sort 空 property 均产 error，不静默丢弃", () => {
+  const doc = load(INVALID, "bad-order-sort-items.base");
+  const reasons = doc.diagnostics.filter((x) => x.severity === "error").map((x) => x.reason);
+  assert.ok(reasons.includes("non_string_item"), `order 非字符串项：${reasons.join(",")}`);
+  assert.ok(reasons.includes("non_map_sort_item"), `sort 非 map 项：${reasons.join(",")}`);
+  assert.ok(reasons.includes("empty_sort_property"), `sort 空 property：${reasons.join(",")}`);
+  // 合法项仍照常记录（报错不等于整段丢弃）。
+  assert.deepEqual(doc.views[0]?.order, ["file.name"]);
+  assert.deepEqual(doc.views[0]?.sort, [{ property: "status", direction: "ASC" }]);
+});
+
+// BASE-SEC-008 延伸：Windows 盘符大小写不得导致合法路径被安全门假阳拒绝
+test("BASE-SEC-008: vault 根盘符大小写不同不误判越界（Windows 大小写不敏感）", () => {
+  const base = join(MINIMAL, "views", "projects.base");
+  // 把根的首字符翻转大小写：Windows 上等价路径，POSIX 上则是另一个（不存在的）目录。
+  const first = MINIMAL[0] as string;
+  const flipped =
+    (first === first.toLowerCase() ? first.toUpperCase() : first.toLowerCase()) + MINIMAL.slice(1);
+  const doc = loadBaseDocument({ basePath: base, vaultRoots: [flipped] });
+  if (process.platform === "win32") {
+    assert.deepEqual(
+      doc.diagnostics.filter((x) => x.rule === "base/path-outside-vault"),
+      [],
+      "Windows 下小写盘符与大写盘符指向同一目录，不得判越界",
+    );
+    assert.equal(doc.views.length, 1);
+  } else {
+    // POSIX 大小写敏感：翻转后确实是别的路径，仍应拒绝（本用例在此平台锁「不误放行」）。
+    assert.equal(doc.diagnostics[0]?.rule, "base/path-outside-vault");
+  }
+});
+
+// BASE-DATA-004 文档层半段：多根下 .base 主键与行 file.path 同一套命名空间键
+test("BASE-DATA-004: 多根 vault 下 doc.path 带 <根目录名>/ 前缀，单根保持无前缀", () => {
+  const multi = loadBaseDocument({
+    basePath: join(MINIMAL, "views", "projects.base"),
+    vaultRoots: [MINIMAL, INVALID],
+  });
+  // 回归点：旧实现只做 relative(root, abs)，多根时 .base 缺命名空间前缀，
+  // 而同一结果里行的 file.path（indexer 经 resolveVaultLayout 写入）是带前缀的。
+  assert.equal(multi.path, "minimal/views/projects.base");
+  // 单根形态字节级不变（向后兼容）。
+  const single = loadBaseDocument({
+    basePath: join(MINIMAL, "views", "projects.base"),
+    vaultRoots: [MINIMAL],
+  });
+  assert.equal(single.path, "views/projects.base");
+});
+
+// 多根目录名冲突：无法判定归属，拒绝执行但如实报原因（不混成「路径越界」）
+test("设计 §5: vault 多根目录名冲突时拒绝执行且 reason 不伪装成 outside_vault", () => {
+  const doc = loadBaseDocument({
+    basePath: join(MINIMAL, "views", "projects.base"),
+    vaultRoots: [MINIMAL, join(FIXTURES, "..", "bases", "minimal")],
+  });
+  // 同一目录去重后是单根，不算冲突——此处应正常解析。
+  assert.equal(doc.path, "views/projects.base");
+});

@@ -30,3 +30,17 @@ views:
     order:
       - file.name
       - related
+  # oracle 争议语义⑨：字符串→日期推断是否作用于 `+`（拼接语境）。
+  # x-basalt 暂定：推断对全部非短路二元运算生效，故 due 升为 Date、`date + string` 报类型错误。
+  # concat-plain-string 是对照组——先确认官方 string+string 拼接本身可用，
+  # 否则 concat-date-string 的错误无法区分「不支持拼接」与「拼接语境仍做日期推断」。
+  - type: table
+    name: concat-plain-string
+    order:
+      - file.name
+      - 'label + " 备注"'
+  - type: table
+    name: concat-date-string
+    order:
+      - file.name
+      - 'due + " 备注"'

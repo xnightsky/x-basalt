@@ -1,0 +1,12 @@
+# order 含非字符串项、sort 含非 map 项与空 property：曾全部静默丢弃（投影少列 / 排序键少一个）
+views:
+  - type: table
+    name: Bad
+    order:
+      - file.name
+      - 42
+    sort:
+      - property: status
+        direction: ASC
+      - "not-a-map"
+      - direction: DESC

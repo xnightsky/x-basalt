@@ -1,0 +1,4 @@
+# 两个 view 都缺必填 name：曾各得 name="" 且零诊断，还逃过 duplicate-view-name 判定
+views:
+  - type: table
+  - type: table

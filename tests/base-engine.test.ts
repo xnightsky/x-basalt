@@ -559,3 +559,28 @@ test("执行预算: maxOperations 耗尽转 execution-budget 且不返回部分�
   assert.ok(err !== undefined);
   assert.match(err.message, /预算/);
 });
+
+// 执行预算（2026-07-27 review 修复）：maxTotalOperations 跨行累计——单次求值远未触顶也会耗尽。
+// 回归点：maxOperations 计数器随每次 evaluateExpression 重置，只有它时最坏总量
+// = maxRows × 列数 × maxOperations ≈ 1e11，「预算从未耗尽」但查询已不可用。
+test("执行预算: maxTotalOperations 跨行累计耗尽转 execution-budget（单次 maxOperations 不受影响）", () => {
+  // 每行 filter 只花个位数操作，单次上限给足；总额只给 3 → 必然在头几行内耗尽。
+  const r = query("merged.base", undefined, {
+    limits: { maxOperations: 1_000_000, maxTotalOperations: 3 },
+  });
+  assert.deepEqual(r.rows, []);
+  assert.equal(r.total, 0);
+  const err = r.diagnostics.find(
+    (d) => d.rule === BASE_RULES.executionBudget && d.severity === "error",
+  );
+  assert.ok(err !== undefined, "跨行累计总额耗尽必须产 execution-budget");
+  assert.match(err.message, /累计操作数/);
+
+  // 同一查询在默认总额下正常完成（证明上面的失败来自总额而非其它预算）。
+  const ok = query("merged.base");
+  assert.deepEqual(
+    ok.diagnostics.filter((d) => d.severity === "error"),
+    [],
+  );
+  assert.ok(ok.total > 0);
+});
