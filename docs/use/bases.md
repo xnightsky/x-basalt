@@ -6,8 +6,8 @@ tags:
   - guide
   - bases
   - x-basalt
-timestamp: 2026-07-27T19:02:50Z
-sha256: f1966ca1374e0d94fab4861a55f37694797a2cfb87c2d71577a013d4d1c0601b
+timestamp: 2026-07-27T19:13:32Z
+sha256: f3696960adac4bab7c3c6e4c0fea7e54d1c7ef09d160d842e1cebc40ab6e8238
 ---
 # Bases · 用 `.base` 无头查询你的 vault
 
@@ -39,9 +39,10 @@ Bases 仍在快速演进（1.9 early access 期间已发生 snake_case → camel
 
 | 官方新增 | x-basalt 状态 |
 | --- | --- |
-| `%` 取模运算符 | 未采纳（快照后新增） |
-| `date()` / `link()` 构造函数 | 未采纳（快照后新增） |
-| duration 字符串后缀形态（`"1 day"`、短单位 `y/M/d/w/h/m/s`） | 未采纳；本仓只支持 `1day` 这种单 token 形态（[§3.4](#34-字面量与运算符)） |
+| `%` 取模运算符 | **未采纳**（文法层拒绝） |
+| `date()` / `duration()` 构造函数 | **已采纳**（2026-07-28，[§3.6](#36-函数与方法全表)） |
+| `link()` / `file()` 构造函数 | 未采纳（计划中） |
+| duration 字符串后缀形态（`"1 day"`、短单位 `y/M/d/w/h/m/s`） | **只在 `duration(...)` 入参处生效**；表达式**字面量**仍只支持 `1day` 单 token 形态（[§3.4](#34-字面量与运算符)） |
 | `file.backlinks` | 未采纳（待评估） |
 
 升级快照时需专项对齐上表，并同步 [语法真相源](../design/bases-syntax.md) 与[实现状态追踪](../design/bases-status.md)。**逐项实现状态与诊断编号以语法真相源为准**；本文是面向使用者的完整覆盖清单与示例，两者标注同一个官方快照日期，升级时必须同步两处。
@@ -551,6 +552,8 @@ duration 单位（单复数均可）：`millisecond` `second` `minute` `hour` `d
 | `today()` | date | 当日 UTC 00:00 |
 | `now()` | datetime | 当前时刻 |
 | `max(a, b, …)` / `min(a, b, …)` | number | 变长 number 参数（至少 1 个）；**不收单个 list 参**，非 number 参报错 |
+| `date(v)` | date | 严格 ISO 字符串（`YYYY-MM-DD` / `YYYY-MM-DDTHH:mm[:ss]`，可带 `Z`/`±hh:mm`）；已是 date 则原样返回；number 按 epoch 毫秒（`date(file.ctime)` 可用） |
+| `duration(v)` | duration | `"1day"` / `"1 day"` / `"2 hours"`（长单位不分大小写、可加复数 `s`），或官方短单位 `y M w d h m s`（**大小写敏感**：`M`=月、`m`=分）；number 按毫秒 |
 
 **任意接收者**
 
@@ -585,6 +588,30 @@ duration 单位（单复数均可）：`millisecond` `second` `minute` `hour` `d
 | `n.round(digits?)` | number | `digits` 非负整数，缺省 0 |
 | `n.toFixed(digits?)` | **string** | `digits` 0..100 整数，缺省 0；与 `round` 的区别是返回字符串 |
 | `n.isEmpty()` | boolean | 恒 `false`（`0` 是有值的 0；属性不存在是 missing，不是空） |
+
+**date / datetime 方法**
+
+| 签名 | 返回 | 说明 |
+| --- | --- | --- |
+| `d.format(fmt)` | string | 见下方格式串说明 |
+| `d.time()` | duration | 当日 UTC 零点起的时长——可比较可运算（`d.time() < 12hours`）；要字符串用 `format("HH:mm")`。date 精度的值恒为 0 |
+| `d.relative()` | string | 相对当前时刻的人读串：`3 days ago` / `in 2 hours` / `just now`。**固定英文**，不随语言变（官方那套是本地化的，不是稳定输出） |
+| `d.isEmpty()` | boolean | 恒 `false` |
+
+**`format` 的格式串**——只支持这些**与语言无关的数字 token**，全部按 UTC：
+
+| token | 含义 | 例（`2026-08-09T07:05:03Z`） |
+| --- | --- | --- |
+| `YYYY` / `YY` | 年 | `2026` / `26` |
+| `MM` / `M` | 月（补零 / 不补零） | `08` / `8` |
+| `DD` / `D` | 日 | `09` / `9` |
+| `HH` / `H` | 时（24 小时制） | `07` / `7` |
+| `mm` / `m` | 分 | `05` / `5` |
+| `ss` / `s` | 秒 | `03` / `3` |
+
+非字母字符（`-` `:` `/` 空格…）原样输出；**字面文本用 `[方括号]` 包起来**（`"[年]YYYY[月]MM"` → `年2026月08`）。
+
+> `MMMM`（月名）、`dddd`（星期名）、`A`（AM/PM）、`Z`（时区）这类 token **会报错，不会静默输出英文**——它们在官方那边随界面语言变，产出的字节不是稳定 schema。要月名请自己拼。
 
 **list 方法**
 

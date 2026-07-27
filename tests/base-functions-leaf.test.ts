@@ -297,9 +297,9 @@ test("注册表与名字真相源一一对齐，且同名多组各自独立", ()
     [],
     "注册表不得有名字真相源之外的条目",
   );
-  // 同名多组：slice/reverse 各有 string+list 两组，isEmpty 有 string/number/list/object 四组
+  // 同名多组：slice/reverse 各有 string+list 两组；isEmpty 覆盖 date/list/number/object/string
   assert.deepEqual(groupsOf("slice"), ["list", "string"]);
   assert.deepEqual(groupsOf("reverse"), ["list", "string"]);
-  assert.deepEqual(groupsOf("isEmpty"), ["list", "number", "object", "string"]);
+  assert.deepEqual(groupsOf("isEmpty"), ["date", "list", "number", "object", "string"]);
   assert.deepEqual(groupsOf("round"), ["number"]);
 });

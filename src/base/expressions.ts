@@ -82,6 +82,14 @@ export const BASE_FUNCTION_NAMES: ReadonlySet<string> = new Set([
   "html",
   "image",
   "icon",
+  // date/duration 族（2026-07-28 覆盖率片二）：global 构造 date()/duration() +
+  // date 方法组 format/time/relative（isEmpty 名字复用）。
+  // 快照说明：date()/duration() 晚于本仓 2026-07-22 冻结快照，本片显式采纳（语法 §1.1 漂移记录已同步）。
+  "date",
+  "duration",
+  "format",
+  "time",
+  "relative",
   // random 同理进白名单显式拒绝——但理由不是「不渲染」而是**与字节稳定保证冲突**
   // （用户 2026-07-28 拍板：直接拒绝，不注入种子、不放弃字节稳定）。
   "random",

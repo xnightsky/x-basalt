@@ -7,8 +7,8 @@ tags:
   - bases
   - testing
   - x-basalt
-timestamp: 2026-07-27T19:02:44Z
-sha256: 3c8eff4661c38d59524c8b31ad93a18fb62664ef82aa4339cbd7145461910d05
+timestamp: 2026-07-27T19:13:03Z
+sha256: a26464ee0110ba789770bbe57374128fa115dc2a0a30c88d47808fd15b74f556
 ---
 # Bases 实现状态追踪
 
@@ -135,7 +135,7 @@ sha256: 3c8eff4661c38d59524c8b31ad93a18fb62664ef82aa4339cbd7145461910d05
 | 片 | 内容 | 状态 |
 | ---- | ---- | ---- |
 | 片一 | 机械叶子 16 个 + 渲染类 4 个显式拒绝 + `round` 归组 | ✅ 2026-07-28（`tests/base-functions-leaf.test.ts` 18 用例；838 全量绿） |
-| 片二 | Date/Duration 族 6 个（`date()`/`duration()`/`format`/`time`/`relative`/`isEmpty`），新增 `date` 分派组 | 🔜 |
+| 片二 | Date/Duration 族 6 个（`date()`/`duration()`/`format`/`time`/`relative`/`isEmpty`），新增 `date` 分派组 | ✅ 2026-07-28（`tests/base-functions-date.test.ts` 11 用例；850 全量绿） |
 | 片三 | Link/File 互转 5 个（`asFile`/`linksTo`/`asLink`/`file()`/`link()`） | 🔜 |
 | 片四 | `matches`（regex）+ ReDoS 防护 | 🔜 BASE-SEC-004 |
 | 片五 | list/link 当分组键 + 自定义汇总收口 | 🔜 BASE-GROUP-002 / BASE-SUM-002 |
@@ -153,6 +153,22 @@ sha256: 3c8eff4661c38d59524c8b31ad93a18fb62664ef82aa4339cbd7145461910d05
 | 渲染类 `escapeHTML`/`html`/`image`/`icon` 白名单内显式拒绝 | 设计 §1 | ✅ 2026-07-28（新增 `BaseUnsupportedError` → `base/unsupported-feature`，与 `property-type-mismatch` 分开，读出方可据 rule 区分「用错类型」与「本引擎不做」） |
 | `repeat`/`replace`/`split` 产物规模预算（string 计字符数，`repeat` 分配前预检） | BASE-SEC-005 延伸 | ✅ 2026-07-28 |
 | `random()` × 字节稳定冲突 | 语法 §4.4 | ✅ 2026-07-28 **直接拒绝**（用户拍板；白名单内报 `base/unsupported-feature`，消息说明是契约冲突而非「不渲染」，与渲染类分开断言） |
+
+### 片二明细 ✅ 2026-07-28
+
+> 测试：`tests/base-functions-date.test.ts`（11 用例）。**快照口径变化**：`date()`/`duration()` 晚于 2026-07-22 冻结快照，本片显式采纳，语法 §1.1 漂移记录已同步（`%` 取模仍不采纳）。
+
+| 项 | 场景编号 | 状态 |
+| ---- | ---- | ---- |
+| global `date(v)` 构造（严格 ISO / date 幂等 / number 按 epoch 毫秒） | BASE-TYPE-005 | ✅ 2026-07-28（与 frontmatter 推断复用同一 `parseDateLike`，保证「属性里能识别的」与「`date()` 能构造的」是同一集合） |
+| global `duration(v)` 构造（长单位 + 官方短单位 + number 按毫秒） | BASE-TYPE-005 | ✅ 2026-07-28（新增值层 `parseDurationLike`；短单位**大小写敏感**：`M`=月/`m`=分，大写变体 `D`/`Y` 一律拒绝——混淆代价是量级级错误） |
+| date 分派组新增（`receiverGroupOf` 返 `"date"`） | 设计 §9 | ✅ 2026-07-28（duration/link 仍只命中 `any`；内部字段 epochMs/precision 依旧不外露） |
+| `date.format(fmt)` | BASE-TYPE-005 | ✅ 2026-07-28（数字 token 子集 + 同字符游程分词 + `[字面量]` 转义；本地化 token 报错——见下方「实测非显然点」） |
+| `date.time()` → 当日 UTC 零点起的 duration | BASE-TYPE-005 | ✅ 2026-07-28（暂定口径：选 duration 而非 `"HH:mm"` 字符串，可比较可算术；date 精度恒 0） |
+| `date.relative()` | BASE-TYPE-005 / BASE-FORM-006 | ✅ 2026-07-28（固定英文 + 固定阶梯，时间源恒为注入 clock；官方输出随界面语言变，不复刻） |
+| `date.isEmpty()` 恒 false | BASE-TYPE-005 | ✅ 2026-07-28 |
+
+> **片二实测非显然点**（已在代码注释与测试里存证）：`format` 若按「最长已知 token 优先」扫描，`MMMM` 会被贪婪切成 `MM`+`MM` **静默输出 `0808`**——用户写 `MMMM` 要的是月名，静默给错数字比报错糟得多。改为按同字符最长游程整体查表后才落到正确诊断，测试用 `MMMM`/`dddd`/`DDDD`/`YYY` 四个游程锁定。
 
 ## 7. 不做 / 暂缓（理由记录）
 

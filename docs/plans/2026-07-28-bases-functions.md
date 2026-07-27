@@ -8,8 +8,8 @@ tags:
   - bases
   - functions
   - x-basalt
-timestamp: 2026-07-27T19:03:22Z
-sha256: 7436bf670f435ad9dc58ea03d0c59fc692c371b20675698344d65d3fd16ea028
+timestamp: 2026-07-27T19:14:06Z
+sha256: 68176ad923c10fda436a46f8de4e067a05fc3936eed84d48f9c16d4e22e82c2d
 ---
 # 计划：Bases 函数覆盖率（51% → ~90%）
 
@@ -127,3 +127,23 @@ sha256: 7436bf670f435ad9dc58ea03d0c59fc692c371b20675698344d65d3fd16ea028
 **验证过的不变量**：`list.reverse()` 不原地改行上的 note 属性数组（测试断言 `row.note.items` 反转后仍为原序）——否则同一行被多个表达式读取时结果依赖求值顺序，直接破坏字节稳定。
 
 **片一补充（用户拍板后同批落地）**：`random()` 按决策 #14 显式拒绝，复用渲染类同一机制但消息独立；测试 19 例（+1）。
+
+### 片 2 ✅ 2026-07-28
+
+**四门**（全绿）：typecheck / lint 零 warning / format:check / `pnpm test` **850 pass / 0 fail**（片一后基线 839，+11）。
+
+**测试**：新增 `tests/base-functions-date.test.ts` 11 用例（BASE-TYPE-005 为主，`relative` 兼 BASE-FORM-006 的 clock 注入纪律）。
+
+**改动落点**：`values.ts` 新增 `parseDurationLike` + `DAY_MS`；`functions.ts` 新增 `expectDateReceiver`/`dateFormatTokens`/`formatDateValue`/`relativeFromNow` 与 6 条注册项；`evaluator.ts` 的 `receiverGroupOf` 对 date 返 `"date"`（duration/link 仍返 null）；`expressions.ts` +5 名。
+
+**实测到的非显然点**（代码注释 + 测试双存证）：`format` 若按「最长已知 token 优先」扫描，`MMMM` 会被贪婪切成 `MM`+`MM` **静默输出 `0808`**——用户写 `MMMM` 要的是月名，静默给错数字比报错糟得多。改为按**同字符最长游程**整体查表（moment 的真实 token 语法）后才落到正确诊断；测试用 `MMMM`/`dddd`/`DDDD`/`YYY` 四个游程锁定。
+
+**口径变化（需下游知晓）**：`date()`/`duration()` 晚于本仓 2026-07-22 冻结快照，本片显式采纳——语法 §1.1 漂移记录、`docs/use/bases.md` 顶部「已知官方后续变动」表同步改写。duration 字符串形态**只在 `duration()` 入参处生效**，表达式字面量仍只认 `1day` 单 token；`%` 取模仍不采纳。
+
+### 片 2 新增 Decision Log
+
+16. **`duration()` 短单位大小写敏感**（`M`=month、`m`=minute，照官方），大写变体 `D`/`Y`/`W`/`H`/`S` 一律拒绝而非归一。理由：`M`/`m` 混淆是 30 天 vs 1 分钟的量级级错误，大小写归一等于把这个陷阱变成静默错误。
+17. **`date(number)` / `duration(number)` 为自建扩展**：前者按 epoch 毫秒（与算术层 `wrapEpochForArith` 对 ctime/mtime 的口径一致），后者按毫秒（与 `toOutputValue` 输出 duration 为毫秒数互为逆，可往返）。
+18. **`time()` 返回 duration 而非 `"HH:mm"` 字符串**。理由：duration 是既有类型，可比较（`t > 12hours`）、可算术；字符串需求由 `format("HH:mm")` 覆盖，不开两条路。暂定，待 oracle。
+19. **`relative()` 固定英文**、固定阶梯（year=365d / month=30d 沿用值域既有约定），时间源恒为注入 clock。理由：官方该函数输出随界面语言变，本就不是稳定 schema（设计 §14 已声明不复刻本地化显示串）；固定串至少保证字节稳定。
+20. **`format` 只做数字 token**，本地化 token 报错。理由同上，且「静默给一种语言」比报错更糟。

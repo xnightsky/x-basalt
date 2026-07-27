@@ -384,6 +384,54 @@ export function parseDateLike(v: unknown): BaseDateValue | undefined {
   return createDateValue("datetime", base - sign * (oh * 60 + om) * 60_000);
 }
 
+// === Obsidian 规范来源: Bases duration 字符串形态（`"1 day"` / `"1day"` / 短单位 y M w d h m s）===
+// 快照说明：官方的 duration **字符串**形态晚于本仓 2026-07-22 冻结快照，2026-07-28 随
+// `duration()` 构造函数一并采纳（只在函数入参处生效；表达式**字面量**仍只认 `1day` 单 token 形态）。
+/**
+ * 短单位表——**大小写敏感**，照官方口径：`M`=month、`m`=minute。
+ * 不做大小写归一：`M`/`m` 混淆会造成 30 天 vs 1 分钟的量级级错误，宁可报错也不猜。
+ * 因此 `Y`/`D`/`W`/`H`/`S` 等大写变体一律不认（返回 undefined → 调用方报类型错误）。
+ */
+const DURATION_SHORT_UNIT: Readonly<Record<string, BaseDurationUnit>> = {
+  y: "year",
+  M: "month",
+  w: "week",
+  d: "day",
+  h: "hour",
+  m: "minute",
+  s: "second",
+};
+
+/** duration 字符串整体形态：`<数值><可选空白><单位>`（数值可负，负 duration 由一元 `-` 语义支持）。 */
+const DURATION_STRING_RE = /^(-?\d+(?:\.\d+)?)\s*([A-Za-z]+)$/;
+
+/**
+ * duration 字符串 → BaseDurationValue（`duration()` 构造函数的解析核心）。
+ *
+ * 接受：`"1day"` / `"1 day"` / `"2 hours"`（长单位大小写不敏感、允许复数词尾 `s`，
+ * 与 duration 字面量词法同一套单位名）与官方短单位 `"1d"` / `"3M"`（大小写敏感）。
+ * 不接受：`"ms"`（长度 2 而非长单位名）、无单位纯数字、多段组合（`"1d2h"`）——
+ * 一律返回 undefined 由调用方转行级类型错误，不猜、不部分解析。
+ */
+export function parseDurationLike(s: string): BaseDurationValue | undefined {
+  const m = DURATION_STRING_RE.exec(s.trim());
+  if (m === null) return undefined;
+  const raw = m[2] as string;
+  let unit: BaseDurationUnit | undefined;
+  if (raw.length === 1) {
+    unit = DURATION_SHORT_UNIT[raw];
+  } else {
+    const lower = raw.toLowerCase();
+    const singular = lower.endsWith("s") ? lower.slice(0, -1) : lower;
+    if (Object.hasOwn(DURATION_UNIT_MS, singular)) unit = singular as BaseDurationUnit;
+  }
+  if (unit === undefined) return undefined;
+  return createDurationValue(Number(m[1]), unit);
+}
+
+/** 一天的毫秒数（`date.time()` 取「当日 UTC 零点起的时长」用）。 */
+export const DAY_MS = 86_400_000;
+
 // === Obsidian 规范来源: wikilink 形态 `[[target]]` / `[[target|display]]` / `[[target#subpath]]` ===
 // （可组合；解析顺序与 src/parser/wikilink.ts parseInner 一致：先 `|` 切 display，再 `#` 切锚点。）
 /** 整体匹配的 frontmatter wikilink 字符串（内部不含 `[`/`]`，wikilink 不嵌套）。 */

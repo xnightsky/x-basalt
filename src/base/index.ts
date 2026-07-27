@@ -61,6 +61,7 @@ export {
   isFileValue,
   isLinkValue,
   parseDateLike,
+  parseDurationLike,
   parseWikilinkValue,
   safeGetOwn,
   sortKeyCompare,

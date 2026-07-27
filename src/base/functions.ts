@@ -19,14 +19,21 @@ import { BASE_FUNCTION_NAMES } from "./expressions.js";
 import {
   BaseTypeError,
   BaseUnsupportedError,
+  DAY_MS,
   MISSING,
   compareValues,
   createDateValue,
+  createDurationValue,
+  isDateValue,
+  isDurationValue,
   isFileValue,
+  parseDateLike,
+  parseDurationLike,
   safeGetOwn,
   truthy,
   typedEqual,
   typeNameOf,
+  type BaseDateValue,
   type BaseValue,
 } from "./values.js";
 
@@ -38,6 +45,8 @@ import {
  * `"number"` 自 2026-07-28 覆盖率片一起独立成组（此前 number 方法挂 "any" 组并在 impl 内
  * 自验 receiver）——组内已有 6 个方法（abs/ceil/floor/round/toFixed/isEmpty），独立分派后
  * `"x".abs()` 得到「类型 string 不支持方法 abs」而非「参数类型错误」，诊断更准确。
+ * `"date"` 同理于片二加入（format/time/relative/isEmpty）；duration/link 仍无独立组
+ * （只命中 "any"），其内部字段不外露为成员。
  * 新增分派组必须同步改 evaluator.ts 的 `receiverGroupOf()`，否则该组永远查不到。
  */
 export type BaseFunctionReceiver =
@@ -45,6 +54,7 @@ export type BaseFunctionReceiver =
   | "any"
   | "string"
   | "number"
+  | "date"
   | "list"
   | "object"
   | "file";
@@ -196,6 +206,123 @@ function extremumOf(entry: BaseFunctionEntry, args: BaseValue[], kind: "max" | "
   // arity.min=1 已由 evaluator 先验，best 必已赋值；防御性兜底不静默返 0。
   if (best === undefined) throw argTypeError(entry, `${kind} 至少需要一个参数`);
   return best;
+}
+
+/** 同 {@link expectListReceiver}：date 组分派后的剩余防线。 */
+function expectDateReceiver(entry: BaseFunctionEntry, r: BaseValue | null): BaseDateValue {
+  if (r === null || !isDateValue(r)) {
+    throw argTypeError(entry, `receiver 须为 date/datetime，实为 ${typeNameOf(r as BaseValue)}`);
+  }
+  return r;
+}
+
+/** 左补零（格式化 token 用）。 */
+function pad(n: number, width = 2): string {
+  return String(n).padStart(width, "0");
+}
+
+// === Obsidian 规范来源: Bases date.format(format)（官方用 moment 风格 token）===
+/**
+ * 支持的格式 token → 取值（**全部按 UTF 无时区解释**，与 date/datetime 值域口径一致）。
+ *
+ * 自建收窄（暂定口径，待 oracle）：**只做与语言无关的数字 token**。
+ * `MMMM`（月名）/`dddd`（星期名）/`A`（AM-PM）等本地化 token 一律报错而不是静默输出英文——
+ * 官方那些 token 随界面语言变，产出的字节不是稳定 schema（设计 §14「不复刻本地化显示名」），
+ * 静默给一种语言比报错更糟。字面文本用 `[方括号]` 转义（同 moment）。
+ */
+function dateFormatTokens(d: Date): Readonly<Record<string, string>> {
+  return {
+    YYYY: pad(d.getUTCFullYear(), 4),
+    YY: pad(d.getUTCFullYear() % 100),
+    MM: pad(d.getUTCMonth() + 1),
+    M: String(d.getUTCMonth() + 1),
+    DD: pad(d.getUTCDate()),
+    D: String(d.getUTCDate()),
+    HH: pad(d.getUTCHours()),
+    H: String(d.getUTCHours()),
+    mm: pad(d.getUTCMinutes()),
+    m: String(d.getUTCMinutes()),
+    ss: pad(d.getUTCSeconds()),
+    s: String(d.getUTCSeconds()),
+  };
+}
+
+/** 支持的 token 名（诊断消息用；取值表的键即全集）。 */
+const DATE_FORMAT_TOKEN_NAMES: readonly string[] = Object.keys(dateFormatTokens(new Date(0)));
+
+/**
+ * 按 token 表格式化 date（手写扫描）。
+ *
+ * **分词规则 = 同一字符的最长游程**（moment 的真实 token 语法：`MM`/`MMMM` 是两个不同 token，
+ * 而不是「`MM` 重复两次」）。这条不能省：按「最长已知 token 优先」扫描会把 `MMMM` 贪婪切成
+ * `MM`+`MM` 静默输出 `0808`，而用户写 `MMMM` 要的是月名——静默给错数字比报错糟得多。
+ * 游程整体查表：查不到（`MMMM`/`dddd`/`A`/`Z` 等本地化或未实现 token）即报错。
+ * 非字母字符原样透出；`[文本]` 转义字面量（同 moment）。
+ */
+function formatDateValue(entry: BaseFunctionEntry, epochMs: number, fmt: string): string {
+  const table = dateFormatTokens(new Date(epochMs));
+  let out = "";
+  let i = 0;
+  while (i < fmt.length) {
+    const ch = fmt[i] as string;
+    if (ch === "[") {
+      // 字面量转义 `[文本]`；未闭合 `[` 视为格式串写错，报错而非静默当普通字符。
+      const end = fmt.indexOf("]", i + 1);
+      if (end === -1) throw argTypeError(entry, "格式串中的 `[` 未闭合（字面文本须写作 [文本]）");
+      out += fmt.slice(i + 1, end);
+      i = end + 1;
+      continue;
+    }
+    if (!/[A-Za-z]/u.test(ch)) {
+      out += ch; // 非字母（`-` `:` 空格 `/` 等）原样透出
+      i += 1;
+      continue;
+    }
+    let end = i;
+    while (end < fmt.length && fmt[end] === ch) end += 1;
+    const runToken = fmt.slice(i, end);
+    const value = table[runToken];
+    if (value === undefined) {
+      throw argTypeError(
+        entry,
+        `不支持的格式 token "${runToken}"（支持 ${DATE_FORMAT_TOKEN_NAMES.join("/")}；月名/星期名/时区等本地化 token 不做——随界面语言变、非稳定输出；字面文本请写 [文本]）`,
+      );
+    }
+    out += value;
+    i = end;
+  }
+  return out;
+}
+
+// === 自建实现: relative()（官方输出随界面语言变，不可复刻，故定义自有确定性口径）===
+/** 相对时间的单位阶梯（由大到小；month=30day、year=365day 沿用值域既有固定约定）。 */
+const RELATIVE_STEPS: readonly (readonly [string, number])[] = [
+  ["year", 365 * DAY_MS],
+  ["month", 30 * DAY_MS],
+  ["week", 7 * DAY_MS],
+  ["day", DAY_MS],
+  ["hour", 3_600_000],
+  ["minute", 60_000],
+  ["second", 1_000],
+];
+
+/**
+ * 人读相对时间（相对注入 clock）。
+ *
+ * 自建口径（暂定，待 oracle）：**固定英文**、固定阶梯，形如 `3 days ago` / `in 2 hours`，
+ * 1 秒内为 `just now`。不本地化：官方该函数的输出随 Obsidian 界面语言变化，
+ * 本就不是稳定 schema（设计 §14），复刻不了也不该复刻；固定串至少保证字节稳定。
+ * 时间源恒为注入 clock（`ctx.clock()`），故同 clock 重跑结果一致。
+ */
+function relativeFromNow(epochMs: number, now: number): string {
+  const diff = now - epochMs; // >0 表示过去
+  const abs = Math.abs(diff);
+  if (abs < 1_000) return "just now";
+  const step = RELATIVE_STEPS.find(([, ms]) => abs >= ms) ?? RELATIVE_STEPS.at(-1);
+  const [unit, unitMs] = step as readonly [string, number];
+  const n = Math.floor(abs / unitMs);
+  const phrase = `${n} ${unit}${n === 1 ? "" : "s"}`;
+  return diff > 0 ? `${phrase} ago` : `in ${phrase}`;
 }
 
 /**
@@ -381,6 +508,126 @@ const ENTRIES: readonly BaseFunctionEntry[] = [
     returnType: "datetime",
     scenarioIds: ["BASE-FORM-006"],
     impl: (_r, _args, ctx) => createDateValue("datetime", ctx.clock().getTime()),
+  },
+
+  // ---- date/duration 构造（2026-07-28 覆盖率片二）----
+  // 快照说明：`date()`/`duration()` 晚于本仓 2026-07-22 冻结快照，本片显式采纳
+  // （语法 §1.1 漂移记录同步更新）。`%` 取模仍未采纳。
+  {
+    name: "date",
+    receiver: "global",
+    arity: { min: 1, max: 1 },
+    returnType: "date",
+    scenarioIds: ["BASE-TYPE-005"],
+    // === Obsidian 规范来源: Bases date(value) 构造 ===
+    impl: (_r, args, _ctx, entry) => {
+      const v = args[0] as BaseValue;
+      // 幂等：已是 date/datetime 原样返回（`date(date(x)) == date(x)`）。
+      if (isDateValue(v)) return v;
+      if (typeof v === "string") {
+        // 严格 ISO（与 frontmatter 推断同一函数，保证「属性里能识别的」与「date() 能构造的」
+        // 是同一集合，不出现两套日期口径）。
+        const d = parseDateLike(v);
+        if (d !== undefined) return d;
+        throw argTypeError(
+          entry,
+          `"${v}" 不是严格 ISO 日期（YYYY-MM-DD 或 YYYY-MM-DDTHH:mm[:ss] 可带 Z/±hh:mm）`,
+        );
+      }
+      // === 自建实现 ===
+      // number → 按 epoch 毫秒构造 datetime：让 `date(file.ctime)` 可用（ctime/mtime 在值域
+      // 里就是 epoch 毫秒，算术层的 wrapEpochForArith 已按同一口径处理，此处与之一致）。
+      if (typeof v === "number") {
+        if (!Number.isFinite(v)) throw argTypeError(entry, "epoch 毫秒须为有限数值");
+        return createDateValue("datetime", v);
+      }
+      throw argTypeError(entry, `不可转换为 date，实为 ${typeNameOf(v)}`);
+    },
+  },
+  {
+    name: "duration",
+    receiver: "global",
+    arity: { min: 1, max: 1 },
+    returnType: "any",
+    scenarioIds: ["BASE-TYPE-005"],
+    // === Obsidian 规范来源: Bases duration(value) 构造 ===
+    impl: (_r, args, _ctx, entry) => {
+      const v = args[0] as BaseValue;
+      if (isDurationValue(v)) return v; // 幂等
+      if (typeof v === "string") {
+        const d = parseDurationLike(v);
+        if (d !== undefined) return d;
+        throw argTypeError(
+          entry,
+          `"${v}" 不是合法 duration（形如 "1day"/"1 day"/"2 hours"，或官方短单位 y/M/w/d/h/m/s——短单位大小写敏感：M=月、m=分）`,
+        );
+      }
+      // === 自建实现 ===
+      // number → 毫秒：与 toOutputValue 把 duration 输出成毫秒数的口径互为逆，可往返。
+      if (typeof v === "number") {
+        if (!Number.isFinite(v)) throw argTypeError(entry, "毫秒数须为有限数值");
+        return createDurationValue(v, "millisecond");
+      }
+      throw argTypeError(entry, `不可转换为 duration，实为 ${typeNameOf(v)}`);
+    },
+  },
+
+  // ---- date 方法组（2026-07-28 覆盖率片二新增分派组）----
+  {
+    name: "format",
+    receiver: "date",
+    arity: { min: 1, max: 1 },
+    returnType: "string",
+    scenarioIds: ["BASE-TYPE-005"],
+    // === Obsidian 规范来源: Bases date.format(format) ===
+    impl: (r, args, _ctx, entry) => {
+      const d = expectDateReceiver(entry, r);
+      const fmt = expectString(entry, args[0] as BaseValue, "格式串");
+      return formatDateValue(entry, d.epochMs, fmt);
+    },
+  },
+  {
+    name: "time",
+    receiver: "date",
+    arity: { min: 0, max: 0 },
+    returnType: "any",
+    scenarioIds: ["BASE-TYPE-005"],
+    // === Obsidian 规范来源: Bases date.time() ===
+    impl: (r, _args, _ctx, entry) => {
+      const d = expectDateReceiver(entry, r);
+      // === 自建实现（暂定口径，待 oracle）===
+      // 返回**当日 UTC 零点起的 duration**，而不是 "HH:mm" 字符串：duration 是既有类型，
+      // 可比较（`t > 12hours`）、可算术；要字符串用 format("HH:mm") 即可，不需要两条路。
+      // precision="date" 的值恒为 0 duration（其 epoch 就是当日 UTC 00:00）。
+      // 取模两次是为负 epoch（1970 前的日期）也落在 [0, DAY_MS)。
+      return createDurationValue(((d.epochMs % DAY_MS) + DAY_MS) % DAY_MS, "millisecond");
+    },
+  },
+  {
+    name: "relative",
+    receiver: "date",
+    arity: { min: 0, max: 0 },
+    returnType: "string",
+    scenarioIds: ["BASE-TYPE-005", "BASE-FORM-006"],
+    // === Obsidian 规范来源: Bases date.relative() ===
+    impl: (r, _args, ctx, entry) => {
+      const d = expectDateReceiver(entry, r);
+      // 时间源恒为注入 clock（与 today/now 同源）——否则本函数会破坏字节稳定。
+      return relativeFromNow(d.epochMs, ctx.clock().getTime());
+    },
+  },
+  {
+    name: "isEmpty",
+    receiver: "date",
+    arity: { min: 0, max: 0 },
+    returnType: "boolean",
+    scenarioIds: ["BASE-TYPE-005"],
+    // === Obsidian 规范来源: Bases date.isEmpty() ===
+    // 同 number.isEmpty：date 值恒非空；「属性缺失」是 MISSING，走既有传播路径。
+    impl: (r, _args, _ctx, entry) => {
+      expectDateReceiver(entry, r);
+      return false;
+    },
   },
 
   // ---- any（任意 receiver 回退组；方法形态，arity 只计显式实参，receiver 即被判定值）----

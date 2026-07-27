@@ -245,15 +245,19 @@ function getFileField(file: BaseFileValue, name: string, offset: number): BaseVa
  * 此前 number 落 null → 回退 "any" 组。新增分派组必须与 functions.ts 的
  * `BaseFunctionReceiver` 联动，否则注册表里该组条目永远查不到。
  */
-function receiverGroupOf(v: BaseValue): "string" | "number" | "list" | "object" | "file" | null {
+function receiverGroupOf(
+  v: BaseValue,
+): "string" | "number" | "date" | "list" | "object" | "file" | null {
   if (typeof v === "string") return "string";
   if (typeof v === "number") return "number";
   if (Array.isArray(v)) return "list";
   if (typeof v === "object" && v !== null) {
     if (isFileValue(v)) return "file";
-    // date/duration/link（P2a）不是 object 组：其内部字段（epochMs/ms/path）不外露为成员，
-    // 只命中 "any" 组（isTruthy/isType/toString）；专属方法属后续片评估。
-    if (isDateValue(v) || isDurationValue(v) || isLinkValue(v)) return null;
+    // date 自 2026-07-28 覆盖率片二起有独立方法组（format/time/relative/isEmpty）；
+    // duration/link 仍无专属方法，只命中 "any" 组（isTruthy/isType/toString）。
+    // 三者的内部字段（epochMs/ms/path）一律不外露为成员（见 isBrandedTypedValue）。
+    if (isDateValue(v)) return "date";
+    if (isDurationValue(v) || isLinkValue(v)) return null;
     return "object";
   }
   return null;

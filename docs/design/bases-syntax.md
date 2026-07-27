@@ -8,8 +8,8 @@ tags:
   - obsidian
   - syntax
   - x-basalt
-timestamp: 2026-07-27T19:02:22Z
-sha256: a4ebd7b32db94db44d31a26946b824cdc670ebcaeb529b5c7fa52f01b9fc9044
+timestamp: 2026-07-27T19:12:27Z
+sha256: 86e57089eb8b599edcab87127e7a8c9e6d23cb8eac53a8746ece441f02dadde0
 ---
 # Bases 语法参考（x-basalt 口径）
 
@@ -35,7 +35,8 @@ sha256: a4ebd7b32db94db44d31a26946b824cdc670ebcaeb529b5c7fa52f01b9fc9044
 
 诊断口径：`views` 缺失/空 → `base/view-required`；未知顶层 key → warning。
 
-> 官方快照漂移记录（2026-07-27 观察）：现网官方文档新增 `%` 取模、`date()`/`link()` 构造、duration 字符串后缀形态（`"1 day"` 与短单位 y/M/d/w/h/m/s）——晚于本仓 2026-07-22 冻结快照，未采纳；快照升级时需专项对齐（含 P2a `1day` token 形态复核）。
+> 官方快照漂移记录（2026-07-27 观察，2026-07-28 部分采纳）：现网官方文档新增 `%` 取模、`date()`/`link()` 构造、duration 字符串后缀形态（`"1 day"` 与短单位 y/M/d/w/h/m/s）——均晚于本仓 2026-07-22 冻结快照。
+> 采纳进度：**`date()`/`duration()` 已于 2026-07-28 采纳**（覆盖率片二）；duration 字符串形态**只在 `duration()` 入参处生效**，表达式字面量仍只认 `1day` 单 token 形态（§4.3 不变）；`link()`/`file()` 计划于片三采纳；**`%` 取模仍不采纳**（文法层继续拒绝）。
 
 ### 1.2 properties 段
 
@@ -151,6 +152,8 @@ note property 来自 Markdown frontmatter；file property 对所有受支持文�
 | object | `isEmpty`、`keys`、`values`                                                         | 【P1 ✅】 |
 | file   | `hasTag`、`inFolder`、`hasLink`、`hasProperty`                                      | 【P1 ✅】 |
 | time   | `today`、`now`（clock 注入，测试必须注入固定 clock）                                | 【P2a ✅】 |
+| global | `date(v)`、`duration(v)` 构造                                                       | 【2026-07-28 ✅】`date`：严格 ISO 字符串（与 frontmatter 推断同一函数）/ date 幂等 / number 按 epoch 毫秒（自建扩展）。`duration`：`"1day"`/`"1 day"`/`"2 hours"` 长单位（大小写不敏感、允许复数）与官方短单位 `y M w d h m s`（**大小写敏感**：`M`=月、`m`=分）/ duration 幂等 / number 按毫秒（与输出形状互逆） |
+| date   | `format(fmt)`、`time()`、`relative()`、`isEmpty()`                                  | 【2026-07-28 ✅ 新增 `date` 分派组】 |
 | list 高阶 | `filter`/`map`/`reduce`（隐式 `value`/`index`/`acc` 作用域，非 JS lambda）、`flat`/`sort`/`unique`/`join`、`mean` | 【P2b ✅】 |
 | number | `round`（0..1 参，小数位缺省 0）                                                   | 【P2b ✅；2026-07-28 由 `any` 组迁入独立 `number` 分派组】 |
 | number | `abs`、`ceil`、`floor`、`toFixed`（返 string）、`isEmpty`（恒 false）               | 【2026-07-28 ✅】 |
@@ -159,6 +162,8 @@ note property 来自 Markdown frontmatter；file property 对所有受支持文�
 | 杂项   | regex（`matches`）                                                                  | 【🔜 片 4：需 ReDoS 防护 + 长度预算，BASE-SEC-004】 |
 
 语义要点：`if()` lazy branch（只计算被选择分支）【P1 ✅ 暂定 lazy 实现，待 oracle 校正】；list 成员比较用 typed equality；`number()` 转换失败行为【P1 ✅ 冻结为行级类型错误】。
+
+片二 date 组的自建口径（暂定，待 oracle）：`format` 只做**与语言无关的数字 token**（`YYYY YY MM M DD D HH H mm m ss s`，全部按 UTC），分词按**同字符最长游程**（moment 真实语法，`MMMM` 是独立 token 而非 `MM`×2），本地化 token（`MMMM`/`dddd`/`A`/`Z`）与未实现 token 一律报错、不静默给一种语言，字面文本用 `[方括号]` 转义；`time()` 返回**当日 UTC 零点起的 duration**（可比较可算术，要字符串用 `format("HH:mm")`），date 精度恒为 0；`relative()` 用**固定英文**固定阶梯（`3 days ago` / `in 2 hours` / `just now`，month=30day、year=365day 与值域约定同源），时间源恒为注入 clock——官方该函数输出随界面语言变，本就不是稳定 schema，不复刻。
 
 2026-07-28 覆盖率片一的自建口径（官方未定义，标注待 oracle）：`replace` 为**字面子串全局替换**（非 regex；替换文本内 `$&` 不展开；空子串报错）；`slice`（string/list）负索引与越界钳制沿用 JS 语义；`reverse`（string）按 code point 反转（不拆代理对，字素簇仍会拆）；`title` 为「按空白切词 + 词首大写 + 词余小写」；`repeat`/`replace`/`split` 的产物规模受 `maxCollectionItems` 约束（string 计字符数），`repeat` 在**分配之前**预检。
 
