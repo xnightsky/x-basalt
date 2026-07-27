@@ -178,3 +178,59 @@ test("--conformance 未知 id：exit 1，JSON 含 base/invalid-schema error 且 
   );
   assert.deepEqual(result.rows, []);
 });
+
+// ---- 片六：--context-file 薄透传（此前只有引擎级测试，CLI 装配层裸奔）----
+
+test("--context-file：this.* 在 CLI 路径上真实生效", () => {
+  const r = run([
+    "base",
+    namedBase,
+    "--view",
+    "ctx",
+    "--vault",
+    vaultPath,
+    "--db",
+    dbPath,
+    "--context-file",
+    "Beta.md",
+  ]);
+  assert.equal(r.status, 0, r.stderr);
+  const result = parseJson(r.stdout);
+  assert.equal(result.rows.length, 1);
+  assert.equal(result.rows[0]?.["file.name"], "Alpha.md");
+  assert.equal(result.rows[0]?.["this.file.name"], "Beta.md", "this 指向 --context-file 那一篇");
+});
+
+test("--context-file 缺省：this.* 报 dynamic-context-required（行级 warning，不影响退出码）", () => {
+  const r = run(["base", namedBase, "--view", "ctx", "--vault", vaultPath, "--db", dbPath]);
+  assert.equal(r.status, 0, r.stderr);
+  const result = parseJson(r.stdout);
+  assert.ok(
+    result.diagnostics.some(
+      (d) => d.rule === "base/dynamic-context-required" && d.severity === "warning",
+    ),
+  );
+});
+
+test("--context-file 指向不存在的文件：exit 1 + error 诊断 + rows 为空", () => {
+  const r = run([
+    "base",
+    namedBase,
+    "--view",
+    "ctx",
+    "--vault",
+    vaultPath,
+    "--db",
+    dbPath,
+    "--context-file",
+    "完全不存在.md",
+  ]);
+  assert.equal(r.status, 1);
+  const result = parseJson(r.stdout);
+  assert.ok(
+    result.diagnostics.some(
+      (d) => d.rule === "base/dynamic-context-required" && d.severity === "error",
+    ),
+  );
+  assert.deepEqual(result.rows, []);
+});

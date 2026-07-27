@@ -5,3 +5,13 @@ views:
   - type: table
     name: active
     filters: 'status == "active"'
+  # 片六 CLI --context-file 的端到端用例（tests/base-cli.test.ts）。
+  # 为什么挂在这份 fixture 而不是新建 .base：p1 vault 的 all-files 用例断言
+  # total=23（7 篇 .md + 16 个附件，.base 本身也算附件），新增文件会把那条掰断；
+  # 加 view 只改内容不改文件数。
+  - type: table
+    name: ctx
+    filters: 'file.name == "Alpha.md"'
+    order:
+      - file.name
+      - this.file.name
