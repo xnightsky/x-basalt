@@ -8,6 +8,7 @@ related: "[[Alpha]]"
 ---
 # Schedule
 
-P2a formulas fixture：日期/datetime/wikilink frontmatter 全部**加引号**——
-不加引号时 gray-matter(js-yaml) 会把 `2026-07-27` 解析为 Date，JSON 序列化带毫秒与 Z
-后缀（`2026-07-27T00:00:00.000Z`），超出 parseDateLike 的严格 ISO 形态（语法 §5.1 第 3 条）。
+P2a formulas fixture：日期/datetime/wikilink frontmatter 加引号。
+注：加引号曾是**必需**的绕法（旧读侧 YAML 引擎会把不加引号的日期转成 Date，落库带毫秒），
+2026-07-27 读侧改用 `yaml` 包后两种写法已等价；本 fixture 保持加引号形态不动，
+不加引号的对照回归见 `../vault-dates/`。

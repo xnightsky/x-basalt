@@ -20,6 +20,7 @@
 
 ### Changed
 
+- **`format` / `format:check` 作用域收敛为 `src tests scripts`**（原 `oxfmt .`），并新增 `.prettierignore` 豁免 `tests/fixtures/`（oxfmt 只认 `.gitignore` / `.prettierignore`，无 `.oxfmtignore`）。此前该门禁**从未可通过**：fixtures 里有故意写坏的 JSON（BASE-TYPE-003 回退用例），格式化器解析即报错中止整次检查。同时一次性格式化了此前从未被覆盖的 13 个代码文件（纯换行合并/拆分）。docs 的 80 个 md 暂不纳入作用域——markdown 重排与本轮无关且会淹没内容改动。
 - **skills-def 入口薄化 + `cli/`/`dev/` 目录分组**：外层 `x-basalt` 入口 skill 改为薄「触发 + 指路」——用法一律 `x-basalt skills get core`，不再重抄命令表/DQL 细节，消开发文档与运行时 `core` 的二次漂移。`skills-def/` 按受众分 `cli/`（消费侧入口，装宿主全局）与 `dev/`（`biz-*` 开发侧，装本仓）；`install-skills.mjs` 改按**目录**路由（原按 `scope` frontmatter），`skills:install` / `skills:install:global` 两脚本语义不变。运行时 `core` 补 `X_BASALT_DIR` 说明。
 - **（breaking）`skill` 命令组改名为 `skills`**（复数，**不保留单数别名**），对齐 agent-browser / Gemini CLI / Claude Code 等生态惯例。
 - **（breaking）skill 运行时数据目录 `skills/` → `skills-data/`**，避免与 `skills` 命令前缀混淆、对齐 agent-browser；外部覆盖路径 `OBSIDIAN_SKILL_PATH` / 配置 `skillPath` / `~/.obsidian-core/skills` 不变。
@@ -40,6 +41,7 @@
   - `order` / `sort` 的非法项（非字符串 / 非 map / 空 property）**不再静默丢弃**，各产 `base/invalid-schema`。
   - 新增 **`maxTotalOperations`** 查询级操作数总额（默认 5000 万，跨行累计）：此前 `maxOperations` 每次表达式求值即重置，最坏总量 `maxRows × 列数 × maxOperations` ≈ 1e11 而预算「从未耗尽」；groupBy 分桶与 summaries 迭代原本各自另开一份额度，现并入同一份总额。
   - 表达式解析缓存改为有界 LRU（512 条）——此前模块级 `Map` 无淘汰，长驻进程（chat REPL）内存随会话累计的 `.base` 数量单调增长。
+- **不加引号的 frontmatter 日期不再静默失去日期语义**（真实 vault 普遍命中的静默错）：`due: 2026-08-10` 此前经 gray-matter 内置 js-yaml（YAML 1.1 `!!timestamp`）解析为 JS `Date`，落库变 `"2026-08-10T00:00:00.000Z"`（含毫秒），超出 Bases 严格 ISO 推断形态 → 退化为普通字符串 → `due < now()` 一类比较只给行级 warning + cell `null`，而查询仍以退出码 0「成功」。读侧 frontmatter 解析改用 `yaml` 包（YAML 1.2 core 无 timestamp 隐式类型，**与写侧 `src/meta` 统一引擎**），日期保持字符串、由值层按词法判定精度——`YYYY-MM-DD` → date、`YYYY-MM-DDTHH:mm[:ss]` → datetime，加不加引号完全等价且 date 精度不退化。
 - parser：剔除围栏代码块（` ``` `/`~~~`）与行内代码（成对反引号）内的 `#tag` 与 `==高亮==`，不再把代码里的 `# 注释`、字符串误识为标签 / 高亮（修复真实 vault 上 `FROM #tag` 静默多命中）。
 - skills 安装：frontmatter `scope` 检测兼容 CRLF 行尾（Windows `autocrlf`）——此前 CRLF 下正则匹配失败致 `scope` 永远落到 `project`，全局安装一个都装不上、项目安装误纳 global 技能。
 

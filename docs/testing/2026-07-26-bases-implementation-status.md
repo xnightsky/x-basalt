@@ -7,8 +7,8 @@ tags:
   - bases
   - testing
   - x-basalt
-timestamp: 2026-07-27T02:40:50Z
-sha256: e1a59b00b5a2e486f33585516bfa6ab72cc30a2d8ef30320bc974e807cbd325f
+timestamp: 2026-07-27T03:23:42Z
+sha256: 6912b0ba0ddb7edf435d467943c8015cbe749c5bf13ecd5b126b62a6ff932cc5
 ---
 # Bases 实现状态追踪
 
@@ -101,7 +101,7 @@ sha256: e1a59b00b5a2e486f33585516bfa6ab72cc30a2d8ef30320bc974e807cbd325f
 | 项 | 场景编号 | 状态 |
 | ---- | ---- | ---- |
 | `.obsidian/types.json` 读取 / 缺失回退 / 非法 warning | BASE-TYPE-001..003 | ✅ 2026-07-27（P2b；可选只读、永不写回、多根先根优先暂定） |
-| 不加引号的 YAML 日期（`due: 2026-08-10`）识别为日期值 | BASE-TYPE-005 延伸 | 🐞 **未做**（2026-07-27 写教程时实测：YAML 解析为日期对象 → 入索引成 `"…T00:00:00.000Z"`，`parseDateLike` 不接受小数秒 → 留字符串形态，日期比较静默失效仅给行级 warning。真实 vault 普遍命中，修法与口径见根 `TODO.md`） |
+| 不加引号的 YAML 日期（`due: 2026-08-10`）识别为日期值 | BASE-TYPE-005 延伸 | ✅ 2026-07-27（根因在读侧 YAML 引擎：改用 `yaml` 包（YAML 1.2 core 无 timestamp 隐式类型），日期保持字符串由值层按词法判定精度；`tests/base-yaml-dates.test.ts` + `tests/parser.test.ts` 锁「加/不加引号等价」与 date 精度不退化） |
 | 声明类型与值冲突 → type-mismatch | BASE-TYPE-004 | ⏸ oracle（P2b 已落暂定口径：行级 warning + 值按运行时类型参与，不静默字符串比较） |
 | date vs datetime 比较（固定时区） | BASE-TYPE-005 | ⏸ oracle（P2a 已落暂定机制：严格 ISO 推断 + 统一 epoch 比较） |
 | frontmatter wikilink → Link value | BASE-TYPE-006 | ⏸ oracle（P2a 已落暂定机制：`[[target]]`/`[[t\|d]]`/`[[t#sub]]` → Link value，路径感知相等） |

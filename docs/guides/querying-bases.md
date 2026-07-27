@@ -7,8 +7,8 @@ tags:
   - bases
   - query
   - x-basalt
-timestamp: 2026-07-27T03:09:59Z
-sha256: 517b5eaf59cc0c2c09ea6ceaf39a872b66f8b23d4a0f7b00a490083c90fa8182
+timestamp: 2026-07-27T03:22:59Z
+sha256: dac8b805920dd85131fe7446575d1168209816d1927ad37ff1521c94eb5cbca9
 ---
 # Bases 查询指南 · x-basalt
 
@@ -86,15 +86,11 @@ x-basalt base views/projects.base --view Active --vault ./my-vault
 
 ## 3. 限制与暂定口径
 
-### 3.1 已知缺陷
-
-- **不加引号的 YAML 日期当前不被识别为日期值**：`due: 2026-08-10` 经 YAML 解析为日期对象、入索引后成为 `"2026-08-10T00:00:00.000Z"`（含毫秒），不匹配严格 ISO 推断，于是留在字符串形态——`due < now()` 之类比较会产生 `base/property-type-mismatch`（warning）且该 cell 为 `null`，**查询不报错但结果不对**。绕法：frontmatter 里给日期加引号（`due: "2026-08-10"`），或在 `.obsidian/types.json` 里把该属性声明为 `date`。
-
-### 3.2 未做（P3 及以后）
+### 3.1 未做（P3 及以后）
 
 附件数据集（all-files）、嵌入式 ```` ```base ```` 代码块、`![[View.base#Name]]`、`this`（遇到报 `base/dynamic-context-required`）、regex。完整的「明确不支持」清单见[编写指南 §3.9](writing-bases.md#39-明确不支持报诊断不静默忽略)。
 
-### 3.3 oracle 暂定口径
+### 3.2 oracle 暂定口径
 
 实现已落地，语义待官方串行 oracle 校正，校正后可能调整：
 
@@ -102,7 +98,7 @@ missing/null/空串/0/false/空列表的 truthiness 精确合并；多键 sort �
 
 逐项状态见[实现状态追踪](../testing/2026-07-26-bases-implementation-status.md)，观察与校正流程见 [oracle 操作手册](../testing/2026-07-27-bases-oracle-runbook.md)。
 
-### 3.4 执行预算
+### 3.3 执行预算
 
 文档大小、filter 深度、表达式节点、调用深度、行数、集合元素、单次求值操作数、**单次查询操作数总额**、公式图节点/深度均有硬上限；任一耗尽返回 `base/execution-budget`（error）+ 空结果，**不返回部分结果冒充成功**。
 

@@ -1,0 +1,14 @@
+# 读侧 YAML 引擎回归：加引号 / 不加引号的日期属性必须产生完全相同的 typed value。
+# 独立 vault（不并入 vault-formula）——那边的用例断言了固定行数，加 .md 会打破。
+views:
+  - type: table
+    name: 日期等价
+    order:
+      - label
+      - due
+      - at
+      - 'due == "2026-07-27"'
+      - 'at < due'
+    sort:
+      - property: label
+        direction: ASC

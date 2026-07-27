@@ -8,8 +8,8 @@ tags:
   - syntax
   - tutorial
   - x-basalt
-timestamp: 2026-07-27T03:08:33Z
-sha256: ef1c9756dae4268007ae136cabba2f9a0e9e568af0d6fe7096fd109baf109f45
+timestamp: 2026-07-27T03:22:59Z
+sha256: b42a51475c96fd62585c333eceef56edefb0f95a9f841bfce9cc0b4f018ee993
 ---
 # Bases 编写指南 · x-basalt
 
@@ -113,15 +113,15 @@ status: 进行中
 owner: 小林
 priority: 1
 estimate: 8
-due: "2026-08-10"
+due: 2026-08-10
 tags: [项目, 前端]
 ---
 # 登录改版
 ```
 
-另外两篇同理（搜索优化：进行中 / 阿远 / priority 3 / estimate 21 / due `"2026-09-01"`；账单导出：已完成 / 小林 / priority 2 / estimate 5 / due `"2026-07-15"`）。
+另外两篇同理（搜索优化：进行中 / 阿远 / priority 3 / estimate 21 / due `2026-09-01`；账单导出：已完成 / 小林 / priority 2 / estimate 5 / due `2026-07-15`）。
 
-> **日期一定要加引号**写成 `due: "2026-08-10"`。不加引号时 YAML 会把它解析成日期对象，进索引后变成带毫秒的字符串（`2026-08-10T00:00:00.000Z`），当前的严格 ISO 推断不认这种形态，日期比较会失效并给 `base/property-type-mismatch` 警告。这是已知缺陷，见[查询指南 §3 限制](querying-bases.md#3-限制与暂定口径)。
+> 日期加不加引号都可以（`due: 2026-08-10` 与 `due: "2026-08-10"` 等价）——形态由值层按词法判定：`YYYY-MM-DD` → date、`YYYY-MM-DDTHH:mm[:ss]` → datetime，见 [§3.8](#38-值与类型语义)。
 
 x-basalt 查的是 SQLite 索引而不是直接扫文件，所以**先建索引**（笔记改了要重跑，或用 `x-basalt scan` 增量）：
 

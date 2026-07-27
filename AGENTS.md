@@ -44,7 +44,7 @@
 | CLI                          | commander                                                                                                    |
 | Obsidian 专有语法 / 基础解析 | **自建提取**（wikilink/embed/callout/highlight/task/blockRef），纯正则、不建完整 mdast、无第三方 wikilink 库 |
 | 查询语言文法（DQL / Bases 表达式） | chevrotain（词法 + parser；两套 token/AST 完全独立，**自建 grammar**，不依赖 obsidian-dataview 执行层） |
-| Frontmatter                  | gray-matter                                                                                                  |
+| Frontmatter                  | gray-matter（仅做 `---` 分隔符/正文切分）+ **`yaml` 包做 YAML 本体**（读写两侧同引擎；不用 gray-matter 内置 js-yaml——YAML 1.1 的 `!!timestamp` 会把不加引号的日期转成 `Date`，词法形态丢失） |
 | 文件监听                     | chokidar                                                                                                     |
 | 索引存储                     | better-sqlite3（单文件 SQLite，同步 API）                                                                    |
 | Skill 文件格式               | json5                                                                                                        |
@@ -79,7 +79,7 @@ docs/         research / specs / plans / guides / architecture / testing（见 d
 - `pnpm run typecheck`：`tsc --noEmit`。
 - `pnpm test`：Node 原生 test runner 跑 `tests/*.test.ts`。
 - `pnpm run lint` / `pnpm run lint:fix`：oxlint 检查 / 自动修复（配置 `.oxlintrc.json`）。
-- `pnpm run format` / `pnpm run format:check`：oxfmt 格式化 / 校验。
+- `pnpm run format` / `pnpm run format:check`：oxfmt 格式化 / 校验（作用域 `src tests scripts`；`tests/fixtures/` 经 `.prettierignore` 豁免——里面有故意非法的样例，格式化器解析即中止。docs 的 md 不在作用域内）。
 - `pnpm cli -- <args>`：开发态直接跑 CLI（tsx），例：`pnpm cli -- parse tests/fixtures/sample-vault/Index.md`。
 - `pnpm dev`：等同 `cli`，便于联调。
 

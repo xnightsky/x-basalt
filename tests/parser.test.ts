@@ -37,6 +37,25 @@ test("parseFrontmatter：首行 --- 时解析 YAML 并剥离正文", () => {
   assert.ok(body.includes("# 正文"));
 });
 
+// 不加引号的 YAML 日期必须保持字符串（YAML 1.2 core 无 timestamp 隐式类型）。
+// 回归点：原 gray-matter 内置 js-yaml 走 YAML 1.1，把它解析成 JS Date，经 indexer
+// JSON.stringify 落库变成 "2026-08-10T00:00:00.000Z"（含毫秒），词法形态丢失 →
+// 下游 Bases 的严格 ISO 推断不认小数秒 → 日期比较静默失效（只给行级 warning）。
+test("parseFrontmatter：不加引号的日期保持字符串，不转 Date（Obsidian 的实际写法）", () => {
+  const { frontmatter } = parseFrontmatter(
+    '---\nd: 2026-08-10\ndt: 2026-08-10T10:30:00\nq: "2026-08-10"\n---\n正文',
+  );
+  assert.equal(frontmatter.d, "2026-08-10");
+  assert.equal(frontmatter.dt, "2026-08-10T10:30:00");
+  // 加不加引号得到同一结果——写法差异不再造成语义差异。
+  assert.equal(frontmatter.q, "2026-08-10");
+  for (const k of ["d", "dt", "q"]) {
+    assert.ok(!(frontmatter[k] instanceof Date), `${k} 不得是 Date 实例`);
+  }
+  // 落库形态（indexer 用 JSON.stringify）必须无毫秒后缀。
+  assert.ok(!JSON.stringify(frontmatter).includes(".000Z"), "落库 JSON 不得出现毫秒形态");
+});
+
 test("parseFrontmatter：无 frontmatter 时返回空对象与原文", () => {
   const { frontmatter, body } = parseFrontmatter("# 没有 frontmatter\n正文");
   assert.deepEqual(frontmatter, {});
