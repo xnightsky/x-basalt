@@ -8,8 +8,8 @@ tags:
   - bases
   - functions
   - x-basalt
-timestamp: 2026-07-27T18:56:15Z
-sha256: 65ac6ab981f1b770a6f327851c6abd3ad6e860b1596203ef1ffcc68f83d6dff8
+timestamp: 2026-07-27T19:03:22Z
+sha256: 7436bf670f435ad9dc58ea03d0c59fc692c371b20675698344d65d3fd16ea028
 ---
 # 计划：Bases 函数覆盖率（51% → ~90%）
 
@@ -38,7 +38,7 @@ sha256: 65ac6ab981f1b770a6f327851c6abd3ad6e860b1596203ef1ffcc68f83d6dff8
 | 3 | Link/File 互转 5 个（`asFile`/`linksTo`/`asLink`/`file()`/`link()`） | links 表接线 | ⏳ |
 | 4 | `matches`（regex）+ ReDoS 防护（BASE-SEC-004） | 正则执行预算 | ⏳ |
 | 5 | BASE-GROUP-002（list/link 分组键）+ BASE-SUM-002 收口 | engine 分组层 | ⏳ |
-| 6 | BASE-CTX-001..004（`contextFile`/`this`、` ```base ` 代码块、embed） | **唯一动 parser 的一片**，开工前须用户拍板范围 | ⏳ |
+| 6 | BASE-CTX-001 显式 `contextFile` + `this.*`（CTX-002/003/004 判❌不做 + 诊断） | engine/CLI 入参，**不动 parser**（2026-07-28 拍板缩范围后） | ⏳ |
 
 ### 片 1 明细
 
@@ -69,10 +69,10 @@ sha256: 65ac6ab981f1b770a6f327851c6abd3ad6e860b1596203ef1ffcc68f83d6dff8
 12. **`toFixed(digits?)` 返回 string**（对齐 JS 与官方）；`digits` 缺省 0，须 0..100 内整数。理由：超出 JS `toFixed` 定义域会抛 RangeError，须在 impl 内前置拦成行级类型错误。
 13. **`split(sep)` 返回 list**，产物元素数过 `ctx.checkCollectionSize`；空分隔符按 JS 语义逐 code unit 切（与 `reverse` 不同——此处保 JS 兼容，注释存证差异）。
 
-### 待用户拍板
+### 用户拍板（2026-07-28）
 
-- **`random()` × 字节稳定**：官方有 `random()`，与本仓「同 DB + 同 `.base` + 同注入 clock 重跑 `JSON.stringify` 全等」的硬保证直接冲突。三选一：注入种子 / 直接拒绝 / 放弃字节稳定。**片 1 尾声问用户**。
-- **片 6 范围**：完整做（含 ` ```base ` 代码块与 `![[View.base#Name]]` embed，须改 parser）还是只做 `contextFile`、另三项判「不做 + 诊断」。**片 6 开工前问用户**。
+14. **`random()` → 直接拒绝**（不注入种子、不放弃字节稳定）。进白名单但 impl 抛 `BaseUnsupportedError` → `base/unsupported-feature`，消息说明是**契约冲突**而非「不渲染」（测试用 `doesNotMatch(/渲染/)` 锁住两类拒绝理由不串）。理由：「同一 DB + 同一 `.base` + 同一注入 clock 重跑 `JSON.stringify` 全等」是 x-basalt 相对官方 CLI 最硬的卖点（官方实测连自己重放都不一致），不为一个叶子函数让路。注入种子的方案被否：数值必然与官方不同，oracle 阶段这条永远无法比对，还要把 seed 塞进 CLI/API 契约。可逆：改 impl 即可换方案。
+15. **片 6 只做 `contextFile`**（BASE-CTX-001），另三项判「❌ 不做 + 诊断」：` ```base ` 代码块（CTX-002）、`![[View.base#Name]]` embed（CTX-003）、sidebar/active-file 语义（CTX-004）。理由：这三项本质是「在 Obsidian 界面里渲染」的形态，无头执行拿不到宿主上下文、产物无消费方；砍掉它们**省掉整个 parser 改动**（片 6 由此不再是「唯一动 parser 的一片」）。显式 `contextFile` 已覆盖可重复的 `this.*` 语义。
 
 ## 硬约束（每片自检）
 
@@ -125,3 +125,5 @@ sha256: 65ac6ab981f1b770a6f327851c6abd3ad6e860b1596203ef1ffcc68f83d6dff8
 2. `toFixed(digits)` 越出 JS 定义域 0..100 抛的是 `RangeError` 而非 `BaseTypeError`，会穿透行级错误通道变成引擎级异常——impl 内前置拦成行级类型错误。
 
 **验证过的不变量**：`list.reverse()` 不原地改行上的 note 属性数组（测试断言 `row.note.items` 反转后仍为原序）——否则同一行被多个表达式读取时结果依赖求值顺序，直接破坏字节稳定。
+
+**片一补充（用户拍板后同批落地）**：`random()` 按决策 #14 显式拒绝，复用渲染类同一机制但消息独立；测试 19 例（+1）。

@@ -6,8 +6,8 @@ tags:
   - guide
   - bases
   - x-basalt
-timestamp: 2026-07-27T18:55:43Z
-sha256: b37bc05417a77a521863ebc68417a0e107e80ff74bfc1008aafbe158b36ae74d
+timestamp: 2026-07-27T19:02:50Z
+sha256: f1966ca1374e0d94fab4861a55f37694797a2cfb87c2d71577a013d4d1c0601b
 ---
 # Bases · 用 `.base` 无头查询你的 vault
 
@@ -671,6 +671,7 @@ frontmatter 里整串恰为一个 wikilink 的字符串（`"[[目标]]"` / `"[[�
 | --- | --- |
 | 白名单外的函数名（含旧 snake_case） | `base/unknown-function` |
 | 渲染类函数 `html()` / `image()` / `icon()` / `s.escapeHTML()` | `base/unsupported-feature`——官方有、查询内核不渲染。它们**在白名单内**，只为把报错从「这函数不存在」升级成「本引擎不做」 |
+| `random()` | `base/unsupported-feature`——与「同一输入必得同一输出」这条核心契约冲突。需要随机抽样请在拿到结果后自己洗牌 |
 | 任意标识符调用、动态成员调用 | 文法层拒绝 |
 | `constructor` / `prototype` / `__proto__` 访问 | 拒绝（安全白名单） |
 | regex 字面量、`%` 取模 | 文法层拒绝 |

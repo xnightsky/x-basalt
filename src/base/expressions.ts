@@ -82,6 +82,9 @@ export const BASE_FUNCTION_NAMES: ReadonlySet<string> = new Set([
   "html",
   "image",
   "icon",
+  // random 同理进白名单显式拒绝——但理由不是「不渲染」而是**与字节稳定保证冲突**
+  // （用户 2026-07-28 拍板：直接拒绝，不注入种子、不放弃字节稳定）。
+  "random",
 ]);
 
 // === 自建实现: 最小 tokenizer（P0 浅扫描，非完整文法）===

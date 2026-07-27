@@ -332,6 +332,23 @@ const ENTRIES: readonly BaseFunctionEntry[] = [
     impl: (_r, _args, _ctx, entry) => rejectRenderFunction(entry),
   },
   {
+    name: "random",
+    receiver: "global",
+    arity: { min: 0, max: Number.POSITIVE_INFINITY },
+    returnType: "any",
+    scenarioIds: ["BASE-EXPR-005"],
+    // === Obsidian 规范来源: Bases random()（官方有；x-basalt 显式拒绝，理由见下）===
+    impl: (_r, _args, _ctx, entry) => {
+      // 用户 2026-07-28 拍板：**直接拒绝**，不注入种子、不放弃字节稳定。
+      // random() 与本引擎的核心契约「同一 DB + 同一 .base + 同一注入 clock 重跑，
+      // JSON.stringify 全等」直接冲突——那条保证是 x-basalt 相对官方 CLI 最硬的卖点
+      // （官方实测连自己重放都不一致），不为一个叶子函数让路。
+      throw new BaseUnsupportedError(
+        `函数 "${entry.name}" 与 x-basalt 的字节稳定保证冲突：同一输入必得同一输出是本引擎的核心契约，故不提供随机数。如需随机抽样请在调用侧对结果洗牌`,
+      );
+    },
+  },
+  {
     name: "escapeHTML",
     // 挂 string 组而非 any：官方签名即 string 方法，`5.escapeHTML()` 应得
     // 「类型 number 不支持方法」这条正确诊断，不该被 unsupported 掩盖。

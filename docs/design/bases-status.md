@@ -7,8 +7,8 @@ tags:
   - bases
   - testing
   - x-basalt
-timestamp: 2026-07-27T18:55:09Z
-sha256: 1205110636dec5ecd7143e0f31635f3208b1448780295d1c78962d13aca80217
+timestamp: 2026-07-27T19:02:44Z
+sha256: 3c8eff4661c38d59524c8b31ad93a18fb62664ef82aa4339cbd7145461910d05
 ---
 # Bases 实现状态追踪
 
@@ -121,10 +121,10 @@ sha256: 1205110636dec5ecd7143e0f31635f3208b1448780295d1c78962d13aca80217
 | ---- | ---- | ---- |
 | 附件作为行（图片/PDF/Canvas/.base） | BASE-ALL-001 | ✅ 2026-07-27（[P3a 计划](../history/plans/2026-07-27-bases-p3-attachments.md)：独立 `vault_entries` 表 + indexer 六条写入路径 + all-files 数据源 + CLI `--conformance`；「DQL 不变」证明 11①③④ 与跨表 path 唯一性 12 全部落成测试） |
 | 附件 links/backlinks/embeds | BASE-ALL-002 | ✅ 2026-07-27（P3a 满足线：附件行出链恒 `[]`、不伪造内容链接；附件作为链接 target 的命中关系可查询（笔记行 `file.links` 含原始 target，embed `![[img.png]]` 计入 links 表 is_embed=1）——暂定口径待 oracle） |
-| 独立 `.base` 的 `this`（显式 contextFile） | BASE-CTX-001 | 🔜 P3 |
-| Markdown `base` code block | BASE-CTX-002 | 🔜 P3（parser 新节点） |
-| `![[View.base#Name]]` embed | BASE-CTX-003 | 🔜 P3 |
-| sidebar/active-file 语义（禁环境隐式状态） | BASE-CTX-004 | 🔜 P3 |
+| 独立 `.base` 的 `this`（显式 contextFile） | BASE-CTX-001 | 🔜 覆盖率片六（[计划](../plans/2026-07-28-bases-functions.md)） |
+| Markdown `base` code block | BASE-CTX-002 | ❌ 不做（用户 2026-07-28 拍板）：只在 Obsidian 界面里渲染才有意义，无头执行拿不到宿主上下文，产物无消费方；要改 parser 而收益为零。遇到时报 `base/unsupported-feature` + 理由 |
+| `![[View.base#Name]]` embed | BASE-CTX-003 | ❌ 不做（同上，2026-07-28） |
+| sidebar/active-file 语义（禁环境隐式状态） | BASE-CTX-004 | ❌ 不做（同上，2026-07-28）：无头执行没有「当前活动文件」，显式 `contextFile` 已覆盖可重复语义 |
 | 插件 view/function | BASE-PLUGIN-001 | ⏸ 默认拒绝；显式注册纯函数扩展需真实需求再议 |
 
 ## 6. 函数覆盖率补齐（2026-07-28 起，[计划](../plans/2026-07-28-bases-functions.md)）
@@ -139,7 +139,7 @@ sha256: 1205110636dec5ecd7143e0f31635f3208b1448780295d1c78962d13aca80217
 | 片三 | Link/File 互转 5 个（`asFile`/`linksTo`/`asLink`/`file()`/`link()`） | 🔜 |
 | 片四 | `matches`（regex）+ ReDoS 防护 | 🔜 BASE-SEC-004 |
 | 片五 | list/link 当分组键 + 自定义汇总收口 | 🔜 BASE-GROUP-002 / BASE-SUM-002 |
-| 片六 | `contextFile`/`this`、` ```base ` 代码块、`![[View.base#Name]]` embed | 🔜 BASE-CTX-001..004（唯一动 parser 的一片，范围待用户拍板） |
+| 片六 | 显式 `contextFile` + `this.*` 求值 | 🔜 BASE-CTX-001（用户 2026-07-28 拍板**只做 contextFile**；CTX-002/003/004 判❌不做 + 诊断，见 §7） |
 
 ### 片一明细 ✅ 2026-07-28
 
@@ -152,7 +152,7 @@ sha256: 1205110636dec5ecd7143e0f31635f3208b1448780295d1c78962d13aca80217
 | global `max`/`min`（变长 number 参） | BASE-EXPR-005 | ✅ 2026-07-28 |
 | 渲染类 `escapeHTML`/`html`/`image`/`icon` 白名单内显式拒绝 | 设计 §1 | ✅ 2026-07-28（新增 `BaseUnsupportedError` → `base/unsupported-feature`，与 `property-type-mismatch` 分开，读出方可据 rule 区分「用错类型」与「本引擎不做」） |
 | `repeat`/`replace`/`split` 产物规模预算（string 计字符数，`repeat` 分配前预检） | BASE-SEC-005 延伸 | ✅ 2026-07-28 |
-| `random()` × 字节稳定冲突 | 语法 §4.4 | ⏸ 待用户拍板（注入种子 / 直接拒绝 / 放弃字节稳定） |
+| `random()` × 字节稳定冲突 | 语法 §4.4 | ✅ 2026-07-28 **直接拒绝**（用户拍板；白名单内报 `base/unsupported-feature`，消息说明是契约冲突而非「不渲染」，与渲染类分开断言） |
 
 ## 7. 不做 / 暂缓（理由记录）
 

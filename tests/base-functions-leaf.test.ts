@@ -258,8 +258,16 @@ test("渲染类函数报 base/unsupported-feature 而非 unknown-function", () =
   assert.match(mismatch.message, /类型 number 不支持方法 "escapeHTML"/u);
 });
 
+test("random() 显式拒绝：与字节稳定保证冲突（2026-07-28 用户拍板）", () => {
+  const e = rowErr("random()", BASE_RULES.unsupportedFeature);
+  assert.equal(e.target, "random");
+  assert.match(e.message, /字节稳定/u);
+  // 拒绝理由与渲染类不同：诊断消息必须说清是「契约冲突」而非「不渲染」
+  assert.doesNotMatch(e.message, /渲染/u);
+});
+
 test("渲染类函数名进白名单：文法/浅扫描不再报 unknown-function", () => {
-  for (const name of ["html", "image", "icon", "escapeHTML"]) {
+  for (const name of ["html", "image", "icon", "escapeHTML", "random"]) {
     assert.ok(BASE_FUNCTION_NAMES.has(name), `${name} 应在名字单一真相源内`);
   }
   // 白名单外的名字仍被浅扫描拒绝（不因本片放宽）

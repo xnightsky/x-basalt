@@ -8,8 +8,8 @@ tags:
   - obsidian
   - syntax
   - x-basalt
-timestamp: 2026-07-27T18:54:40Z
-sha256: 0c11eadb4123aac5d43230c762ea610d48659f352467b117d83335afeba69bf8
+timestamp: 2026-07-27T19:02:22Z
+sha256: a4ebd7b32db94db44d31a26946b824cdc670ebcaeb529b5c7fa52f01b9fc9044
 ---
 # Bases 语法参考（x-basalt 口径）
 
@@ -155,7 +155,8 @@ note property 来自 Markdown frontmatter；file property 对所有受支持文�
 | number | `round`（0..1 参，小数位缺省 0）                                                   | 【P2b ✅；2026-07-28 由 `any` 组迁入独立 `number` 分派组】 |
 | number | `abs`、`ceil`、`floor`、`toFixed`（返 string）、`isEmpty`（恒 false）               | 【2026-07-28 ✅】 |
 | 渲染   | `escapeHTML`（string）、`html`/`image`/`icon`（global）                             | 【2026-07-28 ✅ 白名单内显式拒绝：`base/unsupported-feature`「无头内核不渲染」，不再报 unknown-function】 |
-| 杂项   | `random`、regex（`matches`）                                                        | 【`random` 与字节稳定冲突，待拍板；regex 见片 4 计划】 |
+| 杂项   | `random`                                                                            | 【2026-07-28 ❌ 白名单内显式拒绝：`base/unsupported-feature`「与字节稳定保证冲突」。用户拍板不注入种子、不放弃字节稳定——「同一输入必得同一输出」是本引擎核心契约】 |
+| 杂项   | regex（`matches`）                                                                  | 【🔜 片 4：需 ReDoS 防护 + 长度预算，BASE-SEC-004】 |
 
 语义要点：`if()` lazy branch（只计算被选择分支）【P1 ✅ 暂定 lazy 实现，待 oracle 校正】；list 成员比较用 typed equality；`number()` 转换失败行为【P1 ✅ 冻结为行级类型错误】。
 
