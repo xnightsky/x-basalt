@@ -7,8 +7,8 @@ tags:
   - bases
   - testing
   - x-basalt
-timestamp: 2026-07-27T19:51:08Z
-sha256: 2b808e410e71f55df6d765375a20a3eab8ccc502a23f0ca7a0ecc765ec3e5eb1
+timestamp: 2026-07-27T22:26:47Z
+sha256: 5c717b75520a9963e2a17e6240d48968d4a20dbbf8a8334c6e8272741dce950d
 ---
 # Bases 实现状态追踪
 
@@ -131,6 +131,11 @@ sha256: 2b808e410e71f55df6d765375a20a3eab8ccc502a23f0ca7a0ecc765ec3e5eb1
 
 > 缺口全在**叶子函数**：注册表 / 名字真相源 / 运行时分派三处骨架已成型，补函数 = 扩表 + 扩分派组 + 补用例。
 > 每片完成后本表翻标（日期 + 测试文件）。
+>
+> **测试分两层**：各片的求值层单测（合成 BaseRow，锁语义细节）+ `tests/base-functions-e2e.test.ts`
+> （经 BaseEngine 跑真实索引，锁「函数在真查询里确实能用」）。后者是**补漏检**而非补覆盖率——
+> 变异检验实测：删掉 `engine.ts` 的 `resolveFile:` 注入行，只有单测时 880 例仍全绿，
+> 而 `file()`/`link().asFile()` 在真实查询里已经报错。CLI `--context-file` 同理，见 `tests/base-cli.test.ts`。
 
 | 片 | 内容 | 状态 |
 | ---- | ---- | ---- |
