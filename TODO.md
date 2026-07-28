@@ -15,7 +15,7 @@
 
 定位：实现真正无 GUI、无 Obsidian 运行时的 `.base` 查询库层；官方 `base:query` 只作串行语义 oracle，不进入运行时依赖。首期明确为 **Bases Markdown conformance 2026-07**，不冒充 all-files 完整兼容。
 
-> **下一步（2026-07-28 收口后）**：P0/P1/P2a/P2b/P3a、review 修复、**函数覆盖率六片**全部落地，四门（typecheck / lint / format / test **880**）皆绿。功能面已无明显缺口。**唯一未收口的是 26 条暂定口径没与官方比对过**（逐条见[实现状态追踪](./docs/design/bases-status.md) §6 与 [runbook](./docs/design/bases-oracle-runbook.md) §1）。**2026-07-28 起 oracle 整体 ⏸ 暂缓**：官方不提供无 GUI 的取证路径，且 Bases 仍在快速演进，此刻冻结易被作废——依据与解冻触发条件见 runbook §0。
+> **下一步（2026-07-28 收口后）**：P0/P1/P2a/P2b/P3a、review 修复、**函数覆盖率六片**全部落地，四门（typecheck / lint / format / test **889**）皆绿。功能面已无明显缺口。**唯一未收口的是 26 条暂定口径没与官方比对过**（逐条见[实现状态追踪](./docs/design/bases-status.md) §6 与 [runbook](./docs/design/bases-oracle-runbook.md) §1）。**2026-07-28 起 oracle 整体 ⏸ 暂缓**：官方不提供无 GUI 的取证路径，且 Bases 仍在快速演进，此刻冻结易被作废——依据与解冻触发条件见 runbook §0。
 
 - [x] **P0 · document/schema/diagnostic**：`.base` YAML + view 选择 + filter 结构校验 + expression source span；先完成 `BASE-DOC-001..009`。计划：[`docs/plans/2026-07-26-bases-p0-document-schema.md`](./docs/history/plans/2026-07-26-bases-p0-document-schema.md)（2026-07-26 落地，含 SEC-007/008）
 - [x] **P1 · Markdown query vertical slice**：独立 Bases AST/evaluator，支持 global+view filters、note/file properties、常用 file/string/list 方法、order/sort/limit 与稳定 JSON；不复用 DQL AST，不用 `eval`。计划：[`docs/plans/2026-07-26-bases-p1-markdown-query.md`](./docs/history/plans/2026-07-26-bases-p1-markdown-query.md)（2026-07-26 落地，含 SEC-001/002/003/009 与字节稳定；oracle 冻结项为暂定口径）

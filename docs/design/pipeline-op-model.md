@@ -175,7 +175,7 @@ base tasks.base#overdue → meta.set status={{row.next_status}}
 ## 7. 兼容与迁移
 
 - `x-basalt run --pipe actions=normalize,index --apply` **原样可用**，行为不变。
-- 迁移正确性的判据就是现有测试：880 用例全绿 = 语义没漂。
+- 迁移正确性的判据就是现有测试：889 用例全绿 = 语义没漂（数字以动手当天实测为准，勿照抄本文）。
 - `ChangeEvent` 类型保留为 `Row` 的窄化别名，不做破坏性删除。
 
 ## 8. 不做（守 `change-orchestration.md` §11）
@@ -190,7 +190,7 @@ base tasks.base#overdue → meta.set status={{row.next_status}}
 
 | 片 | 内容 | 独立验收 |
 | --- | --- | --- |
-| 一 | `Row` + `Op` 签名 + `registry`；现有 7 动作迁到新签名 | 880 测试全绿（行为不变即迁移正确） |
+| 一 | `Row` + `Op` 签名 + `registry`；现有 7 动作迁到新签名 | 889 测试全绿（行为不变即迁移正确） |
 | 二 | 接只读算子：`query` / `search` / `base` / `links.*` / `lint` | 每个算子既能当源又能当中段，各有用例 |
 | 三 | 纯函数算子 `filter/map/limit/dedup` + `{{row.x}}` 插值 | `base → meta.set` 端到端跑通计算列传递 |
 | 四 | 配置面：`--pipe` 支持声明式步骤列表，保留现有 kv 兼容 | 新旧两种写法产出同一份 `RunReport` |
@@ -209,7 +209,7 @@ base tasks.base#overdue → meta.set status={{row.next_status}}
 
 ## 11. 验收口径
 
-1. 片一完成后现有 880 测试全绿，且 `--pipe actions=` 旧写法行为逐字节不变。
+1. 片一完成后现有 889 测试全绿，且 `--pipe actions=` 旧写法行为逐字节不变。
 2. 每个新接算子有「作源」「作中段」两种用法的独立用例。
 3. `base` 的 formula 计算列能经 `{{row.x}}` 抵达写动作，有端到端用例。
 4. 调度层可替换性有实证：至少存在一个不经 debounce/watch 的最小执行器跑通同一条算子链。
