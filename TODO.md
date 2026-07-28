@@ -35,12 +35,17 @@
 - [x] **oracle 校正 · 第二批四条出决策（2026-07-28）**：理由逐条写进 [vs-official §5](./docs/design/bases-vs-official.md)，不接受「有意差异」这种无理由的记法。⑦ 顶层行序**不跟**（本轮只测到行序、官方分组内容与组序**根本没测到**——观察记录的 `groups` 字段是坏的；且会牺牲字节稳定契约）；⑨ `+` 拼接**保留超集**（官方那里是静默的空，砍掉纯亏）；㉗ 默认数据集**不改**（差异恒发 warning 不静默；官方读数没证明附件也是行）；⑧ **跟官方**但实现待落 ↓
 - [ ] **oracle 校正 · ⑧ summary `values` 两个维度（决策已出：跟官方；实现待落）**
   - **(b) 计算集改为 limit 后**：无歧义，可直接改（`engine.ts` 顶层 summaries 由 `filtered` 换 `limited`）+ 翻掉锁定用例「汇总计算集为 limit 前全量」。**breaking**：带 `limit` 的 view，内置汇总读数会变。顺带消掉本仓自己的不一致——组级 summaries 本就按 limit 后算。
-  - **(a) 空值计入分母 —— 有硬前置，先取证再动手**：不能只改 `values` 的作用域。`values` 一旦含空值，`values.mean()` 立刻报类型错误（`list.mean()` 要求元素全为 number）；要复现官方的 `0.25`，必须**同时把通用函数 `list.mean()` 改成「非 number 不计分子、计分母」**，而官方从没给过它在混合列表上的读数。**前置：补一个 fixture view 观察官方 `list(1, 2, null).mean()`**，确认机制再动。不靠猜改通用函数。
-- [ ] **oracle fixture 缺口（成本近零，取证已脚本化）**
+  - **(a) 空值计入分母 —— 有硬前置，先取证再动手**：不能只改 `values` 的作用域。`values` 一旦含空值，`values.mean()` 立刻报类型错误（`list.mean()` 要求元素全为 number）；要复现官方的 `0.25`，必须**同时把通用函数 `list.mean()` 改成「非 number 不计分子、计分母」**，而官方从没给过它在混合列表上的读数。**前置：补 view 观察官方 `list(1, 2, null).mean()`**，确认机制再动。不靠猜改通用函数。
+    - **⚠️ 补这个 view 时绝不能新建 `.base` 文件**——官方默认数据集把 `.base` 自身也算作行，多一个文件，26 个 view 的行数全从 12 变 13，**既有观察记录当场全作废**。必须把新 view 加进**已有的** `.base`（如 `types.base`）：文件数不变、既有行集不动，重跑还顺带当一次回归。（这也是 ⑩..㉖ 补 view 时的通用约束，见下条。）
+    - **这一步决定性、不会白跑**——两个结果都能把「改不改、怎么改」钉死：
+      - 官方给 `1`（= M1 成立）→ 改 `list.mean()` + `values` 作用域 + 测试，约一小时。但这是**改通用函数**：任何用户表达式里的 `.mean()` 都跟着变，且变成反直觉语义（`[1,2,null].mean()` = 1 而非 1.5）。改动量小、影响面不小。
+      - 官方报错或给空 → M1 被证伪，说明官方的 `values` 根本不含空值、`0.25` 是汇总层自己取的分母——**本仓模型表达不出来**，⑧(a) 随即从「跟官方」翻成「不跟 + boundary」，**一行代码不用改，只写文档**。
+  - **成本与依赖**：(b) 半小时内、独立、不需要 Obsidian；(a) 的取证要 **Obsidian 开着**（跟第一批的复跑不同——那个读冻结记录，只需 `pnpm build`）。建议顺序：先落 (b)，(a) 等下次方便开 Obsidian 再一起取证。
+- [ ] **oracle fixture 缺口（取证已脚本化，但「成本近零」有个前提，见下）**
   - ⑩..㉖ 共 17 条暂定口径**无 fixture view**（见 [runbook §1.1 / §1.2](./docs/design/bases-oracle-runbook.md)）。
+  - **补 view 的硬约束：只往已有 `.base` 里加 view，不新建 `.base` 文件。** 官方默认数据集把 `.base` 自身算作行，每新建一个文件，所有无 filter view 的行数就 +1，**既有 26 条观察记录全部作废、要整批重跑**。加进已有文件则文件数不变、既有行集不动，重跑反而是一次免费回归。「兑现成本近零」只在遵守这条时成立。
   - **㉓ 的方向维度此前漏登**：分组键组序只登记了相对次序、没登记是否与方向无关。② 修完后两处不一致——顶层 sort 空值恒最后（已冻结），而 `groupBy.direction: DESC` 仍整体取反把空值组翻到最前。有意不动（无观察数据），补 view 时一并取证。见 [runbook §5.1](./docs/design/bases-oracle-runbook.md)。
   - **⑦ 的前置**：取证脚本 `controller.view.groups` 这条读取路径**没取对**（没有 `groupBy` 的 view 也报了组、key 全 null、rows 全空），补 ⑦ 之前得先修它。
-  - **⑩..㉖ 共 17 条仍无 fixture view**。取证已脚本化，补 view 是唯一门槛，兑现成本近零。
 - [ ] **P2 · typed formulas/group/summary**：Property 类型、Date/Link/File/List、公式依赖图与循环、高阶列表、groupBy/summaries；以真实需求逐项开计划。
   - [x] **P2a · formulas 核心**（typed values + 算术 + 依赖图/cycle + clock，BASE-FORM-001..006/SEC-006）：[`docs/plans/2026-07-27-bases-p2a-formulas.md`](./docs/history/plans/2026-07-27-bases-p2a-formulas.md)（2026-07-27 落地）
   - [x] **P2b · types.json / list 高阶 / groupBy / summaries**（BASE-TYPE-001..003、LIST-001、GROUP-001、SUM-001/002；TYPE-004 与 GROUP-002 待 oracle）计划：[`docs/plans/2026-07-27-bases-p2b-types-list-group-summary.md`](./docs/history/plans/2026-07-27-bases-p2b-types-list-group-summary.md)（2026-07-27 落地）

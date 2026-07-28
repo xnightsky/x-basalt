@@ -7,8 +7,8 @@ tags:
   - bases
   - oracle
   - conformance
-timestamp: 2026-07-28T08:32:49Z
-sha256: 5a0d4130adfb5ea5a2d64024ff93a1fdc3f8c634689a4fdc1bfdb1abd09f78ef
+timestamp: 2026-07-28T08:44:16Z
+sha256: bf0bca1dbe23567f6ae5a7a4eb3e136cd2432bacf4c6b79a84788942b6672e35
 ---
 # Bases P1 争议语义官方 oracle 操作手册（runbook）
 
@@ -321,7 +321,12 @@ view 清单（26 个）：truthiness.base × 8（truthy-missing / truthy-explici
 2. 状态文档 [`bases-status.md`](bases-status.md) §3 / §6 对应行同步。
 3. 决定「不跟官方」的，必须在 [`bases-vs-official.md`](bases-vs-official.md) 落 documented boundary，写清**为什么**不跟——不能只留一句「有意差异」。
 
-**⑩..㉖ 这 17 条仍无 fixture view**（见 §1.1 / §1.2）。取证既然已经脚本化，补 view 的成本就是唯一门槛了，兑现成本近零。
+**⑩..㉖ 这 17 条仍无 fixture view**（见 §1.1 / §1.2）。取证既然已经脚本化，补 view 的成本就是唯一门槛了——但「近零」有个前提：
+
+> **只往已有 `.base` 里加 view，不新建 `.base` 文件。** §2 前置第 3 条的推论：官方默认数据集把
+> `.base` 自身算作行，每新建一个文件，所有无 filter view 的行数就 +1，**§4 这 26 条观察记录当场全部作废、
+> 要整批重跑**。加进已有文件则文件数不变、既有行集不动，重跑反而是一次免费回归。
+> 这条同样适用于 ⑧(a) 的前置取证（[vs-official §5.4](bases-vs-official.md)）。
 
 ### 5.1 校正 ② 时暴露的新登记缺口：**组序的方向维度**
 
