@@ -714,7 +714,6 @@ frontmatter 里整串恰为一个 wikilink 的字符串（`"[[目标]]"` / `"[[�
 | `this.*` **且没传** `--context-file` | `base/dynamic-context-required`（传了就正常求值，见 [§3.5](#35-属性引用)） |
 | 把 `.md` 或带 `#锚点` 的路径当 `.base` 传进来 | `base/unsupported-feature`——内嵌 ```` ```base ```` 代码块与 `![[View.base#Name]]` 嵌入都不做，诊断里会告诉你该怎么写 |
 | `cards` / `list` / `map` view、插件 view | `base/unsupported-feature` / `base/unsupported-view-type` |
-| 空 filter 数组 | `base/unsupported-feature`（官方语义未确认，不猜） |
 | Dataview inline fields（`key:: value`） | 不进入 Bases 属性（官方 Bases 即如此） |
 | 附件（图片/PDF/`.base`）作为行 | 默认不支持：markdown 模式每次查询恒发 `base/markdown-only-dataset` 声明；`--conformance bases-all-files-2026-07` 可开启附件为行，见[§6.2](#62-all-files-模式附件并入数据集) |
 | 嵌入式 ```` ```base ```` 代码块、`![[View.base#Name]]` | 首期只支持独立 `.base` 文件 |
@@ -819,7 +818,7 @@ missing/null/空串/0/false/空列表的 truthiness（六形态全假，与实�
 
 以下实现已落地，语义仍待官方串行 oracle 校正，校正后可能调整：
 
-空 filter 数组（暂定拒绝）；date vs datetime 跨精度比较（暂定统一 epoch）；frontmatter wikilink → Link（暂定机制）；types.json 声明冲突口径（暂定行级 warning）；list/tag 分组键扇出后的顶层行序（本仓保 `file.path` 稳定序）；自定义 summary 的 `values` 边界（暂定剔除空值）；拼接语境下的日期推断（暂定 `"2026-01-01" + " 备注"` 报类型错误）。
+date vs datetime 跨精度比较（暂定统一 epoch）；frontmatter wikilink → Link（暂定机制）；types.json 声明冲突口径（暂定行级 warning）；list/tag 分组键扇出后的顶层行序（本仓保 `file.path` 稳定序）；自定义 summary 的 `values` 边界（暂定剔除空值）；拼接语境下的日期推断（暂定 `"2026-01-01" + " 备注"` 报类型错误）。
 
 逐项状态见[实现状态追踪](../design/bases-status.md)，观察与校正流程见 [oracle 操作手册](../design/bases-oracle-runbook.md)。
 
@@ -836,7 +835,7 @@ missing/null/空串/0/false/空列表的 truthiness（六形态全假，与实�
 | `base/view-not-found` | error | `--view` 指定的名字不存在——看 `suggestions` 里的可用名 |
 | `base/duplicate-view-name` | error | 两个 view 重名，拒绝歧义选择 |
 | `base/unsupported-view-type` | error | 未知/插件 view type（不按 table 猜测） |
-| `base/unsupported-feature` | error | `cards`/`list`/`map`、空 filter 数组、多值分组键等已知但未支持的特性；也用于 all-files 模式遇旧库无 `vault_entries` 表时的降级 compat warning（此时为 warning 级，数据集自动退回 md-only） |
+| `base/unsupported-feature` | error | `cards`/`list`/`map`、渲染类函数等已知但未支持的特性；也用于 all-files 模式遇旧库无 `vault_entries` 表时的降级 compat warning（此时为 warning 级，数据集自动退回 md-only） |
 | `base/unknown-function` | error | 白名单外函数（含旧 snake_case，不静默迁移）；也用于未知汇总名 |
 | `base/invalid-regex` | warning | `matches()` 的正则非法、超长，或含灾难性回溯构造（`(a+)+`）/反向引用——**行级报错，不会静默当作「不匹配」** |
 | `base/expression-syntax` | error | 表达式文法错误（位置 = `.base` 文件行列）——**把 DQL 的 `=`/`AND` 写进 `.base` 会落这里** |

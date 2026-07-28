@@ -923,6 +923,9 @@ export class BaseEngine {
  * - expr：evaluateExpression 返回值的 truthy（行级错误 → MISSING → false，该行不通过）；
  * - and：全部通过（短路）；or：任一通过（短路）；
  * - not：不满足其中任何一项 = NOT(child1 OR child2 ...)（设计 §6）。
+ *
+ * 空 children 的三个默认值由 every/some 天然给出：`and:[]`=真、`or:[]`=假、`not:[]`=真
+ * ——与官方 1.12.7 实测一致（oracle runbook ④），故 planner 放行空数组后此处无需特判。
  * BaseBudgetError 不在此吞掉，继续上抛（engine 转 execution-budget + 空结果）。
  *
  * 求值上下文（注入时钟 / 公式 accessor / types.json 类型表 / 查询级共享预算）由调用方经

@@ -22,7 +22,7 @@ sha256: 0cd80053b57707074a7d616feecdcf1de84478f1cedc7718f5af8001f90de60a
 | ---- | ---- | ---- |
 | P0 | document / schema / diagnostic | ✅ 2026-07-26（[计划](../history/plans/2026-07-26-bases-p0-document-schema.md)） |
 | P1 | Markdown query vertical slice（独立 AST/evaluator） | ✅ 2026-07-26（[计划](../history/plans/2026-07-26-bases-p1-markdown-query.md)） |
-| P1 oracle | 官方差分（争议语义冻结） | ✅ 2026-07-28 **取证完成**（Obsidian 1.12.7，26 view 全部两次一致，19 一致 / 7 分歧）；**校正未动手**，待办见 [runbook §5](bases-oracle-runbook.md)。同日上午的「⏸ 暂缓」决策已被推翻，理由见 runbook §0.1 |
+| P1 oracle | 官方差分（争议语义冻结） | ✅ 2026-07-28 **取证完成**（Obsidian 1.12.7，26 view 全部两次一致，19 一致 / 7 分歧）；**校正第一批（①②④）✅ 已落地**，余 ⑦⑧⑨㉗ 待决策，见 [runbook §5](bases-oracle-runbook.md)。同日上午的「⏸ 暂缓」决策已被推翻，理由见 runbook §0.1 |
 | P2a | formulas 核心（typed values + 算术 + 依赖图/cycle + clock） | ✅ 2026-07-27（[计划](../history/plans/2026-07-27-bases-p2a-formulas.md)） |
 | P2b | types.json / list 高阶 / groupBy / summaries | ✅ 2026-07-27（[计划](../history/plans/2026-07-27-bases-p2b-types-list-group-summary.md)） |
 | P3 | all-files / context / 嵌入 | 🔀 P3a 附件数据集 ✅ 2026-07-27（[计划](../history/plans/2026-07-27-bases-p3-attachments.md)）；context ✅ 2026-07-28（覆盖率片六 CTX-001）；嵌入形态 ❌ 不做 + 诊断（CTX-002/003） |
@@ -55,18 +55,18 @@ sha256: 0cd80053b57707074a7d616feecdcf1de84478f1cedc7718f5af8001f90de60a
 | ---- | ---- | ---- |
 | view 选择（views[0] / 命名 view） | BASE-VIEW-001/002 | ✅ 2026-07-26（selectView API 于 P0，e2e 于 P1） |
 | global + view filter AND 合并 | BASE-VIEW-003 | ✅ 2026-07-26 |
-| 递归 and/or/not 求值 | BASE-VIEW-004 | ✅ 2026-07-26（空数组 P1 直接报 `base/unsupported-feature` 拒绝并注明待 oracle，见 §3） |
+| 递归 and/or/not 求值 | BASE-VIEW-004 | ✅ 2026-07-26（空数组 ✅ 2026-07-28 经 oracle ④ 冻结：`and:[]`=真 / `or:[]`=假 / `not:[]`=真，不再拒绝，见 §3） |
 | md-only 执行 + conformance warning | BASE-DATA-001/002 | ✅ 2026-07-26（`base/markdown-only-dataset` warning 每次查询恒发） |
 | 空 vault / 多根 vault | BASE-DATA-003/004 | ✅ 2026-07-26 |
 | 属性引用：`status`/`note.status`/`note["…"]`/Unicode | BASE-PROP-001..003 | ✅ 2026-07-26（文法 + 求值 + e2e 三层用例） |
-| missing/null/空串/0/false/空列表 truthiness | BASE-PROP-004 | ⏸ 待 oracle 冻结（暂定口径已锁定于 evaluator 用例并注释标注） |
+| missing/null/空串/0/false/空列表 truthiness | BASE-PROP-004 | ✅ 2026-07-28 经 oracle ① 冻结（六形态全 falsy，与实现一致；equality 侧的 MISSING/null 合并同批校正） |
 | `file.properties` | BASE-PROP-005 | ✅ 2026-07-26 |
 | 非 Markdown 行访问 note property | BASE-PROP-006 | ✅ 2026-07-26（P1 不产生该类行——附件不为行，由 BASE-DATA-002 用例覆盖；all-files 阶段口径见 P3） |
 | file fields（path/name/…/ctime/mtime） | BASE-FILE-001 | ✅ 2026-07-26（ctime/mtime 为 epoch ms number，P1 无 Date runtime） |
 | `file.inFolder` / `hasTag` / `hasProperty` / `hasLink` | BASE-FILE-002..005 | ✅ 2026-07-26（hasLink bare/qualified/embed 三分支独立用例） |
 | 比较/布尔/优先级文法（Chevrotain parser） | BASE-EXPR-001/002 | ✅ 2026-07-26（`src/base/tokens.ts`/`parser.ts`，独立于 DQL token/AST） |
 | string/list 方法、typed equality | BASE-EXPR-003/004 | ✅ 2026-07-26 |
-| `if()`/`list()`/`number()` | BASE-EXPR-005 | ✅ 2026-07-26（`if` lazy 为暂定实现，待 oracle；number 转换失败 = 行级类型错误） |
+| `if()`/`list()`/`number()` | BASE-EXPR-005 | ✅ 2026-07-26（`if` lazy ✅ 2026-07-28 经 oracle ③ 冻结，与实现一致；number 转换失败 = 行级类型错误） |
 | `order` 投影 / 多键 sort / limit / 默认 file.path tie-break | BASE-RESULT-001..004 | ✅ 2026-07-26（null 排序位置 ✅ 2026-07-28 经 oracle ② 冻结为「恒排最后、与方向无关」并修复 DESC 漂移；无显式 sort 给 `base/default-sort-tiebreak` info） |
 | 属性访问白名单 / 无 eval / 参数化 SQL | BASE-SEC-001/002/003 | ✅ 2026-07-26 |
 | view 必填字段（type/name 缺失即 error，不按 table 猜测） | 设计 §5 | ✅ 2026-07-27（review 修复；缺失校验移出 key 循环） |
@@ -79,19 +79,20 @@ sha256: 0cd80053b57707074a7d616feecdcf1de84478f1cedc7718f5af8001f90de60a
 | 1/100/10,000 篇基准（只记录不承诺） | 矩阵 §9 P1 门 | ✅ 2026-07-26（query 11ms/4ms/68ms，数值见计划「验证结论」，无需 SQL 下推） |
 | CLI 薄出口（`base` 命令）+ guides 补 Bases 章节 | 设计 §15（API 先于 CLI） | ✅ 2026-07-27（[计划](../history/plans/2026-07-27-bases-cli-export.md)；`x-basalt base` + `guides/querying-bases.md`，tests/base-cli.test.ts 7 用例） |
 
-## 3. P1 前置 oracle ✅ 取证完成 / ⏳ 校正未动手
+## 3. P1 前置 oracle ✅ 取证完成 / 第一批校正 ✅ 已落地
 
 > **2026-07-28：26 个 view 全部取证完毕**（Obsidian 1.12.7，每个 view 连跑两次全部一致，无 `implementation-defined`）。
 > 同日上午曾判「⏸ 整体暂缓、不再排期」，当天下午被推翻——官方 CLI 的 `eval` 能读到 Bases 算好的行集，
 > 取证可脚本化、不需要人逐个点。误判复盘见 [runbook §0.1](bases-oracle-runbook.md)。
-> **下表状态是「官方结论已知，但实现一行未改」**——⏳ 表示待校正，逐条取舍见 [runbook §5](bases-oracle-runbook.md)。
+> **2026-07-28 校正轮**：结论明确的第一批三条（① equality / ② sort 空值位 / ④ 空 filter 数组）已落实现 + 回归用例；
+> 余下四条（⑦⑧⑨㉗）需先出决策。⏳ 表示待校正，逐条取舍见 [runbook §5](bases-oracle-runbook.md) 与 [vs-official §5](bases-vs-official.md)。
 
 | 争议语义 | 场景编号 | 官方结论 | 状态 |
 | ---- | ---- | ---- | ---- |
 | missing/null/空串/0/false/空列表 truthiness | BASE-PROP-004 | 六形态全 falsy，**与实现一致** | ✅ 可转正 |
 | `X == null` 与 MISSING 是否合并 | BASE-PROP-004 | **合并**（`missing == null` 为 true） | ✅ 2026-07-28 已校正（跟官方；合并落在 `typedEqual`，分组/`unique`/`contains` 一并生效，`isType("null")` 有意不跟随；取舍见 [vs-official §5.1](bases-vs-official.md)） |
 | 多键 sort 的 null 位置 | BASE-RESULT-002 | 恒排最后，与方向无关 | ✅ 2026-07-28 已校正（当 bug 修：`sortKeyCompareDirected` 让方向只作用于可比值，空值组恒最后；回归用例 `base-engine.test.ts` / `base-values-date.test.ts` 标 oracle ②） |
-| 空 filter 数组（and:[]/or:[]/not:[]） | 设计 §6 | `and:[]`=真 / `or:[]`=假 / `not:[]`=真 | ⏳ 分歧待校正（当前是拒绝） |
+| 空 filter 数组（and:[]/or:[]/not:[]） | 设计 §6 | `and:[]`=真 / `or:[]`=假 / `not:[]`=真 | ✅ 2026-07-28 已校正（跟官方；planner 放行空数组，语义由 evalFilter 的 every/some 天然给出） |
 | `if()` lazy branch | 设计 §9 | lazy，**与实现一致** | ✅ 可转正 |
 | 二元运算的字符串→日期推断是否作用于 `+` | 语法 §5.1 / 设计 §8.3 | **原命题不成立**：官方 `+` 根本不拼接字符串，string+string 也得空 | ⏳ 倾向保留超集 + 落 boundary |
 | 自定义 summary 的 `values` 边界 | BASE-SUM-002 | **含** null/missing（计入分母）、按 **limit 后** | ⏳ 两维度都与实现相反 |

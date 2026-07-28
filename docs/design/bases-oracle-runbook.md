@@ -70,7 +70,7 @@ Obsidian 升级后重跑（本手册结论绑定 1.12.7 + §2 的 fixture 指纹
 | ① | missing/null/空串/0/false/空列表 truthiness 与 == 合并 | BASE-PROP-004 | falsy = MISSING/null/false/0/""/空列表；`missing == null` 为 false | truthiness **同**；但 `missing == null` 为 **true**（MISSING 与 null 合并） | truthiness ✅ 可转正 / equality ✅ 2026-07-28 已跟官方校正 |
 | ② | 多键 sort 的 null/missing 位置 | BASE-RESULT-002 | null/missing 恒排最后（与方向无关） | 恒排最后，**与方向无关** | ✅ 已校正（2026-07-28）：口径本与官方一致，是**实现没做到**（DESC 时排最前），当 bug 修 |
 | ③ | `if()` lazy branch | 设计 §9 | lazy：只计算被选择分支 | lazy | ✅ |
-| ④ | 空 filter 数组 and/or/not | 设计 §6 | P1 拒绝（`base/unsupported-feature`） | `and:[]`=真 / `or:[]`=假 / `not:[]`=真，稳定可重放 | ❌ |
+| ④ | 空 filter 数组 and/or/not | 设计 §6 | P1 拒绝（`base/unsupported-feature`） | `and:[]`=真 / `or:[]`=假 / `not:[]`=真，稳定可重放 | ✅ 2026-07-28 已跟官方校正 |
 | ⑤ | date vs datetime 跨精度比较 | BASE-TYPE-005 | 统一按 UTC epoch 比较（P2a 落地） | 行集一致 | ✅ |
 | ⑥ | frontmatter wikilink → Link 值与相等 | BASE-TYPE-006 | `[[t]]`/`[[t\|d]]`/`[[t#sub]]` → Link value，按 path+subpath 相等（P2a 落地） | 行集一致 | ✅ |
 | ⑦ | list/tag 分组键一行多组 | BASE-GROUP-002 | **扇出**：一行进入其每个元素的组；行内元素先去重、空 list 视同 MISSING 键 | 顶层 rows 12 行（无重复计入），但**顺序随分组键变动** | ❌ 顶层顺序分歧 |
@@ -152,7 +152,7 @@ view 清单（26 个）：truthiness.base × 8（truthy-missing / truthy-explici
 | ① eq | `X == null` 与 MISSING | **MISSING 与 null 合并**，命中全部行 | 区分二者 | ✅ 2026-07-28 已校正（跟官方） |
 | ② | null/missing 排序位 | ASC/DESC **都排最后** | ASC 最后、**DESC 最前** | ✅ 2026-07-28 已校正（原 ❌ DESC 分歧） |
 | ③ | `if()` 惰性 | lazy（未选分支不求值） | lazy | ✅ 一致 |
-| ④ | 空 filter 数组 | `and:[]`=真 / `or:[]`=假 / `not:[]`=真 | 三个都报 `unsupported-feature` | ❌ 3/3 分歧 |
+| ④ | 空 filter 数组 | `and:[]`=真 / `or:[]`=假 / `not:[]`=真 | 三个都报 `unsupported-feature` | ✅ 2026-07-28 已校正（跟官方） |
 | ⑤ | date/datetime 跨精度比较 | 见 §4.5 | 同 | ✅ 一致 |
 | ⑥ | wikilink → Link | 见 §4.5 | 同 | ✅ 一致 |
 | ⑦ | list 分组键扇出 | 顶层 rows 顺序随分组键变动 | 保持 `file.path` 序 | ❌ 分歧 |
@@ -216,6 +216,12 @@ view 清单（26 个）：truthiness.base × 8（truthy-missing / truthy-explici
 
 **结论**：官方按空集的布尔代数默认值处理（`and:[]`=真、`or:[]`=假、`not:[]`=真），全部稳定可重放，**没有 implementation-defined 的余地**。x-basalt 的「P1 拒绝」不成立。
 
+> **✅ 2026-07-28 已跟官方校正**。「P1 拒绝」本就不是语义主张、而是「没有裁判先不猜」的占位，
+> 裁判到位即撤。改动只是删掉 `planner.ts` 里那段拒绝——求值侧 `evalFilter` 的 `every`/`some`
+> 天然就是这三个默认值，一行没改。回归用例：`tests/base-engine.test.ts`（`empty-filter.base`
+> 三个 view），额外断言「无 error 诊断」——因为 `empty-or` 校正前后都是 0 行，**行数相同但成因不同**
+> （旧：拒绝返回空；新：恒假），只比行数会漏判。
+
 ### 4.5 ⑤⑥ date/datetime 比较与 wikilink → Link（样本 CaseE）
 
 | view | 官方 | x-basalt | 结论 |
@@ -277,7 +283,7 @@ view 清单（26 个）：truthiness.base × 8（truthy-missing / truthy-explici
 | --- | --- | --- | --- |
 | ① eq | MISSING 与 null 是否合并 | `src/base/values.ts`（`typedEqual`） | **跟官方** ✅ 2026-07-28：影响任何 `== null` / `!= null` 的 filter，静默改变行集，属最危险的一类。合并落在值域唯一的相等语义上（分组/`unique`/`contains` 一并生效），`isType("null")` 有意不跟随——取舍见 [vs-official §5.1](bases-vs-official.md) |
 | ② | DESC 时 null/missing 排到了最前 | `src/base/values.ts`（`sortKeyCompareDirected`） | **按自己登记的口径修** ✅ 2026-07-28——不是「跟不跟官方」，是实现与 §1 登记口径的漂移，官方恰好站在登记口径那边 |
-| ④ | 空 filter 数组当前是拒绝 | `src/base/planner.ts` | **跟官方**（待落地）：`and:[]`=真 / `or:[]`=假 / `not:[]`=真，官方稳定可重放，「P1 拒绝」没有依据了 |
+| ④ | 空 filter 数组当前是拒绝 | `src/base/planner.ts` | **跟官方** ✅ 2026-07-28：`and:[]`=真 / `or:[]`=假 / `not:[]`=真，官方稳定可重放，「P1 拒绝」没有依据了 |
 | ⑦ | 分组时顶层 rows 顺序 | `src/base/engine.ts`（groupBy） | 待定：x-basalt 的 `file.path` 稳定序是**字节稳定契约**的一部分，跟官方会牺牲它 |
 | ⑧ | summary values 的两个维度 | `src/base/summaries.ts` | 待定：官方把 null/missing 计入分母（0.25 而非 1.5）反直觉，但那是官方 |
 | ⑨ | `+` 是否做字符串拼接 | `src/base/evaluator.ts`（`upgradeStringOperand`） | 倾向**保留超集**：官方 `+` 不拼接字符串，x-basalt 拼——砍掉是纯功能损失，宜落 documented boundary |

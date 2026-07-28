@@ -369,7 +369,7 @@ oracle 判官方相反（两个 view 都命中全部 12 行），2026-07-28 已�
 |---|---|---|
 | ① | missing / null / `""` / `0` / `false` / `[]` 的真假 | 全部为假（✅ 冻结）；~~missing ≠ null~~ → ✅ 2026-07-28 跟官方**合并** |
 | ② | 多键 sort 里 null 排哪 | **见下方警告** |
-| ③ | 空 filter 数组 `and: []` | 直接拒绝，报 unsupported |
+| ③ | 空 filter 数组 `and: []` | ~~直接拒绝，报 unsupported~~ → ✅ 2026-07-28 跟官方：`and:[]`=真 / `or:[]`=假 / `not:[]`=真 |
 | ④ | `if()` 是否惰性求值 | 惰性 |
 | ⑤ | date 与 datetime 跨精度比较 | 严格 ISO 推断，统一 epoch 比较 |
 | ⑥ | frontmatter 里的 `[[wikilink]]` | 转成 Link 值，路径感知相等 |
@@ -445,7 +445,7 @@ obsidian base:query format=json                  # 查当前 base
 | --- | --- | --- | --- |
 | ① eq | 官方把 MISSING 与 null 合并（`missing == null` 为真），本仓原先区分 | **跟官方** ✅ 2026-07-28 | 见 §5.1 |
 | ② | DESC 时空值排到了最前 | **当 bug 修** ✅ 2026-07-28 | 不是选择题：本仓登记口径与官方同为「恒排最后、与方向无关」，实现漂移。见 §3.3 的警告框 |
-| ④ | 空 filter 数组当前报 unsupported | 待落地 | — |
+| ④ | 空 filter 数组当前报 unsupported | **跟官方** ✅ 2026-07-28 | 见 §5.2 |
 | ⑦ | 分组时顶层 rows 顺序 | 待决策（第二批） | — |
 | ⑧ | summary `values` 的空值与 limit 两个维度 | 待决策（第二批） | — |
 | ⑨ | 官方 `+` 不做字符串拼接 | 待决策（第二批） | — |
@@ -476,6 +476,23 @@ obsidian base:query format=json                  # 查当前 base
 **与 DQL 侧的关系**：无关，且有意不同。DQL 的 `WHERE field = null` 测的是**键是否存在**
 （把 `0` / 空串视为「有」，见 `core.json5`），两边是两套语义、两套实现文件（`src/query/` vs `src/base/`），
 本次改动不触及 DQL 一行。
+
+### 5.2 ④ 空 filter 数组：按空集布尔代数默认值（跟官方）
+
+**官方读数**：`and:[]` → 12 行（全部）、`or:[]` → 0 行、`not:[]` → 12 行（全部），连跑两次一致。
+本仓原先对三者一律报 `base/unsupported-feature` error + 空结果。
+
+**为什么跟**：原来的「P1 拒绝」不是一种语义主张，而是一句「**官方语义未确认，不猜**」的**占位**——
+它存在的唯一前提是「没有裁判」。裁判来了，读数还稳定可重放（无 `implementation-defined` 余地），
+占位就该撤掉。而且官方给的正是空集上的布尔代数默认值（空合取为真、空析取为假），是最不意外的一种。
+
+**实现代价为零**：`evalFilter` 用的是 `children.every(...)` / `children.some(...)`，
+空数组时 JS 天然给出 `true` / `false`；`not` 是 `!some(...)` → `true`。所以校正只是**删掉 planner 里
+那段拒绝**，求值侧一行没改。
+
+**一个必须记住的判读陷阱**：`or:[]` 校正前后都是 **0 行**，但成因完全不同——旧行为是
+`base/unsupported-feature` **error + 空结果**，新行为是**恒假**的正常空集。行数相同 ≠ 口径一致，
+回归用例因此额外断言「三个 view 都没有 error 诊断、也不再出现 unsupported-feature」。
 
 ---
 

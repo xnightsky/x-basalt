@@ -580,17 +580,46 @@ test("BASE-SEC-009: 恶意属性名与原型键按缺失处理", () => {
 
 // ---------- 计划拍板项 / 验收门 ----------
 
-// 空 filter 数组（and: []）：语义待官方 oracle 冻结，P1 直接拒绝
-test("空 filter 数组: base/unsupported-feature error + 空结果（待 oracle）", () => {
-  const r = query("empty-filter.base");
-  assert.deepEqual(r.rows, []);
-  assert.equal(r.total, 0);
-  assert.deepEqual(r.columns, []);
-  const err = r.diagnostics.find(
-    (d) => d.rule === BASE_RULES.unsupportedFeature && d.severity === "error",
+// 空 filter 数组（oracle runbook ④ · §4.4，Obsidian 1.12.7 实测冻结）：
+// 按空集布尔代数默认值处理——and:[]=真 / or:[]=假 / not:[]=真，不再报 unsupported-feature。
+// ⚠️ or:[] 的 0 行与旧的「拒绝返回空」**行数相同但成因不同**：这里必须是无 error 诊断的正常空集。
+test("空 filter 数组(oracle ④): and:[]=真 / or:[]=假 / not:[]=真，均无 error", () => {
+  const all = [
+    "Alpha.md",
+    "Beta.md",
+    "Empty.md",
+    "NullProps.md",
+    "Projects/Gamma.md",
+    "Projects/Sub/Delta.md",
+    "Projects2/Epsilon.md",
+  ];
+
+  const and = query("empty-filter.base", "empty-and");
+  assert.deepEqual(errorsOf(and), []);
+  assert.deepEqual(
+    and.rows.map((row) => row["file.path"]),
+    all, // and: [] 恒真 → 全量
   );
-  assert.ok(err !== undefined);
-  assert.match(err.message, /空 filter 数组.*oracle/);
+
+  const or = query("empty-filter.base", "empty-or");
+  assert.deepEqual(errorsOf(or), []); // 关键：空集来自恒假，不是来自拒绝
+  assert.deepEqual(or.rows, []);
+  assert.equal(or.total, 0);
+
+  const not = query("empty-filter.base", "empty-not");
+  assert.deepEqual(errorsOf(not), []);
+  assert.deepEqual(
+    not.rows.map((row) => row["file.path"]),
+    all, // not: [] = NOT(空 or) = 恒真 → 全量
+  );
+
+  // 三个 view 都不得再出现 base/unsupported-feature。
+  for (const r of [and, or, not]) {
+    assert.equal(
+      r.diagnostics.find((d) => d.rule === BASE_RULES.unsupportedFeature),
+      undefined,
+    );
+  }
 });
 
 // 字节稳定专项（矩阵 §9 P1 门）：同 DB+Base+clock 连续两次 JSON.stringify(query()) 全等

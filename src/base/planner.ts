@@ -5,8 +5,9 @@
  * filter/order/sort 的全部表达式字符串经 parseBaseExpression 编译为 AST（带缓存），
  * 解析失败产 error 诊断——engine 对任何 error 级诊断拒绝执行（返回空结果）。
  *
- * 空 filter 数组（`and: []` / `or: []` / `not: []`）语义待官方 oracle 冻结，
- * P1 遍历合并后 filter 树遇空数组直接产 `base/unsupported-feature`（error），不猜语义。
+ * 空 filter 数组（`and: []` / `or: []` / `not: []`）按空集布尔代数默认值处理
+ * （oracle runbook ④ 冻结：`and:[]`=真 / `or:[]`=假 / `not:[]`=真）——本层正常编译，
+ * 语义由 engine 的 evalFilter（every/some）天然给出；P1 的「直接拒绝、不猜」已作废。
  *
  * P2a 增量：formulas 段编译 + 依赖图（拓扑排序与 YAML 键序无关；循环 → base/formula-cycle；
  * 节点数/深度预算 SEC-006；filter/order/sort 中的 formula.* 引用名一并核验）。
@@ -427,8 +428,10 @@ function mergeFilters(
  * 递归编译合并后 filter 树（深度已被文档层 maxFilterDepth ≤ 32 限住，递归无栈溢出风险，
  * 无须重复 P0 的显式栈——那里防御的是**未校验**输入）。
  *
- * 空 children 数组 → `base/unsupported-feature`（error）：空 filter 数组语义待官方 oracle
- * 冻结，P1 直接拒绝，不猜 and:[]→true / or:[]→false / not:[]→true。
+ * 空 children 数组（`and: []` / `or: []` / `not: []`）**正常编译，不再拒绝**：
+ * oracle runbook ④（官方 1.12.7 实测，连跑两次一致）给出的是空集布尔代数默认值
+ * ——`and:[]`=真 / `or:[]`=假 / `not:[]`=真。求值侧 `evalFilter` 的 every/some 天然就是
+ * 这个语义，故本层只需放行。此前的「P1 拒绝、不猜」在有官方读数后失去依据。
  *
  * @returns 任一节点失败返回 undefined（诊断已聚合），该 filter 视为整体失败
  */
@@ -456,19 +459,6 @@ function compileFilter(
       return undefined;
     }
     return { kind: "expr", ast: result.expr, source: node.expr, span: node.span };
-  }
-  if (node.children.length === 0) {
-    diagnostics.push(
-      baseDiagnostic(
-        file,
-        node.span,
-        BASE_RULES.unsupportedFeature,
-        "error",
-        `空 filter 数组（${node.kind}: []）语义待官方 oracle 冻结，P1 直接拒绝`,
-        { target: node.kind, reason: "empty_filter_array" },
-      ),
-    );
-    return undefined;
   }
   const children: CompiledFilter[] = [];
   let ok = true;
