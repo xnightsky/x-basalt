@@ -65,6 +65,7 @@ export {
   parseWikilinkValue,
   safeGetOwn,
   sortKeyCompare,
+  sortKeyCompareDirected,
   toOutputValue,
   truthy,
   typedEqual,

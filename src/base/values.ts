@@ -701,37 +701,74 @@ export function typeNameOf(v: BaseValue): string {
   return typeof v; // boolean / number / string
 }
 
+/** 空值/不可比较排序组的 rank（`sortRank` 的最后一组，恒排最后）。 */
+const SORT_RANK_EMPTY = 4;
+
 /** 排序分组：0=number，1=string，2=date/datetime，3=duration，4=不可比较/空值组（恒排最后）。 */
 function sortRank(v: BaseValue): number {
   if (typeof v === "number") return 0;
   if (typeof v === "string") return 1;
   if (isDateValue(v)) return 2;
   if (isDurationValue(v)) return 3;
-  return 4;
+  return SORT_RANK_EMPTY;
 }
 
-/**
- * 排序键比较（engine sort 用；方向由调用方乘系数，本函数恒按 ASC 语义返回）。
- *
- * 暂定口径（待 oracle BASE-RESULT-002 冻结）：null / MISSING / 不可比较类型
- * （boolean/list/object/file）恒排最后，**与 ASC/DESC 无关**；
- * number 与 string 混排时 number 在前（仅为确定性，非官方语义）。
- * P2a：date/datetime（epoch）与 duration（毫秒）可比，分入独立排序组；
- * **link 不可比——排序遇到 link 抛 {@link BaseTypeError}**（P2a 计划「关键取舍」#9：
- * 排序报行级错误；engine 侧捕获接线属下一片，本片无产生 link 值的执行路径）。
- */
-export function sortKeyCompare(a: BaseValue, b: BaseValue): number {
+/** link 无排序语义：排序键遇到 link 一律行级类型错误（P2a 计划「关键取舍」#9）。 */
+function rejectLinkSortKey(a: BaseValue, b: BaseValue): void {
   if (isLinkValue(a) || isLinkValue(b)) {
     throw new BaseTypeError(
       `类型不参与排序：link（${typeNameOf(a)} 与 ${typeNameOf(b)}，link 无排序语义）`,
     );
   }
+}
+
+/**
+ * 排序键比较（**恒 ASC 语义**；带方向的排序请用 {@link sortKeyCompareDirected}）。
+ *
+ * 冻结口径（oracle runbook ② / BASE-RESULT-002，2026-07-28 官方 1.12.7 实测）：
+ * null / MISSING / 不可比较类型（boolean/list/object/file）排在最后；
+ * number 与 string 混排时 number 在前（仅为确定性，非官方语义）。
+ * date/datetime（epoch）与 duration（毫秒）可比，分入独立排序组；
+ * **link 不可比——排序遇到 link 抛 {@link BaseTypeError}**。
+ *
+ * ⚠️ 调用方**不得**用 `-sortKeyCompare(a, b)` 实现 DESC：那会把空值组的排名差一起翻转，
+ * 空值跑到最前（这正是 runbook ② 记录的实现漂移）。方向必须经
+ * {@link sortKeyCompareDirected} 施加。
+ */
+export function sortKeyCompare(a: BaseValue, b: BaseValue): number {
+  rejectLinkSortKey(a, b);
   const ra = sortRank(a);
   const rb = sortRank(b);
   if (ra !== rb) return ra - rb;
-  if (ra === 4) return 0; // 同组保持原序（稳定排序兜底）
+  if (ra === SORT_RANK_EMPTY) return 0; // 同组保持原序（稳定排序兜底）
   // 同组内 number/string/date/duration 的 compareValues 必成功。
   return compareValues(a, b);
+}
+
+/**
+ * 带方向的排序键比较（engine 的 view sort 用）。
+ *
+ * 冻结口径（oracle runbook ② / §4.2，官方 1.12.7 实测）：**null/missing 恒排最后，
+ * 与 ASC/DESC 无关**。故方向只作用于「两侧都可比」的情形；任一侧落在空值/不可比较组时
+ * 直接给出「空值在后」的定序，不受 DESC 取反影响。
+ *
+ * 这条与本仓 [runbook §1](../../docs/design/bases-oracle-runbook.md) 登记的口径一致——
+ * 2026-07-28 之前是**实现**没做到（DESC 整体取反把空值翻到了最前），官方站在登记口径这边。
+ */
+export function sortKeyCompareDirected(
+  a: BaseValue,
+  b: BaseValue,
+  direction: "ASC" | "DESC",
+): number {
+  rejectLinkSortKey(a, b);
+  const aEmpty = sortRank(a) === SORT_RANK_EMPTY;
+  const bEmpty = sortRank(b) === SORT_RANK_EMPTY;
+  if (aEmpty || bEmpty) {
+    // 空值组恒最后：两侧都空 → 视为相等（由调用方的稳定 tie-break 兜底）。
+    return aEmpty && bEmpty ? 0 : aEmpty ? 1 : -1;
+  }
+  const c = sortKeyCompare(a, b);
+  return direction === "DESC" ? -c : c;
 }
 
 // ---------------------------------------------------------------------------

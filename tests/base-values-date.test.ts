@@ -12,6 +12,7 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import {
   BaseTypeError,
+  MISSING,
   arithAdd,
   arithDiv,
   arithMul,
@@ -27,6 +28,7 @@ import {
   parseDateLike,
   parseWikilinkValue,
   sortKeyCompare,
+  sortKeyCompareDirected,
   toOutputValue,
   typedEqual,
   type BaseFunctionContext,
@@ -254,6 +256,29 @@ test("sortKeyCompare：date/duration 排序组与 link 拒绝", () => {
   const link = parseWikilinkValue("[[Note]]");
   assert.ok(link !== undefined);
   assert.throws(() => sortKeyCompare(link, link), BaseTypeError);
+});
+
+// oracle runbook ②（BASE-RESULT-002，官方 1.12.7 冻结）：方向只作用于可比值，
+// 空值组恒最后——sortKeyCompareDirected 存在的唯一理由就是替掉调用方的 `-c` 取反。
+test("sortKeyCompareDirected：空值组恒最后（DESC 不翻转），可比值随方向", () => {
+  // 可比值：方向生效。
+  assert.equal(sortKeyCompareDirected(1, 2, "ASC"), -1);
+  assert.equal(sortKeyCompareDirected(1, 2, "DESC"), 1);
+  // 空值 vs 可比值：两个方向下空值都在后。
+  for (const dir of ["ASC", "DESC"] as const) {
+    assert.equal(sortKeyCompareDirected(null, 1, dir), 1, `null 在后（${dir}）`);
+    assert.equal(sortKeyCompareDirected(1, null, dir), -1, `null 在后（${dir}）`);
+    assert.equal(sortKeyCompareDirected(MISSING, "a", dir), 1, `missing 在后（${dir}）`);
+    assert.equal(sortKeyCompareDirected("a", MISSING, dir), -1, `missing 在后（${dir}）`);
+    // 不可比较类型（boolean/list/object/file）与空值同组，同样恒最后。
+    assert.equal(sortKeyCompareDirected(true, 1, dir), 1, `boolean 在后（${dir}）`);
+    // 两侧都空 → 0（由调用方的 file.path tie-break 兜底）。
+    assert.equal(sortKeyCompareDirected(null, MISSING, dir), 0);
+  }
+  // link 仍不参与排序（方向不改变这条）。
+  const link = parseWikilinkValue("[[Note]]");
+  assert.ok(link !== undefined);
+  assert.throws(() => sortKeyCompareDirected(link, 1, "DESC"), BaseTypeError);
 });
 
 // BASE-TYPE-006（暂定机制半段）：parseWikilinkValue 三形态 + 非 wikilink 串

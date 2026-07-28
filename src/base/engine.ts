@@ -80,6 +80,7 @@ import {
   createFileValue,
   isLinkValue,
   sortKeyCompare,
+  sortKeyCompareDirected,
   toOutputValue,
   truthy,
   typedEqual,
@@ -262,7 +263,10 @@ function groupKeyCompare(a: BaseValue, b: BaseValue): number {
     const kb = `${b.path}#${b.subpath ?? ""}`;
     return ka < kb ? -1 : ka > kb ? 1 : 0;
   }
-  // 空值键恒最后（沿用 sortKeyCompare 的既有口径，link 不得插到它们后面）。
+  // 空值键排最后（沿用 sortKeyCompare 的 ASC 口径，link 不得插到它们后面）。
+  // 注意：**组序的方向维度未取证**——调用方对 DESC 整体取反，空值组因此翻到最前，
+  // 与顶层 sort 的「恒最后」（oracle runbook ②，已冻结）不同。㉓ 只登记了组序的相对次序、
+  // 没登记它是否与方向无关，官方 oracle 也未覆盖，故此处维持既有行为不动（见 runbook §5 备注）。
   if (a === null || a === MISSING) return 1;
   if (b === null || b === MISSING) return -1;
   return la ? 1 : -1;
@@ -692,15 +696,17 @@ export class BaseEngine {
         ),
       }));
 
-      // 多键稳定比较（sortKeyCompare 恒 ASC 语义，DESC 由方向取反）；
-      // 最终恒附 file.path ASC tie-break（计划「关键取舍」#11：含显式 sort 的场景也兜底，
-      // 保证全键相等时结果仍字节稳定）。
+      // 多键稳定比较（方向经 sortKeyCompareDirected 施加：空值组恒最后、不随 DESC 翻转，
+      // oracle runbook ②）；最终恒附 file.path ASC tie-break（计划「关键取舍」#11：
+      // 含显式 sort 的场景也兜底，保证全键相等时结果仍字节稳定）。
       decorated.sort((a, b) => {
         for (let i = 0; i < plan.sort.length; i += 1) {
-          const c = sortKeyCompare(a.keys[i] as BaseValue, b.keys[i] as BaseValue);
-          if (c !== 0) {
-            return (plan.sort[i] as { direction: "ASC" | "DESC" }).direction === "DESC" ? -c : c;
-          }
+          const c = sortKeyCompareDirected(
+            a.keys[i] as BaseValue,
+            b.keys[i] as BaseValue,
+            (plan.sort[i] as { direction: "ASC" | "DESC" }).direction,
+          );
+          if (c !== 0) return c;
         }
         const pa = a.row.file.path;
         const pb = b.row.file.path;

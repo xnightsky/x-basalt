@@ -374,16 +374,17 @@ eq-explicit-null-null -> 1 行   [CaseA.md]   ← 显式 null == null 判真
 | ⑧ | groupBy 用 list/link 当键 | 拒绝 |
 | ⑨ | `"2026-01-01" + " 备注"` 是拼接还是日期运算 | 报类型错误（日期推断对 `+` 也生效） |
 
-> ⚠️ **第 ② 项存在文档与实现不一致（2026-07-28 实测发现）**
+> ✅ **第 ② 项已于 2026-07-28 校正**（曾是文档与实现不一致的活样本）
 >
-> `docs/design/bases-status.md` §3 写的是「null/missing **恒排最后，与方向无关**」。
-> 实跑 `sort-null.base`：
+> `docs/design/bases-status.md` §3 写的是「null/missing **恒排最后，与方向无关**」，而实跑 `sort-null.base`：
 > ```
 > sort-asc  -> [B:1, C:2, A:null, D:null, E:null, F:null]   null 在后 ✓
 > sort-desc -> [A:null, D:null, E:null, F:null, C:2, B:1]   null 在前 ✗
 > ```
-> 根因在 `src/base/engine.ts:571`：`sortKeyCompare` 是恒 ASC 语义（null 排名靠后），DESC 时整体取反 `-c`，**null 的排名差也一起被翻转**。
-> 所以真实口径是「null 参与方向翻转」，不是「恒排最后」。修不修取决于官方是哪一种——**这正是必须跑 oracle 的原因**：没有裁判，连"实现和文档谁对"都判不了。
+> 根因：`sortKeyCompare` 是恒 ASC 语义（null 排名靠后），engine 用 `-c` 实现 DESC，**null 的排名差也一起被翻转**。
+> oracle 给出的裁判是「官方 ASC/DESC 都排最后」——与本仓登记口径同侧，所以这条**当 bug 修**，
+> 现由 `sortKeyCompareDirected(a, b, direction)` 施加方向，空值组不参与翻转。
+> 这个例子本身是「为什么必须跑 oracle」的最好注脚：没有裁判，连"实现和文档谁对"都判不了。
 
 ### 3.4 怎么把软肋消掉
 

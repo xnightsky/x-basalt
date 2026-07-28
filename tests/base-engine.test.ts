@@ -430,7 +430,7 @@ test("BASE-RESULT-001: order 投影与缺失值列 null", () => {
 
 // BASE-RESULT-002：多键 sort 优先级 + 方向 + 稳定 tie-break
 test("BASE-RESULT-002: 多键 sort 优先级、方向与稳定 tie-break", () => {
-  // null 排序位置不测（暂定恒排最后、与方向无关；待官方 oracle 冻结，计划「关键取舍」#5）。
+  // 空值排序位置见下一个用例（oracle runbook ② 冻结：恒排最后、与方向无关）。
   const multi = query("sort.base", "multi");
   assert.deepEqual(errorsOf(multi), []);
   // priority DESC 优先：Delta(3) 在前、Alpha(1) 殿后；同 priority=2 按 file.name ASC：Epsilon < Gamma。
@@ -448,6 +448,43 @@ test("BASE-RESULT-002: 多键 sort 优先级、方向与稳定 tie-break", () =>
   assert.deepEqual(
     stable.rows.map((row) => row["file.path"]),
     ["Alpha.md", "Projects/Gamma.md", "Projects2/Epsilon.md", "Projects/Sub/Delta.md"],
+  );
+});
+
+// BASE-RESULT-002（oracle runbook ② · §4.2，Obsidian 1.12.7 实测冻结）：
+// null/missing **恒排最后，与 ASC/DESC 无关**。此前实现把方向整体取反（`-c`），
+// 空值组的排名差一起被翻转 → DESC 时空值跑到最前，与本仓登记口径和官方双双不符。
+test("BASE-RESULT-002(oracle ②): null/missing 在 ASC 与 DESC 下都排最后", () => {
+  // status：Alpha/Gamma/Delta/Epsilon = "active"、Beta = "inactive"、
+  // NullProps = 显式 null、Empty = 属性缺失。空值两行的相对序由 file.path ASC tie-break 定。
+  const asc = query("sort.base", "null-last-asc");
+  assert.deepEqual(errorsOf(asc), []);
+  assert.deepEqual(
+    asc.rows.map((row) => row["file.path"]),
+    [
+      "Alpha.md",
+      "Projects/Gamma.md",
+      "Projects/Sub/Delta.md",
+      "Projects2/Epsilon.md",
+      "Beta.md",
+      "Empty.md", // ← missing
+      "NullProps.md", // ← 显式 null
+    ],
+  );
+
+  const desc = query("sort.base", "null-last-desc");
+  assert.deepEqual(errorsOf(desc), []);
+  assert.deepEqual(
+    desc.rows.map((row) => row["file.path"]),
+    [
+      "Beta.md", // "inactive" > "active"
+      "Alpha.md",
+      "Projects/Gamma.md",
+      "Projects/Sub/Delta.md",
+      "Projects2/Epsilon.md",
+      "Empty.md", // ← 仍在最后，未被 DESC 翻到最前
+      "NullProps.md",
+    ],
   );
 });
 

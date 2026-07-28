@@ -67,7 +67,7 @@ sha256: 0cd80053b57707074a7d616feecdcf1de84478f1cedc7718f5af8001f90de60a
 | 比较/布尔/优先级文法（Chevrotain parser） | BASE-EXPR-001/002 | ✅ 2026-07-26（`src/base/tokens.ts`/`parser.ts`，独立于 DQL token/AST） |
 | string/list 方法、typed equality | BASE-EXPR-003/004 | ✅ 2026-07-26 |
 | `if()`/`list()`/`number()` | BASE-EXPR-005 | ✅ 2026-07-26（`if` lazy 为暂定实现，待 oracle；number 转换失败 = 行级类型错误） |
-| `order` 投影 / 多键 sort / limit / 默认 file.path tie-break | BASE-RESULT-001..004 | ✅ 2026-07-26（null 排序位置暂定恒排最后，⏸ 待 oracle；无显式 sort 给 `base/default-sort-tiebreak` info） |
+| `order` 投影 / 多键 sort / limit / 默认 file.path tie-break | BASE-RESULT-001..004 | ✅ 2026-07-26（null 排序位置 ✅ 2026-07-28 经 oracle ② 冻结为「恒排最后、与方向无关」并修复 DESC 漂移；无显式 sort 给 `base/default-sort-tiebreak` info） |
 | 属性访问白名单 / 无 eval / 参数化 SQL | BASE-SEC-001/002/003 | ✅ 2026-07-26 |
 | view 必填字段（type/name 缺失即 error，不按 table 猜测） | 设计 §5 | ✅ 2026-07-27（review 修复；缺失校验移出 key 循环） |
 | `order`/`sort` 非法项报错而非静默丢弃 | 设计 §5 | ✅ 2026-07-27（review 修复） |
@@ -90,7 +90,7 @@ sha256: 0cd80053b57707074a7d616feecdcf1de84478f1cedc7718f5af8001f90de60a
 | ---- | ---- | ---- | ---- |
 | missing/null/空串/0/false/空列表 truthiness | BASE-PROP-004 | 六形态全 falsy，**与实现一致** | ✅ 可转正 |
 | `X == null` 与 MISSING 是否合并 | BASE-PROP-004 | **合并**（`missing == null` 为 true） | ⏳ 分歧待校正 |
-| 多键 sort 的 null 位置 | BASE-RESULT-002 | 恒排最后，与方向无关 | ⏳ **实现漂移**：DESC 时排到了最前，与本仓登记口径也不符 |
+| 多键 sort 的 null 位置 | BASE-RESULT-002 | 恒排最后，与方向无关 | ✅ 2026-07-28 已校正（当 bug 修：`sortKeyCompareDirected` 让方向只作用于可比值，空值组恒最后；回归用例 `base-engine.test.ts` / `base-values-date.test.ts` 标 oracle ②） |
 | 空 filter 数组（and:[]/or:[]/not:[]） | 设计 §6 | `and:[]`=真 / `or:[]`=假 / `not:[]`=真 | ⏳ 分歧待校正（当前是拒绝） |
 | `if()` lazy branch | 设计 §9 | lazy，**与实现一致** | ✅ 可转正 |
 | 二元运算的字符串→日期推断是否作用于 `+` | 语法 §5.1 / 设计 §8.3 | **原命题不成立**：官方 `+` 根本不拼接字符串，string+string 也得空 | ⏳ 倾向保留超集 + 落 boundary |

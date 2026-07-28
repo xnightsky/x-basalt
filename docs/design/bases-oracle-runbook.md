@@ -68,7 +68,7 @@ Obsidian 升级后重跑（本手册结论绑定 1.12.7 + §2 的 fixture 指纹
 | # | 争议语义 | 场景编号 | x-basalt 暂定口径（跑前） | 官方（1.12.7 实测） | 判定 |
 | --- | --- | --- | --- | --- | --- |
 | ① | missing/null/空串/0/false/空列表 truthiness 与 == 合并 | BASE-PROP-004 | falsy = MISSING/null/false/0/""/空列表；`missing == null` 为 false | truthiness **同**；但 `missing == null` 为 **true**（MISSING 与 null 合并） | ⚠️ truthiness ✅ / equality ❌ |
-| ② | 多键 sort 的 null/missing 位置 | BASE-RESULT-002 | null/missing 恒排最后（与方向无关） | 恒排最后，**与方向无关** | ❌ 口径本身与官方一致，但**实现没做到**：DESC 时排最前 |
+| ② | 多键 sort 的 null/missing 位置 | BASE-RESULT-002 | null/missing 恒排最后（与方向无关） | 恒排最后，**与方向无关** | ✅ 已校正（2026-07-28）：口径本与官方一致，是**实现没做到**（DESC 时排最前），当 bug 修 |
 | ③ | `if()` lazy branch | 设计 §9 | lazy：只计算被选择分支 | lazy | ✅ |
 | ④ | 空 filter 数组 and/or/not | 设计 §6 | P1 拒绝（`base/unsupported-feature`） | `and:[]`=真 / `or:[]`=假 / `not:[]`=真，稳定可重放 | ❌ |
 | ⑤ | date vs datetime 跨精度比较 | BASE-TYPE-005 | 统一按 UTC epoch 比较（P2a 落地） | 行集一致 | ✅ |
@@ -143,11 +143,14 @@ view 清单（26 个）：truthiness.base × 8（truthy-missing / truthy-explici
 
 ### 4.0 分歧总表（19 一致 / 7 分歧）
 
-| # | 语义 | 官方 | x-basalt | 判定 |
+> 「x-basalt」列是**取证当时（校正前）的实现行为**，作为观察记录不改写；
+> 逐条的校正结果看「判定」列与 §5。
+
+| # | 语义 | 官方 | x-basalt（校正前） | 判定 |
 | --- | --- | --- | --- | --- |
 | ① truthy | 六形态 truthiness | 全 falsy | 全 falsy | ✅ **一致，可转正** |
 | ① eq | `X == null` 与 MISSING | **MISSING 与 null 合并**，命中全部行 | 区分二者 | ❌ 分歧 |
-| ② | null/missing 排序位 | ASC/DESC **都排最后** | ASC 最后、**DESC 最前** | ❌ DESC 分歧 |
+| ② | null/missing 排序位 | ASC/DESC **都排最后** | ASC 最后、**DESC 最前** | ✅ 2026-07-28 已校正（原 ❌ DESC 分歧） |
 | ③ | `if()` 惰性 | lazy（未选分支不求值） | lazy | ✅ 一致 |
 | ④ | 空 filter 数组 | `and:[]`=真 / `or:[]`=假 / `not:[]`=真 | 三个都报 `unsupported-feature` | ❌ 3/3 分歧 |
 | ⑤ | date/datetime 跨精度比较 | 见 §4.5 | 同 | ✅ 一致 |
@@ -180,6 +183,12 @@ view 清单（26 个）：truthiness.base × 8（truthy-missing / truthy-explici
 | sort-desc | **C(2) · B(1) · A(null)** · D · E · F · 6×base | **A(null) · D · E · F · 6×base · C(2) · B(1)** ❌ |
 
 **结论**：官方 null/missing **恒排最后，与方向无关**——这正是 §1 登记的 x-basalt 口径，但**实现没做到**：DESC 时 x-basalt 把 null/missing 排到了最前。属实现与自身登记口径的漂移，且官方站在登记口径那边。
+
+> **✅ 2026-07-28 已校正**（当 bug 修，非「跟不跟官方」的选择题）。根因：engine 用 `-sortKeyCompare(a,b)`
+> 实现 DESC，空值组的 rank 差被一起翻转。现由 `sortKeyCompareDirected(a, b, direction)` 施加方向——
+> 任一侧落在空值/不可比较组时直接给「空值在后」的定序，方向只作用于两侧都可比的情形。
+> 回归用例：`tests/base-engine.test.ts`（`sort.base` 的 `null-last-asc` / `null-last-desc` 两 view）
+> 与 `tests/base-values-date.test.ts`（纯函数层），均标注 oracle ②。
 
 ### 4.3 ③ if() lazy
 
@@ -251,16 +260,17 @@ view 清单（26 个）：truthiness.base × 8（truthy-missing / truthy-explici
 
 **结论**：问题不是「官方在拼接语境是否做日期推断」，而是**官方的 `+` 根本不做字符串拼接**。所以 x-basalt 的 string+string 拼接是**超集行为**（官方没有），date+string 则是两边都不产出拼接串、但**失败形态不同**（官方静默空、x-basalt 报行级类型错误）。
 
-## 5. 校正待办（结论已出，实现尚未改动）
+## 5. 校正（第一批逐条落地中 / 第二批待决策）
 
-> **本轮只做取证，一行实现都没改。** 下面是按 §4 结论**应该**做的事，逐条待排期——
-> 每条都要单独判断「跟官方」还是「落 documented boundary」，不存在无脑对齐。
+> 取证轮只做取证、一行实现没改；**校正轮（2026-07-28）开始按下表逐条落地**。
+> 每条都单独判断「跟官方」还是「落 documented boundary」，不存在无脑对齐；
+> 判断理由逐条写进 [`bases-vs-official.md`](bases-vs-official.md)。
 
-| # | 差异 | 落点 | 倾向 |
+| # | 差异 | 落点 | 取舍与状态 |
 | --- | --- | --- | --- |
-| ① eq | MISSING 与 null 是否合并 | `src/base/values.ts`（equality） | **跟官方**：影响任何 `== null` / `!= null` 的 filter，静默改变行集，属最危险的一类 |
-| ② | DESC 时 null/missing 排到了最前 | `src/base/values.ts`（`sortKeyCompare`） | **按自己登记的口径修**——这条不是「跟不跟官方」，是实现与 §1 登记口径的漂移，官方恰好站在登记口径那边 |
-| ④ | 空 filter 数组当前是拒绝 | `src/base/planner.ts` | **跟官方**：`and:[]`=真 / `or:[]`=假 / `not:[]`=真，官方稳定可重放，「P1 拒绝」没有依据了 |
+| ① eq | MISSING 与 null 是否合并 | `src/base/values.ts`（equality） | **跟官方**（待落地）：影响任何 `== null` / `!= null` 的 filter，静默改变行集，属最危险的一类 |
+| ② | DESC 时 null/missing 排到了最前 | `src/base/values.ts`（`sortKeyCompareDirected`） | **按自己登记的口径修** ✅ 2026-07-28——不是「跟不跟官方」，是实现与 §1 登记口径的漂移，官方恰好站在登记口径那边 |
+| ④ | 空 filter 数组当前是拒绝 | `src/base/planner.ts` | **跟官方**（待落地）：`and:[]`=真 / `or:[]`=假 / `not:[]`=真，官方稳定可重放，「P1 拒绝」没有依据了 |
 | ⑦ | 分组时顶层 rows 顺序 | `src/base/engine.ts`（groupBy） | 待定：x-basalt 的 `file.path` 稳定序是**字节稳定契约**的一部分，跟官方会牺牲它 |
 | ⑧ | summary values 的两个维度 | `src/base/summaries.ts` | 待定：官方把 null/missing 计入分母（0.25 而非 1.5）反直觉，但那是官方 |
 | ⑨ | `+` 是否做字符串拼接 | `src/base/evaluator.ts`（`upgradeStringOperand`） | 倾向**保留超集**：官方 `+` 不拼接字符串，x-basalt 拼——砍掉是纯功能损失，宜落 documented boundary |
@@ -273,6 +283,15 @@ view 清单（26 个）：truthiness.base × 8（truthy-missing / truthy-explici
 3. 决定「不跟官方」的，必须在 [`bases-vs-official.md`](bases-vs-official.md) 落 documented boundary，写清**为什么**不跟——不能只留一句「有意差异」。
 
 **⑩..㉖ 这 17 条仍无 fixture view**（见 §1.1 / §1.2）。取证既然已经脚本化，补 view 的成本就是唯一门槛了，兑现成本近零。
+
+### 5.1 校正 ② 时暴露的新登记缺口：**组序的方向维度**
+
+㉓ 登记的是分组键**组序的相对次序**（可比标量 < link < null/MISSING），**没登记它是否与方向无关**。
+② 修完后两处并不一致：顶层 sort 的空值恒最后（已由官方冻结），而 `groupBy.direction: DESC`
+仍是对整体组序取反、空值组因此翻到最前（`src/base/engine.ts` 的 `groupKeyCompare` 调用处）。
+
+本轮**有意不动它**——官方 oracle 只覆盖了顶层 rows 顺序（⑦），组序在 DESC 下的空值位置无观察数据，
+照 §6 红线「取证跑不通时不猜测补齐」。补 ㉓ 的 fixture view 时一并把方向维度取证掉，再决定是否对齐 ②。
 
 ## 6. 红线
 

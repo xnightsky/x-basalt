@@ -697,7 +697,7 @@ frontmatter 里整串恰为一个 wikilink 的字符串（`"[[目标]]"` / `"[[�
 
 **排序**：多键稳定排序，最终恒以 `file.path` 升序 tie-break（保证结果字节稳定）；null / missing / 不可比类型**恒排最后，与 ASC/DESC 无关**。
 
-> 上面几条里，truthiness 的精确合并、null 排序位置、跨精度 date/datetime 比较、wikilink → Link 等属**暂定口径**，待官方串行 oracle 校正，清单见[§6](#6-限制与暂定口径)。
+> 上面几条里，truthiness 的精确合并与 null 排序位置已由官方 oracle **冻结**（2026-07-28）；跨精度 date/datetime 比较、wikilink → Link 等仍属**暂定口径**，待校正，清单见[§6](#6-限制与暂定口径)。
 
 ### 3.9 明确不支持（报诊断，不静默忽略）
 
@@ -811,9 +811,13 @@ x-basalt base views/projects.base --conformance bases-all-files-2026-07 --vault 
 
 ### 6.3 oracle 暂定口径
 
-实现已落地，语义待官方串行 oracle 校正，校正后可能调整：
+**已由官方 oracle 冻结**（2026-07-28，Obsidian 1.12.7 实测，不再是暂定）：
+missing/null/空串/0/false/空列表的 truthiness（六形态全假，与实现一致）；`if()` lazy branch（惰性，与实现一致）；
+多键 sort 的 null 排序位置（**恒排最后、与 ASC/DESC 无关**——同日修掉了 DESC 下排到最前的实现漂移）。
 
-missing/null/空串/0/false/空列表的 truthiness 精确合并；多键 sort 的 null 排序位置（暂定恒排最后）；空 filter 数组（暂定拒绝）；`if()` lazy branch（暂定 lazy）；date vs datetime 跨精度比较（暂定统一 epoch）；frontmatter wikilink → Link（暂定机制）；types.json 声明冲突口径（暂定行级 warning）；一行多组的 list/tag 分组键（暂定拒绝）；自定义 summary 的 `values` 边界（暂定剔除空值）；拼接语境下的日期推断（暂定 `"2026-01-01" + " 备注"` 报类型错误）。
+以下实现已落地，语义仍待官方串行 oracle 校正，校正后可能调整：
+
+空 filter 数组（暂定拒绝）；date vs datetime 跨精度比较（暂定统一 epoch）；frontmatter wikilink → Link（暂定机制）；types.json 声明冲突口径（暂定行级 warning）；list/tag 分组键扇出后的顶层行序（本仓保 `file.path` 稳定序）；自定义 summary 的 `values` 边界（暂定剔除空值）；拼接语境下的日期推断（暂定 `"2026-01-01" + " 备注"` 报类型错误）。
 
 逐项状态见[实现状态追踪](../design/bases-status.md)，观察与校正流程见 [oracle 操作手册](../design/bases-oracle-runbook.md)。
 

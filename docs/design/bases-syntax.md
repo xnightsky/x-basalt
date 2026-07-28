@@ -193,7 +193,7 @@ note property 来自 Markdown frontmatter；file property 对所有受支持文�
 
 ### 5.3 equality 与排序
 
-同类型 primitive 按值比较；数字不与数字字符串隐式相等；列表按元素递归相等；object 只允许 `==/!=`；Link/File/Date equality【P2a ✅：Date/Duration 按 epoch/毫秒，Link 按 path+subpath 路径感知；date vs datetime 跨精度比较暂定统一 epoch，待 oracle BASE-TYPE-005；frontmatter wikilink 值 → Link 为暂定机制，待 oracle BASE-TYPE-006】；多键 sort 稳定执行、`file.path` 最终 tie-break；null/missing/error 排序位置【待 oracle：BASE-RESULT-002 冻结，不照搬 SQLite 默认；P1 暂定恒排最后（与方向无关）】。【P1 ✅（除 null 排序位置外）】
+同类型 primitive 按值比较；数字不与数字字符串隐式相等；列表按元素递归相等；object 只允许 `==/!=`；Link/File/Date equality【P2a ✅：Date/Duration 按 epoch/毫秒，Link 按 path+subpath 路径感知；date vs datetime 跨精度比较暂定统一 epoch，待 oracle BASE-TYPE-005；frontmatter wikilink 值 → Link 为暂定机制，待 oracle BASE-TYPE-006】；多键 sort 稳定执行、`file.path` 最终 tie-break；null/missing/error 排序位置【✅ 2026-07-28 经官方 oracle BASE-RESULT-002 冻结：**恒排最后，与方向无关**（不照搬 SQLite 默认）；同日修掉 DESC 下空值排最前的实现漂移】。【P1 ✅】
 
 ## 6. formulas
 
