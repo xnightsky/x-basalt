@@ -1,20 +1,36 @@
 ---
 type: testing
 title: Bases P1 争议语义官方 oracle 操作手册
-description: 九项暂定口径（truthiness/null 排序/空 filter 数组/if lazy/date-datetime/wikilink-Link/list 分组键/summary values/拼接语境日期推断）的官方串行 oracle：fixture vault、26 个 view 逐步执行、观察记录表与校正工作流
+description: 二十六项暂定口径的官方串行 oracle 手册：fixture vault、26 个 view 逐步执行、观察记录表与校正工作流；2026-07-28 起状态为 ⏸ 暂缓执行（官方文档不覆盖、官方 API 不暴露求值引擎、Bases 仍在快速演进），等官方后续实现情况再解冻
 tags:
   - testing
   - bases
   - oracle
   - conformance
-timestamp: 2026-07-27T19:53:42Z
-sha256: a72f7b59d8017c9c753faba618c394f379f0016c822440f860eac0919cc89db3
+timestamp: 2026-07-28T02:54:35Z
+sha256: 6c33987d2c571dbfdf154ba4f1f2f05882ec4cfee6e9ba4e55d69f2a81df9c96
 ---
 # Bases P1 争议语义官方 oracle 操作手册（runbook）
 
 > 2026-07-27 · 协议真相源：[`2026-07-22-bases-scenario-matrix.md`](bases-scenarios.md) §8（本手册是其逐步具体化，不替代协议）。
 > 用途：把 P1 四项「暂定口径」一次跑完官方串行 oracle，校正 x-basalt 语义与锁定测试。
 > **执行者：用户侧人工**（官方 `base:query` 依赖 Obsidian GUI；项目硬约束禁 GUI 自动化，本手册全部步骤只能人工串行执行）。
+
+## 0. 状态：⏸ 暂缓执行（2026-07-28 冻结）
+
+**决策：本手册暂不实施，全部暂定口径维持现状，等官方后续实现情况再定。** 下方 §2..§5 的步骤保持可用但不启动。
+
+调研依据（2026-07-28）：
+
+1. **官方文档不覆盖。** 官方 [`obsidian-help/en/Bases/Bases syntax.md`](https://github.com/obsidianmd/obsidian-help/blob/master/en/Bases/Bases%20syntax.md) 对本手册 §1 的八类争议只明确了一类——「frontmatter 中的 wikilink 自动识别为 Link 对象」「link 与 file/this 比较时，解析到同一文件即相等」（对应 ⑥，与 x-basalt 暂定口径一致）。truthiness、null 排序位、`if()` 惰性、空 filter 数组、date/datetime 跨精度比较、list 分组键、自定义 summary `values` 边界——**七类只字未提**，官方文档本身就没有可引用的口径。
+2. **官方 API 不提供取证路径。** `obsidian-api` 的 Bases 面（`BasesView` / `BasesQueryResult` / `BasesEntry` / `Value` 家族）只暴露**渲染入口与已算好的结果**：filter/formula/sort 在 `BasesConfigFile` 里是不透明字符串，求值引擎（truthiness、比较、排序、`if` 分支）不对外。唯一贴边的钩子是 `NotNullValue.isTruthy()`，但它只在插件运行时里存在，仍然绕不开 App。**结论：本手册「只能人工串行跑 GUI」的前提没有被新 API 松动。**
+3. **官方仍在快速变动，现在冻结的收益会被作废。** Bases 自 1.9.2 改过语法与文件格式；1.10.0 才加入 `group by`、表格 summaries 与首版 Bases API；1.10.3 又补 `reduce()`/`mean()`/`stddev()`/`median()`/`html()`；到 1.12.4 / 1.13.0 仍在改 Bases 行为与 API（`BaseOption#shouldHide` 是破坏性变更）。**在一个仍在加语义的目标上人工跑 26 个 view 冻结强结论，成本高且随时可能被下个版本推翻。**
+
+解冻触发条件（满足任一即重启本手册）：
+
+- 官方发布覆盖上述语义的规范文档或参考实现；
+- 官方提供无需 GUI 的查询入口（CLI / 可脚本化 API）；
+- dogfood 中出现**由某条暂定口径直接导致的错误结果**（此时只针对该条做定点 oracle，不必全量跑）。
 
 ## 1. 待冻结语义与 x-basalt 暂定口径
 
@@ -51,6 +67,19 @@ sha256: a72f7b59d8017c9c753faba618c394f379f0016c822440f860eac0919cc89db3
 | ㉑ | `matches` 的 ReDoS 静态判据（哪些正则被拒）与「非法即报诊断」 | 片四 |
 | ㉒ | 组级汇总 `groups[].summaries` 计算集 = 该组 **limit 后**的行 | 片五 |
 | ㉓ | 分组键组序：可比标量 < link < null/MISSING | 片五 |
+
+### 1.2 2026-07-28 调研补登记：此前漏登的暂定口径（㉔ 起）
+
+> 这三条在源码注释里已自认「官方未明示/官方未定义」，但**从未进入本手册的观察清单**——即本手册 §1 此前并非争议全集。
+> 同样无 fixture view。
+
+| # | 暂定口径 | 落点 |
+| --- | --- | --- |
+| ㉔ | `Median` 汇总：偶数个样本取中间两值的**均值**（而非取下中位） | `src/base/summaries.ts:118` |
+| ㉕ | `Stddev` 汇总：取**总体**标准差（÷n），非样本标准差（÷(n−1)） | `src/base/summaries.ts:128` |
+| ㉖ | Duration 的 `month` = 30 day、`year` = 365 day 固定换算，作用于**全部 duration 算术**（非仅 `date.relative()`）——⑰ 只登记了 `relative()` 的阶梯，登记面窄于实际影响面 | `src/base/values.ts:144` |
+
+**fixture 缺口合计：⑩..㉖ 共 17 条无 view**；现有 26 个 view 只覆盖 ①..⑨。
 
 ## 2. 前置（一次性）
 

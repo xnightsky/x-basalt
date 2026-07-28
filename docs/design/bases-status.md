@@ -7,8 +7,8 @@ tags:
   - bases
   - testing
   - x-basalt
-timestamp: 2026-07-27T22:26:47Z
-sha256: 5c717b75520a9963e2a17e6240d48968d4a20dbbf8a8334c6e8272741dce950d
+timestamp: 2026-07-28T02:55:34Z
+sha256: 0cd80053b57707074a7d616feecdcf1de84478f1cedc7718f5af8001f90de60a
 ---
 # Bases 实现状态追踪
 
@@ -22,7 +22,7 @@ sha256: 5c717b75520a9963e2a17e6240d48968d4a20dbbf8a8334c6e8272741dce950d
 | ---- | ---- | ---- |
 | P0 | document / schema / diagnostic | ✅ 2026-07-26（[计划](../history/plans/2026-07-26-bases-p0-document-schema.md)） |
 | P1 | Markdown query vertical slice（独立 AST/evaluator） | ✅ 2026-07-26（[计划](../history/plans/2026-07-26-bases-p1-markdown-query.md)） |
-| P1 oracle | 官方串行差分（争议语义冻结） | 🔜 待开（需用户侧 Obsidian App 环境，人工触发） |
+| P1 oracle | 官方串行差分（争议语义冻结） | ⏸ 2026-07-28 暂缓（触发条件见 [runbook §0](bases-oracle-runbook.md)：官方出规范 / 出无 GUI 查询入口 / dogfood 出现口径导致的错误结果） |
 | P2a | formulas 核心（typed values + 算术 + 依赖图/cycle + clock） | ✅ 2026-07-27（[计划](../history/plans/2026-07-27-bases-p2a-formulas.md)） |
 | P2b | types.json / list 高阶 / groupBy / summaries | ✅ 2026-07-27（[计划](../history/plans/2026-07-27-bases-p2b-types-list-group-summary.md)） |
 | P3 | all-files / context / 嵌入 | 🔀 P3a 附件数据集 ✅ 2026-07-27（[计划](../history/plans/2026-07-27-bases-p3-attachments.md)）；context ✅ 2026-07-28（覆盖率片六 CTX-001）；嵌入形态 ❌ 不做 + 诊断（CTX-002/003） |
@@ -79,8 +79,10 @@ sha256: 5c717b75520a9963e2a17e6240d48968d4a20dbbf8a8334c6e8272741dce950d
 | 1/100/10,000 篇基准（只记录不承诺） | 矩阵 §9 P1 门 | ✅ 2026-07-26（query 11ms/4ms/68ms，数值见计划「验证结论」，无需 SQL 下推） |
 | CLI 薄出口（`base` 命令）+ guides 补 Bases 章节 | 设计 §15（API 先于 CLI） | ✅ 2026-07-27（[计划](../history/plans/2026-07-27-bases-cli-export.md)；`x-basalt base` + `guides/querying-bases.md`，tests/base-cli.test.ts 7 用例） |
 
-## 3. P1 前置 oracle（用户侧人工串行）🔜
+## 3. P1 前置 oracle（用户侧人工串行）⏸
 
+> **2026-07-28：oracle 整体 ⏸ 暂缓，不再排期。** 理由与解冻触发条件见 [oracle runbook §0](bases-oracle-runbook.md)（官方文档不覆盖这些语义、官方 Bases API 不暴露求值引擎故无法绕开 GUI、官方仍在快速加语义故此刻冻结易被作废）。
+> 下表各行的 🔜 一律读作「口径已落地并自锁，校正无限期挂起」，**不表示近期会做**。
 > 2026-07-26 起口径变化：P1 已按**暂定口径**落地（代码注释与测试均标「待 oracle」），oracle 从「阻塞 P1」转为「校正 P1 暂定口径」；空 filter 数组在 P1 直接拒绝（`base/unsupported-feature`）。
 
 | 争议语义 | 场景编号 | 状态 |
