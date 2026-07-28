@@ -14,7 +14,7 @@ sha256: 2a0b75262102e56de752e9cce09c1629d38c53521a1cb47a19d1ae50dbe3724d
 # 计划：收口场景库坐实的确定性产品缺口
 
 > 2026-07-02 · scan byDir 分组计数 · 缺失 vault 根 warn · DQL `file.frontmatter` 存在性
-> 关联：私有场景库 `../x-basalt-evals`（不入本仓，位置见 `AGENTS.local.md`）
+> 关联：私有场景库（兄弟私有仓，不入本仓，位置见 `AGENTS.local.md`）
 
 ## 背景
 
@@ -60,7 +60,7 @@ dogfood 期私有场景库用真实失败坐实了一批产品缺口，但至今
 
 - DQL 真相源文档补 `file.frontmatter`：`docs/specs/2026-07-01-dql-truthiness-existence-design.md`、`docs/specs/2026-06-27-dql-subset-frozen.md`、`docs/specs/2026-06-26-coverage-matrix.md`、`skills-def/biz-dql-subset/SKILL.md`（跑 `pnpm run skills:install`）。
 - scan 文档补 `--by-dir`。
-- 私有场景库（`../x-basalt-evals`）订正两处场景描述（不入本仓，仅记于此供追溯）。
+- 私有场景库（兄弟私有仓）订正两处场景描述（不入本仓，仅记于此供追溯）。
 
 ## 验证
 

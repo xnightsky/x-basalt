@@ -28,7 +28,7 @@ sha256: 31c64ecc3ec841452da6f3505a2fa2afd9dac15fd1b1864ea08dfb1ee23db753
 - 争议语义的官方串行 oracle 快照；
 - 边界、异常定位与安全对抗。
 
-私有 `x-basalt-evals` 继续负责 chat/agent 行为；Bases 语义属于产品确定性契约，fixture 应进入本仓 `tests/fixtures/bases/`，不放进私有评估库。
+AI/agent 行为评估另有去处；Bases 语义属于产品确定性契约，fixture 应进入本仓 `tests/fixtures/bases/`，不外放。
 
 ## 2. 未来 fixture 结构
 

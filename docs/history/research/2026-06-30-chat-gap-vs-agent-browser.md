@@ -80,7 +80,7 @@ sha256: 7bb0adf511305eae6203c9324951b33a2cca816c94922bc5d39f11d2944027cf
 **为什么正好解你的三痛点**：有了场景库，「操作失败率」「撞顶率」从主观体感变成**可量化、可回归**的指标 —— 改了重试/步数/工具后，跑一遍场景库就知道有没有变好。
 
 **待定（本篇不决，留给后续 brainstorm/spec）**：
-1. 放哪 —— 兄弟新目录（如 `../x-basalt-evals`）还是并入已有 `../x-kb` / `../x-promptkit`；
+1. 放哪 —— 新建兄弟私有仓还是并入已有 `../x-kb` / `../x-promptkit`；
 2. 格式 —— 照搬 TS `EvalCase`，还是用 YAML（与项目内已装的 `recall-queue.schema.yaml` / recall-author/eval 体系对齐）；
 3. 与项目内 `.recall` 评估体系的关系（复用还是另起）；
 4. 场景从哪来 —— 沉淀真实 dogfood 转录。

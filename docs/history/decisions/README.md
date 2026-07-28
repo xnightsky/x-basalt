@@ -32,4 +32,4 @@ tags:
 |--------|---------|---------|
 | `2026-06-25-x-basalt-design.md` | 2026-07-22 | 初始架构设计，已被实际演进取代 |
 | `2026-06-28-cli-chat-design.md` | 2026-07-22 | 被 `cli-chat-readwrite-design.md` 取代 |
-| `2026-06-30-chat-eval-scenario-library-design.md` | 2026-07-22 | 场景库已迁至兄弟仓 `x-basalt-evals` |
+| `2026-06-30-chat-eval-scenario-library-design.md` | 2026-07-22 | 场景库已迁至兄弟私有仓 |

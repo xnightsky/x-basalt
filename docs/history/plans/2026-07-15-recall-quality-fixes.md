@@ -86,7 +86,7 @@ sha256: 365160d2194647b458ebf94ff49ec0fa584f50631b36c77c58a6686eea6fa252
 - **P4**：`search "前端 单元测试"` → 1（此前 0）；`search "测试"`（2 字）→ 2（此前报错拒查）；`search "前端单元测试"` → 命中。fixture 单测另证异措辞笔记经 trigram-OR 兜底浮现、完整子串 bm25 排首。
 - **P1**：mock 模型单测锁定「零 vault 工具 + 实质答复 → finish 带标注」「调过 recall 工具 → 不标注」「短寒暄不标注」「未配置不标注」；渲染层收尾打印标注；prompt 补「别擅自短路」纪律。真实 LLM 是否照做属未验证项。
 
-## eval 库验证（2026-07-15，兄弟仓 `../x-basalt-evals`）
+## eval 库验证（2026-07-15，兄弟私有仓）
 
 初次只用了 scratchpad 手搭小 fixture、**未过 eval 库**（缺口，已补）。用 worktree 构建（`X_BASALT_CLI` 指向 `.worktrees/recall-quality/dist/cli.js`）过 eval 库：
 
