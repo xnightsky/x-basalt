@@ -15,16 +15,18 @@
 
 定位：实现真正无 GUI、无 Obsidian 运行时的 `.base` 查询库层；官方 `base:query` 只作串行语义 oracle，不进入运行时依赖。首期明确为 **Bases Markdown conformance 2026-07**，不冒充 all-files 完整兼容。
 
-> **下一步（2026-07-28 收口后）**：P0/P1/P2a/P2b/P3a、review 修复、**函数覆盖率六片**全部落地，四门（typecheck / lint / format / test **880**）皆绿。功能面已无明显缺口，**剩下的唯一硬阻塞是 P1 oracle**——9 项暂定口径 + 本轮新增的一批自建口径（`title`/`slice` 负索引/`time()` 返 duration/`relative()` 固定英文/list 分组扇出等，逐条见[实现状态追踪](./docs/design/bases-status.md) §6）全都没与官方比对过。oracle 需用户侧 Obsidian App 环境，AI 侧无法自行推进。
+> **下一步（2026-07-28 收口后）**：P0/P1/P2a/P2b/P3a、review 修复、**函数覆盖率六片**全部落地，四门（typecheck / lint / format / test **880**）皆绿。功能面已无明显缺口。**唯一未收口的是 26 条暂定口径没与官方比对过**（逐条见[实现状态追踪](./docs/design/bases-status.md) §6 与 [runbook](./docs/design/bases-oracle-runbook.md) §1）。**2026-07-28 起 oracle 整体 ⏸ 暂缓**：官方不提供无 GUI 的取证路径，且 Bases 仍在快速演进，此刻冻结易被作废——依据与解冻触发条件见 runbook §0。
 
 - [x] **P0 · document/schema/diagnostic**：`.base` YAML + view 选择 + filter 结构校验 + expression source span；先完成 `BASE-DOC-001..009`。计划：[`docs/plans/2026-07-26-bases-p0-document-schema.md`](./docs/history/plans/2026-07-26-bases-p0-document-schema.md)（2026-07-26 落地，含 SEC-007/008）
 - [x] **P1 · Markdown query vertical slice**：独立 Bases AST/evaluator，支持 global+view filters、note/file properties、常用 file/string/list 方法、order/sort/limit 与稳定 JSON；不复用 DQL AST，不用 `eval`。计划：[`docs/plans/2026-07-26-bases-p1-markdown-query.md`](./docs/history/plans/2026-07-26-bases-p1-markdown-query.md)（2026-07-26 落地，含 SEC-001/002/003/009 与字节稳定；oracle 冻结项为暂定口径）
 - [x] **P1 收口 · CLI 薄出口 + guides**：`x-basalt base` 命令（JSON 契约、error 诊断 exit 1）+ `guides/querying-bases.md`。计划：[`docs/plans/2026-07-27-bases-cli-export.md`](./docs/history/plans/2026-07-27-bases-cli-export.md)（2026-07-27 落地）
-- [ ] **⭐ P1 oracle · 串行差分（当前唯一硬阻塞，建议先于 P3）**：固定官方版本，冻结 **9 项**争议语义；禁止并发拉起 GUI。
-  - **为什么排在 P3 前面**：这 9 项目前都是**暂定口径**——实现能跑、测试也锁着，但没有与官方比对过，随时可能是错的。P3 是**加能力**，oracle 是**验证已有能力对不对**；暂定口径压着不解，P3 做得越多、将来校正要翻的面越大（P3 的附件行同样要走 truthiness / null 排序 / 类型比较这几条已存疑的路径）。
-  - **准备度**：runbook 已就绪，26 个 view + 观察记录表 + 校正工作流全部写好 → [`docs/testing/2026-07-27-bases-oracle-runbook.md`](./docs/design/bases-oracle-runbook.md)；fixture 在 `tests/fixtures/bases/oracle/`。
-  - **卡点**：需要装了 Obsidian App 的机器人工串行跑一遍，**AI 侧做不了**，须用户触发。
-  - 9 项清单与逐项暂定口径见[实现状态追踪](./docs/design/bases-status.md) §3 / §4；跑完按 runbook §5 校正工作流回填。
+- [ ] **⏸ P1 oracle · 串行差分（2026-07-28 暂缓，不再排期）**：固定官方版本，冻结争议语义；禁止并发拉起 GUI。
+  - **为什么暂缓**：官方文档对八类争议只覆盖一类（wikilink→Link）；官方 Bases API 只暴露渲染与算好的结果，求值引擎不对外，绕不开 GUI；Bases 自 1.9.2 起仍在快速加语义（1.10 加 groupBy/summaries/首版 API，1.10.3 补 reduce/mean/stddev/median/html，1.12.4/1.13.0 仍在改行为与 API），此刻人工跑 26 个 view 冻结的强结论易被下个版本作废。三条依据与**解冻触发条件**见 [runbook §0](./docs/design/bases-oracle-runbook.md)。
+  - **口径条数已修正为 26 条**（原记 9 条）：①..⑨ 有 fixture；⑩..㉓ 为函数覆盖率批次新增；㉔..㉖ 为 2026-07-28 调研补登记（Median 偶数取均值 / Stddev 用总体标准差 / duration 的 month=30d·year=365d 作用于全部算术）。**⑩..㉖ 共 17 条无 fixture view。**
+  - **暂缓不等于没风险**：这些口径实现能跑、测试也锁着，但锁的是**自一致性**而非**与官方一致**。影响面按失败形态分三类：静默改变行集/数字的（truthiness、null 排序位、分组扇出、summary 范围、Median/Stddev、duration 换算）最需警惕；显式报错的（空 filter、拼接日期推断、ReDoS 拒绝）会当场炸不会带病往下走；呈现层的（`title`/`reverse`/`relative` 文案）基本无影响。
+  - **准备度**：runbook 已就绪，26 个 view + 观察记录表 + 校正工作流全部写好 → [`bases-oracle-runbook.md`](./docs/design/bases-oracle-runbook.md)；fixture 在 `tests/fixtures/bases/oracle/`。
+  - **卡点**：需要装了 Obsidian App 的机器人工串行跑一遍，**AI 侧做不了**，须用户触发。解冻后建议**定点跑**（一条口径一个 view），不必全量 26 个。
+  - 清单与逐项暂定口径见[实现状态追踪](./docs/design/bases-status.md) §3 / §4 / §6 与 [runbook](./docs/design/bases-oracle-runbook.md) §1/§1.1/§1.2；跑完按 runbook §5 校正工作流回填。
 - [ ] **P2 · typed formulas/group/summary**：Property 类型、Date/Link/File/List、公式依赖图与循环、高阶列表、groupBy/summaries；以真实需求逐项开计划。
   - [x] **P2a · formulas 核心**（typed values + 算术 + 依赖图/cycle + clock，BASE-FORM-001..006/SEC-006）：[`docs/plans/2026-07-27-bases-p2a-formulas.md`](./docs/history/plans/2026-07-27-bases-p2a-formulas.md)（2026-07-27 落地）
   - [x] **P2b · types.json / list 高阶 / groupBy / summaries**（BASE-TYPE-001..003、LIST-001、GROUP-001、SUM-001/002；TYPE-004 与 GROUP-002 待 oracle）计划：[`docs/plans/2026-07-27-bases-p2b-types-list-group-summary.md`](./docs/history/plans/2026-07-27-bases-p2b-types-list-group-summary.md)（2026-07-27 落地）
@@ -79,7 +81,9 @@
 
 ## 💡 backlog（待 dogfood 暴露真实需求再开）
 
-- **变更编排器 P1 余项 / P2**：背压、缓存跳过、条件分支、检查点续跑、失败告警、原生管道 stdin、管道 `set` 列表值。设计见 [`docs/specs/2026-06-29-change-orchestration-design.md`](./docs/design/change-orchestration.md)。
+- **变更编排器 P1 余项 / P2**：背压、缓存跳过、条件分支、检查点续跑、失败告警、管道 `set` 列表值。设计见 [`change-orchestration.md`](./docs/design/change-orchestration.md)。
+- **内置 pipeline 改造（统一算子模型）**：把流动单位从文件事件升级为 `Row`、算子统一单签名、调度与算子分离，让 `query`/`search`/`base`/`links`/`lint` 都能进管道。**设计已落地、代码未动**：[`pipeline-op-model.md`](./docs/design/pipeline-op-model.md)（四片切口见 §9）。
+- **多平台 shell 管道**：接外部工具的 stdin/stdout 跨平台契约；**依赖上一条先落地**。设计见 [`shell-pipe-portability.md`](./docs/design/shell-pipe-portability.md)（Windows PS 5.1 中文不可逆丢失的实测证据在 §2）。取代原 backlog 条目「原生管道 stdin」。
 - **更多 profile**：按需扩。
 - **embedding 向量语义检索**：FTS5 全文已落地；embedding 仍 backlog（触发条件见 `docs/design/semantic-retrieval.md` §10）。
 - **S3.4 kysely 收编 DQL→SQL**（可选增强，按需再定）。

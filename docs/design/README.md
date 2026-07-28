@@ -6,8 +6,8 @@ tags:
   - design
   - index
   - x-basalt
-timestamp: 2026-07-27T18:17:29Z
-sha256: 5049b1170502c605be4a3b23a7271e6d44d66dffdfd0495806c5b13c9c503b0d
+timestamp: 2026-07-28T03:32:50Z
+sha256: f81c26e6e553033806a6bcc09b0542286f9070028baf8ad3254341c72865e813
 ---
 # 设计文档
 
@@ -57,6 +57,8 @@ sha256: 5049b1170502c605be4a3b23a7271e6d44d66dffdfd0495806c5b13c9c503b0d
 | --- | --- |
 | [meta 子集](meta-subset.md) | frontmatter 读写的冻结范围 |
 | [变更编排](change-orchestration.md) | `run` 管道的设计 |
+| [内置 pipeline 改造](pipeline-op-model.md) | **提案·未实现**：统一算子模型（Row 流动单位、单签名算子、调度可换） |
+| [多平台 shell 管道](shell-pipe-portability.md) | **提案·未实现**：接外部工具的跨平台 stdin/stdout 契约（含 Windows 实测证据）；依赖上一条 |
 
 ## chat（可选 AI）
 

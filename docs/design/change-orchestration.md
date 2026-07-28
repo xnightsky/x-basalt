@@ -7,8 +7,8 @@ tags:
   - orchestrator
   - design
   - x-basalt
-timestamp: 2026-06-29T23:59:11Z
-sha256: 54e58598055d53b7fed6611fd09e3dbd8df818b1474214b7faf78a90b6e6c8fb
+timestamp: 2026-07-28T03:33:10Z
+sha256: 6267cea67dc1e103a5abc73c429f0342bffdfc88016270ff233a718027378f9e
 ---
 
 # 设计评估：变更编排器（change orchestration）—— 统一 watch / scan / 手动 三源的声明式维护管线
@@ -283,6 +283,10 @@ pipelines:
 
 ### 8.3 原生管道（stdin）—— 与 `--pipe` 正交的独立设计
 
+> **2026-07-28：本节的传输契约已被 [`shell-pipe-portability.md`](shell-pipe-portability.md) 取代。**
+> 保留的结论：stdin 与 `--pipe` 正交、可分期落地、可自由组装。
+> **被推翻的决策：下文「不内置 JSON 猜测（用 `jq`，单一职责）」。** 本机实测 Windows 上 `jq` 默认不存在，且 PowerShell 5.1 的管道会把中文路径不可逆地打成 `??`——该决策在主力平台上走不通，改为内置格式嗅探 + ASCII 转义 JSON 输出，证据与新契约见新文档 §2/§3。
+
 `--pipe`（内建**有状态**管道）和 Unix **原生管道**（stdin）是**两个独立设计：可组装、互不绑定**。stdin **不**塞进 `--pipe`（不是 `paths=-`），而是独立的「手动源来自 stdin」机制，与 `--pipe`（管道定义）正交：
 
 - **独立开关**（形态待定：`--stdin` 或位置 `-`）：从 `process.stdin` 读文件列表作手动源；不触碰 `--pipe`。
@@ -338,6 +342,8 @@ x-basalt query "LIST FROM #pkm" --json | jq -r '.rows[]["file.path"]' \
 3. 在此之前：仅存档本评估；TODO 把 `watch pipeline` 与 `migrate` 两项合并重定位为"变更编排器（有评估背书）"。**不写实现代码。**
 
 ## 14. 编排算子集（operator catalog）
+
+> **2026-07-28 后续**：本节把算子当"概念命名"，实现层仍是 `Action.run(ev: ChangeEvent)` 单文件签名，导致 `query`/`search`/`base`/`links`/`lint` 五个已有能力接不进管道。执行层模型的升级提案见 [`pipeline-op-model.md`](pipeline-op-model.md)（统一 `Row` 流动单位 + 单算子签名 + 调度可换），**提案状态、代码未动**；本节的取舍与命名被它沿用。
 
 > 把 §5 的能力维度落成**可命名、可组合的算子**——配置（§8）即这些算子的声明式组合。每个算子标注**现代体系出处**（借自哪个算子/概念）与**引入后对 x-basalt 体系的影响**。命名为设想，不冻结；取舍沿用 §5（🟢P0 / 🟡P1 / ⚪P2）。
 
