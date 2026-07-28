@@ -8,8 +8,8 @@ tags:
   - bases
   - headless
   - query-engine
-timestamp: 2026-07-27T19:53:20Z
-sha256: 216744c65de54503fc349148b19fbe6884dd0c02d5613348741e043485f623e0
+timestamp: 2026-07-28T08:34:50Z
+sha256: 1432da167d8e08793bb2400bfde996c8d1f23b5d16dfa351b4ee8fa6005c30b4
 ---
 
 # Obsidian Bases 无头执行引擎设计
@@ -180,7 +180,7 @@ type BaseFilter =
 - 字符串是 expression filter；
 - 对象只能包含 `and`、`or`、`not` 中一个键；
 - value 必须是 filter 数组；
-- `and: []` 为 true，`or: []` 为 false，`not: []` 为 true；该口径实现前需用 oracle 验证，若官方不稳定则空数组直接拒绝；
+- `and: []` 为 true，`or: []` 为 false，`not: []` 为 true；**✅ 2026-07-28 已由官方 oracle ④ 验证并落地**（官方 1.12.7 三个 view 连跑两次一致，无 implementation-defined，故不触发「不稳定则拒绝」的退路）；
 - `not` 表示“不满足其中任何一项”，等价 `NOT (child1 OR child2 ...)`；
 - global filter 与 view filter 组合为外层 AND。
 
@@ -229,7 +229,7 @@ type BaseFilter =
 
 - `file.hasProperty(name)` 只看 key 是否存在；
 - 直接投影 missing 输出 null；
-- equality/truthiness 的精确合并规则由 `BASE-PROP-004` oracle 冻结；
+- equality/truthiness 的精确合并规则由 `BASE-PROP-004` oracle 冻结——**✅ 2026-07-28 已冻结**：truthiness 六形态全 falsy（与实现一致）；equality 上 **MISSING 与 null 合并**（`missing == null` 为真，已按官方校正）；
 - diagnostic 可区分 missing、explicit-null 与 type-mismatch。
 
 ### 8.2 类型来源
@@ -390,6 +390,6 @@ YAML 使用安全 schema；限制 alias 数量与文档尺寸。Base 路径 reso
 
 1. 用户确认首期 Markdown-only 兼容口径；
 2. 为 `BASE-DOC-*` 与 P1 主路径建立 fixture 空壳；
-3. 对 `BASE-PROP-004`、`BASE-RESULT-002` 做官方串行 oracle；
+3. 对 `BASE-PROP-004`、`BASE-RESULT-002` 做官方 oracle；**✅ 2026-07-28 完成**（26 view 脚本化取证，不必人工串行；结论见 [runbook §4](bases-oracle-runbook.md)，逐条取舍见 [vs-official §5](bases-vs-official.md)）；
 4. 建执行计划并同步 TODO；
 5. 明确 API 先于 CLI，避免业务逻辑落回 `src/cli.ts`。

@@ -6,8 +6,8 @@ tags:
   - guide
   - bases
   - x-basalt
-timestamp: 2026-07-27T19:49:01Z
-sha256: 1415bc732a6acb80bc21b4b4e162d63cd2b0a77e8d7401fd6bb7dfeb966a8575
+timestamp: 2026-07-28T08:33:04Z
+sha256: e647dacc5f713a62db18f87add95bfa1b516e8e31ab883f1cb5f8859a6127d51
 ---
 # Bases · 用 `.base` 无头查询你的 vault
 
@@ -816,9 +816,17 @@ x-basalt base views/projects.base --conformance bases-all-files-2026-07 --vault 
 missing/null/空串/0/false/空列表的 truthiness（六形态全假，与实现一致）；`if()` lazy branch（惰性，与实现一致）；equality 上 **MISSING 与 null 合并**（`missing == null` 为真，已按官方校正）；
 多键 sort 的 null 排序位置（**恒排最后、与 ASC/DESC 无关**——同日修掉了 DESC 下排到最前的实现漂移）。
 
+**已取证、但有意与官方不同**（documented boundary，理由逐条见 [官方 vs 我们 §5](../design/bases-vs-official.md)）：
+
+| 差异 | 本仓行为 | 官方 | 为什么不跟 |
+| --- | --- | --- | --- |
+| groupBy 时的顶层 `rows` 顺序 | 恒 `file.path` 稳定序 | 随分组键变动 | 保字节稳定契约；分组次序在独立的 `groups` 字段里，不丢信息 |
+| `+` 拼接字符串 | 正常拼接（`"a" + "b"` → `"ab"`） | **不拼接**，string+string 也得空 | 官方那里是静默的空（没实现的洞），砍掉纯亏 |
+| 默认数据集 | 只有 `.md` 是行（恒发 `markdown-only-dataset` warning） | `.base` 文件自身也是行 | 差异不静默；要对齐加 `--conformance bases-all-files-2026-07` 即可 |
+
 以下实现已落地，语义仍待官方串行 oracle 校正，校正后可能调整：
 
-date vs datetime 跨精度比较（暂定统一 epoch）；frontmatter wikilink → Link（暂定机制）；types.json 声明冲突口径（暂定行级 warning）；list/tag 分组键扇出后的顶层行序（本仓保 `file.path` 稳定序）；自定义 summary 的 `values` 边界（暂定剔除空值）；拼接语境下的日期推断（暂定 `"2026-01-01" + " 备注"` 报类型错误）。
+date vs datetime 跨精度比较（暂定统一 epoch）；frontmatter wikilink → Link（暂定机制）；types.json 声明冲突口径（暂定行级 warning）；自定义 summary 的 `values` 边界（暂定剔除空值、按 limit 前全量——**官方两条都相反，已决定跟官方，实现待落**）。
 
 逐项状态见[实现状态追踪](../design/bases-status.md)，观察与校正流程见 [oracle 操作手册](../design/bases-oracle-runbook.md)。
 

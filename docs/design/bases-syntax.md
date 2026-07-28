@@ -8,8 +8,8 @@ tags:
   - obsidian
   - syntax
   - x-basalt
-timestamp: 2026-07-27T19:48:46Z
-sha256: f987294b271b288332376c4011b6eedee9ba8cbaa200f4416e4f7b5b4f25ae36
+timestamp: 2026-07-28T08:34:36Z
+sha256: 865b04284e08622d41115a0afc421a257dd602b21da7388e5d4f26d0b8adcc15
 ---
 # Bases 语法参考（x-basalt 口径）
 
@@ -30,7 +30,7 @@ sha256: f987294b271b288332376c4011b6eedee9ba8cbaa200f4416e4f7b5b4f25ae36
 | `properties` | map                     | 属性显示配置（§2.2）       | 【P0 ✅ 结构记录】                |
 | `views`      | array（必填、非空）     | 视图列表（§2）             | 【P0 ✅ 结构校验】                |
 | `formulas`   | map                     | 派生属性定义（§6）         | 【P2a ✅ 执行】（依赖图拓扑 + 循环诊断 + clock 注入） |
-| `summaries`  | map                     | 自定义汇总（`values` 隐式作用域） | 【P2b ✅ 执行】（SUM-002 空值剔除/越权口径暂定，待 oracle） |
+| `summaries`  | map                     | 自定义汇总（`values` 隐式作用域） | 【P2b ✅ 执行】（SUM-002：当前剔除空值 + 按 limit 前全量；**官方两条都相反，已决定跟官方、实现待落**，见 [vs-official §5.4](bases-vs-official.md)） |
 | 未知顶层 key | 任意                    | 向前兼容：warning + 原值保留，不影响已知字段 | 【P0 ✅】       |
 
 诊断口径：`views` 缺失/空 → `base/view-required`；未知顶层 key → warning。
@@ -73,7 +73,7 @@ views:
 | `order`   | 【P0 ✅ 结构记录】【P1 ✅ 投影】                                 |
 | `sort`    | 【P0 ✅ 结构记录（direction 仅 ASC/DESC）】【P1 ✅ 执行】        |
 | `limit`   | 【P0 ✅ 校验非负整数】【P1 ✅ 执行】                             |
-| `groupBy` | 【P2b ✅ 标量键】【2026-07-28 ✅ list/link 键，GROUP-002】`{ property, direction }`；**list 键扇出**（一行进入其每个元素的组，行内元素先去重、空 list 视同 MISSING 键），link 为标量键（路径感知相等，组序按归一 path）。扇出使「组内行数之和 ≥ rows.length」，顶层 rows 仍平铺一份。暂定口径，待 oracle |
+| `groupBy` | 【P2b ✅ 标量键】【2026-07-28 ✅ list/link 键，GROUP-002】`{ property, direction }`；**list 键扇出**（一行进入其每个元素的组，行内元素先去重、空 list 视同 MISSING 键），link 为标量键（路径感知相等，组序按归一 path）。扇出使「组内行数之和 ≥ rows.length」，顶层 rows 仍平铺一份且**恒为 `file.path` 稳定序**——官方顶层行序随分组键变动，本仓 2026-07-28 决定**不跟**（documented boundary，见 [vs-official §5.3](bases-vs-official.md)）。扇出本身仍是暂定口径 |
 | `summaries` | 【P2b ✅】view 级 `<property-ref> → 15 内置汇总名/顶层自定义名`（未知名报 `base/unknown-function`）；【2026-07-28 ✅ SUM-002 收口】与 groupBy 同现时另产 `groups[].summaries`，**计算集 = 该组 limit 后的行**（顶层仍为 filter 后 limit 前全量） |
 
 view 选择规则：未指定取 `views[0]`（默认 view）；指定不存在报 `base/view-not-found`（suggestions 列可用名）。【P0 ✅】
@@ -102,7 +102,7 @@ filters:
 - 对象**只能含 `and`/`or`/`not` 中一个键**，值必须是 filter 数组；违反 → `base/invalid-schema`。【P0 ✅】
 - 全局 filter 与 view filter 组合为外层 AND。【P1 ✅】
 - `not` = 「不满足其中任何一项」，等价 `NOT (child1 OR child2 ...)`。【P1 ✅】
-- 空数组：`and: []` → true、`or: []` → false、`not: []` → true。【待 oracle：官方口径未冻结；P1 遇空数组直接报 `base/unsupported-feature` 拒绝】
+- 空数组：`and: []` → true、`or: []` → false、`not: []` → true。【✅ 2026-07-28 经 oracle ④ 冻结（官方 1.12.7 实测，稳定可重放）；此前的「P1 遇空数组直接报 `base/unsupported-feature` 拒绝」已撤销】
 - 嵌套深度受 `maxFilterDepth`（默认 32）预算限制，超限报 `base/execution-budget`。【P0 ✅】
 
 ## 4. 表达式语言

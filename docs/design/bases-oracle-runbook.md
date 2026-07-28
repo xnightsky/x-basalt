@@ -7,8 +7,8 @@ tags:
   - bases
   - oracle
   - conformance
-timestamp: 2026-07-28T02:54:35Z
-sha256: 6c33987d2c571dbfdf154ba4f1f2f05882ec4cfee6e9ba4e55d69f2a81df9c96
+timestamp: 2026-07-28T08:32:49Z
+sha256: 5a0d4130adfb5ea5a2d64024ff93a1fdc3f8c634689a4fdc1bfdb1abd09f78ef
 ---
 # Bases P1 争议语义官方 oracle 操作手册（runbook）
 
@@ -73,10 +73,10 @@ Obsidian 升级后重跑（本手册结论绑定 1.12.7 + §2 的 fixture 指纹
 | ④ | 空 filter 数组 and/or/not | 设计 §6 | P1 拒绝（`base/unsupported-feature`） | `and:[]`=真 / `or:[]`=假 / `not:[]`=真，稳定可重放 | ✅ 2026-07-28 已跟官方校正 |
 | ⑤ | date vs datetime 跨精度比较 | BASE-TYPE-005 | 统一按 UTC epoch 比较（P2a 落地） | 行集一致 | ✅ |
 | ⑥ | frontmatter wikilink → Link 值与相等 | BASE-TYPE-006 | `[[t]]`/`[[t\|d]]`/`[[t#sub]]` → Link value，按 path+subpath 相等（P2a 落地） | 行集一致 | ✅ |
-| ⑦ | list/tag 分组键一行多组 | BASE-GROUP-002 | **扇出**：一行进入其每个元素的组；行内元素先去重、空 list 视同 MISSING 键 | 顶层 rows 12 行（无重复计入），但**顺序随分组键变动** | ❌ 顶层顺序分歧 |
-| ⑧ | 自定义 summary 的 `values` 边界（空值剔除 / limit 前后） | BASE-SUM-002 | 暂定剔除 null/missing、按 limit 前全量（P2b 落地） | **含** null/missing（计入分母）、按 **limit 后** | ❌ 两维度都相反 |
-| ⑨ | 字符串→日期推断是否作用于 `+`（拼接语境） | 语法 §5.1 / 设计 §8.3 | 推断对全部非短路二元运算生效，故 `due + " 备注"` 报行级类型错误而非拼接 | **`+` 根本不做字符串拼接**，string+string 也得空 | ❌ 原命题不成立 |
-| ㉗ | **默认数据集**（本轮新发现，原不在清单） | BASE-DATA-001/002 | 默认 md-only，`.base` 不为行 | `.base` 文件**自身也是行** | ❌ |
+| ⑦ | list/tag 分组键一行多组 | BASE-GROUP-002 | **扇出**：一行进入其每个元素的组；行内元素先去重、空 list 视同 MISSING 键 | 顶层 rows 12 行（无重复计入），但**顺序随分组键变动** | ❌ 顶层顺序分歧 → **决定不跟**（boundary） |
+| ⑧ | 自定义 summary 的 `values` 边界（空值剔除 / limit 前后） | BASE-SUM-002 | 暂定剔除 null/missing、按 limit 前全量（P2b 落地） | **含** null/missing（计入分母）、按 **limit 后** | ❌ 两维度都相反 → **决定跟官方**，实现待落 |
+| ⑨ | 字符串→日期推断是否作用于 `+`（拼接语境） | 语法 §5.1 / 设计 §8.3 | 推断对全部非短路二元运算生效，故 `due + " 备注"` 报行级类型错误而非拼接 | **`+` 根本不做字符串拼接**，string+string 也得空 | ❌ 原命题不成立 → **决定不跟**（保留超集 + boundary） |
+| ㉗ | **默认数据集**（本轮新发现，原不在清单） | BASE-DATA-001/002 | 默认 md-only，`.base` 不为行 | `.base` 文件**自身也是行** | ❌ → **决定不改默认值**（boundary + 文档） |
 
 ### 1.1 2026-07-28 函数覆盖率批次新增的暂定口径（⑩ 起）
 
@@ -155,10 +155,10 @@ view 清单（26 个）：truthiness.base × 8（truthy-missing / truthy-explici
 | ④ | 空 filter 数组 | `and:[]`=真 / `or:[]`=假 / `not:[]`=真 | 三个都报 `unsupported-feature` | ✅ 2026-07-28 已校正（跟官方） |
 | ⑤ | date/datetime 跨精度比较 | 见 §4.5 | 同 | ✅ 一致 |
 | ⑥ | wikilink → Link | 见 §4.5 | 同 | ✅ 一致 |
-| ⑦ | list 分组键扇出 | 顶层 rows 顺序随分组键变动 | 保持 `file.path` 序 | ❌ 分歧 |
-| ⑧ | summary `values` 边界 | **含 null/missing**（计入分母）、按 **limit 后** | 剔除 null/missing、按 limit 前 | ❌ 两维度都分歧 |
-| ⑨ | `+` 的拼接语境 | **`+` 根本不做字符串拼接**，string+string 也得空 | string+string 正常拼接 | ❌ 分歧（读法前提也被推翻，见 §4.9） |
-| ㉗ | **默认数据集**（原 26 条外，本轮新发现） | `.base` 文件**自身也是行** | 默认 md-only 排除 | ❌ 分歧 |
+| ⑦ | list 分组键扇出 | 顶层 rows 顺序随分组键变动 | 保持 `file.path` 序 | ❌ 分歧 · **决定不跟**（2026-07-28，boundary） |
+| ⑧ | summary `values` 边界 | **含 null/missing**（计入分母）、按 **limit 后** | 剔除 null/missing、按 limit 前 | ❌ 两维度都分歧 · **决定跟官方**（2026-07-28），实现待落（(a) 有前置取证） |
+| ⑨ | `+` 的拼接语境 | **`+` 根本不做字符串拼接**，string+string 也得空 | string+string 正常拼接 | ❌ 分歧 · **决定不跟**（2026-07-28，保留超集 + boundary） |
+| ㉗ | **默认数据集**（原 26 条外，本轮新发现） | `.base` 文件**自身也是行** | 默认 md-only 排除 | ❌ 分歧 · **决定不改默认值**（2026-07-28，boundary + 文档） |
 
 ### 4.1 ① truthiness / equality（CaseA 六形态显式值；CaseB/C 缺这些属性；CaseD 全缺）
 
@@ -243,6 +243,13 @@ view 清单（26 个）：truthiness.base × 8（truthy-missing / truthy-explici
 
 **结论**：两边都是 12 行（没有因扇出而重复计入顶层），但**官方顶层 rows 的顺序受分组键影响**，x-basalt 保持 `file.path` 稳定序。分组内容本身是否一致需比 `groups[]`，本轮只确证了顶层顺序分歧。
 
+> ⚠️ **观察记录里的 `groups` 字段不可用**（2026-07-28 校正轮复核时发现）：它对
+> `summary-custom` 这个**根本没有 `groupBy`** 的 view 也报了 1 个组，且所有组的 `key` 全为 `null`、
+> `rows` 全为空。即 `controller.view.groups` 这条读取路径没取对（或同样存在 §0.2 坑 1 那类未收敛问题）。
+> **本轮关于分组，实测到手的只有顶层行序这一个信号，官方的分组内容与组序都没测到。**
+> 补 ⑦ 的取证时，第一件事是把 `groups` 的读取路径修对——否则「跟官方」连跟什么都定不下来。
+> 这也是 ⑦ 决定不跟的首要理由（[vs-official §5.3](bases-vs-official.md)）。
+
 ### 4.7 ⑧ 自定义 summary 的 values 边界（`meanOfValues: values.mean()` 作用于 `sortable`）
 
 样本 `sortable`：CaseA=null、CaseB=1、CaseC=2，其余 9 行缺失。
@@ -273,21 +280,40 @@ view 清单（26 个）：truthiness.base × 8（truthy-missing / truthy-explici
 
 **结论**：问题不是「官方在拼接语境是否做日期推断」，而是**官方的 `+` 根本不做字符串拼接**。所以 x-basalt 的 string+string 拼接是**超集行为**（官方没有），date+string 则是两边都不产出拼接串、但**失败形态不同**（官方静默空、x-basalt 报行级类型错误）。
 
-## 5. 校正（第一批逐条落地中 / 第二批待决策）
+### 4.10 校正后复跑对照（2026-07-28，第一批 ①②④ 落地后）
 
-> 取证轮只做取证、一行实现没改；**校正轮（2026-07-28）开始按下表逐条落地**。
+同一份官方观察记录、同一个对照器（`parity/bases-oracle-diff.mjs`，固定 `--conformance bases-all-files-2026-07`）：
+
+```
+一致 24 · 存疑一致 0 · 分歧 2 · 跑不动 0  （共 26）
+```
+
+**分歧 7 → 2，且无新增分歧。** 消掉的五个 view：`eq-missing-null` / `eq-explicit-null-null`（①）、
+`sort-desc`（②）、`empty-and` / `empty-not`（④）；`empty-or` 本就行数相同，现在成因也对齐了。
+剩余两条都是 ⑦（`group-by-tags` / `group-by-list-prop` 的顶层行序），已决定不跟（[vs-official §5.3](bases-vs-official.md)）。
+
+**这次复跑不需要 Obsidian 在跑**——对照器读的是 §4 冻结下来的观察记录，只需主仓 `pnpm build`。
+需要重新取证（换 Obsidian 版本、补 view）时才要 App。
+
+⚠️ 复跑**没有覆盖** ⑧ 与 ⑨：对照器只比行集不比列值，而这两条的判据都在列值/汇总里。
+
+## 5. 校正（第一批 ✅ 已落地 / 第二批决策已出，仅 ⑧ 待实现）
+
+> 取证轮只做取证、一行实现没改；**校正轮（2026-07-28）**：第一批 ①②④ 已落实现 + 回归用例
+> （复跑对照见 §4.10，分歧 7 → 2、无新增）；第二批 ⑦⑧⑨㉗ 决策已出——⑦⑨㉗ 落 documented
+> boundary（维持现状，无代码改动），⑧ 决定跟官方但实现待落（(a) 有前置取证，见 vs-official §5.4）。
 > 每条都单独判断「跟官方」还是「落 documented boundary」，不存在无脑对齐；
-> 判断理由逐条写进 [`bases-vs-official.md`](bases-vs-official.md)。
+> 判断理由逐条写进 [`bases-vs-official.md`](bases-vs-official.md) §5。
 
 | # | 差异 | 落点 | 取舍与状态 |
 | --- | --- | --- | --- |
 | ① eq | MISSING 与 null 是否合并 | `src/base/values.ts`（`typedEqual`） | **跟官方** ✅ 2026-07-28：影响任何 `== null` / `!= null` 的 filter，静默改变行集，属最危险的一类。合并落在值域唯一的相等语义上（分组/`unique`/`contains` 一并生效），`isType("null")` 有意不跟随——取舍见 [vs-official §5.1](bases-vs-official.md) |
 | ② | DESC 时 null/missing 排到了最前 | `src/base/values.ts`（`sortKeyCompareDirected`） | **按自己登记的口径修** ✅ 2026-07-28——不是「跟不跟官方」，是实现与 §1 登记口径的漂移，官方恰好站在登记口径那边 |
 | ④ | 空 filter 数组当前是拒绝 | `src/base/planner.ts` | **跟官方** ✅ 2026-07-28：`and:[]`=真 / `or:[]`=假 / `not:[]`=真，官方稳定可重放，「P1 拒绝」没有依据了 |
-| ⑦ | 分组时顶层 rows 顺序 | `src/base/engine.ts`（groupBy） | 待定：x-basalt 的 `file.path` 稳定序是**字节稳定契约**的一部分，跟官方会牺牲它 |
-| ⑧ | summary values 的两个维度 | `src/base/summaries.ts` | 待定：官方把 null/missing 计入分母（0.25 而非 1.5）反直觉，但那是官方 |
-| ⑨ | `+` 是否做字符串拼接 | `src/base/evaluator.ts`（`upgradeStringOperand`） | 倾向**保留超集**：官方 `+` 不拼接字符串，x-basalt 拼——砍掉是纯功能损失，宜落 documented boundary |
-| ㉗ | 默认数据集是否含 `.base` 自身 | `src/base/engine.ts`（conformance 默认值） | 待定：改默认值是 breaking，也可能只需在文档里讲清两个 conformance 的取舍 |
+| ⑦ | 分组时顶层 rows 顺序 | `src/base/engine.ts`（groupBy） | **不跟** · boundary（2026-07-28 决策）：本轮只测到顶层行序、**没测到官方的分组内容与组序**（观察记录的 `groups` 字段是坏的，见 §5.2），跟等于照抄症状；且会牺牲字节稳定契约。理由全文 [vs-official §5.3](bases-vs-official.md) |
+| ⑧ | summary values 的两个维度 | `src/base/engine.ts`（summaries 取值集）/ `src/base/functions.ts`（`list.mean`） | **跟官方**（2026-07-28 决策，实现待落）：(b) limit 后可直接改；**(a) 有硬前置**——要复现 0.25 必须同时改 `list.mean()`「非 number 不计分子、计分母」，而官方从没给过 `list.mean()` 在混合列表上的读数。先补一个 view 取证再动手。理由全文 [vs-official §5.4](bases-vs-official.md) |
+| ⑨ | `+` 是否做字符串拼接 | `src/base/evaluator.ts`（`upgradeStringOperand`） | **不跟** · boundary（2026-07-28 决策）：官方那里是**静默的空**（没实现的洞，不是语义），砍掉纯亏；与本仓「不静默」立场一致。理由全文 [vs-official §5.5](bases-vs-official.md) |
+| ㉗ | 默认数据集是否含 `.base` 自身 | `src/base/engine.ts`（conformance 默认值） | **不改默认值** · boundary（2026-07-28 决策）：差异不静默（恒发 `markdown-only-dataset` warning），且官方读数只证明 `.base` 是行、**没证明附件也是行**（fixture 无附件样本），切默认等于顺带断言未取证的事；要对齐一条 flag 即可。理由全文 [vs-official §5.6](bases-vs-official.md) |
 
 配套动作（改哪条做哪条，不要一次性全改）：
 

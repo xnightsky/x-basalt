@@ -7,8 +7,8 @@ tags:
   - bases
   - testing
   - x-basalt
-timestamp: 2026-07-28T02:55:34Z
-sha256: 0cd80053b57707074a7d616feecdcf1de84478f1cedc7718f5af8001f90de60a
+timestamp: 2026-07-28T08:32:23Z
+sha256: fc9eb3be183bf2eb3fcd7a822599c27ee0d8e0db4e5a7603d220377e4c1b9f3c
 ---
 # Bases 实现状态追踪
 
@@ -94,10 +94,10 @@ sha256: 0cd80053b57707074a7d616feecdcf1de84478f1cedc7718f5af8001f90de60a
 | 多键 sort 的 null 位置 | BASE-RESULT-002 | 恒排最后，与方向无关 | ✅ 2026-07-28 已校正（当 bug 修：`sortKeyCompareDirected` 让方向只作用于可比值，空值组恒最后；回归用例 `base-engine.test.ts` / `base-values-date.test.ts` 标 oracle ②） |
 | 空 filter 数组（and:[]/or:[]/not:[]） | 设计 §6 | `and:[]`=真 / `or:[]`=假 / `not:[]`=真 | ✅ 2026-07-28 已校正（跟官方；planner 放行空数组，语义由 evalFilter 的 every/some 天然给出） |
 | `if()` lazy branch | 设计 §9 | lazy，**与实现一致** | ✅ 可转正 |
-| 二元运算的字符串→日期推断是否作用于 `+` | 语法 §5.1 / 设计 §8.3 | **原命题不成立**：官方 `+` 根本不拼接字符串，string+string 也得空 | ⏳ 倾向保留超集 + 落 boundary |
-| 自定义 summary 的 `values` 边界 | BASE-SUM-002 | **含** null/missing（计入分母）、按 **limit 后** | ⏳ 两维度都与实现相反 |
-| list 分组键扇出的顶层行序 | BASE-GROUP-002 | 顶层 rows 顺序随分组键变动 | ⏳ 与字节稳定契约冲突，待取舍 |
-| **默认数据集是否含 `.base` 自身** | BASE-DATA-001/002 | **含**（`.base` 文件自身也是行） | ⏳ 本轮新发现，原不在清单 |
+| 二元运算的字符串→日期推断是否作用于 `+` | 语法 §5.1 / 设计 §8.3 | **原命题不成立**：官方 `+` 根本不拼接字符串，string+string 也得空 | ✅ 2026-07-28 决策：**不跟**，保留超集 + [documented boundary](bases-vs-official.md)（官方那里是静默的空，砍掉纯亏） |
+| 自定义 summary 的 `values` 边界 | BASE-SUM-002 | **含** null/missing（计入分母）、按 **limit 后** | ⏳ 2026-07-28 决策：**跟官方**，实现待落——(b) limit 后可直接改；(a) 有前置（要复现 0.25 必须同时改 `list.mean()`，而官方没给过它在混合列表上的读数），见 [vs-official §5.4](bases-vs-official.md) |
+| list 分组键扇出的顶层行序 | BASE-GROUP-002 | 顶层 rows 顺序随分组键变动 | ✅ 2026-07-28 决策：**不跟**，保 `file.path` 稳定序 + [documented boundary](bases-vs-official.md)（本轮只测到顶层行序，官方分组内容/组序**没测到**——观察记录 `groups` 字段是坏的） |
+| **默认数据集是否含 `.base` 自身** | BASE-DATA-001/002 | **含**（`.base` 文件自身也是行） | ✅ 2026-07-28 决策：**不改默认值** + [documented boundary](bases-vs-official.md)（差异恒发 warning 不静默；官方读数没证明附件也是行，切默认等于断言未取证的事） |
 
 > 取证方式与三个会静默出错的坑见 [runbook §0.2](bases-oracle-runbook.md)。原始观察数据由取证侧留档（不入本仓：机器生成、体量大，且与 §4 的人读结论重复存放必然漂移）。
 > **⑩..㉖ 共 17 条仍无 fixture view**（见 runbook §1.1 / §1.2）——取证已脚本化，补 view 是唯一门槛。
