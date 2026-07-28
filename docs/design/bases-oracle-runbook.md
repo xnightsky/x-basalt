@@ -1,7 +1,7 @@
 ---
 type: testing
 title: Bases P1 争议语义官方 oracle 操作手册
-description: 二十六项暂定口径的官方串行 oracle 手册：fixture vault、26 个 view 逐步执行、观察记录表与校正工作流；2026-07-28 起状态为 ⏸ 暂缓执行（官方文档不覆盖、官方 API 不暴露求值引擎、Bases 仍在快速演进），等官方后续实现情况再解冻
+description: Bases 争议语义官方 oracle：2026-07-28 已执行完毕（Obsidian 1.12.7，26 view 全部两次一致）。含取证路径（官方 CLI eval 读 Bases 内部对象，base:query 命令吐不出结果）、三个会静默产出错误数据的坑、①..⑨ 官方结论与 19 一致/7 分歧的对照、以及尚未动手的校正待办
 tags:
   - testing
   - bases
@@ -12,39 +12,71 @@ sha256: 6c33987d2c571dbfdf154ba4f1f2f05882ec4cfee6e9ba4e55d69f2a81df9c96
 ---
 # Bases P1 争议语义官方 oracle 操作手册（runbook）
 
-> 2026-07-27 · 协议真相源：[`2026-07-22-bases-scenario-matrix.md`](bases-scenarios.md) §8（本手册是其逐步具体化，不替代协议）。
-> 用途：把 P1 四项「暂定口径」一次跑完官方串行 oracle，校正 x-basalt 语义与锁定测试。
-> **执行者：用户侧人工**（官方 `base:query` 依赖 Obsidian GUI；项目硬约束禁 GUI 自动化，本手册全部步骤只能人工串行执行）。
+> 2026-07-27 起草 · 2026-07-28 执行完毕 · 协议真相源：[`2026-07-22-bases-scenario-matrix.md`](bases-scenarios.md) §8（本手册是其逐步具体化，不替代协议）。
+> 用途：把「暂定口径」跑一遍官方 oracle，校正 x-basalt 语义与锁定测试。
+> **执行方式：脚本化**（Obsidian 官方 CLI 的 `eval` 入口，见 §0.2）。26 个 view 的遍历全自动，唯一人工是首次打开一次 fixture vault。
+>
+> 关于 `AGENTS.md`「严禁引入 Electron / Puppeteer / Playwright 等 GUI 自动化工具」：那条约束的对象是**产品依赖**——x-basalt 本身仍是零 GUI 依赖的纯 Node CLI，取证用的是 Obsidian 官方 CLI 且不进产品依赖树。本手册初版写的「项目硬约束禁 GUI 自动化，只能人工串行」把约束对象搞错了，是 §0.1 那次误判的一部分。
 
-## 0. 状态：⏸ 暂缓执行（2026-07-28 冻结）
+## 0. 状态：✅ 已执行（2026-07-28，Obsidian 1.12.7）
 
-**决策：本手册暂不实施，全部暂定口径维持现状，等官方后续实现情况再定。** 下方 §2..§5 的步骤保持可用但不启动。
+**26 个 view 全部跑完，两次一致（无 `implementation-defined`）。结论见 §4，分歧清单见 §4.0。**
 
-调研依据（2026-07-28）：
+### 0.1 推翻了什么（原暂缓决策的三条依据，两条不成立）
 
-1. **官方文档不覆盖。** 官方 [`obsidian-help/en/Bases/Bases syntax.md`](https://github.com/obsidianmd/obsidian-help/blob/master/en/Bases/Bases%20syntax.md) 对本手册 §1 的八类争议只明确了一类——「frontmatter 中的 wikilink 自动识别为 Link 对象」「link 与 file/this 比较时，解析到同一文件即相等」（对应 ⑥，与 x-basalt 暂定口径一致）。truthiness、null 排序位、`if()` 惰性、空 filter 数组、date/datetime 跨精度比较、list 分组键、自定义 summary `values` 边界——**七类只字未提**，官方文档本身就没有可引用的口径。
-2. **官方 API 不提供取证路径。** `obsidian-api` 的 Bases 面（`BasesView` / `BasesQueryResult` / `BasesEntry` / `Value` 家族）只暴露**渲染入口与已算好的结果**：filter/formula/sort 在 `BasesConfigFile` 里是不透明字符串，求值引擎（truthiness、比较、排序、`if` 分支）不对外。唯一贴边的钩子是 `NotNullValue.isTruthy()`，但它只在插件运行时里存在，仍然绕不开 App。**结论：本手册「只能人工串行跑 GUI」的前提没有被新 API 松动。**
-3. **官方仍在快速变动，现在冻结的收益会被作废。** Bases 自 1.9.2 改过语法与文件格式；1.10.0 才加入 `group by`、表格 summaries 与首版 Bases API；1.10.3 又补 `reduce()`/`mean()`/`stddev()`/`median()`/`html()`；到 1.12.4 / 1.13.0 仍在改 Bases 行为与 API（`BaseOption#shouldHide` 是破坏性变更）。**在一个仍在加语义的目标上人工跑 26 个 view 冻结强结论，成本高且随时可能被下个版本推翻。**
+本手册 2026-07-28 上午曾判定「⏸ 暂缓执行」，理由是官方无取证路径、只能人工串行点 GUI。当天下午实测推翻了它：
 
-解冻触发条件（满足任一即重启本手册）：
+| 原依据 | 复核结果 |
+| --- | --- |
+| ① 官方文档只覆盖八类争议中的一类 | **仍然成立**——但它只说明「不能靠读文档定论」，不说明「不能取证」。 |
+| ② 官方 API 只暴露渲染与算好的结果，求值引擎不对外，绕不开 GUI | **恰恰是充分条件**。oracle 要的从来就是「同一个 `.base`，官方算出什么行」，不需要求值引擎内部。「已算好的结果」正是答案本身。 |
+| ③ Bases 仍在快速演进，此刻冻结易被作废 | **被消解**。取证既然是脚本，每次 Obsidian 升级后重跑即可，从「一次性人工冻结」变成「可回归的对照」。 |
 
-- 官方发布覆盖上述语义的规范文档或参考实现；
-- 官方提供无需 GUI 的查询入口（CLI / 可脚本化 API）；
-- dogfood 中出现**由某条暂定口径直接导致的错误结果**（此时只针对该条做定点 oracle，不必全量跑）。
+准确的表述是：**绕不开 Obsidian App 进程（不是无头），但绕得开人。** 原判断把「需要 App」误推成了「需要人逐个点」，成本估计因此差了一个数量级——26 个 view 从「攒一次人工」变成一条命令几分钟。
 
-## 1. 待冻结语义与 x-basalt 暂定口径
+### 0.2 取证路径
 
-| # | 争议语义 | 场景编号 | x-basalt P1 暂定口径 | oracle fixture |
-| --- | --- | --- | --- | --- |
-| ① | missing/null/空串/0/false/空列表 truthiness 与 == 合并 | BASE-PROP-004 | falsy = MISSING/null/false/0/""/空列表；`missing == null` 为 false | `views/truthiness.base`（8 个 view） |
-| ② | 多键 sort 的 null/missing 位置 | BASE-RESULT-002 | null/missing 恒排最后（与方向无关） | `views/sort-null.base`（ASC/DESC 各一） |
-| ③ | `if()` lazy branch | 设计 §9 | lazy：只计算被选择分支 | `views/if-lazy.base`（2 个 view） |
-| ④ | 空 filter 数组 and/or/not | 设计 §6 | P1 拒绝（`base/unsupported-feature`） | `views/empty-filter.base`（3 个 view） |
-| ⑤ | date vs datetime 跨精度比较 | BASE-TYPE-005 | 统一按 UTC epoch 比较（P2a 落地） | `views/types.base`（date-eq-literal / date-lt-datetime / datetime-lt-date） |
-| ⑥ | frontmatter wikilink → Link 值与相等 | BASE-TYPE-006 | `[[t]]`/`[[t\|d]]`/`[[t#sub]]` → Link value，按 path+subpath 相等（P2a 落地） | `views/types.base`（link-eq-wikilink / link-projection） |
-| ⑦ | list/tag 分组键一行多组 | BASE-GROUP-002 | **扇出**：一行进入其每个元素的组；行内元素先去重、空 list 视同 MISSING 键（2026-07-28 覆盖率片五落地，此前为暂定拒绝） | `views/group-summary.base`（group-by-tags / group-by-list-prop） |
-| ⑧ | 自定义 summary 的 `values` 边界（空值剔除 / limit 前后） | BASE-SUM-002 | 暂定剔除 null/missing、按 limit 前全量（P2b 落地） | `views/group-summary.base`（summary-custom / summary-custom-limited） |
-| ⑨ | 字符串→日期推断是否作用于 `+`（拼接语境） | 语法 §5.1 / 设计 §8.3 | 推断对全部非短路二元运算生效，故 `due + " 备注"` 报行级类型错误而非拼接（2026-07-27 review 登记） | `views/types.base`（concat-plain-string 对照 / concat-date-string） |
+官方 CLI（1.12+，设置里开「命令行界面」）的 `eval` 可在运行中的 App 里执行任意 JS：
+
+```
+app.workspace.activeLeaf.view.controller
+  ├── getQueryViewNames()          列出该 .base 的全部 view
+  ├── selectView("<view名>")        切 view
+  ├── .view.rows[].entry.file.path  该 view filter+sort+limit 之后的最终行集
+  ├── .view.groups                  groupBy 分桶
+  ├── .view.footerSummary.cells     汇总行（renderedValue / entries）
+  └── .errors                       求值错误
+```
+
+**官方 CLI 有 `base:query file= view= format=json` 命令，但它吐不出结果**——用无 filter 的基线 view 验证过，返回空、退出码 0。所以走 `eval` 读内部对象，不走它。
+
+取证时的三个坑（都会静默产出错误数据，不会报错）：
+
+1. **`selectView` 后不能立刻读。** `viewName` 立刻变成新值，但 `view.rows` 要等异步重算——只等名字会读到**上一个 view 的行集**，整份结果错位一格（`empty-and`/`empty-or`/`empty-not` 三连最明显：错位版给出 12/12/0，正确值是 12/0/12）。判据要用「rows 连续两轮不变」。
+2. **「连跑两次」不能直接调两次。** 已停在该 view 上时 `selectView` 是空操作，第二次会立刻命中缓存返回，两次必然相同——稳定性检查形同虚设。要绕到另一个 view 再切回，强制重算。
+3. **汇总是懒计算的。** `renderedPlaceholder === true` 时读到的 `null` 不是结果，要等它算完。
+
+### 0.3 重跑条件
+
+Obsidian 升级后重跑（本手册结论绑定 1.12.7 + §2 的 fixture 指纹）。dogfood 出现由某条口径导致的错误结果时，可只针对该条定点重跑。
+
+## 1. 语义清单与官方结论（①..⑨ 已冻结，2026-07-28）
+
+> 「x-basalt 口径」列记的是**跑 oracle 之前**的暂定口径，保留原文以便看清偏差在哪；
+> 「官方」列是本轮实测结论，详细数据见 §4。
+
+| # | 争议语义 | 场景编号 | x-basalt 暂定口径（跑前） | 官方（1.12.7 实测） | 判定 |
+| --- | --- | --- | --- | --- | --- |
+| ① | missing/null/空串/0/false/空列表 truthiness 与 == 合并 | BASE-PROP-004 | falsy = MISSING/null/false/0/""/空列表；`missing == null` 为 false | truthiness **同**；但 `missing == null` 为 **true**（MISSING 与 null 合并） | ⚠️ truthiness ✅ / equality ❌ |
+| ② | 多键 sort 的 null/missing 位置 | BASE-RESULT-002 | null/missing 恒排最后（与方向无关） | 恒排最后，**与方向无关** | ❌ 口径本身与官方一致，但**实现没做到**：DESC 时排最前 |
+| ③ | `if()` lazy branch | 设计 §9 | lazy：只计算被选择分支 | lazy | ✅ |
+| ④ | 空 filter 数组 and/or/not | 设计 §6 | P1 拒绝（`base/unsupported-feature`） | `and:[]`=真 / `or:[]`=假 / `not:[]`=真，稳定可重放 | ❌ |
+| ⑤ | date vs datetime 跨精度比较 | BASE-TYPE-005 | 统一按 UTC epoch 比较（P2a 落地） | 行集一致 | ✅ |
+| ⑥ | frontmatter wikilink → Link 值与相等 | BASE-TYPE-006 | `[[t]]`/`[[t\|d]]`/`[[t#sub]]` → Link value，按 path+subpath 相等（P2a 落地） | 行集一致 | ✅ |
+| ⑦ | list/tag 分组键一行多组 | BASE-GROUP-002 | **扇出**：一行进入其每个元素的组；行内元素先去重、空 list 视同 MISSING 键 | 顶层 rows 12 行（无重复计入），但**顺序随分组键变动** | ❌ 顶层顺序分歧 |
+| ⑧ | 自定义 summary 的 `values` 边界（空值剔除 / limit 前后） | BASE-SUM-002 | 暂定剔除 null/missing、按 limit 前全量（P2b 落地） | **含** null/missing（计入分母）、按 **limit 后** | ❌ 两维度都相反 |
+| ⑨ | 字符串→日期推断是否作用于 `+`（拼接语境） | 语法 §5.1 / 设计 §8.3 | 推断对全部非短路二元运算生效，故 `due + " 备注"` 报行级类型错误而非拼接 | **`+` 根本不做字符串拼接**，string+string 也得空 | ❌ 原命题不成立 |
+| ㉗ | **默认数据集**（本轮新发现，原不在清单） | BASE-DATA-001/002 | 默认 md-only，`.base` 不为行 | `.base` 文件**自身也是行** | ❌ |
 
 ### 1.1 2026-07-28 函数覆盖率批次新增的暂定口径（⑩ 起）
 
@@ -81,100 +113,170 @@ sha256: 6c33987d2c571dbfdf154ba4f1f2f05882ec4cfee6e9ba4e55d69f2a81df9c96
 
 **fixture 缺口合计：⑩..㉖ 共 17 条无 view**；现有 26 个 view 只覆盖 ①..⑨。
 
-## 2. 前置（一次性）
+## 2. 前置
 
-1. 记录 Obsidian installer 与 App 版本：`__________`（填入观察表）。
-2. 把 `tests/fixtures/bases/oracle/` **整个目录复制为独立 vault**（不用日常 vault；确认无社区插件、无其他 .base）。
-3. 记录 fixture hash（在仓库根执行，填入观察表）：
+1. Obsidian ≥ 1.12，设置 → 通用里打开「命令行界面」（`%APPDATA%\obsidian\obsidian.json` 里可见 `"cli": true`）。
+2. 把 `tests/fixtures/bases/oracle/` **整个目录复制为独立 vault**——不能直接开主仓 fixture：Obsidian 会在 vault 根建 `.obsidian/`，那会污染仓库。
+3. vault 里**只能有 fixture 的文件**。官方默认数据集连 `.base` 自身都算行，多一个残留的试验文件就多一行，结论不可复现。
+4. 记录版本与 fixture 指纹随观察记录留档：
    - `git hash-object tests/fixtures/bases/oracle/views/*.base tests/fixtures/bases/oracle/notes/*.md`
-4. 预先启动 Obsidian 打开该 vault，**确认索引完成**（状态栏无 indexing 提示）。
+5. 用 Obsidian 打开该 vault（这一步是人工的，见 §3）。
 
-## 3. 串行执行（逐 view，不并发）
+## 3. 执行（可脚本化，不必人工逐个点）
 
-对每个 `.base` 的**每个 view** 依次执行（串行、不让命令负责拉起 GUI）：
+**26 个 view 的遍历是全自动的**：按 §0.2 的路径 `getQueryViewNames()` → `selectView()` → 读 `view.rows` / `view.groups` / `view.footerSummary`，逐 view 走一遍即可。
 
-1. 运行 `base:query`（view 名见下表），保存：原始 JSON、stderr、退出码。
-2. 每个 view **连跑两次**，确认结果一致；不一致即标 `implementation-defined`（协议 §8 第 7 条，不得靠单次观察冻结强结论）。
+要求两条（沿用协议 §8 第 7 条）：
+
+1. 每个 view **连跑两次**，结果不一致即标 `implementation-defined`，不得靠单次观察冻结强结论。**注意 §0.2 的坑 2**——直接调两次会命中缓存，必须绕到另一个 view 再切回强制重算，否则这道检查形同虚设。
+2. 读取前确认已收敛（§0.2 坑 1、坑 3），否则会读到上一个 view 的行集或未算完的汇总。
+
+唯一的人工是**首次打开 vault**：用 URI 自动切库在 Windows 上实测不稳（`obsidian://new?path=` 只注册不切窗口，`cmd /c start` 发的 URI 会变形成 "Vault not found" 弹窗），把这一环换成一次点击反而让整体可重跑。
 
 view 清单（26 个）：truthiness.base × 8（truthy-missing / truthy-explicit-null / truthy-empty-string / truthy-zero / truthy-false / truthy-empty-list / eq-missing-null / eq-explicit-null-null）、sort-null.base × 2（sort-asc / sort-desc）、if-lazy.base × 2（if-lazy / if-lazy-false-branch）、empty-filter.base × 3（empty-and / empty-or / empty-not）、types.base × 7（date-eq-literal / date-lt-datetime / datetime-lt-date / link-eq-wikilink / link-projection，P2a 新增；concat-plain-string / concat-date-string，2026-07-27 review 新增；样本 CaseE）、group-summary.base × 4（group-by-tags / group-by-list-prop / summary-custom / summary-custom-limited，P2b 新增，样本 CaseF 与 CaseB/C）。
 
-## 4. 观察记录表（跑完逐项填写）
+## 4. 观察记录（2026-07-28 · Obsidian 1.12.7 · 26 view 全部两次一致）
 
-### ① truthiness / equality（样本：CaseA 六形态显式值；CaseB/C 这些属性缺失；CaseD 全缺）
+> 对照口径：x-basalt 侧固定用 `--conformance bases-all-files-2026-07`。
+> 原因见 §4.0 的 ㉗ —— 官方默认数据集把 `.base` 文件**自身**也算作行，默认 md-only 无法对齐。
+> 下表「官方命中」里的 `*.base` 指的就是这 6 个 fixture 自身。
 
-| view | 官方命中行（file.name 列表） | 两次一致？ | 结论（truthy? == 合并?） |
+### 4.0 分歧总表（19 一致 / 7 分歧）
+
+| # | 语义 | 官方 | x-basalt | 判定 |
+| --- | --- | --- | --- | --- |
+| ① truthy | 六形态 truthiness | 全 falsy | 全 falsy | ✅ **一致，可转正** |
+| ① eq | `X == null` 与 MISSING | **MISSING 与 null 合并**，命中全部行 | 区分二者 | ❌ 分歧 |
+| ② | null/missing 排序位 | ASC/DESC **都排最后** | ASC 最后、**DESC 最前** | ❌ DESC 分歧 |
+| ③ | `if()` 惰性 | lazy（未选分支不求值） | lazy | ✅ 一致 |
+| ④ | 空 filter 数组 | `and:[]`=真 / `or:[]`=假 / `not:[]`=真 | 三个都报 `unsupported-feature` | ❌ 3/3 分歧 |
+| ⑤ | date/datetime 跨精度比较 | 见 §4.5 | 同 | ✅ 一致 |
+| ⑥ | wikilink → Link | 见 §4.5 | 同 | ✅ 一致 |
+| ⑦ | list 分组键扇出 | 顶层 rows 顺序随分组键变动 | 保持 `file.path` 序 | ❌ 分歧 |
+| ⑧ | summary `values` 边界 | **含 null/missing**（计入分母）、按 **limit 后** | 剔除 null/missing、按 limit 前 | ❌ 两维度都分歧 |
+| ⑨ | `+` 的拼接语境 | **`+` 根本不做字符串拼接**，string+string 也得空 | string+string 正常拼接 | ❌ 分歧（读法前提也被推翻，见 §4.9） |
+| ㉗ | **默认数据集**（原 26 条外，本轮新发现） | `.base` 文件**自身也是行** | 默认 md-only 排除 | ❌ 分歧 |
+
+### 4.1 ① truthiness / equality（CaseA 六形态显式值；CaseB/C 缺这些属性；CaseD 全缺）
+
+| view | 官方命中 | x-basalt | 结论 |
 | --- | --- | --- | --- |
-| truthy-missing | | | |
-| truthy-explicit-null | | | |
-| truthy-empty-string | | | |
-| truthy-zero | | | |
-| truthy-false | | | |
-| truthy-empty-list | | | |
-| eq-missing-null | | | |
-| eq-explicit-null-null | | | |
+| truthy-missing | 0 行 | 0 行 | MISSING → falsy ✅ |
+| truthy-explicit-null | 0 行 | 0 行 | null → falsy ✅ |
+| truthy-empty-string | 0 行 | 0 行 | `""` → falsy ✅ |
+| truthy-zero | 0 行 | 0 行 | `0` → falsy ✅ |
+| truthy-false | 0 行 | 0 行 | `false` → falsy ✅ |
+| truthy-empty-list | 0 行 | 0 行 | `[]` → falsy ✅ |
+| eq-missing-null | **全部 12 行** | 0 行 | ❌ 官方 `missing == null` 为 **true** |
+| eq-explicit-null-null | **全部 12 行** | 1 行（仅 CaseA） | ❌ 官方对**没有该属性**的行也判 true |
 
-### ② null 排序位置（CaseA sortable=null、CaseB=1、CaseC=2、CaseD 缺失）
+**结论**：truthiness 六形态与 x-basalt 完全一致，暂定口径可转正。但 equality 相反——官方把 MISSING 与 null **合并**，`X == null` 对缺失属性同样成立；x-basalt 区分二者（§1 记的「`missing == null` 为 false」确是当前实现，与官方不符）。
 
-| view | 官方行序（file.name 顺序） | 两次一致？ | 结论（null/missing 位置） |
+### 4.2 ② null 排序位置（CaseA=null、CaseB=1、CaseC=2、CaseD 缺失）
+
+| view | 官方行序 | x-basalt 行序 |
+| --- | --- | --- |
+| sort-asc | B(1) · C(2) · A(null) · D · E · F · 6×base | 同 ✅ |
+| sort-desc | **C(2) · B(1) · A(null)** · D · E · F · 6×base | **A(null) · D · E · F · 6×base · C(2) · B(1)** ❌ |
+
+**结论**：官方 null/missing **恒排最后，与方向无关**——这正是 §1 登记的 x-basalt 口径，但**实现没做到**：DESC 时 x-basalt 把 null/missing 排到了最前。属实现与自身登记口径的漂移，且官方站在登记口径那边。
+
+### 4.3 ③ if() lazy
+
+| view | 官方 | x-basalt | 结论 |
 | --- | --- | --- | --- |
-| sort-asc | | | |
-| sort-desc | | | |
+| if-lazy（`if(true,"ok",1 < "x") == "ok"`） | 12 行，errors 空 | 12 行 | lazy ✅ |
+| if-lazy-false-branch（`if(false,1 < "x","fallback") == "fallback"`） | 12 行，errors 空 | 12 行 | lazy ✅ |
 
-### ③ if() lazy
+**结论**：未选分支的确定性类型错误（`1 < "x"`）既没污染结果也没产生诊断 → **官方 lazy，与 x-basalt 一致**。
 
-| view | 官方结果/错误 | 两次一致？ | 结论（lazy? eager 污染形态） |
+### 4.4 ④ 空 filter 数组
+
+| view | 官方 | x-basalt | 结论 |
 | --- | --- | --- | --- |
-| if-lazy | | | |
-| if-lazy-false-branch | | | |
+| empty-and | **12 行（全部）** | 0 行 + `base/unsupported-feature` | ❌ 官方 `and: []` 恒 true |
+| empty-or | **0 行** | 0 行 + `base/unsupported-feature` | ⚠️ **巧合相同**：官方是恒 false，x-basalt 是报错返回空，成因不同 |
+| empty-not | **12 行（全部）** | 0 行 + `base/unsupported-feature` | ❌ 官方 `not: []` 恒 true |
 
-### ④ 空 filter 数组
+**结论**：官方按空集的布尔代数默认值处理（`and:[]`=真、`or:[]`=假、`not:[]`=真），全部稳定可重放，**没有 implementation-defined 的余地**。x-basalt 的「P1 拒绝」不成立。
 
-| view | 官方命中行数/错误 | 两次一致？ | 结论 |
+### 4.5 ⑤⑥ date/datetime 比较与 wikilink → Link（样本 CaseE）
+
+| view | 官方 | x-basalt | 结论 |
 | --- | --- | --- | --- |
-| empty-and | | | |
-| empty-or | | | |
-| empty-not | | | |
+| date-eq-literal | 1 行（CaseE） | 同 | ✅ |
+| date-lt-datetime | 0 行 | 同 | ✅ |
+| datetime-lt-date | 1 行（CaseE） | 同 | ✅ |
+| link-eq-wikilink | 1 行（CaseE） | 同 | ✅ |
+| link-projection | 12 行 | 同 | ✅ |
 
-### ⑤⑥ date/datetime 比较与 wikilink → Link（P2a 新增，样本 CaseE）
+**结论**：行集完全一致，⑤⑥ 暂定口径可转正（⑥ 本就与官方文档相符）。
 
-| view | 官方结果 | 两次一致？ | 结论 |
+### 4.6 ⑦ list 分组键扇出（CaseF：tags=[project,area]、scores=[1,2,3]）
+
+| view | 官方顶层 rows 顺序 | x-basalt |
+| --- | --- | --- |
+| group-by-tags | A·B·C·D·E·6×base·**F（最后）** | A·B·C·D·E·**F**·6×base（`file.path` 序） |
+| group-by-list-prop | **F（最前）**·A·B·C·D·E·6×base | 同上（`file.path` 序） |
+
+**结论**：两边都是 12 行（没有因扇出而重复计入顶层），但**官方顶层 rows 的顺序受分组键影响**，x-basalt 保持 `file.path` 稳定序。分组内容本身是否一致需比 `groups[]`，本轮只确证了顶层顺序分歧。
+
+### 4.7 ⑧ 自定义 summary 的 values 边界（`meanOfValues: values.mean()` 作用于 `sortable`）
+
+样本 `sortable`：CaseA=null、CaseB=1、CaseC=2，其余 9 行缺失。
+
+| view | 官方 | x-basalt | 结论 |
 | --- | --- | --- | --- |
-| date-eq-literal | | | |
-| date-lt-datetime | | | |
-| datetime-lt-date | | | |
-| link-eq-wikilink | | | |
-| link-projection | | | |
+| summary-custom（全量 12 行） | **0.25**（entries=12） | **1.5** | ❌ 0.25 = (1+2)/**12** → 官方把 null/missing **计入分母**；x-basalt 1.5 = mean(1,2) → 剔除 |
+| summary-custom-limited（limit 1） | **null**（entries=1） | **1.5** | ❌ 官方按 **limit 后**的行集汇总；x-basalt 按 limit 前全量 |
 
-### ⑦⑧ list 分组键与自定义 summary values（P2b 新增，样本 CaseF / CaseB/C）
+**结论**：x-basalt 口径⑧「剔除 null/missing、按 limit 前全量」**两条都与官方相反**。
 
-| view | 官方结果 | 两次一致？ | 结论 |
+### 4.8 ㉗ 默认数据集（原清单之外，本轮新发现）
+
+无 filter 的基线 view 官方返回 **13 行**（12 个 fixture 文件 + 临时探针），其中包含 `.base` 文件**自身**。x-basalt 默认 `bases-markdown-2026-07` 只把 `.md` 当行并恒发 `markdown-only-dataset` warning，需切 `bases-all-files-2026-07` 才对齐。
+
+**这条不在原 26 条暂定口径里**，但它是行集级别的差异，影响面比多数已登记条目都大。
+
+### 4.9 ⑨ 拼接语境（样本 CaseE：due="2026-07-27"、label="报告"）
+
+> **原读法已被推翻。** §4 旧版写的是「`concat-plain-string` 先验证官方 string+string 拼接可用，在此前提下再看 `concat-date-string`」——这个前提不成立。
+
+| view | 列表达式 | 官方 | x-basalt |
 | --- | --- | --- | --- |
-| group-by-tags | | | |
-| group-by-list-prop | | | |
-| summary-custom | | | |
-| summary-custom-limited | | | |
+| concat-plain-string | `label + " 备注"`（string + string） | **空**，无错误 | `"报告 备注"`（正常拼接） |
+| concat-date-string | `due + " 备注"`（date + string） | **空**，无错误 | `null` + `base/property-type-mismatch` |
 
-### ⑨ 拼接语境下的日期推断（2026-07-27 review 新增，样本 CaseE：due="2026-07-27"、label="报告"）
+官方把表达式**解析了**（`columnInfo` 键被规范化成 `note.label + " 备注"`），`entry.getByIdentifier("label")` 也确实取得到 `"报告"`——但 `+` 的求值结果为空。
 
-> 读法：`concat-plain-string` 先验证官方 string+string 拼接可用；在此前提下，
-> `concat-date-string` 出错 ⇒ 官方拼接语境**同样**做日期推断（x-basalt 暂定口径正确）；
-> 得到 `"2026-07-27 备注"` ⇒ 官方在拼接语境**抑制**推断，需按官方收窄 `upgradeStringOperand`。
+**结论**：问题不是「官方在拼接语境是否做日期推断」，而是**官方的 `+` 根本不做字符串拼接**。所以 x-basalt 的 string+string 拼接是**超集行为**（官方没有），date+string 则是两边都不产出拼接串、但**失败形态不同**（官方静默空、x-basalt 报行级类型错误）。
 
-| view | 官方结果 | 两次一致？ | 结论 |
+## 5. 校正待办（结论已出，实现尚未改动）
+
+> **本轮只做取证，一行实现都没改。** 下面是按 §4 结论**应该**做的事，逐条待排期——
+> 每条都要单独判断「跟官方」还是「落 documented boundary」，不存在无脑对齐。
+
+| # | 差异 | 落点 | 倾向 |
 | --- | --- | --- | --- |
-| concat-plain-string | | | |
-| concat-date-string | | | |
+| ① eq | MISSING 与 null 是否合并 | `src/base/values.ts`（equality） | **跟官方**：影响任何 `== null` / `!= null` 的 filter，静默改变行集，属最危险的一类 |
+| ② | DESC 时 null/missing 排到了最前 | `src/base/values.ts`（`sortKeyCompare`） | **按自己登记的口径修**——这条不是「跟不跟官方」，是实现与 §1 登记口径的漂移，官方恰好站在登记口径那边 |
+| ④ | 空 filter 数组当前是拒绝 | `src/base/planner.ts` | **跟官方**：`and:[]`=真 / `or:[]`=假 / `not:[]`=真，官方稳定可重放，「P1 拒绝」没有依据了 |
+| ⑦ | 分组时顶层 rows 顺序 | `src/base/engine.ts`（groupBy） | 待定：x-basalt 的 `file.path` 稳定序是**字节稳定契约**的一部分，跟官方会牺牲它 |
+| ⑧ | summary values 的两个维度 | `src/base/summaries.ts` | 待定：官方把 null/missing 计入分母（0.25 而非 1.5）反直觉，但那是官方 |
+| ⑨ | `+` 是否做字符串拼接 | `src/base/evaluator.ts`（`upgradeStringOperand`） | 倾向**保留超集**：官方 `+` 不拼接字符串，x-basalt 拼——砍掉是纯功能损失，宜落 documented boundary |
+| ㉗ | 默认数据集是否含 `.base` 自身 | `src/base/engine.ts`（conformance 默认值） | 待定：改默认值是 breaking，也可能只需在文档里讲清两个 conformance 的取舍 |
 
-## 5. 校正工作流（拿到结论后）
+配套动作（改哪条做哪条，不要一次性全改）：
 
-1. 定位需改写的锁定测试（全部带「待 oracle」标注）：
-   - `rg -n "oracle" tests/base-evaluator.test.ts tests/base-engine.test.ts`
-   - 语义实现落点：`src/base/values.ts`（truthiness/equality/sortKeyCompare）、`src/base/evaluator.ts`（if lazy、`upgradeStringOperand` 拼接语境推断）、`src/base/planner.ts`（空数组拒绝）。
-2. 按官方结论改写实现与测试，**删除对应「待 oracle」标注**，状态文档 [`2026-07-26-bases-implementation-status.md`](bases-status.md) §3 对应行翻 ✅。
-3. 若某 view 两次结果不一致 → 该语义标 `implementation-defined`：x-basalt 维持暂定口径并注释「官方不稳定」，测试只锁定 x-basalt 自一致性。
-4. 原始 JSON/stderr/版本/hash 随校正提交一并留存（放 `docs/history/oracle/` 新建日期目录）。
+1. 定位对应的锁定测试：`rg -n "oracle" tests/base-evaluator.test.ts tests/base-engine.test.ts`，改写后**删除该条的「待 oracle」标注**。
+2. 状态文档 [`bases-status.md`](bases-status.md) §3 / §6 对应行同步。
+3. 决定「不跟官方」的，必须在 [`bases-vs-official.md`](bases-vs-official.md) 落 documented boundary，写清**为什么**不跟——不能只留一句「有意差异」。
+
+**⑩..㉖ 这 17 条仍无 fixture view**（见 §1.1 / §1.2）。取证既然已经脚本化，补 view 的成本就是唯一门槛了，兑现成本近零。
 
 ## 6. 红线
 
 - 原始 App 输出**不是** x-basalt 公共 API；结论必须人工审查后才转期望快照。
-- oracle 跑不通（官方 CLI 拉起失败/输出不稳定）时，不猜测补齐——维持暂定口径，状态文档保持 ⏸。
+- 某 view 两次结果不一致 → 标 `implementation-defined`：维持 x-basalt 口径并注释「官方不稳定」，测试只锁自一致性。（本轮 26 个 view 无一触发。）
+- 取证跑不通时不猜测补齐——维持暂定口径，状态文档保持 ⏸。
+- **行数相同 ≠ 口径一致**：`empty-or` 两边都是 0 行，但官方是逻辑恒假、x-basalt 是报错返回空。判定前先看诊断与列值。

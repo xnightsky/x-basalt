@@ -22,7 +22,7 @@ sha256: 0cd80053b57707074a7d616feecdcf1de84478f1cedc7718f5af8001f90de60a
 | ---- | ---- | ---- |
 | P0 | document / schema / diagnostic | ✅ 2026-07-26（[计划](../history/plans/2026-07-26-bases-p0-document-schema.md)） |
 | P1 | Markdown query vertical slice（独立 AST/evaluator） | ✅ 2026-07-26（[计划](../history/plans/2026-07-26-bases-p1-markdown-query.md)） |
-| P1 oracle | 官方串行差分（争议语义冻结） | ⏸ 2026-07-28 暂缓（触发条件见 [runbook §0](bases-oracle-runbook.md)：官方出规范 / 出无 GUI 查询入口 / dogfood 出现口径导致的错误结果） |
+| P1 oracle | 官方差分（争议语义冻结） | ✅ 2026-07-28 **取证完成**（Obsidian 1.12.7，26 view 全部两次一致，19 一致 / 7 分歧）；**校正未动手**，待办见 [runbook §5](bases-oracle-runbook.md)。同日上午的「⏸ 暂缓」决策已被推翻，理由见 runbook §0.1 |
 | P2a | formulas 核心（typed values + 算术 + 依赖图/cycle + clock） | ✅ 2026-07-27（[计划](../history/plans/2026-07-27-bases-p2a-formulas.md)） |
 | P2b | types.json / list 高阶 / groupBy / summaries | ✅ 2026-07-27（[计划](../history/plans/2026-07-27-bases-p2b-types-list-group-summary.md)） |
 | P3 | all-files / context / 嵌入 | 🔀 P3a 附件数据集 ✅ 2026-07-27（[计划](../history/plans/2026-07-27-bases-p3-attachments.md)）；context ✅ 2026-07-28（覆盖率片六 CTX-001）；嵌入形态 ❌ 不做 + 诊断（CTX-002/003） |
@@ -79,22 +79,28 @@ sha256: 0cd80053b57707074a7d616feecdcf1de84478f1cedc7718f5af8001f90de60a
 | 1/100/10,000 篇基准（只记录不承诺） | 矩阵 §9 P1 门 | ✅ 2026-07-26（query 11ms/4ms/68ms，数值见计划「验证结论」，无需 SQL 下推） |
 | CLI 薄出口（`base` 命令）+ guides 补 Bases 章节 | 设计 §15（API 先于 CLI） | ✅ 2026-07-27（[计划](../history/plans/2026-07-27-bases-cli-export.md)；`x-basalt base` + `guides/querying-bases.md`，tests/base-cli.test.ts 7 用例） |
 
-## 3. P1 前置 oracle（用户侧人工串行）⏸
+## 3. P1 前置 oracle ✅ 取证完成 / ⏳ 校正未动手
 
-> **2026-07-28：oracle 整体 ⏸ 暂缓，不再排期。** 理由与解冻触发条件见 [oracle runbook §0](bases-oracle-runbook.md)（官方文档不覆盖这些语义、官方 Bases API 不暴露求值引擎故无法绕开 GUI、官方仍在快速加语义故此刻冻结易被作废）。
-> 下表各行的 🔜 一律读作「口径已落地并自锁，校正无限期挂起」，**不表示近期会做**。
-> 2026-07-26 起口径变化：P1 已按**暂定口径**落地（代码注释与测试均标「待 oracle」），oracle 从「阻塞 P1」转为「校正 P1 暂定口径」；空 filter 数组在 P1 直接拒绝（`base/unsupported-feature`）。
+> **2026-07-28：26 个 view 全部取证完毕**（Obsidian 1.12.7，每个 view 连跑两次全部一致，无 `implementation-defined`）。
+> 同日上午曾判「⏸ 整体暂缓、不再排期」，当天下午被推翻——官方 CLI 的 `eval` 能读到 Bases 算好的行集，
+> 取证可脚本化、不需要人逐个点。误判复盘见 [runbook §0.1](bases-oracle-runbook.md)。
+> **下表状态是「官方结论已知，但实现一行未改」**——⏳ 表示待校正，逐条取舍见 [runbook §5](bases-oracle-runbook.md)。
 
-| 争议语义 | 场景编号 | 状态 |
-| ---- | ---- | ---- |
-| missing/null/空串/0/false/空列表 值与 truthiness | BASE-PROP-004 | 🔜 校正 P1 暂定口径（falsy=MISSING/null/false/0/""/空列表） |
-| 多键 sort 的 null 位置 | BASE-RESULT-002 | 🔜 校正 P1 暂定口径（null/missing 恒排最后，与方向无关） |
-| 空 filter 数组（and:[]/or:[]/not:[]） | 设计 §6 | 🔜 P1 拒绝空数组；oracle 稳定后再放开 |
-| `if()` lazy branch | 设计 §9 | 🔜 校正 P1 暂定 lazy 实现 |
-| 二元运算操作数的字符串→日期推断是否作用于 `+`（拼接语境） | 语法 §5.1 / 设计 §8.3 | 🔜 校正 P2a 暂定口径（`upgradeStringOperand` 对全部非短路二元运算生效，故 `"2026-01-01" + " 备注"` 报类型错误而非拼接；2026-07-27 code review 登记，runbook 观察项 ⑨） |
+| 争议语义 | 场景编号 | 官方结论 | 状态 |
+| ---- | ---- | ---- | ---- |
+| missing/null/空串/0/false/空列表 truthiness | BASE-PROP-004 | 六形态全 falsy，**与实现一致** | ✅ 可转正 |
+| `X == null` 与 MISSING 是否合并 | BASE-PROP-004 | **合并**（`missing == null` 为 true） | ⏳ 分歧待校正 |
+| 多键 sort 的 null 位置 | BASE-RESULT-002 | 恒排最后，与方向无关 | ⏳ **实现漂移**：DESC 时排到了最前，与本仓登记口径也不符 |
+| 空 filter 数组（and:[]/or:[]/not:[]） | 设计 §6 | `and:[]`=真 / `or:[]`=假 / `not:[]`=真 | ⏳ 分歧待校正（当前是拒绝） |
+| `if()` lazy branch | 设计 §9 | lazy，**与实现一致** | ✅ 可转正 |
+| 二元运算的字符串→日期推断是否作用于 `+` | 语法 §5.1 / 设计 §8.3 | **原命题不成立**：官方 `+` 根本不拼接字符串，string+string 也得空 | ⏳ 倾向保留超集 + 落 boundary |
+| 自定义 summary 的 `values` 边界 | BASE-SUM-002 | **含** null/missing（计入分母）、按 **limit 后** | ⏳ 两维度都与实现相反 |
+| list 分组键扇出的顶层行序 | BASE-GROUP-002 | 顶层 rows 顺序随分组键变动 | ⏳ 与字节稳定契约冲突，待取舍 |
+| **默认数据集是否含 `.base` 自身** | BASE-DATA-001/002 | **含**（`.base` 文件自身也是行） | ⏳ 本轮新发现，原不在清单 |
 
-> oracle 协议见矩阵 §8：固定版本、无插件 fixture vault、预启动 App、串行 `base:query`、存原始 JSON + hash，人工审查后转期望快照。
-> **操作手册（fixture + 26 个 view 串行步骤 + 观察记录表 + 校正工作流）：[`2026-07-27-bases-oracle-runbook.md`](bases-oracle-runbook.md)**；校正清单 `rg -n "oracle" tests/base-evaluator.test.ts tests/base-engine.test.ts`。
+> 取证方式与三个会静默出错的坑见 [runbook §0.2](bases-oracle-runbook.md)。原始观察数据由取证侧留档（不入本仓：机器生成、体量大，且与 §4 的人读结论重复存放必然漂移）。
+> **⑩..㉖ 共 17 条仍无 fixture view**（见 runbook §1.1 / §1.2）——取证已脚本化，补 view 是唯一门槛。
+> 校正清单 `rg -n "oracle" tests/base-evaluator.test.ts tests/base-engine.test.ts`。
 
 ## 4. P2 typed formulas / group / summary（P2a ✅ / P2b ✅ 2026-07-27）
 

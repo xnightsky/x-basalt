@@ -181,6 +181,12 @@ Windows 上 `obsidian` 解析到安装目录的 `Obsidian.com`（控制台桩）
 
 坑五最致命：**它意味着官方 CLI 的 base 查询不是一个函数，而是一次对 UI 状态的采样。** 同样的输入不保证同样的输出——这对"当自动化 oracle 用"是个硬伤，跑差分时必须逐条人工确认拿到了非空结果，不能信任批处理的退出码。
 
+> **2026-07-28 补充：坑五的结论要收窄。** 上面五个坑说的都是 `base:query` **这个命令**，它们仍然成立（实测它连无 filter 的基线 view 都返回空、退出码 0）。但「官方 Bases 不可自动化取证」这个更强的推论**不成立**——绕开该命令，用 `obsidian eval` 直接读 Bases 内部对象（`controller.selectView` 切 view、`controller.view.rows` 取算好的行集），26 个 view 连跑两次**全部一致**，没有一条触发 `implementation-defined`。
+>
+> 所谓"不可重复"其实是**读得太早**：`selectView` 一调用 `viewName` 就变了，但 `view.rows` 要等异步重算——不等收敛就读，会拿到上一个 view 的行集，看起来就像"结果随机"。用「rows 连续两轮不变」当判据后，重复性问题消失。
+>
+> 修正后的表述：**绕不开 Obsidian App 进程（不是无头），但绕得开人。** 详见 [oracle runbook §0](bases-oracle-runbook.md)。下面 §1.6 的结论（官方 CLI 进 oracle、不进运行时依赖）不变——变的只是"进 oracle"这件事的成本，从"人工逐个点"降到"一条脚本"。
+
 ### 1.6 所以官方 CLI 该被用在哪
 
 ```mermaid
@@ -397,12 +403,15 @@ flowchart LR
 
 材料全部就位：fixture 在 `tests/fixtures/bases/oracle/`，操作手册在 [oracle runbook](bases-oracle-runbook.md)。
 
-**一条需要修正的判断**：TODO 里写着 oracle「需要人工串行跑、**AI 侧做不了**」。这句话在官方 CLI 出现前成立，现在只对了一半——
+**一条需要修正的判断**：TODO 里曾写着 oracle「需要人工串行跑、**AI 侧做不了**」。这句话在官方 CLI 出现前成立，之后就不成立了。
 
-- ✅ **能自动化的部分**：`obsidian base:query format=json` 可以从脚本调用，输出可直接 diff（`x-basalt-evals/parity/ob-cli-truth.mjs` 已经在用同样方式取官方读数）。
-- ❌ **仍然自动化不了的部分**：坑四要求每个 base 先 `obsidian open`；坑五意味着**同一命令重放可能返回空**。所以差分脚本必须逐条校验"这次真的拿到非空结果"，拿不到就重试或转人工——不能信任批量退出码。
+**2026-07-28 实测结论**（26 个 view 全跑完，每个连跑两次全部一致）：
 
-**准确的说法**：oracle 是**半自动**的——脚本负责跑和比对，人负责盯住空结果。比"纯人工点 22 个 view"省事得多，但不是无人值守。
+- ✅ **可以全自动**：但不是靠 `base:query`（它吐不出结果），而是靠 `obsidian eval` 直接读 Bases 内部对象——`controller.selectView()` 切 view、`controller.view.rows` 取算好的行集。坑四（要先 `open`）、坑五（重放返回空）都是 `base:query` 这条路的问题，走 `eval` 不受影响。
+- ⚠️ **唯一的人工**：首次要在 Obsidian 里打开一次 fixture vault。用 URI 自动切库在 Windows 上不稳（会弹 "Vault not found"），换成一次点击反而让整体可重跑。
+- ❌ **仍然做不到**：无头。Obsidian App 进程必须在跑，所以 CI / 服务器 / 容器里这条路依然不存在——这不影响 §1.6 的结论。
+
+**准确的说法**：oracle **绕不开 Obsidian App 进程，但绕得开人**。26 个 view 从"攒一次人工"变成一条脚本几分钟，且可随 Obsidian 升级重跑做回归。详见 [oracle runbook](bases-oracle-runbook.md)。
 
 ---
 

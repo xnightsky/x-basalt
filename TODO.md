@@ -15,18 +15,20 @@
 
 定位：实现真正无 GUI、无 Obsidian 运行时的 `.base` 查询库层；官方 `base:query` 只作串行语义 oracle，不进入运行时依赖。首期明确为 **Bases Markdown conformance 2026-07**，不冒充 all-files 完整兼容。
 
-> **下一步（2026-07-28 收口后）**：P0/P1/P2a/P2b/P3a、review 修复、**函数覆盖率六片**全部落地，四门（typecheck / lint / format / test **889**）皆绿。功能面已无明显缺口。**唯一未收口的是 26 条暂定口径没与官方比对过**（逐条见[实现状态追踪](./docs/design/bases-status.md) §6 与 [runbook](./docs/design/bases-oracle-runbook.md) §1）。**2026-07-28 起 oracle 整体 ⏸ 暂缓**：官方不提供无 GUI 的取证路径，且 Bases 仍在快速演进，此刻冻结易被作废——依据与解冻触发条件见 runbook §0。
+> **下一步（2026-07-28 收口后）**：P0/P1/P2a/P2b/P3a、review 修复、**函数覆盖率六片**全部落地，四门（typecheck / lint / format / test **889**）皆绿。功能面已无明显缺口。
+>
+> **2026-07-28 下午：oracle 取证完成，①..⑨ 不再是「没与官方比对过」。** 26 个 view 全部跑完（Obsidian 1.12.7，两次一致），**19 一致 / 7 分歧**。同日上午的「整体暂缓」决策当天被推翻——取证可脚本化，绕不开 App 但绕得开人。**现在的缺口从「不知道官方怎么算」变成了「知道了但还没改」**：7 条分歧一行实现未动，逐条取舍见 [runbook §5](./docs/design/bases-oracle-runbook.md)；⑩..㉖ 共 17 条仍缺 fixture view。
 
 - [x] **P0 · document/schema/diagnostic**：`.base` YAML + view 选择 + filter 结构校验 + expression source span；先完成 `BASE-DOC-001..009`。计划：[`docs/plans/2026-07-26-bases-p0-document-schema.md`](./docs/history/plans/2026-07-26-bases-p0-document-schema.md)（2026-07-26 落地，含 SEC-007/008）
 - [x] **P1 · Markdown query vertical slice**：独立 Bases AST/evaluator，支持 global+view filters、note/file properties、常用 file/string/list 方法、order/sort/limit 与稳定 JSON；不复用 DQL AST，不用 `eval`。计划：[`docs/plans/2026-07-26-bases-p1-markdown-query.md`](./docs/history/plans/2026-07-26-bases-p1-markdown-query.md)（2026-07-26 落地，含 SEC-001/002/003/009 与字节稳定；oracle 冻结项为暂定口径）
 - [x] **P1 收口 · CLI 薄出口 + guides**：`x-basalt base` 命令（JSON 契约、error 诊断 exit 1）+ `guides/querying-bases.md`。计划：[`docs/plans/2026-07-27-bases-cli-export.md`](./docs/history/plans/2026-07-27-bases-cli-export.md)（2026-07-27 落地）
-- [ ] **⏸ P1 oracle · 串行差分（2026-07-28 暂缓，不再排期）**：固定官方版本，冻结争议语义；禁止并发拉起 GUI。
-  - **为什么暂缓**：官方文档对八类争议只覆盖一类（wikilink→Link）；官方 Bases API 只暴露渲染与算好的结果，求值引擎不对外，绕不开 GUI；Bases 自 1.9.2 起仍在快速加语义（1.10 加 groupBy/summaries/首版 API，1.10.3 补 reduce/mean/stddev/median/html，1.12.4/1.13.0 仍在改行为与 API），此刻人工跑 26 个 view 冻结的强结论易被下个版本作废。三条依据与**解冻触发条件**见 [runbook §0](./docs/design/bases-oracle-runbook.md)。
-  - **口径条数已修正为 26 条**（原记 9 条）：①..⑨ 有 fixture；⑩..㉓ 为函数覆盖率批次新增；㉔..㉖ 为 2026-07-28 调研补登记（Median 偶数取均值 / Stddev 用总体标准差 / duration 的 month=30d·year=365d 作用于全部算术）。**⑩..㉖ 共 17 条无 fixture view。**
-  - **暂缓不等于没风险**：这些口径实现能跑、测试也锁着，但锁的是**自一致性**而非**与官方一致**。影响面按失败形态分三类：静默改变行集/数字的（truthiness、null 排序位、分组扇出、summary 范围、Median/Stddev、duration 换算）最需警惕；显式报错的（空 filter、拼接日期推断、ReDoS 拒绝）会当场炸不会带病往下走；呈现层的（`title`/`reverse`/`relative` 文案）基本无影响。
-  - **准备度**：runbook 已就绪，26 个 view + 观察记录表 + 校正工作流全部写好 → [`bases-oracle-runbook.md`](./docs/design/bases-oracle-runbook.md)；fixture 在 `tests/fixtures/bases/oracle/`。
-  - **卡点**：需要装了 Obsidian App 的机器人工串行跑一遍，**AI 侧做不了**，须用户触发。解冻后建议**定点跑**（一条口径一个 view），不必全量 26 个。
-  - 清单与逐项暂定口径见[实现状态追踪](./docs/design/bases-status.md) §3 / §4 / §6 与 [runbook](./docs/design/bases-oracle-runbook.md) §1/§1.1/§1.2；跑完按 runbook §5 校正工作流回填。
+- [x] **P1 oracle · 官方差分取证（2026-07-28 完成）**：26 个 view 全部跑完，Obsidian 1.12.7，每个 view 连跑两次全部一致（无 `implementation-defined`）。**19 一致 / 7 分歧**，结论见 [runbook §4](./docs/design/bases-oracle-runbook.md)。原始观察数据由取证侧留档，不入本仓。
+  - **同日上午的「⏸ 整体暂缓」决策已被推翻**。当时的三条依据里两条不成立：「官方 API 只暴露算好的结果」恰恰是充分条件（oracle 要的就是「官方算出什么行」，不需要求值引擎内部）；「仍在演进故冻结易作废」被消解（取证是脚本，升级后重跑即可）。准确表述是**绕不开 Obsidian App 进程，但绕得开人**——原判断把「需要 App」误推成「需要人逐个点」，成本估计差了一个数量级。复盘见 [runbook §0.1](./docs/design/bases-oracle-runbook.md)。
+  - **取证路径**：官方 CLI 的 `eval` 读 Bases 内部对象（`controller.selectView` 切 view、`controller.view.rows` 取最终行集、`footerSummary` 取汇总）。官方那个 `base:query` 命令**吐不出结果**，不能用。三个会静默产出错误数据的坑见 [runbook §0.2](./docs/design/bases-oracle-runbook.md)。
+- [ ] **oracle 校正 · 7 条分歧待逐条取舍（实现一行未改）**：不是无脑对齐——每条都要判「跟官方」还是「落 documented boundary」。清单与倾向见 [runbook §5](./docs/design/bases-oracle-runbook.md)。
+  - **最该先动的两条**（都静默改变行集）：① 官方把 **MISSING 与 null 合并**（`missing == null` 为 true），影响任何 `== null` 的 filter；② **sort DESC 时 null/missing 排到了最前**，而本仓登记口径写的是「恒排最后」——这条不是跟不跟官方，是**实现与自己的文档漂移**，官方恰好站在登记口径那边。
+  - 另外五条：空 filter 数组（官方 `and:[]`=真/`or:[]`=假/`not:[]`=真，当前是拒绝）、summary `values` 边界（官方含 null/missing 且按 limit 后，两维度都相反）、分组顶层行序（与字节稳定契约冲突）、`+` 不拼接字符串（x-basalt 是超集，倾向保留）、**默认数据集是否含 `.base` 自身**（本轮新发现，原 26 条之外）。
+  - **⑩..㉖ 共 17 条仍无 fixture view**。取证已脚本化，补 view 是唯一门槛，兑现成本近零。
 - [ ] **P2 · typed formulas/group/summary**：Property 类型、Date/Link/File/List、公式依赖图与循环、高阶列表、groupBy/summaries；以真实需求逐项开计划。
   - [x] **P2a · formulas 核心**（typed values + 算术 + 依赖图/cycle + clock，BASE-FORM-001..006/SEC-006）：[`docs/plans/2026-07-27-bases-p2a-formulas.md`](./docs/history/plans/2026-07-27-bases-p2a-formulas.md)（2026-07-27 落地）
   - [x] **P2b · types.json / list 高阶 / groupBy / summaries**（BASE-TYPE-001..003、LIST-001、GROUP-001、SUM-001/002；TYPE-004 与 GROUP-002 待 oracle）计划：[`docs/plans/2026-07-27-bases-p2b-types-list-group-summary.md`](./docs/history/plans/2026-07-27-bases-p2b-types-list-group-summary.md)（2026-07-27 落地）
@@ -37,7 +39,7 @@
 
 - [x] **函数覆盖率补齐（六片全部落地，2026-07-28）**：注册表条目 **35 → 68**（63 条可执行 + 5 条白名单内显式拒绝）。①机械叶子 16 个 + 渲染类/`random` 拒绝 + `round` 归 number 组 → ②date/duration 构造 + date 方法组 → ③file/link 互转 + 行集解析器（含 `file(...)` 文法增量）→ ④`matches` + 三层 ReDoS 防护 → ⑤GROUP-002 扇出 + 组级汇总 → ⑥显式 `contextFile` 驱动 `this.*`（CTX-002/003 判不做 + 入口形态诊断）。四门全绿（test 880）。计划：[`docs/history/plans/2026-07-28-bases-functions.md`](./docs/history/plans/2026-07-28-bases-functions.md)
 
-**暂缓**：内置 chat 打磨、DQL 函数全集、task emoji 全字段、lint CI/baseline、embedding、复杂编排器。它们不能优先于 **Bases oracle**（原文写「P0/P1」，两者均已完成，优先级基准顺延至 oracle），除非 dogfood 出现阻断性缺陷。
+**暂缓**：内置 chat 打磨、DQL 函数全集、task emoji 全字段、lint CI/baseline、embedding、复杂编排器。原本的优先级基准是「不能优先于 Bases oracle」；**oracle 取证已于 2026-07-28 完成，基准顺延至 oracle 校正**（上面那条未打勾的 7 条分歧）。除非 dogfood 出现阻断性缺陷。
 
 **实现前停点（已通过，留档）**：原定「若 P1 场景超过三分之一依赖附件 / 动态 UI `this` / 不可稳定观测的闭源语义，则退回 `.base` lint/inspect」。实际结论：P1 全部场景在 Markdown-only 口径下可实现且可测，未触发退回；附件与 `this` 划入 P3，争议语义走 oracle 校正而非猜测补齐。
 
