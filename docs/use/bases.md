@@ -689,7 +689,9 @@ frontmatter 里整串恰为一个 wikilink 的字符串（`"[[目标]]"` / `"[[�
 
 **真值（truthiness）**：假 = missing / `null` / `false` / `0` / `""` / 空列表；其余为真（含空对象、非空列表）。
 
-**missing 与 null 是两回事**：属性不存在是 missing，写了 `key:` 是显式 null。`missing == null` 为 **false**；`file.hasProperty()` 只看 key 存在性；missing **投影输出时**才塌成 `null`。
+**missing 与 null 在相等语义上是一回事**（对齐官方，2026-07-28 oracle 冻结）：属性不存在是 missing，写了 `key:` 是显式 null，但 `missing == null` 为 **true**——`status == null` 会同时命中「写了 `status:` 空值」和「根本没有 status 属性」两种笔记。要**只判键是否存在**用 `file.hasProperty("status")`；`isType("null")` 仍只对显式 null 为真。missing **投影输出时**塌成 `null`。
+
+> ⚠️ 这与 DQL 侧的 `WHERE field = null` **不是一回事**——那边测的是键是否存在（`0` / 空串算「有」）。两套语法两套语义，别互相套用。
 
 **相等**：同类型按值，**数字不与数字字符串相等**（`1 == "1"` 为 false）；list 按元素递归；object 按 own key 递归；date/datetime 按 epoch；duration 按毫秒；link 按路径+锚点；file 按 path。
 
@@ -812,7 +814,7 @@ x-basalt base views/projects.base --conformance bases-all-files-2026-07 --vault 
 ### 6.3 oracle 暂定口径
 
 **已由官方 oracle 冻结**（2026-07-28，Obsidian 1.12.7 实测，不再是暂定）：
-missing/null/空串/0/false/空列表的 truthiness（六形态全假，与实现一致）；`if()` lazy branch（惰性，与实现一致）；
+missing/null/空串/0/false/空列表的 truthiness（六形态全假，与实现一致）；`if()` lazy branch（惰性，与实现一致）；equality 上 **MISSING 与 null 合并**（`missing == null` 为真，已按官方校正）；
 多键 sort 的 null 排序位置（**恒排最后、与 ASC/DESC 无关**——同日修掉了 DESC 下排到最前的实现漂移）。
 
 以下实现已落地，语义仍待官方串行 oracle 校正，校正后可能调整：

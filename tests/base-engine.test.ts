@@ -262,6 +262,26 @@ test("BASE-PROP-005: file.properties 返回 frontmatter 对象", () => {
   assert.doesNotThrow(() => JSON.stringify(obj));
 });
 
+// BASE-PROP-004（oracle runbook ① · §4.1，Obsidian 1.12.7 实测冻结）：
+// `X == null` 的**行集**——MISSING 与 null 合并后，缺失属性的行也命中。
+// 这条是行集级差异（静默多/少行），故除 evaluator 单测外再锁一层端到端。
+test("BASE-PROP-004(oracle ①): status == null 同时命中显式 null 与属性缺失的行", () => {
+  const eq = query("props.base", "eq-null");
+  assert.deepEqual(errorsOf(eq), []);
+  assert.deepEqual(
+    eq.rows.map((row) => row["file.path"]),
+    ["Empty.md", "NullProps.md"], // Empty=属性缺失、NullProps=显式 null，二者都命中
+  );
+
+  // `!=` 是 `==` 的取反：两个 view 必须恰好互补，不重不漏。
+  const ne = query("props.base", "ne-null");
+  assert.deepEqual(errorsOf(ne), []);
+  assert.deepEqual(
+    ne.rows.map((row) => row["file.path"]),
+    ["Alpha.md", "Beta.md", "Projects/Gamma.md", "Projects/Sub/Delta.md", "Projects2/Epsilon.md"],
+  );
+});
+
 // ---------- BASE-FILE：file 字段与方法 ----------
 
 // BASE-FILE-001：path/name/basename/folder/ext/size/ctime/mtime 类型与值正确

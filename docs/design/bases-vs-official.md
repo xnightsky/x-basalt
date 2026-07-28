@@ -350,11 +350,14 @@ truthy-empty-string   -> 0 行   []
 truthy-zero           -> 0 行   []
 truthy-false          -> 0 行   []
 truthy-empty-list     -> 0 行   []
-eq-missing-null       -> 0 行   []           ← missing == null 判否
-eq-explicit-null-null -> 1 行   [CaseA.md]   ← 显式 null == null 判真
+eq-missing-null       -> 0 行   []           ← 校正前：missing == null 判否
+eq-explicit-null-null -> 1 行   [CaseA.md]   ← 校正前：只有显式 null 的那行判真
 ```
 
-读出来的口径：`missing`（属性根本不存在）和 `null`（写了 `x: null`）**是两回事**。六种 falsy 形态（missing / null / `""` / `0` / `false` / `[]`）都判假。
+六种 falsy 形态（missing / null / `""` / `0` / `false` / `[]`）都判假——这六条经 oracle 确认与官方一致，已冻结。
+
+后两行是**校正前**的读数：那时 `missing`（属性根本不存在）和 `null`（写了 `x: null`）在相等语义上是两回事。
+oracle 判官方相反（两个 view 都命中全部 12 行），2026-07-28 已跟官方合并，现在两个 view 都是全量命中（取舍见 §5.1）。
 
 性能（1 / 100 / 10,000 篇笔记）：11ms / 4ms / 68ms。万篇级不需要把过滤下推到 SQL。
 
@@ -364,7 +367,7 @@ eq-explicit-null-null -> 1 行   [CaseA.md]   ← 显式 null == null 判真
 
 | # | 争议点 | x-basalt 暂定口径 |
 |---|---|---|
-| ① | missing / null / `""` / `0` / `false` / `[]` 的真假 | 全部为假；missing ≠ null |
+| ① | missing / null / `""` / `0` / `false` / `[]` 的真假 | 全部为假（✅ 冻结）；~~missing ≠ null~~ → ✅ 2026-07-28 跟官方**合并** |
 | ② | 多键 sort 里 null 排哪 | **见下方警告** |
 | ③ | 空 filter 数组 `and: []` | 直接拒绝，报 unsupported |
 | ④ | `if()` 是否惰性求值 | 惰性 |
@@ -432,7 +435,51 @@ obsidian base:query format=json                  # 查当前 base
 
 ---
 
-## 5. 外部信源
+## 5. oracle 校正账本：逐条「跟官方 / 不跟官方」及理由
+
+> 取证结论在 [oracle runbook §4](bases-oracle-runbook.md)，这里只记**取舍**——每条为什么跟、
+> 为什么不跟。**不接受「有意差异」这种无理由的记法**：不跟官方的，必须在这里写清代价与依据，
+> 它就是 documented boundary 本身。
+
+| # | 分歧 | 取舍 | 理由 |
+| --- | --- | --- | --- |
+| ① eq | 官方把 MISSING 与 null 合并（`missing == null` 为真），本仓原先区分 | **跟官方** ✅ 2026-07-28 | 见 §5.1 |
+| ② | DESC 时空值排到了最前 | **当 bug 修** ✅ 2026-07-28 | 不是选择题：本仓登记口径与官方同为「恒排最后、与方向无关」，实现漂移。见 §3.3 的警告框 |
+| ④ | 空 filter 数组当前报 unsupported | 待落地 | — |
+| ⑦ | 分组时顶层 rows 顺序 | 待决策（第二批） | — |
+| ⑧ | summary `values` 的空值与 limit 两个维度 | 待决策（第二批） | — |
+| ⑨ | 官方 `+` 不做字符串拼接 | 待决策（第二批） | — |
+| ㉗ | 默认数据集是否含 `.base` 自身 | 待决策（第二批） | — |
+
+### 5.1 ① equality：MISSING 与 null 合并（跟官方）
+
+**官方读数**：`eq-missing-null`（`missing == null`）与 `eq-explicit-null-null` 两个 view 都命中**全部 12 行**——
+即「属性根本不存在」的行，`X == null` 同样判真。本仓原先区分二者，`missing == null` 判假。
+
+**为什么跟**：这是七条分歧里**唯一会静默改变行集且没有任何提示**的一类。写 `status != null`
+想筛「填了 status 的笔记」，在旧行为下会把**没有 status 属性**的笔记也算进来——多出来的行不报错、
+不发诊断，只是数字不对。既然官方是裁判、且这条读数稳定可重放（连跑两次一致），没有保留的理由。
+
+**推论范围（本仓自己的决定，不是官方读数）**：官方观察覆盖的是 `==` 运算符，本仓把合并落在
+`typedEqual`——值域**唯一**的相等语义，于是分组分桶、`unique()`、`contains()`、Unique 汇总一并生效。
+理由：官方引擎只有一套相等语义，为「只让 `==` 合并、其余仍区分」再造第二套相等，是比合并更大的、
+无证据的发明；且 MISSING 与 null 序列化后同为 `null`，分组时区分二者只会产出两个 key 都是 `null`
+的组，读出方无从分辨——合并顺带消掉了这个歧义。
+
+**有意不跟随的一处**：`isType("null")` 仍只对**显式 null** 为真，`missing.isType("null")` 为假。
+`isType` 问的是「这个值是什么类型」而非「它是不是空」，官方观察没有覆盖它，不外推。判空用
+`x == null` 或 `isEmpty()`。
+
+**没被牺牲的能力**：区分 missing 与 null 的入口仍在——`file.hasProperty(name)` 只看 key 是否存在，
+不受值是不是 null 影响。合并的是**相等语义**，不是**信息**。
+
+**与 DQL 侧的关系**：无关，且有意不同。DQL 的 `WHERE field = null` 测的是**键是否存在**
+（把 `0` / 空串视为「有」，见 `core.json5`），两边是两套语义、两套实现文件（`src/query/` vs `src/base/`），
+本次改动不触及 DQL 一行。
+
+---
+
+## 6. 外部信源
 
 - [Obsidian Bases 官方文档](https://obsidian.md/help/bases) —— Bases 本体、views/filters/formulas/functions/语法
 - [Obsidian CLI 官方页](https://obsidian.md/cli) —— 架构说明（"the Obsidian app must be running"）、命令总览

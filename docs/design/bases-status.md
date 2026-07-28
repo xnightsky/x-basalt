@@ -89,7 +89,7 @@ sha256: 0cd80053b57707074a7d616feecdcf1de84478f1cedc7718f5af8001f90de60a
 | 争议语义 | 场景编号 | 官方结论 | 状态 |
 | ---- | ---- | ---- | ---- |
 | missing/null/空串/0/false/空列表 truthiness | BASE-PROP-004 | 六形态全 falsy，**与实现一致** | ✅ 可转正 |
-| `X == null` 与 MISSING 是否合并 | BASE-PROP-004 | **合并**（`missing == null` 为 true） | ⏳ 分歧待校正 |
+| `X == null` 与 MISSING 是否合并 | BASE-PROP-004 | **合并**（`missing == null` 为 true） | ✅ 2026-07-28 已校正（跟官方；合并落在 `typedEqual`，分组/`unique`/`contains` 一并生效，`isType("null")` 有意不跟随；取舍见 [vs-official §5.1](bases-vs-official.md)） |
 | 多键 sort 的 null 位置 | BASE-RESULT-002 | 恒排最后，与方向无关 | ✅ 2026-07-28 已校正（当 bug 修：`sortKeyCompareDirected` 让方向只作用于可比值，空值组恒最后；回归用例 `base-engine.test.ts` / `base-values-date.test.ts` 标 oracle ②） |
 | 空 filter 数组（and:[]/or:[]/not:[]） | 设计 §6 | `and:[]`=真 / `or:[]`=假 / `not:[]`=真 | ⏳ 分歧待校正（当前是拒绝） |
 | `if()` lazy branch | 设计 §9 | lazy，**与实现一致** | ✅ 可转正 |

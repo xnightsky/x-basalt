@@ -67,7 +67,7 @@ Obsidian 升级后重跑（本手册结论绑定 1.12.7 + §2 的 fixture 指纹
 
 | # | 争议语义 | 场景编号 | x-basalt 暂定口径（跑前） | 官方（1.12.7 实测） | 判定 |
 | --- | --- | --- | --- | --- | --- |
-| ① | missing/null/空串/0/false/空列表 truthiness 与 == 合并 | BASE-PROP-004 | falsy = MISSING/null/false/0/""/空列表；`missing == null` 为 false | truthiness **同**；但 `missing == null` 为 **true**（MISSING 与 null 合并） | ⚠️ truthiness ✅ / equality ❌ |
+| ① | missing/null/空串/0/false/空列表 truthiness 与 == 合并 | BASE-PROP-004 | falsy = MISSING/null/false/0/""/空列表；`missing == null` 为 false | truthiness **同**；但 `missing == null` 为 **true**（MISSING 与 null 合并） | truthiness ✅ 可转正 / equality ✅ 2026-07-28 已跟官方校正 |
 | ② | 多键 sort 的 null/missing 位置 | BASE-RESULT-002 | null/missing 恒排最后（与方向无关） | 恒排最后，**与方向无关** | ✅ 已校正（2026-07-28）：口径本与官方一致，是**实现没做到**（DESC 时排最前），当 bug 修 |
 | ③ | `if()` lazy branch | 设计 §9 | lazy：只计算被选择分支 | lazy | ✅ |
 | ④ | 空 filter 数组 and/or/not | 设计 §6 | P1 拒绝（`base/unsupported-feature`） | `and:[]`=真 / `or:[]`=假 / `not:[]`=真，稳定可重放 | ❌ |
@@ -149,7 +149,7 @@ view 清单（26 个）：truthiness.base × 8（truthy-missing / truthy-explici
 | # | 语义 | 官方 | x-basalt（校正前） | 判定 |
 | --- | --- | --- | --- | --- |
 | ① truthy | 六形态 truthiness | 全 falsy | 全 falsy | ✅ **一致，可转正** |
-| ① eq | `X == null` 与 MISSING | **MISSING 与 null 合并**，命中全部行 | 区分二者 | ❌ 分歧 |
+| ① eq | `X == null` 与 MISSING | **MISSING 与 null 合并**，命中全部行 | 区分二者 | ✅ 2026-07-28 已校正（跟官方） |
 | ② | null/missing 排序位 | ASC/DESC **都排最后** | ASC 最后、**DESC 最前** | ✅ 2026-07-28 已校正（原 ❌ DESC 分歧） |
 | ③ | `if()` 惰性 | lazy（未选分支不求值） | lazy | ✅ 一致 |
 | ④ | 空 filter 数组 | `and:[]`=真 / `or:[]`=假 / `not:[]`=真 | 三个都报 `unsupported-feature` | ❌ 3/3 分歧 |
@@ -174,6 +174,13 @@ view 清单（26 个）：truthiness.base × 8（truthy-missing / truthy-explici
 | eq-explicit-null-null | **全部 12 行** | 1 行（仅 CaseA） | ❌ 官方对**没有该属性**的行也判 true |
 
 **结论**：truthiness 六形态与 x-basalt 完全一致，暂定口径可转正。但 equality 相反——官方把 MISSING 与 null **合并**，`X == null` 对缺失属性同样成立；x-basalt 区分二者（§1 记的「`missing == null` 为 false」确是当前实现，与官方不符）。
+
+> **✅ 2026-07-28 已跟官方校正**。合并落在 `typedEqual`（值域唯一的相等语义），故分组分桶、
+> `unique()`、`contains()`、Unique 汇总一并生效——这层外推是本仓的决定而非官方读数，理由与代价
+> 写在 [`bases-vs-official.md` §5.1](bases-vs-official.md)。`isType("null")` 有意不跟随
+> （官方没覆盖 isType，不外推）；区分 missing 与 null 的能力仍在 `file.hasProperty()`。
+> 回归用例：`tests/base-evaluator.test.ts`（运算符层）+ `tests/base-engine.test.ts`
+> （`props.base` 的 `eq-null` / `ne-null`，锁行集互补），均标注 oracle ①。
 
 ### 4.2 ② null 排序位置（CaseA=null、CaseB=1、CaseC=2、CaseD 缺失）
 
@@ -268,7 +275,7 @@ view 清单（26 个）：truthiness.base × 8（truthy-missing / truthy-explici
 
 | # | 差异 | 落点 | 取舍与状态 |
 | --- | --- | --- | --- |
-| ① eq | MISSING 与 null 是否合并 | `src/base/values.ts`（equality） | **跟官方**（待落地）：影响任何 `== null` / `!= null` 的 filter，静默改变行集，属最危险的一类 |
+| ① eq | MISSING 与 null 是否合并 | `src/base/values.ts`（`typedEqual`） | **跟官方** ✅ 2026-07-28：影响任何 `== null` / `!= null` 的 filter，静默改变行集，属最危险的一类。合并落在值域唯一的相等语义上（分组/`unique`/`contains` 一并生效），`isType("null")` 有意不跟随——取舍见 [vs-official §5.1](bases-vs-official.md) |
 | ② | DESC 时 null/missing 排到了最前 | `src/base/values.ts`（`sortKeyCompareDirected`） | **按自己登记的口径修** ✅ 2026-07-28——不是「跟不跟官方」，是实现与 §1 登记口径的漂移，官方恰好站在登记口径那边 |
 | ④ | 空 filter 数组当前是拒绝 | `src/base/planner.ts` | **跟官方**（待落地）：`and:[]`=真 / `or:[]`=假 / `not:[]`=真，官方稳定可重放，「P1 拒绝」没有依据了 |
 | ⑦ | 分组时顶层 rows 顺序 | `src/base/engine.ts`（groupBy） | 待定：x-basalt 的 `file.path` 稳定序是**字节稳定契约**的一部分，跟官方会牺牲它 |

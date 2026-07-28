@@ -189,7 +189,7 @@ note property 来自 Markdown frontmatter；file property 对所有受支持文�
 
 ### 5.2 missing 与 null
 
-内部保留 MISSING sentinel，读取时不立刻塌成 null：`file.hasProperty(name)` 只看 key 是否存在；直接投影 missing 输出 null；equality/truthiness 精确合并规则【待 oracle：BASE-PROP-004 冻结】；诊断可区分 missing / explicit-null / type-mismatch。【P1 ✅ 机制（MISSING 不塌缩、hasProperty、投影 null、行级类型错误诊断）；truthiness/equality 合并为暂定口径，待 oracle 校正】
+内部保留 MISSING sentinel，读取时不立刻塌成 null：`file.hasProperty(name)` 只看 key 是否存在；直接投影 missing 输出 null；equality/truthiness 精确合并规则【✅ 2026-07-28 经 oracle BASE-PROP-004 冻结：truthiness 六形态全假（原口径一致）；**equality 上 MISSING 与 null 合并**（`missing == null` 为真，原口径相反，已按官方校正）；`isType("null")` 有意不跟随合并】；诊断可区分 missing / explicit-null / type-mismatch。【P1 ✅ 机制（MISSING 不塌缩、hasProperty、投影 null、行级类型错误诊断）】
 
 ### 5.3 equality 与排序
 

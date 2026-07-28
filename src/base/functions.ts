@@ -772,8 +772,10 @@ const ENTRIES: readonly BaseFunctionEntry[] = [
         case "object":
           return typeof r === "object" && r !== null && !Array.isArray(r) && !isFileValue(r);
         case "null":
-          // 暂定（待 oracle BASE-PROP-004）：MISSING ≠ null（与 typedEqual 暂定口径一致），
-          // 仅显式 null 命中 "null"。
+          // 暂定（无 oracle 数据）：仅**显式 null** 命中 "null"，MISSING 不命中。
+          // 注意这与 oracle ① 冻结的 equality **有意不一致**——`missing == null` 为 true，
+          // 但 `missing.isType("null")` 仍为 false：`isType` 问的是「这个值是什么类型」，
+          // 官方观察只覆盖了 `==`，没覆盖 isType，故不外推。要判空用 `x == null` 或 `isEmpty()`。
           return r === null;
         default:
           throw argTypeError(entry, `未知类型名 "${name}"`);

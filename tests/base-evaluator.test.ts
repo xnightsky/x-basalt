@@ -294,13 +294,22 @@ test("BASE-PROP-003: Unicode 属性名可读取", () => {
   assert.equal(ok('file.hasProperty("状态")', row), true);
 });
 
-// BASE-PROP-004：missing 与显式 null 可区分（暂定口径锁定，待 oracle）
-test("BASE-PROP-004: missing ≠ 显式 null（暂定口径，待 oracle 冻结）", () => {
+// BASE-PROP-004（oracle runbook ① · §4.1，Obsidian 1.12.7 实测冻结）：
+// equality 上 **MISSING 与 null 合并**——`X == null` 对「没有该属性」的行同样成立。
+// 此前实现区分二者（`missing == null` 为 false），会静默少算行；区分能力保留在 hasProperty。
+test("BASE-PROP-004(oracle ①): missing == null 为真，键存在性仍可区分", () => {
   const row = makeRow({ n: null });
   assert.equal(ok("n == null", row), true); // 显式 null
-  assert.equal(ok("missing == null", row), false); // missing 不塌成 null
-  assert.equal(ok("missing == missing2", row), true); // MISSING 只等于 MISSING
-  assert.equal(ok('file.hasProperty("n")', row), true); // 但键存在性不受值影响
+  assert.equal(ok("missing == null", row), true); // ← 合并：缺失属性也判 true
+  assert.equal(ok("missing != null", row), false); // != 是 == 的取反，一并翻转
+  assert.equal(ok("missing == missing2", row), true); // 两个缺失属性相等
+  assert.equal(ok("n == missing", row), true); // 显式 null 与缺失相等
+  // 区分二者的唯一入口是键存在性（不受值是不是 null 影响）。
+  assert.equal(ok('file.hasProperty("n")', row), true);
+  assert.equal(ok('file.hasProperty("missing")', row), false);
+  // isType("null") **有意不跟随**：官方观察只覆盖 `==`，未覆盖 isType，不外推。
+  assert.equal(ok('n.isType("null")', row), true);
+  assert.equal(ok('missing.isType("null")', row), false);
   assert.equal(ok("missing.deep.path", row), MISSING); // MISSING 传播不报错
   assert.equal(ok('missing.contains("a")', row), MISSING); // MISSING 上方法调用传播
 });

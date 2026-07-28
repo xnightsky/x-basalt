@@ -759,8 +759,9 @@ export class BaseEngine {
             ),
           ),
         );
-        // 分桶：typedEqual 相等即同组（MISSING 只等于 MISSING，故 missing 键与显式 null 键
-        // 各自成组——序列化后 key 同为 null，读侧以组序区分；暂定口径，注释存证）。
+        // 分桶：typedEqual 相等即同组。oracle ① 冻结后 MISSING 与 null 在值域相等语义上**合并**，
+        // 故 missing 键与显式 null 键落进**同一组**（序列化后 key 同为 null，此前分两组时读出方
+        // 也分辨不了——合并顺带消掉了这个歧义）。
         // 比较/迭代扣查询级共享总额（防大行数 × 多组 O(n·g) 耗尽）——与求值侧同一份预算，
         // 否则分桶自建计数器等于给同一次查询又开了一份 maxOperations 额度。
         const spendGroup = (): void => spendShared(opsBudget, limits);

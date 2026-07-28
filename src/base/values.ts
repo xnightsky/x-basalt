@@ -28,8 +28,9 @@ import type { BaseDurationUnit } from "./types.js";
 /**
  * 属性缺失 sentinel：读时不塌成 null（设计 §8.1）。
  *
- * 暂定口径（待 oracle BASE-PROP-004 冻结）：MISSING 只等于 MISSING，
- * `missing == null` 为 false，可与显式 null 区分（`file.hasProperty` 只看 key 存在性）。
+ * 冻结口径（oracle runbook ① / BASE-PROP-004，官方 1.12.7 实测）：**equality 上 MISSING 与
+ * null 合并**（`missing == null` 为 true，见 {@link typedEqual}）。区分二者的能力保留在
+ * 键存在性侧——`file.hasProperty(name)` 只看 key 是否存在，不受值是不是 null 影响。
  */
 export const MISSING: unique symbol = Symbol("base.missing");
 
@@ -567,7 +568,15 @@ export function arithNeg(v: BaseValue): BaseValue {
  * - file 值按 `path` 相等；
  * - date/datetime 按 epoch（跨精度暂定同按 epoch，待 oracle BASE-TYPE-005）、
  *   duration 按毫秒、link 按归一 path + subpath（P2a）；
- * - MISSING 只等于 MISSING（`missing == null` 为 false——暂定口径，待 oracle BASE-PROP-004）。
+ * - **MISSING 与 null 合并**：`missing == null` / `missing == missing` / `null == null` 全为
+ *   true（oracle runbook ① / §4.1 冻结，官方 1.12.7：`X == null` 对没有该属性的行同样成立）。
+ *   区分二者请用 `file.hasProperty(name)`（只看 key 存在性）。
+ *
+ * 取证范围与推论范围：官方观察覆盖的是 **`==` 运算符**；本函数是值域**唯一**的相等语义，
+ * 分组分桶 / `unique()` / `contains()` / Unique 汇总同样走它，故合并一并生效。
+ * 这是有意的——官方引擎只有一套相等，为「只让 `==` 合并、其余仍区分」再造一套相等
+ * 反而是更大的、无证据的发明；且 MISSING 与 null 序列化后同为 `null`，分组时区分二者
+ * 只会产出两个 key 都是 `null` 的组，读出方无从分辨。理由存证见 bases-vs-official.md §5.1。
  *
  * 不用 JSON.stringify 对比（key 顺序不稳定）；对象递归比较 own keys。
  *
@@ -575,8 +584,9 @@ export function arithNeg(v: BaseValue): BaseValue {
  *   maxOperations 预算，回调内可抛 BaseBudgetError）
  */
 export function typedEqual(a: BaseValue, b: BaseValue, onElementCompare?: () => void): boolean {
-  if (a === MISSING || b === MISSING) return a === b;
-  if (a === null || b === null) return a === b;
+  const aEmpty = a === MISSING || a === null;
+  const bEmpty = b === MISSING || b === null;
+  if (aEmpty || bEmpty) return aEmpty && bEmpty;
   const ta = typeof a;
   const tb = typeof b;
   // primitive：类型不同直接 false（数字 ≠ 数字字符串）；同类型按值。
