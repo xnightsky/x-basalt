@@ -42,6 +42,7 @@
 
 ### Fixed
 
+- **内置规范 `obsidian-base-spec` 的 tag 口径与实现漂移**（规范是 AI 构造 DQL / 判断 frontmatter 的接地材料，写错即误导）：该篇声明的标签正则是 `(^|\s)#([A-Za-z0-9_\-/]+)`，与 `src/parser` 的实际实现**两处不符**——(1) 要求前导「行首或空白」，实现用的是「`#` 前不能是 Unicode 字母/数字/下划线」的负向后顾（`标签：#moc` 实际成立、规范说不成立）；(2) 声明纯 ASCII，实现取 Unicode 字母数字（`#概念` 实际成立、规范说不成立）。**解析行为不变**，只把规范文本改成与实现逐字符一致，并补中文边界样例。同时落一条 **documented boundary**：与 Obsidian 实际行为的对照验证显示，Obsidian 会把紧跟标签的非空白 Unicode 标点计入标签本身（`再打一次 #概念。` → Obsidian 得标签 `概念。`），x-basalt 在标点处终止得 `概念`；这是**有意差异**——该边界在 Obsidian 侧无权威规格（官方文档所列允许字符与实现不符且逐版本变动），跟随会让中文标签按句读碎片化（`概念` / `概念。` / `概念，` 各成一个）并使 `FROM #概念` 前缀查询在句末标签上失效。同款边界声明已同步到 `docs/use/obsidian-syntax.md` 与开发侧 skill `biz-obsidian-spec`。该篇 `description` 另追加范围声明：只讲 Obsidian Markdown 与 DQL 文法，**不涉及 Bases（`.base`）语法**（名字里的 "base" 指「基础规范」，防召错）。
 - **Bases code review 修复批次**（[计划](./docs/history/plans/2026-07-27-bases-code-review-fixes.md)），四类静默失败 + 两处资源模型缺口：
   - `.base` 的 view **缺少 `type` / `name` 不再静默通过**——必填校验此前只在「键存在」时触发，缺 `type` 的 view 会被当 table 执行完（与「未知 type 不按 table 猜测」矛盾），缺 `name` 的两个 view 还能同时逃过重名判定。**（行为收紧：这类 `.base` 由静默执行改为 error + 空结果，CLI exit 1）**
   - **Windows 下 vault 根盘符大小写不同不再误判路径越界**——`d:\vault` 配 `D:\vault\...` 此前触发 `base/path-outside-vault`，合法路径被安全门假阳拒绝。判定收敛为 `utils/path.ts` 新增的共享原语 `isPathInside`（Windows 大小写不敏感），indexer 的根归属判定与编排器路径还原一并复用（此前同样会在大小写不同时漏索引）。
