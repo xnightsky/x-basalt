@@ -111,11 +111,31 @@ export async function runPipeline(
   const poolSize = Math.min(concurrency, batch.length);
   await Promise.all(Array.from({ length: poolSize }, () => worker()));
 
+  // 按**文件**聚合（口径见 RunReport 注释）：changed/skipped 与 total 同单位，
+  // 分动作明细另存 byAction。changedPaths 供上层写后刷索引与调用方复核。
+  const changedPaths: string[] = [];
+  const skippedPaths = new Set<string>();
+  const byAction: Record<string, number> = {};
+  const seenChanged = new Set<string>();
+  for (const r of results) {
+    if (r.changed) {
+      byAction[r.action] = (byAction[r.action] ?? 0) + 1;
+      if (!seenChanged.has(r.path)) {
+        seenChanged.add(r.path);
+        changedPaths.push(r.path); // 保持批内顺序，便于复现
+      }
+    }
+    if (r.skipped) skippedPaths.add(r.path);
+  }
+
   return {
     total: batch.length,
-    changed: results.filter((r) => r.changed).length,
-    skipped: results.filter((r) => r.skipped).length,
+    changed: changedPaths.length,
+    skipped: skippedPaths.size,
     failed: results.filter((r) => r.error !== undefined),
     dryRun: ctx.dryRun,
+    changedPaths,
+    byAction,
+    reindexed: 0, // 由 engine.runBatch 在写后刷索引时回填
   };
 }

@@ -1,6 +1,6 @@
 ---
-timestamp: 2026-07-27T05:02:53Z
-sha256: 4e2b29bd485ba64e580cfd93f42ac1d6185b93774378a0d871450b29111b49ad
+timestamp: 2026-07-29T16:08:09Z
+sha256: 6954edaac877d441d96db2277c6055fbcee2620401b6f1dc27fd0cf3f0ccc0b1
 type: guide
 title: 命令参考 · x-basalt
 description: x-basalt CLI 全部子命令的参数、输出形态与示例
@@ -470,6 +470,7 @@ x-basalt run [--pipe k=v]... [--apply] [--vault <path>]... [--db <path>] [--json
 | `on`          | add,change             | 事件类型过滤                                                                                                                         |
 | `concurrency` | N                      | 文件间并发上限（默认 4）                                                                                                             |
 | `if-exists`   | skip\|overwrite\|merge | `rename` 键冲突策略（默认 `skip`）                                                                                                   |
+| `refresh-index` | true\|false          | 写动作落盘后是否自动把改动文件刷进索引（默认 `true`，见下「写后索引新鲜度」）                                                        |
 
 **内建动作**
 
@@ -485,6 +486,20 @@ x-basalt run [--pipe k=v]... [--apply] [--vault <path>]... [--db <path>] [--json
 
 所有**写动作**（`normalize` / `apply` / `set` / `unset` / `rename`）默认 **dry-run 只预览**，必须加 `--apply` 才落盘。
 
+**写后索引新鲜度**：写动作改的是 `.md` 文件，而 `query` 读的是 SQLite 索引——两者之间需要一次
+刷新，否则「刚写完却查到旧值」。`run` 现在**默认在写动作落盘后自动把改动过的文件刷进索引**，
+报告的 `reindexed` 就是刷新篇数：
+
+```bash
+x-basalt run --apply --pipe actions="set type=note" --pipe where='LIST FROM "inbox" WHERE type = null' --vault ./v
+# ✓ run run：28 文件 / 28 改动 / 0 跳过 / 0 失败 / 28 已刷索引
+x-basalt query 'LIST FROM "inbox" WHERE type = null'   # → 0，不必再手动 index
+```
+
+动作链里已经带了 `index` 时不重复刷（`reindexed` 为 `0`，索引同样是新鲜的）。
+只有在「稍后必定统一 index」的批处理里才建议用 `--pipe refresh-index=false` 关掉——
+关掉之后落盘与索引会静默不一致，`query` 查到的仍是旧值。
+
 **运行环境**（顶层 flag，与管道无关）：
 
 | 选项             | 默认                             | 说明                                                        |
@@ -492,7 +507,7 @@ x-basalt run [--pipe k=v]... [--apply] [--vault <path>]... [--db <path>] [--json
 | `--apply`        | 关                               | 写动作落盘（默认 dry-run 只预览）；覆盖管道 `dryRun`        |
 | `--vault <path>` | 配置 `vault`                     | Vault 根目录                                                |
 | `--db <path>`    | `.x-basalt/index.db` / 配置 `db` | SQLite 路径                                                 |
-| `--json`         | 关                               | 结构化报告（`total`/`changed`/`skipped`/`failed`/`dryRun`） |
+| `--json`         | 关                               | 结构化报告（`total`/`changed`/`skipped`/`failed`/`dryRun`/`changedPaths`/`byAction`/`reindexed`） |
 
 **源**：`run` 默认 **scan 源**（全库 diff）；给 `--pipe where=` / `--pipe paths=` 切**手动源**。**退出码**：有动作失败时 `1`（明细打到 stderr）。
 
@@ -500,6 +515,8 @@ x-basalt run [--pipe k=v]... [--apply] [--vault <path>]... [--db <path>] [--json
 
 - 管道 `set` **仅支持标量值**：token 按空格切，值不能含空格/逗号；列表值暂不支持（P2）。
 - 管道 `apply` 是**纯 top-up**（只补缺字段 + 自动 normalize），不带 `meta apply` 的 `--set`/`--refresh-derived`；要补语义字段或重算 `sha256`/`modified` 等请用独立 `meta apply` 命令。
+- `where` 必须是**完整 DQL**（以 `LIST` / `TABLE` / `TASK` 开头），不能只写 `FROM …` / `WHERE …` 裸子句；写错会直接报错并提示补法。
+- 报告的 `total` / `changed` / `skipped` **均以文件为单位**；同一文件被多个动作改动只计一次，分动作明细看 `byAction`。
 
 **示例**
 

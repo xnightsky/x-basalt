@@ -78,19 +78,37 @@ export interface PipelineConfig {
   dryRun?: boolean;
   /** rename 写动作的键冲突策略（默认 skip）。 */
   ifExists?: "skip" | "overwrite" | "merge";
+  /**
+   * 写动作落盘后是否自动把改动文件刷进索引（默认 true）。
+   * 关掉 = 落盘后索引与磁盘静默不一致，`query` 会查到旧值；只有在「稍后必定统一 index」时才该关。
+   */
+  refreshIndex?: boolean;
   /** 内建动作名序列（串行 pipe 执行）。 */
   actions: string[];
 }
 
-/** 一次执行（一批事件跑完一条管道）的结构化报告。 */
+/**
+ * 一次执行（一批事件跑完一条管道）的结构化报告。
+ *
+ * **口径纪律（2026-07-30 订正）**：`total`/`changed`/`skipped` 三者**同为文件数**。
+ * 此前 `changed`/`skipped` 数的是**动作结果数**（文件 × 动作），与 `total`（文件数）不同单位——
+ * `actions=set,index` 跑 28 个文件会报 `total:28 / changed:56`，`changed > total` 直接说不通，
+ * 调用方根本无法判断「到底改了几篇」。分动作的明细没有丢，挪到 `byAction`。
+ */
 export interface RunReport {
   /** 处理的文件数（去重后批大小）。 */
   total: number;
-  /** 实际产生变化的动作结果数。 */
+  /** 实际产生变化的**文件数**（该文件至少有一个动作 changed）。 */
   changed: number;
-  /** 跳过的动作结果数（含 dry-run 写动作）。 */
+  /** 被跳过的**文件数**（该文件至少有一个动作 skipped；含 dry-run 写动作）。 */
   skipped: number;
   /** 失败的动作结果（含路径与原因）。 */
   failed: ActionResult[];
   dryRun: boolean;
+  /** 实际产生变化的文件路径（索引主键）。写后刷索引与调用方复核都靠它。 */
+  changedPaths: string[];
+  /** 分动作的改动计数（动作名 → 该动作改动了几个文件）——保留旧口径的明细。 */
+  byAction: Record<string, number>;
+  /** 写后自动刷进索引的文件数（dry-run 或动作链已含 index 时为 0）。见 engine.runBatch。 */
+  reindexed: number;
 }

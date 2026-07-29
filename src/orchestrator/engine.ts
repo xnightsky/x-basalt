@@ -91,10 +91,28 @@ export class Orchestrator {
       ifExists: pipeline.ifExists ?? "skip",
       onWrite: (p) => this.selfWritten.set(p, Date.now()),
     };
-    return runPipeline(routed, actions, ctx, {
+    const report = await runPipeline(routed, actions, ctx, {
       concurrency: pipeline.concurrency,
       onError: pipeline.onError,
     });
+
+    // 索引新鲜度·写后（§6.4 纪律的另一半）：上面 where 过滤前会先把候选落库，避免按陈旧索引选错；
+    // 但写动作改完 .md 之后此前**不刷回去**——于是管道报 changed:N，紧接着 query 却查到旧值，
+    // 「成功回执」和「验证通道」互相矛盾，调用方只能靠 scan + 手动 index 兜一圈才敢信（dogfood 实测）。
+    // 这里补上对称的那一半：非 dry-run 且真有改动时，把改动过的文件刷进索引。
+    // 动作链自带 index 时跳过（那一步已经落库，再刷是纯浪费）。
+    const wantRefresh = pipeline.refreshIndex ?? true;
+    const selfIndexes = actions.some((a) => a.name === "index");
+    if (wantRefresh && !ctx.dryRun && !selfIndexes && report.changedPaths.length > 0) {
+      const typeOf = new Map(routed.map((e) => [e.path, e.type]));
+      for (const p of report.changedPaths) {
+        // 写动作不会作用在已删除文件上，但 unlink 事件仍可能混在批里——按事件类型分流，别让 update 抛。
+        if (typeOf.get(p) === "unlink") this.indexer.removeByKey(p);
+        else await this.indexer.update(p);
+        report.reindexed++;
+      }
+    }
+    return report;
   }
 
   /** 一次性：scan 源（FS↔DB diff）跑一条管道。 */

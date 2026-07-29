@@ -173,8 +173,11 @@ function reportRun(report: RunReport, name: string, json: boolean): void {
     emit(report);
   } else {
     const mark = report.failed.length === 0 ? "✓" : "⚠";
+    // 计数一律「文件」为单位（含 changed/skipped，见 RunReport 口径注释）；
+    // 刷索引数单独缀在后面，让「写完能不能立刻查到」这件事在输出里可见、不用猜。
+    const refreshed = report.reindexed > 0 ? ` / ${report.reindexed} 已刷索引` : "";
     console.log(
-      `${mark} run ${name}：${report.total} 文件 / ${report.changed} 改动 / ${report.skipped} 跳过 / ${report.failed.length} 失败${report.dryRun ? "（dry-run，写动作未落盘）" : ""}`,
+      `${mark} run ${name}：${report.total} 文件 / ${report.changed} 改动 / ${report.skipped} 跳过 / ${report.failed.length} 失败${refreshed}${report.dryRun ? "（dry-run，写动作未落盘）" : ""}`,
     );
     for (const f of report.failed) console.error(`  ✗ ${f.action} ${f.path}：${f.error}`);
   }
@@ -232,8 +235,15 @@ function resolvePipeline(pipeFlags: string[], apply: boolean): PipelineConfig {
   ) {
     throw new Error(`--pipe if-exists 仅接受 skip|overwrite|merge，得到 "${ifExistsRaw}"`);
   }
+  // refresh-index：写动作落盘后是否自动刷索引（默认 true）。关掉 = 落盘后 query 仍查到旧值，
+  // 只有「稍后必定统一 index」时才该关；非法值报错，别静默当成 false。
+  const refreshRaw = kv["refresh-index"];
+  if (refreshRaw !== undefined && refreshRaw !== "true" && refreshRaw !== "false") {
+    throw new Error(`--pipe refresh-index 仅接受 true|false，得到 "${refreshRaw}"`);
+  }
   return {
     actions,
+    refreshIndex: refreshRaw !== undefined ? refreshRaw === "true" : base?.refreshIndex,
     where: kv.where ?? base?.where,
     paths: kv.paths !== undefined ? splitList(kv.paths) : base?.paths,
     on: kv.on !== undefined ? (splitList(kv.on) as EventType[]) : base?.on,

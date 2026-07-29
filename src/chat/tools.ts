@@ -424,7 +424,11 @@ export function buildTools(ctx: ToolContext, safety: Safety): ToolSet {
     }),
     pipeline_run: tool({
       description:
-        "对一批笔记跑声明式管道（actions: index/normalize/apply/set/unset/rename）。批量直接写入。where 用 DQL 选源（见 obsidian-base-spec），省略则用 scan 差异源；actions 语义见 core。",
+        "对一批笔记跑声明式管道（actions: index/normalize/apply/set/unset/rename）。批量直接写入。" +
+        "where 用**完整** DQL 选源（必须以 LIST/TABLE/TASK 开头，如 'LIST FROM \"inbox\" WHERE type = null'；" +
+        "不能只写 FROM…/WHERE… 裸子句），省略则用 scan 差异源；actions 语义见 core。" +
+        "返回 total/changed/skipped 均以**文件**为单位，byAction 给分动作明细。" +
+        "**写完索引已自动刷新**（reindexed 即刷新篇数），changed>0 就是写成功了——不必再 query/scan 复核一遍，那只会白烧步数。",
       inputSchema: jsonSchema<{
         actions: string[];
         where?: string;
@@ -463,6 +467,9 @@ export function buildTools(ctx: ToolContext, safety: Safety): ToolSet {
             skipped: r.skipped,
             failed: r.failed,
             dryRun: r.dryRun,
+            byAction: r.byAction,
+            // 回传刷新篇数：模型据此确认「现在 query 已经能查到新值」，不必再自己 scan+index 兜一圈。
+            reindexed: r.reindexed,
           });
         } finally {
           orch.close();
