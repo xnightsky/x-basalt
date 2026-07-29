@@ -91,10 +91,6 @@ export async function runOpPipeline(
     if (stopped) break;
 
     const rowsIn = currentRows.length;
-    if (rowsIn === 0) {
-      steps.push({ op: op.name, rowsIn: 0, rowsOut: 0, failed: [] });
-      continue;
-    }
 
     let outcome: OpOutcome;
 

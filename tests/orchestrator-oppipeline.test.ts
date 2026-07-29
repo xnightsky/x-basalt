@@ -421,3 +421,39 @@ test("B6 Given onError=stop concurrency=3 When 某行失败 Then 已开跑的行
   assert.equal(report.failed.length, 1);
   assert.equal(report.failed[0]?.path, "bad.md");
 });
+
+// ── Test 11 (D11 regression)：空批 + 源算子（rowwise:false, 0→N），源算子仍被调用并产出行 ──
+
+test("OP-P10 Given 空批 + 源算子 (rowwise:false, 0→N) When runOpPipeline Then 源算子被调用且产出行", async () => {
+  let callCount = 0;
+  const sourceOp: Op = {
+    name: "fake-source",
+    write: false,
+    rowwise: false,
+    async run(_rows, _ctx) {
+      callCount++;
+      return {
+        rows: [
+          { path: "out-a.md", fields: { from: "source" } },
+          { path: "out-b.md", fields: { from: "source" } },
+        ],
+        failed: [],
+        changed: [],
+        skipped: [],
+      };
+    },
+  };
+
+  const report = await runOpPipeline([], [sourceOp], ctx);
+
+  // 源算子应被调用
+  assert.equal(callCount, 1, "空批时源算子也应被调用");
+  // steps 应为一条
+  assert.equal(report.steps?.length, 1);
+  assert.equal(report.steps[0].op, "fake-source");
+  assert.equal(report.steps[0].rowsIn, 0, "入参行数为 0");
+  assert.equal(report.steps[0].rowsOut, 2, "源算子产出了 2 行");
+  // total = 初始入参行数（0）
+  assert.equal(report.total, 0);
+  assert.equal(report.failed.length, 0);
+});
