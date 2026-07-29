@@ -388,7 +388,7 @@ views:
 
 - `groupBy` 后多出 `groups` 字段；顶层 `rows` **仍是平铺的全部行**，两者是同一批行的两种视图。
 - view 的 `summaries` 是「列名 → 汇总名」；汇总名要么是 15 个内置之一，要么是顶层 `summaries` 里自定义的名字（用隐式变量 `values`）。
-- 汇总算的是 **filter 后、limit 前**的全量行。
+- 汇总算的是 **limit 后**的行——设了 `limit`，汇总只覆盖你实际看到的那几行。
 
 ### 第 6 步：多个 view
 
@@ -779,7 +779,7 @@ x-basalt base views/projects.base --conformance bases-all-files-2026-07 --vault 
 | `total` | **filter 后、limit 前**的行数（`rows.length <= limit`） |
 | `rows` | 行数组，key 为列原文 |
 | `groups` | 仅 view 配了 `groupBy` 时出现：`[{ key, rows, summaries? }]`；顶层 `rows` 仍是平铺全部行。**分组键是 list 时会扇出**——一行进入它每个元素的组，所以各组行数之和可能**大于** `rows.length`（要「每行恰好一次」请用顶层 `rows`） |
-| `summaries` | 仅 view 配了 `summaries` 时出现；按 filter 后、limit 前的全量行计算。同时配了 `groupBy` 时，每个组另有 `groups[].summaries`，**计算集是该组 limit 后的行**（组本身就建立在 limit 后行集上） |
+| `summaries` | 仅 view 配了 `summaries` 时出现；**按 limit 后的行计算**（与官方一致）。同时配了 `groupBy` 时，每个组另有 `groups[].summaries`，计算集是该组 limit 后的行——与顶层同口径 |
 | `diagnostics` | 全量诊断（文档层 → planner → 引擎级 → 行级，顺序固定） |
 
 其它契约要点：
@@ -826,7 +826,7 @@ missing/null/空串/0/false/空列表的 truthiness（六形态全假，与实�
 
 以下实现已落地，语义仍待官方串行 oracle 校正，校正后可能调整：
 
-date vs datetime 跨精度比较（暂定统一 epoch）；frontmatter wikilink → Link（暂定机制）；types.json 声明冲突口径（暂定行级 warning）；自定义 summary 的 `values` 边界（暂定剔除空值、按 limit 前全量——**官方两条都相反，已决定跟官方，实现待落**）。
+date vs datetime 跨精度比较（暂定统一 epoch）；frontmatter wikilink → Link（暂定机制）；types.json 声明冲突口径（暂定行级 warning）；自定义 summary 的 `values` 是否含空值（暂定剔除，**官方计入分母，已决定跟官方但待前置取证**；另一维度「按 limit 后计算」已于 2026-07-29 跟官方落地）。
 
 逐项状态见[实现状态追踪](../design/bases-status.md)，观察与校正流程见 [oracle 操作手册](../design/bases-oracle-runbook.md)。
 

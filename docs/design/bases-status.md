@@ -121,7 +121,7 @@ sha256: fc9eb3be183bf2eb3fcd7a822599c27ee0d8e0db4e5a7603d220377e4c1b9f3c
 | `today`/`now`（clock 注入） | BASE-FORM-006 | ✅ 2026-07-27（P2a；同 clock 两次 query 字节一致） |
 | list filter/map/reduce（value/index/acc 隐式作用域） | BASE-LIST-001 / BASE-SEC-005 | ✅ 2026-07-27（P2b；lazy 分派 + 作用域栈，flat/sort/unique/join 同批；迭代/collection/callDepth 预算） |
 | groupBy 标量 / 列表/tag | BASE-GROUP-001/002 | GROUP-001 ✅ 2026-07-27（P2b；`groups` 增量字段，组序方向 + 组内稳定）；**GROUP-002 ✅ 2026-07-28**（覆盖率片五：list 键扇出、link 标量键；语义仍属暂定口径待 oracle，但已不再拒绝） |
-| 默认汇总 / custom summary values | BASE-SUM-001/002 | SUM-001 ✅ 2026-07-27（P2b；15 内置，limit 前全量暂定）；SUM-002 ✅ 2026-07-28 收口（`values` 作用域 + **组级汇总 `groups[].summaries`**；空值剔除/越权口径仍为暂定，待 oracle） |
+| 默认汇总 / custom summary values | BASE-SUM-001/002 | SUM-001 ✅ 2026-07-27（P2b；15 内置）；SUM-002 ✅ 2026-07-28 收口（`values` 作用域 + **组级汇总 `groups[].summaries`**）；**计算集 ✅ 2026-07-29 改为 limit 后**（oracle⑧(b) 跟官方，原「limit 前全量」已翻，breaking）；空值剔除（⑧(a)）/越权口径仍为暂定，待 oracle |
 | regex（若支持必须 ReDoS 防护 + 长度预算） | BASE-SEC-004 | ✅ 2026-07-28（覆盖率片四：`string.matches(pattern)` + 三层防护；见 §6 片四明细） |
 
 ## 5. P3 all-files / context（P3a 附件数据集 ✅ 2026-07-27）
@@ -190,7 +190,7 @@ sha256: fc9eb3be183bf2eb3fcd7a822599c27ee0d8e0db4e5a7603d220377e4c1b9f3c
 | 行内元素先 typedEqual 去重 | BASE-GROUP-002 | ✅ 2026-07-28（`[a, a]` 不得把同一行塞进同一组两次） |
 | 空 list 键视同 MISSING（单独成组） | BASE-GROUP-002 | ✅ 2026-07-28（**不静默丢行**——专项用例断言 6 行全在） |
 | link 为**标量**键（不扇出） | BASE-GROUP-002 | ✅ 2026-07-28（路径感知相等分组；新增 `groupKeyCompare`——`sortKeyCompare` 对 link **抛类型错误**，分组只需确定性组序，故按归一 `path`+`subpath` 定序，序为「可比标量 < link < null/MISSING」） |
-| 组级汇总 `groups[].summaries` | BASE-SUM-002 | ✅ 2026-07-28（**口径变更留档**：P2b 曾判「组级汇总属官方 UI 形态，无头 JSON 暂不做」，片五 GROUP-002 落地后 groups 成一等产物，「有组没有组的汇总」是半个功能故补上。计算集 = 该组 **limit 后**的行，与顶层的 **limit 前**全量有意不同） |
+| 组级汇总 `groups[].summaries` | BASE-SUM-002 | ✅ 2026-07-28（**口径变更留档**：P2b 曾判「组级汇总属官方 UI 形态，无头 JSON 暂不做」，片五 GROUP-002 落地后 groups 成一等产物，「有组没有组的汇总」是半个功能故补上。计算集 = 该组 **limit 后**的行；顶层自 2026-07-29 起同为 limit 后（oracle⑧(b)），两者口径已统一并共用同一份逐行求值） |
 
 ### 片四明细 ✅ 2026-07-28（BASE-SEC-004）
 

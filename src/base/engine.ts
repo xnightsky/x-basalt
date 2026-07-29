@@ -20,7 +20,7 @@
  *   → 逐行求值合并 filter（无 filter 全量通过）→ 多键 sort（恒附 file.path ASC tie-break）
  *   → limit 截断（total = filter 后 limit 前行数）→ 逐列投影序列化
  *   → groupBy 分桶（P2b 片三，可选；list/link 键暂定拒绝 GROUP-002）
- *   → summaries 汇总（P2b 片三，可选；计算集 = filter 后 limit 前全量，暂定）
+ *   → summaries 汇总（P2b 片三，可选；计算集 = **limit 后**行集，oracle⑧(b) 跟官方）
  *
  * 错误口径（设计 §11「error 阻止结果」，计划「关键取舍」#10）：
  * - query() **不 throw**——加载/选择/解析/预算任一 error 级诊断即返回
@@ -202,8 +202,8 @@ export interface BaseQueryResult {
    * 大于 `rows.length`**——需要「每行恰好一次」的读出方请用顶层 `rows`。
    *
    * `summaries`（2026-07-28 片五）：view 同时配置 groupBy 与 summaries 时存在。
-   * 计算集 = **该组在 limit 后的行**，与顶层 `summaries`（filter 后 **limit 前**全量）
-   * 有意不同——组本身就建立在 limit 后行集上。
+   * 计算集 = **该组在 limit 后的行**；顶层 `summaries` 自 2026-07-29 起同为 limit 后
+   * （oracle⑧(b) 跟官方），两者口径统一。
    */
   groups?: {
     key: BaseOutputValue;
@@ -212,8 +212,8 @@ export interface BaseQueryResult {
   }[];
   /**
    * 汇总结果（P2b 片三增量可选字段；view 配置 summaries 时存在，否则缺省）。
-   * key = view summaries 的 property-ref 原文（YAML 声明序）；计算集 = filter 后
-   * limit 前全量（暂定口径）；全部值被类型跳过 → null。
+   * key = view summaries 的 property-ref 原文（YAML 声明序）；计算集 = **limit 后**
+   * 行集（2026-07-29 oracle⑧(b) 跟官方，原「limit 前全量」已翻）；全部值被类型跳过 → null。
    */
   summaries?: Record<string, BaseOutputValue>;
   /** 全量诊断（顺序：文档层 → planner → 引擎级 → 行级按行序，字节稳定）。 */
@@ -810,17 +810,21 @@ export class BaseEngine {
         groupBuckets = buckets;
       }
 
-      // ---- summaries（P2b 片三，计划「关键取舍」#10/#11，BASE-SUM-001 / SUM-002 暂定）----
-      // 计算集 = filter 后 limit 前全量（暂定口径）；groupBy 同现时仍按全量集计算一份——
-      // 组级汇总属官方 UI 形态，无头 JSON 暂不做，注释标注。
+      // ---- summaries（P2b 片三，计划「关键取舍」#10/#11，BASE-SUM-001 / SUM-002）----
+      // 计算集 = **limit 后**的行。原 P2b 暂定「filter 后 limit 前全量」已于 2026-07-29
+      // 按 oracle 口径⑧(b) 翻掉：官方 summary-custom-limited（limit 1）的 entries=1，
+      // 即按 limit 后行集汇总。改后顶层与组级统一，不再有「组里看不见的行也算进顶层汇总」
+      // 的分裂。⚠️ breaking：带 limit 的 view 汇总读数会变。
       let summariesOut: Record<string, BaseOutputValue> | undefined;
       if (plan.summaries.length > 0) {
         summariesOut = {};
         // 汇总迭代/比较预算（Unique 的 O(n²) 去重等）：扣查询级共享总额，同 groupBy 的理由。
         const spendSummary = (): void => spendShared(opsBudget, limits);
-        for (const s of plan.summaries) {
-          // 目标列逐行求值（行级错误 → MISSING 进列表，由内置口径跳过/Empty 计数）。
-          const values = filtered.map((row) =>
+        // 目标列逐行求值（行级错误 → MISSING 进列表，由内置口径跳过/Empty 计数）。
+        // 顶层与组级**共用这一份**：口径统一后两处行集相同，各求一次会重复扣求值预算，
+        // 且同一行的求值错误会推两条重复诊断（pushRowDiagnostic 不去重）。
+        const perRowValues = plan.summaries.map((s) =>
+          limited.map(({ row }) =>
             evaluateExpression(
               s.ast,
               row,
@@ -828,7 +832,11 @@ export class BaseEngine {
                 pushRowDiagnostic(view.span, s.property, info, row.file.path),
               ),
             ),
-          );
+          ),
+        );
+        for (let si = 0; si < plan.summaries.length; si += 1) {
+          const s = plan.summaries[si] as (typeof plan.summaries)[number];
+          const values = perRowValues[si] as BaseValue[];
           const builtin = BUILTIN_SUMMARIES.get(s.name);
           if (builtin !== undefined) {
             summariesOut[s.property] = toOutputValue(
@@ -856,21 +864,8 @@ export class BaseEngine {
         // ---- 组级汇总（2026-07-28 覆盖率片五，SUM-002 收口）----
         // 口径变更留档：P2b 曾判「组级汇总属官方 UI 形态，无头 JSON 暂不做」。片五 GROUP-002
         // 落地后 groups 成为一等产物，「有组没有组的汇总」是半个功能，故补上。
-        // **计算集与顶层不同，有意为之**：顶层 summaries = filter 后 **limit 前**全量；
-        // 组级 = 该组在 **limit 后**的行——因为组本身就建立在 limit 后行集上，用 limit 前的
-        // 集合去配 limit 后的组会给出「组里看不见的行也算进汇总」的怪结果。
+        // 计算集 = 该组在 limit 后的行，取自上面共用的 perRowValues（顶层同口径，⑧(b) 后统一）。
         if (groups !== undefined && groupBuckets !== undefined) {
-          const perRowValues = plan.summaries.map((s) =>
-            limited.map(({ row }) =>
-              evaluateExpression(
-                s.ast,
-                row,
-                rowEvalContext(row, (info) =>
-                  pushRowDiagnostic(view.span, s.property, info, row.file.path),
-                ),
-              ),
-            ),
-          );
           groups = groups.map((g, gi) => {
             const idx = (groupBuckets as { rowIdx: number[] }[])[gi]?.rowIdx ?? [];
             const out: Record<string, BaseOutputValue> = {};

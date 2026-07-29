@@ -520,7 +520,7 @@ obsidian base:query format=json                  # 查当前 base
 **代价（诚实记录）**：把官方 `.base` 原样搬过来、且**依赖顶层行序**的用法，在 groupBy 场景下会看到不同顺序。
 判断是这个代价小于放弃字节稳定——而且真要官方那个次序，读 `groups` 再自己拍平即可。
 
-### 5.4 ⑧ summary `values` 的两个维度：跟官方，但 (a) 卡在一条未取证的前置
+### 5.4 ⑧ summary `values` 的两个维度：跟官方；(b) 已落地，(a) 卡在一条未取证的前置
 
 **官方读数**（`meanOfValues: values.mean()` 作用于 `sortable`；样本 CaseA=null、CaseB=1、CaseC=2、其余 9 行缺失）：
 
@@ -530,14 +530,20 @@ obsidian base:query format=json                  # 查当前 base
 | `summary-custom-limited`（limit 1） | **null**（entries=1） | 1.5 | (b) 按 **limit 后**的行集汇总 |
 
 **决策：两个维度都跟官方。** 口径反直觉（「求平均把没填的也算进分母」几乎肯定不是使用者想要的），
-但汇总口径属于「官方说了算」的纯约定，没有安全或正确性上的理由去对抗它；而且 (b) 还能顺带消掉本仓
-自己的一处不一致——顶层 summaries 现在按 **limit 前**全量算，组级 summaries 却按 **limit 后**算。
+但汇总口径属于「官方说了算」的纯约定，没有安全或正确性上的理由去对抗它；而且 (b) 还顺带消掉了本仓
+自己的一处不一致——改前顶层 summaries 按 **limit 前**全量算，组级 summaries 却按 **limit 后**算。
 
 **落地拆成两步，因为 (a) 有一条硬前置**：
 
-- **(b) 计算集改为 limit 后**：无歧义、可直接落。改 `engine.ts` 里顶层 summaries 的取值集
-  （`filtered` → `limited`），并翻掉锁定用例「汇总计算集为 limit 前全量」。这是 breaking：
-  带 `limit` 的 view，其内置汇总（Sum/Average/…）读数会变。
+- **(b) 计算集改为 limit 后 —— ✅ 已落地（2026-07-29）**。`engine.ts` 顶层 summaries 的取值集
+  由 `filtered` 换成 `limited`，锁定用例「汇总计算集为 limit 前全量」翻为「limit 后行集」
+  （fixture view `limitBefore` → `limitAfter`，sort score ASC + limit 2 → Sum=30，
+  与旧口径 60、与「只取首行」10 三者互不相等，判别力足）。
+  **breaking**：带 `limit` 的 view，其内置汇总（Sum/Average/…）读数会变。
+  顺带两项收益：① 顶层与组级口径统一，本仓自己的不一致消失；② 两处原本各自对同一行集求值一遍，
+  现共用一份 `perRowValues`——省掉一轮求值预算，并消掉「同一行错误推两条重复诊断」
+  （`pushRowDiagnostic` 不去重）。新增用例 `groupBy + limit + summaries → 顶层与组级同为
+  limit 后行集` 锁定该收益（顶层 15 == 组级 active 15；旧口径顶层为 20）。
 - **(a) 空值计入分母**：⚠️ **不能只改 `values` 的作用域**。当前 `values` 剔除 null/MISSING，
   若改成含空值，`values.mean()` 会立刻报行级类型错误——因为 `list.mean()` 要求元素全为 number。
   要复现 0.25，必须**同时把 `list.mean()` 改成「非 number 元素不计入分子、但计入分母」**，

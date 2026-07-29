@@ -74,9 +74,14 @@ views:
     name: unique
     summaries:
       area: Unique
-  # 计算集 = filter 后 limit 前全量（暂定）：limit=1 时 Sum 仍按全量 6 行计算 → 60
+  # 计算集 = limit 后（2026-07-29 oracle⑧(b) 跟官方，原「limit 前全量」已翻）：
+  # sort score ASC → Alpha(10)/Beta(20) 为前两行，limit 2 → Sum=30（限前全量为 60）。
+  # 三个值互不相等，能区分「limit 后」「limit 前全量」「只取首行」三种口径。
   - type: table
-    name: limitBefore
-    limit: 1
+    name: limitAfter
+    sort:
+      - property: score
+        direction: ASC
+    limit: 2
     summaries:
       score: Sum

@@ -74,7 +74,7 @@ Obsidian 升级后重跑（本手册结论绑定 1.12.7 + §2 的 fixture 指纹
 | ⑤ | date vs datetime 跨精度比较 | BASE-TYPE-005 | 统一按 UTC epoch 比较（P2a 落地） | 行集一致 | ✅ |
 | ⑥ | frontmatter wikilink → Link 值与相等 | BASE-TYPE-006 | `[[t]]`/`[[t\|d]]`/`[[t#sub]]` → Link value，按 path+subpath 相等（P2a 落地） | 行集一致 | ✅ |
 | ⑦ | list/tag 分组键一行多组 | BASE-GROUP-002 | **扇出**：一行进入其每个元素的组；行内元素先去重、空 list 视同 MISSING 键 | 顶层 rows 12 行（无重复计入），但**顺序随分组键变动** | ❌ 顶层顺序分歧 → **决定不跟**（boundary） |
-| ⑧ | 自定义 summary 的 `values` 边界（空值剔除 / limit 前后） | BASE-SUM-002 | 暂定剔除 null/missing、按 limit 前全量（P2b 落地） | **含** null/missing（计入分母）、按 **limit 后** | ❌ 两维度都相反 → **决定跟官方**，实现待落 |
+| ⑧ | 自定义 summary 的 `values` 边界（空值剔除 / limit 前后） | BASE-SUM-002 | 暂定剔除 null/missing、按 limit 前全量（P2b 落地） | **含** null/missing（计入分母）、按 **limit 后** | ❌ 两维度都相反 → **决定跟官方**；(b) ✅ 2026-07-29 已落，(a) 待前置取证 |
 | ⑨ | 字符串→日期推断是否作用于 `+`（拼接语境） | 语法 §5.1 / 设计 §8.3 | 推断对全部非短路二元运算生效，故 `due + " 备注"` 报行级类型错误而非拼接 | **`+` 根本不做字符串拼接**，string+string 也得空 | ❌ 原命题不成立 → **决定不跟**（保留超集 + boundary） |
 | ㉗ | **默认数据集**（本轮新发现，原不在清单） | BASE-DATA-001/002 | 默认 md-only，`.base` 不为行 | `.base` 文件**自身也是行** | ❌ → **决定不改默认值**（boundary + 文档） |
 
@@ -156,7 +156,7 @@ view 清单（26 个）：truthiness.base × 8（truthy-missing / truthy-explici
 | ⑤ | date/datetime 跨精度比较 | 见 §4.5 | 同 | ✅ 一致 |
 | ⑥ | wikilink → Link | 见 §4.5 | 同 | ✅ 一致 |
 | ⑦ | list 分组键扇出 | 顶层 rows 顺序随分组键变动 | 保持 `file.path` 序 | ❌ 分歧 · **决定不跟**（2026-07-28，boundary） |
-| ⑧ | summary `values` 边界 | **含 null/missing**（计入分母）、按 **limit 后** | 剔除 null/missing、按 limit 前 | ❌ 两维度都分歧 · **决定跟官方**（2026-07-28），实现待落（(a) 有前置取证） |
+| ⑧ | summary `values` 边界 | **含 null/missing**（计入分母）、按 **limit 后** | (a) 剔除 null/missing；(b) ✅ 已改为 limit 后 | ❌ 两维度都分歧 · **决定跟官方**（2026-07-28）；**(b) ✅ 2026-07-29 落地**，(a) 待前置取证 |
 | ⑨ | `+` 的拼接语境 | **`+` 根本不做字符串拼接**，string+string 也得空 | string+string 正常拼接 | ❌ 分歧 · **决定不跟**（2026-07-28，保留超集 + boundary） |
 | ㉗ | **默认数据集**（原 26 条外，本轮新发现） | `.base` 文件**自身也是行** | 默认 md-only 排除 | ❌ 分歧 · **决定不改默认值**（2026-07-28，boundary + 文档） |
 
@@ -261,6 +261,9 @@ view 清单（26 个）：truthiness.base × 8（truthy-missing / truthy-explici
 
 **结论**：x-basalt 口径⑧「剔除 null/missing、按 limit 前全量」**两条都与官方相反**。
 
+> 上表是 2026-07-28 的原始观察，**不随实现改动而改写**（观察记录即真相源）。后续处置：
+> (b) 已于 2026-07-29 跟官方落地（顶层计算集改 limit 后），(a) 仍待前置取证——见 §5 校正表。
+
 ### 4.8 ㉗ 默认数据集（原清单之外，本轮新发现）
 
 无 filter 的基线 view 官方返回 **13 行**（12 个 fixture 文件 + 临时探针），其中包含 `.base` 文件**自身**。x-basalt 默认 `bases-markdown-2026-07` 只把 `.md` 当行并恒发 `markdown-only-dataset` warning，需切 `bases-all-files-2026-07` 才对齐。
@@ -297,11 +300,12 @@ view 清单（26 个）：truthiness.base × 8（truthy-missing / truthy-explici
 
 ⚠️ 复跑**没有覆盖** ⑧ 与 ⑨：对照器只比行集不比列值，而这两条的判据都在列值/汇总里。
 
-## 5. 校正（第一批 ✅ 已落地 / 第二批决策已出，仅 ⑧ 待实现）
+## 5. 校正（第一批 ✅ / 第二批决策已出 · ⑧(b) ✅，仅 ⑧(a) 待前置取证）
 
 > 取证轮只做取证、一行实现没改；**校正轮（2026-07-28）**：第一批 ①②④ 已落实现 + 回归用例
 > （复跑对照见 §4.10，分歧 7 → 2、无新增）；第二批 ⑦⑧⑨㉗ 决策已出——⑦⑨㉗ 落 documented
-> boundary（维持现状，无代码改动），⑧ 决定跟官方但实现待落（(a) 有前置取证，见 vs-official §5.4）。
+> boundary（维持现状，无代码改动），⑧ 决定跟官方，其中 **(b) 计算集改 limit 后已于 2026-07-29
+> 落地**（test 892 → 893），**(a) 空值计入分母仍卡在前置取证**（见 vs-official §5.4）。
 > 每条都单独判断「跟官方」还是「落 documented boundary」，不存在无脑对齐；
 > 判断理由逐条写进 [`bases-vs-official.md`](bases-vs-official.md) §5。
 
@@ -311,7 +315,7 @@ view 清单（26 个）：truthiness.base × 8（truthy-missing / truthy-explici
 | ② | DESC 时 null/missing 排到了最前 | `src/base/values.ts`（`sortKeyCompareDirected`） | **按自己登记的口径修** ✅ 2026-07-28——不是「跟不跟官方」，是实现与 §1 登记口径的漂移，官方恰好站在登记口径那边 |
 | ④ | 空 filter 数组当前是拒绝 | `src/base/planner.ts` | **跟官方** ✅ 2026-07-28：`and:[]`=真 / `or:[]`=假 / `not:[]`=真，官方稳定可重放，「P1 拒绝」没有依据了 |
 | ⑦ | 分组时顶层 rows 顺序 | `src/base/engine.ts`（groupBy） | **不跟** · boundary（2026-07-28 决策）：本轮只测到顶层行序、**没测到官方的分组内容与组序**（观察记录的 `groups` 字段是坏的，见 §5.2），跟等于照抄症状；且会牺牲字节稳定契约。理由全文 [vs-official §5.3](bases-vs-official.md) |
-| ⑧ | summary values 的两个维度 | `src/base/engine.ts`（summaries 取值集）/ `src/base/functions.ts`（`list.mean`） | **跟官方**（2026-07-28 决策，实现待落）：(b) limit 后可直接改；**(a) 有硬前置**——要复现 0.25 必须同时改 `list.mean()`「非 number 不计分子、计分母」，而官方从没给过 `list.mean()` 在混合列表上的读数。先补一个 view 取证再动手。理由全文 [vs-official §5.4](bases-vs-official.md) |
+| ⑧ | summary values 的两个维度 | `src/base/engine.ts`（summaries 取值集）/ `src/base/functions.ts`（`list.mean`） | **跟官方**（2026-07-28 决策）：**(b) limit 后 ✅ 2026-07-29 已落地**（`filtered` → `limited`，锁定用例翻为 `limitAfter`；顺带统一顶层/组级口径并共用一份 `perRowValues`，消掉重复求值与重复诊断）；**(a) 仍待前置取证**——要复现 0.25 必须同时改 `list.mean()`「非 number 不计分子、计分母」，而官方从没给过 `list.mean()` 在混合列表上的读数。先补一个 view 取证再动手。理由全文 [vs-official §5.4](bases-vs-official.md) |
 | ⑨ | `+` 是否做字符串拼接 | `src/base/evaluator.ts`（`upgradeStringOperand`） | **不跟** · boundary（2026-07-28 决策）：官方那里是**静默的空**（没实现的洞，不是语义），砍掉纯亏；与本仓「不静默」立场一致。理由全文 [vs-official §5.5](bases-vs-official.md) |
 | ㉗ | 默认数据集是否含 `.base` 自身 | `src/base/engine.ts`（conformance 默认值） | **不改默认值** · boundary（2026-07-28 决策）：差异不静默（恒发 `markdown-only-dataset` warning），且官方读数只证明 `.base` 是行、**没证明附件也是行**（fixture 无附件样本），切默认等于顺带断言未取证的事；要对齐一条 flag 即可。理由全文 [vs-official §5.6](bases-vs-official.md) |
 

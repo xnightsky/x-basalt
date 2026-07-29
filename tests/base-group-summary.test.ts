@@ -6,7 +6,8 @@
  * 片三 #8-#11；设计 §13）：
  * - BASE-GROUP-001：标量分组键、组序（ASC/DESC）、组内稳定顺序、missing 键成组（排最后，暂定）；
  * - GROUP-002（暂定拒绝，待 oracle）：list/tag 分组键 → base/unsupported-feature + 空结果；
- * - BASE-SUM-001：15 个内置汇总逐名断言；混合类型跳过、全部跳过 → null；计算集 = limit 前全量；
+ * - BASE-SUM-001：15 个内置汇总逐名断言；混合类型跳过、全部跳过 → null；
+ *   计算集 = **limit 后**行集（2026-07-29 oracle⑧(b) 跟官方，原「limit 前全量」已翻）；
  * - SUM-002（暂定，待 oracle）：顶层自定义汇总 values.mean().round(3)；values 越权 → MISSING 口径；
  * - 未知汇总名 → base/unknown-function；groupBy/summaries 结构非法 → base/invalid-schema；
  * - 字符串拼接（arithAdd string+string 小修正）e2e。
@@ -275,13 +276,15 @@ test("BASE-SUM-001: 混合类型跳过与全部跳过 → null", () => {
   assert.equal(skipped.summaries?.["ghost"], null); // 无任何行有 ghost → 全部跳过 → null
 });
 
-// BASE-SUM-001：计算集 = filter 后 limit 前全量（暂定口径）——limit=1 时 Sum 仍按全量计
-test("BASE-SUM-001: 汇总计算集为 limit 前全量（limit=1 不影响 Sum）", () => {
-  const r = query("summaries-builtin.base", "limitBefore");
+// BASE-SUM-001：计算集 = **limit 后**（2026-07-29 oracle⑧(b) 跟官方）。
+// 原用例锁的是「limit 前全量」，官方 summary-custom-limited（limit 1）entries=1 证伪，故翻。
+test("BASE-SUM-001: 汇总计算集为 limit 后行集（limit=2 → 只汇总前两行）", () => {
+  const r = query("summaries-builtin.base", "limitAfter");
   assert.deepEqual(errorsOf(r), []);
-  assert.equal(r.rows.length, 1);
-  assert.equal(r.total, 6);
-  assert.equal(r.summaries?.["score"], 60); // 10+20+30（limit 前全量，暂定口径）
+  assert.equal(r.rows.length, 2);
+  assert.equal(r.total, 6, "total 仍是 filter 后 limit 前行数，不随汇总口径变");
+  // sort score ASC → Alpha(10)/Beta(20)；30 ≠ 60（limit 前全量）≠ 10（只取首行）
+  assert.equal(r.summaries?.["score"], 30);
 });
 
 // ---------- SUM-002（暂定，待 oracle）：顶层自定义汇总 ----------
@@ -301,15 +304,15 @@ test("SUM-002: 自定义汇总 values 越权 → MISSING → 结果 null（暂�
   assert.equal(r.summaries?.["score"], null);
 });
 
-// groupBy 与 summaries 同现：summaries 仍按全量集计算一份（组级汇总无头 JSON 暂不做）
-test("BASE-SUM-001: groupBy 与 summaries 同现，汇总按全量集一份", () => {
+// groupBy 与 summaries 同现：顶层仍产出一份（此 view 无 limit，limit 前后行集相同）
+test("BASE-SUM-001: groupBy 与 summaries 同现，顶层汇总仍产出一份", () => {
   const r = query("summaries-custom.base", "withGroup");
   assert.deepEqual(errorsOf(r), []);
   assert.deepEqual(
     r.groups?.map((g) => g.key),
     ["active", "done", "paused"],
   );
-  assert.equal(r.summaries?.["score"], 20); // 全量集 Average（顶层口径不变）
+  assert.equal(r.summaries?.["score"], 20); // Average(10,20,30)；无 limit 故不受⑧(b) 影响
 });
 
 // SUM-002 收口（2026-07-28 覆盖率片五）：groupBy 同现时补组级汇总 groups[].summaries
@@ -322,8 +325,28 @@ test("SUM-002: 组级汇总 groups[].summaries（计算集 = 该组 limit 后的
   assert.equal(byKey.get("active")?.["score"], 15);
   assert.equal(byKey.get("done")?.["score"], 30);
   assert.equal(byKey.get("paused")?.["score"], null, "组内全部跳过 → null（同顶层口径）");
-  // 顶层 summaries 与组级并存且互不影响（顶层 = 全量集 20，组级 = 各组自己的集合）
+  // 顶层 summaries 与组级并存（顶层 = 整个 limit 后行集 20，组级 = 各组自己的子集）
   assert.equal(r.summaries?.["score"], 20);
+});
+
+// ⑧(b) 收益锁定（2026-07-29）：limit 同现时顶层与组级计算集统一，不再分裂
+test("BASE-SUM-001: groupBy + limit + summaries → 顶层与组级同为 limit 后行集", () => {
+  const r = query("summaries-custom.base", "withGroupLimited");
+  assert.deepEqual(errorsOf(r), []);
+  // sort score ASC + limit 2 → Alpha(active,10)/Beta(active,20)；done/paused 组被 limit 掉
+  assert.equal(r.rows.length, 2);
+  assert.deepEqual(
+    r.groups?.map((g) => g.key),
+    ["active"],
+    "limit 后只剩 active 组的行，其余组不成组",
+  );
+  const active = r.groups?.[0]?.summaries?.["score"];
+  assert.equal(active, 15, "组级 Average(10,20)");
+  assert.equal(
+    r.summaries?.["score"],
+    15,
+    "顶层同为 limit 后行集 → 与组级一致；旧口径此处为 20（全量 Average(10,20,30)）",
+  );
 });
 
 // 未知汇总名 → base/unknown-function（error）+ 空结果
