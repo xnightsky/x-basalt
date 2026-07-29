@@ -11,7 +11,10 @@ import type { DataviewEngine } from "../query/index.js";
 /** 文件变更事件类型（对齐 chokidar add/change/unlink、scan diff 三态）。 */
 export type EventType = "add" | "change" | "unlink";
 
-/** 统一变更事件：三种「源」（watch/scan/手动）都归一为此结构后进入管线。 */
+/**
+ * 统一变更事件：三种「源」（watch/scan/手动）都归一为此结构后进入管线。
+ * ChangeEvent 是 Row 的窄化投影——event 必有值的那种（见 Row.event 的可选性）。
+ */
 export interface ChangeEvent {
   /** 相对 base 的 POSIX 路径（索引主键形态；多根 vault 时 base = 各根公共祖先）。 */
   path: string;
@@ -20,6 +23,18 @@ export interface ChangeEvent {
   mtime?: number;
   /** 文件字节数；可缺省。 */
   size?: number;
+}
+
+// === 自建实现：统一算子模型的流动单位（设计：docs/design/pipeline-op-model.md §3.1）===
+
+/** 流动单位：文件事件降为特例——path 保持一等字段以兼容 dedup/accumulate/route/防回环机制。 */
+export interface Row {
+  /** 索引主键形态的路径（现有 ChangeEvent.path 语义原样保留）。 */
+  path: string;
+  /** 文件事件类型；仅 scan/watch 源产出的行有，其余算子产出的行没有。 */
+  event?: EventType;
+  /** 上游算子的产物：DQL/base 的列、search 的评分、lint/links 的诊断。 */
+  fields: Record<string, unknown>;
 }
 
 /** 动作执行上下文：编排器把现有四层能力注入给动作。 */
@@ -56,6 +71,56 @@ export interface Action {
   /** 是否写 `.md`（true 才受 dryRun 安全闸约束；写 DB 的 index 为 false）。 */
   write: boolean;
   run(ev: ChangeEvent, ctx: ActionContext): Promise<ActionResult>;
+}
+
+// === 自建实现：统一算子模型（设计：docs/design/pipeline-op-model.md §3.2）===
+
+/**
+ * 算子执行上下文：内容沿用现有 ActionContext 的字段。
+ * 独立演进——算子层与动作层可各自演化，不必耦合。
+ */
+export interface OpContext {
+  /** @deprecated 不再使用：写动作改经 {@link OpContext.indexer}.toAbsolute(row.path) 还原绝对路径。 */
+  vaultPath?: string;
+  /** 索引器（index 算子用；也是写算子还原 .md 绝对路径 + meta 写后刷新索引的入口）。 */
+  indexer: VaultIndexer;
+  /** 查询引擎（DQL/base 算子用），可选。 */
+  engine?: DataviewEngine;
+  /** 写动作安全闸：true 时写动作只预览不落盘。 */
+  dryRun: boolean;
+  /** 写动作落盘成功后回调路径（供调度层记录"自产生写"做防回环）。 */
+  onWrite?: (path: string) => void;
+  /** rename 写动作遇目标键已存在时的冲突策略（默认 skip）。 */
+  ifExists?: "skip" | "overwrite" | "merge";
+}
+
+/** 统一算子签名：批进批出，一个签名覆盖源/转换/动作/汇四种角色。 */
+export interface Op {
+  name: string;
+  /** 是否写 `.md`；true 才受 dry-run 安全闸约束（沿用现有 Action.write 语义）。 */
+  write: boolean;
+  /**
+   * 逐行独立：该算子对每行的处理互不影响，调度层可任意切批并发（§3.2.1）。
+   * false（默认，保守）= 必须看到完整批次，整批一次过（dedup/limit/emit 这类）。
+   * 默认 false 的理由：若默认 true，依赖全批的算子会被静默切开，产出错误结果且难以复现。
+   */
+  rowwise: boolean;
+  run(rows: Row[], ctx: OpContext): Promise<OpOutcome>;
+}
+
+/** 算子产出：行与失败分开返回——调度层据 failed 把失败行从后续算子的输入中剔除（onError=continue 的新语义）。 */
+export interface OpOutcome {
+  rows: Row[];
+  failed: OpFailure[];
+}
+
+/** 逐行失败记录。 */
+export interface OpFailure {
+  /** 失败行的 path（索引主键形态）。 */
+  path: string;
+  /** 产生失败的算子名。 */
+  op: string;
+  error: string;
 }
 
 /** 一条声明式管道的配置（对应 spec §8 的 pipelines: 段一项）。 */
