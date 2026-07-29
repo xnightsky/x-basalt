@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 import { exec } from "node:child_process";
-import { existsSync, readFileSync } from "node:fs";
+import { readFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
 import { Command } from "commander";
@@ -40,14 +40,11 @@ import { renderSkill, renderSkillList, renderSkills } from "./skill/render.js";
 // 本文件只做参数装配与输出格式化，不内联业务逻辑（逻辑在各层并各有单测）。
 
 // 启动时加载一次项目/全局配置；各命令以 `flag ?? config.X ?? 内置默认` 解析，免去重复传参。
-// CLI 显式传入 X_BASALT_DIR；若环境变量指向的目录不存在（如测试子进程换了 cwd），
-// 则忽略它，避免外部进程环境污染项目配置发现。
-const envBaseDir = process.env.X_BASALT_DIR;
-const config = loadConfig(
-  process.cwd(),
-  homedir(),
-  envBaseDir && existsSync(envBaseDir) ? envBaseDir : undefined,
-);
+// X_BASALT_DIR 原样交给 loadConfig：它按「该目录下有没有 config.*」决定用还是回退就近发现，
+// 外部进程的无关 env（如测试子进程换了 cwd）自然落回项目配置。
+// 此处**不得**再加 existsSync 预判——BASE_DIR 无条件用同一个 env 且 indexer 会自动建目录，
+// 「目录存不存在」会被自己的副作用翻转（详见 loadConfig 注释）。
+const config = loadConfig(process.cwd(), homedir(), process.env.X_BASALT_DIR);
 
 // 基目录：env `X_BASALT_DIR` 指定则用它（可把 .x-basalt 整块搬到任意位置），否则就近隐藏目录 `.x-basalt/`。
 const BASE_DIR = process.env.X_BASALT_DIR ?? ".x-basalt";
