@@ -129,6 +129,45 @@ test("remove 删除单文件记录，update 重新建立（增量幂等）", asy
   idx.close();
 });
 
+// CRLF 笔记（Windows 编辑器 / core.autocrlf 的默认写法）必须与 LF 笔记落库一致。
+// 回归点在 parser/frontmatter.ts 的行尾归一：缺了它，CRLF 笔记的 frontmatter 要么值带尾随
+// `\r`（json_extract 出来的 status 与 "done" 永不相等，DQL WHERE 恒空），要么整份被降级成
+// {}（连 tags 都不入 tags 表）。两种坏法都不产诊断，只有到查询期才表现为「查不到」。
+test("CRLF 笔记的 frontmatter 与 tags 落库结果同 LF 笔记", async () => {
+  const vaultDir = mkdtempSync(join(tmpdir(), "x-basalt-crlf-idx-"));
+  tmpDirs.push(vaultDir);
+  const dbPath = freshDbPath();
+  const note = "---\nstatus: done\ntags: [alpha, beta]\n---\n\n正文\n";
+  await writeFile(join(vaultDir, "LF.md"), note);
+  await writeFile(join(vaultDir, "CRLF.md"), note.replace(/\n/g, "\r\n"));
+
+  const idx = new VaultIndexer({ vaultPath: vaultDir, dbPath });
+  await idx.rebuild();
+  const db = openReadonly(dbPath);
+
+  // json_extract 取标量：两篇必须都命中 "done"（修复前 CRLF 篇是 "done\r"）。
+  const done = db
+    .prepare("SELECT path FROM files WHERE json_extract(frontmatter, '$.status') = 'done'")
+    .all() as { path: string }[];
+  assert.deepEqual(
+    done.map((r) => r.path).toSorted(),
+    ["CRLF.md", "LF.md"],
+    "CRLF 笔记的 status 必须等值命中，不得带尾随 \\r",
+  );
+
+  // frontmatter tags 需完整入 tags 表（修复前 CRLF 篇因 flow 集合解析抛错而整份丢失）。
+  const tags = db
+    .prepare("SELECT tag FROM tags WHERE file_path = 'CRLF.md' AND in_frontmatter = 1 ORDER BY tag")
+    .all() as { tag: string }[];
+  assert.deepEqual(
+    tags.map((r) => r.tag),
+    ["alpha", "beta"],
+  );
+
+  db.close();
+  idx.close();
+});
+
 // === 2026-07-02 #28 inline fields：随 parser 落库 + delete-in-lockstep（spec §6.2 生命周期）===
 
 test("inline_fields：rebuild 落库 key/key_norm/value/line_number；update/remove 同步清理", async () => {

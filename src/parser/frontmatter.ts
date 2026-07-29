@@ -30,9 +30,25 @@ import { parse as parseYaml, stringify as stringifyYaml } from "yaml";
 const YAML_ENGINE = {
   // 空 frontmatter（`---\n---`）时 parse 返回 null，gray-matter 的 engine 契约要求 object：
   // 归一为 {}，与原 js-yaml 引擎下的下游行为一致（非对象 frontmatter 由消费侧各自兜底）。
-  parse: (str: string): object => (parseYaml(str) ?? {}) as object,
+  parse: (str: string): object => (parseYaml(normalizeLineBreaks(str)) ?? {}) as object,
   stringify: (obj: object): string => stringifyYaml(obj),
 };
+
+/**
+ * 把 CRLF / CR 行尾归一为 LF，再交给 YAML 解析（YAML 1.2 §5.4 规定的行断归一）。
+ *
+ * 必要性是一个 CRLF 文件上的静默数据损坏：gray-matter 按 `\n` 切分隔符，交给 engine 的
+ * block 尾部**总是留一个裸 `\r`**（如 `"\r\nstatus: done\r"`）。`yaml` 包按 YAML 1.2 只把
+ * `\r\n` 当行断、不认孤立 `\r`，于是尾行按内容分两种坏法，**两种都静默**：
+ *   - 末行是标量 → 值被污染成 `"done\r"`，`WHERE status = "done"` 恒不中；
+ *   - 末行是 flow 集合（`tags: [a]`）→ 抛 "Unexpected scalar at node end"，被
+ *     {@link parseFrontmatter} 的 catch 降级成 `{}`，整份 frontmatter 消失。
+ * 影响读侧全线（parser → indexer → DQL → base filter → chat）；写侧 src/meta 不过
+ * gray-matter 故不受影响。原 js-yaml（YAML 1.1）会归一 `\r`，换引擎时连带丢了这个行为。
+ */
+function normalizeLineBreaks(str: string): string {
+  return str.replace(/\r\n?/g, "\n");
+}
 
 /**
  * 解析文件顶部 YAML frontmatter，返回键值对与去掉 frontmatter 后的正文。
@@ -58,6 +74,12 @@ const YAML_ENGINE = {
  * When 解析文件内容
  * Then 保持字符串原样，不转成 JS Date（YAML 1.2 core 无 timestamp 隐式类型）——
  *      日期语义交由下游值层按词法判定，见 {@link YAML_ENGINE} 注释
+ *
+ * @behavior
+ * Given 文件以 CRLF 行尾保存（Windows 编辑器与 `core.autocrlf` 的默认）
+ * When 解析文件内容
+ * Then frontmatter 与 LF 版本逐键相等——末行值不带尾随 `\r`、flow 集合不触发解析失败，
+ *      见 {@link normalizeLineBreaks}
  */
 export function parseFrontmatter(content: string): {
   frontmatter: Record<string, unknown>;
