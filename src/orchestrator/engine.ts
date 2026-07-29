@@ -1,18 +1,19 @@
 import { VaultIndexer } from "../indexer/index.js";
 import { DataviewEngine } from "../query/index.js";
 import { Accumulator } from "./accumulate.js";
-import { parseAction } from "./actions.js";
+import { registerBuiltinOps } from "./ops.js";
+import { resolve } from "./registry.js";
 import { foldEvents } from "./dedup.js";
 import { matchEvent, selectByDql } from "./route.js";
 import { manualSourceFromDql, manualSourceFromPaths, scanSource, watchSource } from "./sources.js";
-import type { ActionContext, ChangeEvent, PipelineConfig, RunReport } from "./types.js";
-import { runPipeline } from "./run.js";
+import type { ChangeEvent, OpContext, PipelineConfig, Row, RunReport } from "./types.js";
+import { runOpPipeline } from "./run.js";
 import { resolveVaultLayout, type VaultLayout } from "../utils/path.js";
 
 // === 自建实现: 编排引擎（组装五段 + 防回环 + 优雅退出）===
 //
 // 设计：docs/design/change-orchestration.md §4/§6/§9。
-// 组装：源 → (watch 经堆积) → 去重(foldEvents) → 路由(matchEvent + [index 先行 → where]) → 执行(runPipeline)。
+// 组装：源 → (watch 经堆积) → 去重(foldEvents) → 路由(matchEvent + [index 先行 → where]) → 执行(runOpPipeline)。
 // 三种源（scan/手动/watch）复用同一 runBatch 核心；watch 额外有堆积、防回环、优雅退出。
 
 /** watch 写动作落盘后到 chokidar 捕获之间的忽略窗（ms）：宽于 awaitWriteFinish，足够覆盖一次回环。 */
@@ -84,14 +85,23 @@ export class Orchestrator {
       }
     }
 
-    const actions = pipeline.actions.map(parseAction);
-    const ctx: ActionContext = {
+    // 注册内建算子（幂等：重复调仅覆盖同名注册，不会出错）
+    registerBuiltinOps();
+    // 解析 action tokens 为 Op 实例
+    const ops = pipeline.actions.map((token) => resolve(token));
+    // 投影 ChangeEvent[] → Row[]
+    const rows: Row[] = routed.map((e) => ({
+      path: e.path,
+      event: e.type,
+      fields: {},
+    }));
+    const ctx: OpContext = {
       indexer: this.indexer,
       dryRun: pipeline.dryRun ?? true, // 写动作默认 dry-run（spec §6.6）
       ifExists: pipeline.ifExists ?? "skip",
       onWrite: (p) => this.selfWritten.set(p, Date.now()),
     };
-    const report = await runPipeline(routed, actions, ctx, {
+    const report = await runOpPipeline(rows, ops, ctx, {
       concurrency: pipeline.concurrency,
       onError: pipeline.onError,
     });
@@ -102,7 +112,7 @@ export class Orchestrator {
     // 这里补上对称的那一半：非 dry-run 且真有改动时，把改动过的文件刷进索引。
     // 动作链自带 index 时跳过（那一步已经落库，再刷是纯浪费）。
     const wantRefresh = pipeline.refreshIndex ?? true;
-    const selfIndexes = actions.some((a) => a.name === "index");
+    const selfIndexes = ops.some((a) => a.name === "index");
     if (wantRefresh && !ctx.dryRun && !selfIndexes && report.changedPaths.length > 0) {
       const typeOf = new Map(routed.map((e) => [e.path, e.type]));
       for (const p of report.changedPaths) {

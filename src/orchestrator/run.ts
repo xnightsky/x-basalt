@@ -99,7 +99,7 @@ export async function runOpPipeline(
     let outcome: OpOutcome;
 
     if (op.rowwise) {
-      // 并发切片：共享游标 + Promise.all（复用 runPipeline 的 worker 池写法，§3.2.1）
+      // 逐行领取：共享游标 + Promise.all（复用 runPipeline 的 worker 池写法，§3.2.1/D10）
       // 每个 worker 从共享游标领一行，保证同时在跑的行数不超过 concurrency。
       const outcomes = Array.from<OpOutcome>({ length: currentRows.length });
       let next = 0;
