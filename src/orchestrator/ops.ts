@@ -2,7 +2,10 @@ import { parseAction } from "./actions.js";
 import { register } from "./registry.js";
 import { BaseEngine } from "../base/index.js";
 import { resolveVaultLayout } from "../utils/path.js";
+import { runLint } from "../lint/index.js";
+import { runLinksCheck, runLinksSuggest } from "../links/index.js";
 import type { ActionContext, Op, OpContext, OpFailure, OpOutcome, Row } from "./types.js";
+import type { BasaltDiagnostic } from "../diagnostic.js";
 
 // === 自建实现: 内建动作的 Op 包装（设计：docs/design/pipeline-op-model.md §3.2）===
 //
@@ -375,6 +378,197 @@ function makeBaseOp(params: string): Op {
   };
 }
 
+// === 片二只读诊断类算子（设计：docs/design/pipeline-op-model.md §4 / §12）===
+//
+// 设计决策：诊断挂在 Row.fields.diagnostics，类型复用各模块既有的 BasaltDiagnostic 结构，
+// 不另造形状。三个算子都遵守这个键名。理由是复用既有结构、消费方一处适配即可。
+// links.suggest 的路径建议用 fields.linkSuggestions。
+
+/**
+ * 把诊断数组按文件分组，转换为算子产出行。
+ * - 源模式（inputRows 为空）：每个有诊断的文件产出一行（path=文件路径，fields.diagnostics=诊断数组）。
+ * - 转换模式（inputRows 非空）：按行路径匹配诊断后挂到该行 fields.diagnostics，所有行原样透传。
+ */
+function diagnosticsToRows(diagnostics: BasaltDiagnostic[], inputRows: Row[]): Row[] {
+  const diagMap = new Map<string, BasaltDiagnostic[]>();
+  for (const d of diagnostics) {
+    const arr = diagMap.get(d.file) ?? [];
+    arr.push(d);
+    diagMap.set(d.file, arr);
+  }
+
+  if (inputRows.length === 0) {
+    // 源模式：每个有诊断的文件产出一行
+    const out: Row[] = [];
+    for (const [file, ds] of diagMap) {
+      out.push({ path: file, fields: { diagnostics: ds } });
+    }
+    out.sort((a, b) => a.path.localeCompare(b.path));
+    return out;
+  }
+
+  // 转换模式：按行路径匹配诊断后透传（诊断 ≠ 失败，不丢弃行）
+  return inputRows.map((row) => {
+    const ds = diagMap.get(row.path);
+    if (ds && ds.length > 0) {
+      return { ...row, fields: { ...row.fields, diagnostics: ds } };
+    }
+    return row;
+  });
+}
+
+/**
+ * lint 算子工厂。双角色（源/转换）：
+ * - 源模式（入参 rows 为空）：对整个 vault 跑 lint，每个有诊断的文件产出为 Row
+ *   （path=文件路径，fields.diagnostics=该文件的诊断数组）。
+ * - 转换模式（入参 rows 非空）：对整个 vault 跑 lint，按行路径过滤诊断后挂到该行 fields.diagnostics；
+ *   有诊断的行仍然透传下去——lint 的产物就是诊断本身，把诊断当失败会让整条链断掉。
+ *
+ * 失败边界：failed 只用于「跑 lint 这个动作本身失败」（如 vault 根不可读），
+ * 不用于「发现了诊断」。
+ * changed/skipped 恒为空（只读算子）。
+ */
+function makeLintOp(): Op {
+  return {
+    name: "lint",
+    write: false,
+    rowwise: false,
+    async run(rows: Row[], ctx: OpContext): Promise<OpOutcome> {
+      if (!ctx.vaultRoots || ctx.vaultRoots.length === 0) {
+        return {
+          rows: rows.length === 0 ? [] : rows,
+          failed: [
+            {
+              path: "<lint>",
+              op: "lint",
+              error: "ctx.vaultRoots 未提供：lint 算子需要 vaultRoots",
+            },
+          ],
+          changed: [],
+          skipped: [],
+        };
+      }
+      try {
+        const result = await runLint({ vault: ctx.vaultRoots });
+        return {
+          rows: diagnosticsToRows(result.diagnostics, rows),
+          failed: [],
+          changed: [],
+          skipped: [],
+        };
+      } catch (err) {
+        return {
+          rows: rows.length === 0 ? [] : rows,
+          failed: [{ path: "<lint>", op: "lint", error: String(err) }],
+          changed: [],
+          skipped: [],
+        };
+      }
+    },
+  };
+}
+
+/**
+ * links.check 算子工厂。语义同 lint 算子——断链诊断挂 fields.diagnostics，行照常透传/产出。
+ * 失败边界同上：failed 只用于「跑断链检查动作本身失败」，不用于「发现了断链」。
+ * changed/skipped 恒为空（只读算子）。
+ */
+function makeLinksCheckOp(): Op {
+  return {
+    name: "links.check",
+    write: false,
+    rowwise: false,
+    async run(rows: Row[], ctx: OpContext): Promise<OpOutcome> {
+      if (!ctx.vaultRoots || ctx.vaultRoots.length === 0) {
+        return {
+          rows: rows.length === 0 ? [] : rows,
+          failed: [
+            {
+              path: "<links.check>",
+              op: "links.check",
+              error: "ctx.vaultRoots 未提供：links.check 算子需要 vaultRoots",
+            },
+          ],
+          changed: [],
+          skipped: [],
+        };
+      }
+      try {
+        const result = await runLinksCheck({ vault: ctx.vaultRoots });
+        return {
+          rows: diagnosticsToRows(result.diagnostics, rows),
+          failed: [],
+          changed: [],
+          skipped: [],
+        };
+      } catch (err) {
+        return {
+          rows: rows.length === 0 ? [] : rows,
+          failed: [{ path: "<links.check>", op: "links.check", error: String(err) }],
+          changed: [],
+          skipped: [],
+        };
+      }
+    },
+  };
+}
+
+/**
+ * links.suggest 算子工厂。单文件入口，spec 格式：`links.suggest <fileRel>`。
+ * 把路径建议挂进 fields.linkSuggestions（类型为 string[]，已去重）。
+ *
+ * 双角色（源/转换）：
+ * - 源模式（入参 rows 为空）：产出文件所在行（path=fileRel，fields.linkSuggestions=建议列表）。
+ * - 转换模式（入参 rows 非空）：所有行透传，添加 fields.linkSuggestions。
+ */
+function makeLinksSuggestOp(fileRel: string): Op {
+  return {
+    name: "links.suggest",
+    write: false,
+    rowwise: false,
+    async run(rows: Row[], ctx: OpContext): Promise<OpOutcome> {
+      if (!ctx.vaultRoots || ctx.vaultRoots.length === 0) {
+        return {
+          rows: rows.length === 0 ? [] : rows,
+          failed: [
+            {
+              path: fileRel,
+              op: "links.suggest",
+              error: "ctx.vaultRoots 未提供：links.suggest 算子需要 vaultRoots",
+            },
+          ],
+          changed: [],
+          skipped: [],
+        };
+      }
+      try {
+        const result = await runLinksSuggest(fileRel, { vault: ctx.vaultRoots });
+        const suggestions = [...new Set(result.diagnostics.flatMap((d) => d.suggestions ?? []))];
+        const fields: Record<string, unknown> = { linkSuggestions: suggestions };
+
+        if (rows.length === 0) {
+          // 源模式：产出文件路径 + 建议
+          return { rows: [{ path: fileRel, fields }], failed: [], changed: [], skipped: [] };
+        }
+
+        // 转换模式：所有行透传 + 挂建议
+        const out: Row[] = rows.map((row) => ({
+          ...row,
+          fields: { ...row.fields, ...fields },
+        }));
+        return { rows: out, failed: [], changed: [], skipped: [] };
+      } catch (err) {
+        return {
+          rows: rows.length === 0 ? [] : rows,
+          failed: [{ path: fileRel, op: "links.suggest", error: String(err) }],
+          changed: [],
+          skipped: [],
+        };
+      }
+    },
+  };
+}
+
 /**
  * 注册内建算子到 registry。
  * 不要在模块顶层自动执行——调用方显式调，避免 import 副作用与测试污染。
@@ -403,5 +597,17 @@ export function registerBuiltinOps(): void {
     if (!params)
       throw new Error("base 算子需要 .base 文件路径参数，格式：base <file>[#<viewName>]");
     return makeBaseOp(params);
+  });
+
+  // 片二只读诊断类算子（设计：docs/design/pipeline-op-model.md §4 / §12）
+  // === 设计决策：诊断挂在 Row.fields.diagnostics，类型复用各模块既有的 BasaltDiagnostic 结构，
+  //     不另造形状。三个算子都遵守这个键名。理由是复用既有结构、消费方一处适配即可。
+  //     links.suggest 的路径建议用 fields.linkSuggestions。
+  // ===
+  register("lint", () => makeLintOp());
+  register("links.check", () => makeLinksCheckOp());
+  register("links.suggest", (params: string) => {
+    if (!params) throw new Error("links.suggest 算子需要文件路径参数");
+    return makeLinksSuggestOp(params);
   });
 }
