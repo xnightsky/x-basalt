@@ -89,6 +89,7 @@
     "x-basalt parse <file>",
     "x-basalt index <vault> --db <path>",
     "x-basalt query <dql> --db <path>",
+    'x-basalt search "<正文关键词>" --db <path>',
     "x-basalt base <file.base> --vault <path> [--view <name>]",
     "x-basalt skills get <name>",
     "x-basalt meta set <file> <key> <value>",
@@ -132,6 +133,15 @@
         "x-basalt query \"LIST FROM #project WHERE status = 'active' SORT file.mtime DESC LIMIT 10\" --db ./index.db",
         "x-basalt query 'LIST FROM \"\"' --size 50 --offset 0 --db ./index.db   # 分页：每页 50，读 total 知总量",
         "x-basalt query 'TABLE count() FROM \"\" GROUP BY file.extension' --db ./index.db   # 计数惯用法",
+      ],
+    },
+    {
+      pattern: "search <query> [--db <path>] [--offset <n>] [--size <n>] [--vault <path>]",
+      description:
+        "按**正文内容**全文检索（FTS5 + trigram 子串匹配，覆盖中英文）→ JSON { total, offset, size, returned, hasMore, rows:[{path,name,snippet}] }。用于「哪篇笔记提到 X」这类不知道是哪篇、只能按内容找的问题——query 查结构化字段（frontmatter/tag/link/task），**查不了正文**。查询至少 2 个字符；不支持 FTS5 查询语法（AND/*/- 都不是操作符）。**匹配口径分两档，别把 total 当成「含该短语的篇数」**：纯 ASCII 是字面短语、多词 AND；含 CJK 汉字走 trigram 并集 **OR 宽松召回**——只命中部分片段的笔记也计入 total（搜「回归网-不存在」与搜「回归网」返回一样多）。完整连续子串命中者由 bm25 **排最前**，判断「到底有没有这一串」看靠前结果或改用 query 的 contains() 精确判定。基于索引快照：新写入要先 scan/index 才搜得到（run 管道写完会自动刷索引）。是子串匹配、**非语义/向量检索**。",
+      examples: [
+        'x-basalt search "熔断降级" --db ./index.db',
+        'x-basalt search "retention-policy" --size 10 --db ./index.db',
       ],
     },
     {

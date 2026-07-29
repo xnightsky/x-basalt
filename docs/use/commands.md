@@ -1,6 +1,6 @@
 ---
-timestamp: 2026-07-29T16:08:09Z
-sha256: 6954edaac877d441d96db2277c6055fbcee2620401b6f1dc27fd0cf3f0ccc0b1
+timestamp: 2026-07-29T16:50:41Z
+sha256: 4e5b94c7031e64b5bdd6e2aa5f18594aecf746d5cee06835d81f00b08d87347d
 type: guide
 title: 命令参考 · x-basalt
 description: x-basalt CLI 全部子命令的参数、输出形态与示例
@@ -24,14 +24,15 @@ tags:
 2. [`index`](#index--全量建索引)
 3. [`scan`](#scan--增量重索引)
 4. [`query`](#query--执行-dql-查询)
-5. [`base`](#base--base-view-查询)
-6. [`skills` — 规范召回](#skills--规范召回)
-7. [`meta`](#meta--读改-frontmatter)
-8. [`watch`](#watch--常驻监听)
-9. [`run`](#run--变更编排管道)
-10. [`chat`](#chat--自然语言驱动可选-ai)
-11. [`links`](#links--本地链接诊断)
-12. [`lint`](#lint--规则诊断metadata--links)
+5. [`search`](#search--全文检索正文)
+6. [`base`](#base--base-view-查询)
+7. [`skills` — 规范召回](#skills--规范召回)
+8. [`meta`](#meta--读改-frontmatter)
+9. [`watch`](#watch--常驻监听)
+10. [`run`](#run--变更编排管道)
+11. [`chat`](#chat--自然语言驱动可选-ai)
+12. [`links`](#links--本地链接诊断)
+13. [`lint`](#lint--规则诊断metadata--links)
 
 ---
 
@@ -217,6 +218,63 @@ x-basalt query 'LIST FROM ""' --size 50 --offset 0 --db ./index.db              
 > **PowerShell 引号提示**：DQL 中的 `"folder"` 需原样传入程序。用**单引号**包整条语句，内部保留普通双引号（`'... FROM "Projects" ...'`）；不要写 `\"`，PowerShell 下会导致意外转义。
 
 DQL 完整语法（`FROM` / `WHERE` / `SORT` / `LIMIT` / 操作符 / 隐式字段映射）见 [querying-dql.md](dql.md)。
+
+---
+
+## `search` — 全文检索正文
+
+```
+x-basalt search "<query>" [--vault <path>] [--db <path>] [--offset <n>] [--size <n>]
+```
+
+按**正文内容**找笔记（FTS5 + trigram 子串匹配，覆盖中英文）。回答「哪篇笔记提到 X」这类不知道是哪篇、只能按内容找的问题——`query` 查的是结构化字段（frontmatter/tag/link/task），查不了正文。
+
+| 参数/选项       | 默认                             | 说明                                                                 |
+| --------------- | -------------------------------- | -------------------------------------------------------------------- |
+| `<query>`       | 必填                             | 查询文本，**至少 2 个字符**；不支持 FTS5 查询语法（`AND`/`*`/`-` 等不是操作符） |
+| `--vault <path>` | 配置 `vault`                    | Vault 根目录（检索只读索引，可省略）                                 |
+| `--db <path>`   | `.x-basalt/index.db` / 配置 `db` | SQLite 路径                                                          |
+| `--offset <n>`  | `0`                              | 结果起始偏移                                                         |
+| `--size <n>`    | 不分页（全部）                   | 本页最大行数；给定则结果含 `total`/`hasMore`                         |
+
+### 匹配口径分两档（别把 `total` 当成「含该短语的篇数」）
+
+| 查询形态 | 匹配方式 | 后果 |
+| -------- | -------- | ---- |
+| 纯 ASCII | 字面短语；多词按 **AND** | `zzzz retention` → 0（两词须同现） |
+| 含 CJK 汉字 | 切成重叠 trigram 取并集后 **OR 宽松召回** | **只命中部分片段的笔记也计入 `total`** |
+
+CJK 走 OR 是有意的召回设计（中文无空白分词，严格短语会大量漏召），代价是 `total` 是**召回数**而非「确实含这一串的篇数」：
+
+```bash
+x-basalt search "回归网"          # → total 85
+x-basalt search "回归网-不存在"    # → total 85（「不存在」单独搜是 0，但并不缩小结果）
+```
+
+**完整连续子串命中的笔记由 bm25 排在最前**，所以判断「到底有没有这一串」要看靠前的结果，别只读 `total`；需要精确判定用 `query` 的 `contains(...)`。
+
+**其他边界**：基于**索引快照**——新写入的改动要先 `scan` / `index` 才搜得到（写动作走 [`run`](#run--变更编排管道) 管道时会自动刷索引）。是**子串匹配、非语义检索**：不理解同义词与概念相关性。
+
+**输出形态**
+
+```json
+{
+  "total": 3,
+  "offset": 0,
+  "size": 2,
+  "returned": 2,
+  "hasMore": true,
+  "rows": [{ "path": "areas/ops/runbook/线上预案.md", "name": "线上预案", "snippet": "… 判断是否需要[熔断降级] … " }]
+}
+```
+
+**示例**
+
+```bash
+x-basalt search "熔断降级"
+x-basalt search "retention-policy" --size 10
+x-basalt search "缓存失效" --offset 20 --size 20
+```
 
 ---
 

@@ -7,8 +7,8 @@ tags:
   - cli
   - chat
   - x-basalt
-timestamp: 2026-06-30T23:25:31Z
-sha256: 2ebe1be083aaa9994ea4e90a687d837c51da2ca41d12a14ddb4600db2e8accae
+timestamp: 2026-07-29T16:50:51Z
+sha256: f90b91034659fbc688f173a6d45a06200d8014e8bbba3e661420b0cc16895dd4
 ---
 # chat 怎么玩 · x-basalt
 
@@ -93,7 +93,8 @@ x-basalt chat
 
 ## 7. 当前限制 / 注意
 
-- **全文检索是子串匹配，非语义搜索**：`search` 走 FTS5 + trigram，按字面子串找（查询至少 3 个字符，中英文皆可），不理解同义词/概念相关；且基于索引快照，新改动要先 `scan`/`index` 才搜得到。
+- **全文检索是子串匹配，非语义搜索**：`search` 走 FTS5 + trigram，按字面子串找（查询**至少 2 个字符**，中英文皆可），不理解同义词/概念相关；且基于索引快照，新改动要先 `scan`/`index` 才搜得到。
+  匹配口径**分两档**：纯 ASCII 是字面短语（多词 AND）；含中文时切 trigram 取并集 **OR 宽松召回**——只命中部分片段的笔记也会计入 `total`，完整子串命中者由 bm25 排最前。所以别把 `search` 的 `total` 当成「确实含这一串的篇数」，详见 [命令参考 `search`](commands.md#search--全文检索正文)。
 - **写无确认闸**：写动作直接改文件，靠 `Ctrl+C` 中断 + 原子写兜底，**没有逐动作确认**。别拿重要库直接玩写。
 - **常驻/监听不可用**：chat 工具皆一次性；不存在 watch（会挂死对话），它被系统提示禁止尝试。
 - **效果未量化**：AI 行为质量尚无场景库回归（见 [`../research/2026-06-30-chat-gap-vs-agent-browser.md`](../history/research/2026-06-30-chat-gap-vs-agent-browser.md) §3）。

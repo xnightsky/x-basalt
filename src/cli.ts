@@ -398,7 +398,10 @@ program
 program
   .command("search")
   .description("全文检索笔记正文（FTS5 + trigram 子串匹配，覆盖中英文；S3.5）")
-  .argument("<query>", "查询文本，至少 3 个字符（整体按字面短语匹配，不支持 FTS5 查询语法）")
+  .argument(
+    "<query>",
+    "查询文本，至少 2 个字符，不支持 FTS5 查询语法。纯 ASCII 按字面短语（多词 AND）；含 CJK 走 trigram 并集 OR 宽松召回——部分片段命中也计入 total，完整子串由 bm25 排最前",
+  )
   .option("--vault <path>", "Vault 目录（查询仅读索引，可省略）")
   .option("--db <path>", "SQLite 索引文件路径（默认 .x-basalt/index.db，可由配置 db 覆盖）")
   .option("--offset <n>", "结果起始偏移（默认 0）")

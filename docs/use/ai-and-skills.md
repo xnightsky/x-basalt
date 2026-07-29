@@ -1,6 +1,6 @@
 ---
-timestamp: 2026-06-30T00:01:23Z
-sha256: 667f8d030d3d9b1b88e58802dbf7aaa12793f4173679bedefca3a185e15f85f2
+timestamp: 2026-07-29T16:51:03Z
+sha256: d494ac5b994c114f07528712f92a99d0ab5eec41181998c0bc7bf9d7d44f356e
 type: guide
 title: 与 AI 协作：技能召回与全局使用技能
 description: x-basalt 技能召回两条路径（CLI 自助 recall 与全局 SKILL.md）及可选 chat 命令说明
@@ -314,7 +314,7 @@ chat 既能读也能改 vault。**写动作直接落盘，没有逐个确认弹�
 
 > **不支持常驻 watch / 监听**：chat 只做**一次性**操作，工具面**不含** `watch` / `index --watch` 这类常驻命令——常驻进程永不返回，会把 chat 循环**挂死**。要持续监听维护 vault，请用独立的 `x-basalt watch` 或 `x-basalt scan --pipe`（见 [indexing-and-sync.md](indexing.md)），不要走 chat。
 
-> **能力边界**：当前 chat 做**结构化**任务（DQL/元数据/规范）。"按笔记**正文内容**找"依赖全文检索（FTS5，规划中），尚未落地——让它"找讲 X 的笔记"时它只能靠结构化字段，不能搜正文。
+> **能力边界**：chat 做**结构化**任务（DQL/元数据/规范）**与正文全文检索**。「按笔记正文内容找」走 `search`（FTS5 + trigram，**已落地**），所以「找讲 X 的笔记」是可以的；但它是**字面子串**匹配、**非语义/向量检索**，不理解同义词与概念相关性。含中文的查询走 trigram 并集 OR 宽松召回，`total` 是召回数而非「确实含这一串的篇数」——口径详见 [命令参考 `search`](commands.md#search--全文检索正文)。
 
 ---
 
