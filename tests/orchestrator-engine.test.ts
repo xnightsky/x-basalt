@@ -199,3 +199,44 @@ test("CO-F2 Given dry-run When runManual Then 不写盘也不刷索引", async (
     rmSync(dir, { recursive: true, force: true });
   }
 });
+
+test("CO-F2 Given watch 源跑写管道 When 落盘 Then 同样刷索引、且不因自刷触发回环", async () => {
+  // watch 与 scan/手动源共用 runBatch，写后刷索引对它同样生效。这条专门守两件事：
+  //   ① 常驻模式下写完索引也是新鲜的（否则 watch 维护的库会越跑越偏离磁盘）；
+  //   ② 刷索引只写 DB、不写 .md，不该把自己的写当成新变更再触发一轮（§9 坑① 防回环）。
+  const dir = mkVault({ "a.md": "---\ncaptured: x\n---\nA\n" });
+  const dbPath = join(dir, "i.db");
+  const orch = new Orchestrator({ vaultPath: dir, dbPath });
+  const reports: { changed: number; reindexed: number }[] = [];
+  await new Promise<void>((resolve) => {
+    orch.watch(
+      { actions: ["set type=note"], dryRun: false, debounce: { wait: 100, maxWait: 500 } },
+      (r) => reports.push({ changed: r.changed, reindexed: r.reindexed }),
+      () => resolve(),
+    );
+  });
+  try {
+    writeFileSync(join(dir, "b.md"), "---\ncaptured: y\n---\nB\n");
+    for (let i = 0; i < 80 && reports.length === 0; i++) await sleep(50);
+    assert.ok(reports.length >= 1, "watch 应至少跑一次管道");
+    const hit = reports.find((r) => r.changed > 0);
+    assert.ok(hit, "应有一批真的改到文件");
+    assert.equal(hit.reindexed, hit.changed, "改了几篇就该刷几篇");
+
+    // 再等一段防回环观察窗：刷索引不碰 .md，不该凭空多出「又有文件改了」的批次。
+    const afterWrite = reports.length;
+    await sleep(600);
+    const extraChanged = reports.slice(afterWrite).filter((r) => r.changed > 0).length;
+    assert.equal(extraChanged, 0, "自刷索引不得触发新一轮写（回环）");
+
+    const engine = new DataviewEngine(dbPath);
+    try {
+      assert.equal(engine.query("LIST WHERE type = null").rows.length, 0, "索引应已是新值");
+    } finally {
+      engine.close();
+    }
+  } finally {
+    await orch.stop();
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
