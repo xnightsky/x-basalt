@@ -14,6 +14,8 @@ function row(path: string): Row {
   return { path, fields: {} };
 }
 
+const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
+
 // ── Test 1：串行链路 rows 逐级传递 ──
 
 test("OP-P0 Given 多 Op 链 When runOpPipeline Then rows 逐级传递（fields 累积不丢失）", async () => {
@@ -365,4 +367,57 @@ test("OP-P9 Given 多 Op 改了不同数量路径 When runOpPipeline Then byActi
   assert.equal(report.byAction["opA"], 3);
   assert.equal(report.byAction["opB"], 2);
   assert.equal(report.changed, 4); // a.md b.md c.md d.md
+});
+
+// ── B6 gap：onError=stop + concurrency > 1，已开跑的行跑完当前算子 ──
+
+test("B6 Given onError=stop concurrency=3 When 某行失败 Then 已开跑的行跑完当前算子且下一算子不执行", async () => {
+  let opBCalled = false;
+  const processed: string[] = [];
+
+  const opA: Op = {
+    name: "opA",
+    write: false,
+    rowwise: true,
+    async run(rows) {
+      const p = rows[0].path;
+      processed.push(p);
+      // 短延时让其他 worker 有机会同时领到行
+      await sleep(50);
+      if (p === "bad.md") {
+        return {
+          rows: [],
+          failed: [{ path: p, op: "opA", error: "stop-here" }],
+          changed: [],
+          skipped: [],
+        };
+      }
+      return { rows, failed: [], changed: [], skipped: [] };
+    },
+  };
+
+  const opB: Op = {
+    name: "opB",
+    write: false,
+    rowwise: true,
+    async run(_rows) {
+      opBCalled = true;
+      return { rows: _rows, failed: [], changed: [], skipped: [] };
+    },
+  };
+
+  const batch = [row("a.md"), row("bad.md"), row("c.md"), row("d.md"), row("e.md")];
+  const report = await runOpPipeline(batch, [opA, opB], ctx, {
+    concurrency: 3,
+    onError: "stop",
+  });
+
+  assert.equal(opBCalled, false, "opB 不应被调用");
+  assert.equal(processed.length, 5, "所有 5 行都经 opA 处理（含 bad.md 前后的行）");
+  assert.equal(report.steps?.length, 1, "steps 只含 opA");
+  assert.equal(report.steps?.[0]?.op, "opA");
+  assert.equal(report.steps?.[0]?.rowsIn, 5);
+  assert.equal(report.steps?.[0]?.rowsOut, 4, "1 行失败、4 行通过");
+  assert.equal(report.failed.length, 1);
+  assert.equal(report.failed[0]?.path, "bad.md");
 });
