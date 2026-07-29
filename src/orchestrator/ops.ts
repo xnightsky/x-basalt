@@ -1,5 +1,7 @@
 import { parseAction } from "./actions.js";
 import { register } from "./registry.js";
+import { BaseEngine } from "../base/index.js";
+import { resolveVaultLayout } from "../utils/path.js";
 import type { ActionContext, Op, OpContext, OpFailure, OpOutcome, Row } from "./types.js";
 
 // === 自建实现: 内建动作的 Op 包装（设计：docs/design/pipeline-op-model.md §3.2）===
@@ -240,6 +242,140 @@ function makeSearchOp(text: string): Op {
 }
 
 /**
+ * base <file>[#<viewName>] 算子工厂。双角色（源/转换）：
+ * - 源模式（入参 rows 为空）：执行 BaseEngine.query，每个命中文件产出为 Row（path=文件路径，
+ *   fields=该行所有列值，包括 formula 计算列——这是本算子的核心价值）。
+ * - 转换模式（入参 rows 非空）：用 BaseEngine 结果的 path 集合过滤上游行，
+ *   并把列值合并进保留行的 fields，同名键上游优先。
+ *
+ * 参数格式：`base <file>[#<viewName>]`，# 后为 view 名，缺省取 views[0]。
+ *
+ * 诊断处理：
+ * - severity=error 的诊断必须记进 failed（不抛异常，不静默吞掉）。
+ * - severity=warning/info 的诊断不进 failed（base 的 markdown-only 数据集恒发 warning，
+ *   若 warning 也算失败则任何 base 算子都会失败）。
+ *
+ * 生命周期：每次 run 自己开自己关 BaseEngine，不要泄漏连接。
+ */
+function makeBaseOp(params: string): Op {
+  // 解析 `base <file>[#<viewName>]` 格式
+  const hashIdx = params.indexOf("#");
+  const basePath = hashIdx === -1 ? params.trim() : params.slice(0, hashIdx).trim();
+  const viewName = hashIdx === -1 ? undefined : params.slice(hashIdx + 1).trim() || undefined;
+
+  return {
+    name: "base",
+    write: false,
+    rowwise: false,
+    async run(rows: Row[], ctx: OpContext): Promise<OpOutcome> {
+      if (!ctx.vaultRoots || !ctx.dbPath) {
+        const missing: string[] = [];
+        if (!ctx.vaultRoots) missing.push("vaultRoots");
+        if (!ctx.dbPath) missing.push("dbPath");
+        const errMsg = `ctx.${missing.join("/")} 未提供：base 算子需要 vaultRoots 和 dbPath`;
+        const failedEntry: OpFailure = { path: "<base>", op: "base", error: errMsg };
+        return {
+          rows: rows.length === 0 ? [] : rows,
+          failed: [failedEntry],
+          changed: [],
+          skipped: [],
+        };
+      }
+
+      // 把 basePath 解析为 vault 内绝对路径：loadBaseDocument 用 resolve() 从 CWD 解析，
+      // 而 vault 根未必是 CWD（尤其在测试中）。这里用 resolveVaultLayout.toAbs 把
+      // vault 相对路径转绝对路径，与 indexer 的路径解析口径一致。
+      let absBasePath: string;
+      try {
+        const layout = resolveVaultLayout(ctx.vaultRoots);
+        absBasePath = layout.toAbs(basePath);
+      } catch {
+        const failedEntry: OpFailure = { path: "<base>", op: "base", error: "vault 根解析失败" };
+        return {
+          rows: rows.length === 0 ? [] : rows,
+          failed: [failedEntry],
+          changed: [],
+          skipped: [],
+        };
+      }
+
+      const engine = new BaseEngine();
+      try {
+        const result = engine.query({
+          basePath: absBasePath,
+          view: viewName,
+          dbPath: ctx.dbPath,
+          vaultRoots: ctx.vaultRoots,
+        });
+
+        // 收集 error 级诊断到 failed
+        const baseFailed: OpFailure[] = [];
+        for (const d of result.diagnostics) {
+          if (d.severity === "error") {
+            baseFailed.push({
+              path: d.file,
+              op: "base",
+              error: `${d.rule}: ${d.message}`,
+            });
+          }
+        }
+
+        const columns = result.columns;
+
+        // 源模式：忽略入参，从 BaseEngine 结果直接产出行
+        if (rows.length === 0) {
+          if (baseFailed.length > 0) {
+            return { rows: [], failed: baseFailed, changed: [], skipped: [] };
+          }
+          const out: Row[] = result.rows.map((r) => {
+            const path = String(r["file.path"] ?? "");
+            const fields: Record<string, unknown> = {};
+            for (const col of columns) {
+              if (col !== "file.path") fields[col] = r[col];
+            }
+            return { path, fields };
+          });
+          return { rows: out, failed: [], changed: [], skipped: [] };
+        }
+
+        // 转换模式：过滤 + 合并列值
+        if (baseFailed.length > 0) {
+          // 有 error 诊断时，行原样透传（不丢弃有效数据），同时报告失败
+          return { rows, failed: baseFailed, changed: [], skipped: [] };
+        }
+
+        const hitPaths = new Set<string>();
+        const fieldsMap = new Map<string, Record<string, unknown>>();
+        for (const r of result.rows) {
+          const p = r["file.path"];
+          if (typeof p === "string") {
+            hitPaths.add(p);
+            const fields: Record<string, unknown> = {};
+            for (const col of columns) {
+              if (col !== "file.path") fields[col] = r[col];
+            }
+            fieldsMap.set(p, fields);
+          }
+        }
+
+        const out: Row[] = [];
+        for (const row of rows) {
+          const bf = fieldsMap.get(row.path);
+          if (bf !== undefined) {
+            // 合并策略：BaseEngine 列值填充新键，不覆盖 row.fields 已有同名键
+            const mergedFields = { ...bf, ...row.fields };
+            out.push({ ...row, fields: mergedFields });
+          }
+        }
+        return { rows: out, failed: [], changed: [], skipped: [] };
+      } finally {
+        engine.close();
+      }
+    },
+  };
+}
+
+/**
  * 注册内建算子到 registry。
  * 不要在模块顶层自动执行——调用方显式调，避免 import 副作用与测试污染。
  */
@@ -261,5 +397,11 @@ export function registerBuiltinOps(): void {
   register("search", (params: string) => {
     if (!params) throw new Error("search 算子需要搜索文本参数");
     return makeSearchOp(params);
+  });
+  // 片二只读算子：base（依赖 ctx.vaultRoots/dbPath）
+  register("base", (params: string) => {
+    if (!params)
+      throw new Error("base 算子需要 .base 文件路径参数，格式：base <file>[#<viewName>]");
+    return makeBaseOp(params);
   });
 }

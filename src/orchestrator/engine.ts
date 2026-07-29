@@ -102,6 +102,8 @@ export class Orchestrator {
         dryRun: pipeline.dryRun ?? true, // 写动作默认 dry-run（spec §6.6）
         ifExists: pipeline.ifExists ?? "skip",
         onWrite: (p) => this.selfWritten.set(p, Date.now()),
+        vaultRoots: this.layout.roots,
+        dbPath: this.dbPath,
       };
       const report = await runOpPipeline(rows, ops, ctx, {
         concurrency: pipeline.concurrency,

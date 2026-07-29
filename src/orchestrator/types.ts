@@ -92,6 +92,10 @@ export interface OpContext {
   onWrite?: (path: string) => void;
   /** rename 写动作遇目标键已存在时的冲突策略（默认 skip）。 */
   ifExists?: "skip" | "overwrite" | "merge";
+  /** vault 根目录列表（绝对路径）；base 算子需要。 */
+  vaultRoots?: string[];
+  /** 索引库路径；base 算子需要。 */
+  dbPath?: string;
 }
 
 /** 统一算子签名：批进批出，一个签名覆盖源/转换/动作/汇四种角色。 */
