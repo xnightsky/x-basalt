@@ -17,7 +17,7 @@ function buildOp(actionToken: string): Op {
     async run(rows: Row[], ctx: OpContext): Promise<OpOutcome> {
       // OpContext 与 ActionContext 结构一致，直接投影
       const actCtx = ctx as ActionContext;
-      const outcome: OpOutcome = { rows: [], failed: [] };
+      const outcome: OpOutcome = { rows: [], failed: [], changed: [], skipped: [] };
 
       for (const row of rows) {
         try {
@@ -27,12 +27,16 @@ function buildOp(actionToken: string): Op {
           } else {
             outcome.rows.push(row);
           }
+          // D9: 收集 changed/skipped 信号（ActionResult 本就有，之前没外传）
+          if (result.changed) outcome.changed.push(row.path);
+          if (result.skipped) outcome.skipped.push(row.path);
         } catch (err) {
           outcome.failed.push({
             path: row.path,
             op: action.name,
             error: String(err),
           });
+          // 抛异常的行：不变更不跳过，不加到 changed/skipped
         }
       }
 

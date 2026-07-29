@@ -8,6 +8,6 @@ export { getAction, listActions } from "./actions.js";
 export { foldEvents } from "./dedup.js";
 export { isSelfWrite, Orchestrator, type OrchestratorOptions } from "./engine.js";
 export { matchEvent, type RouteFilter, selectByDql } from "./route.js";
-export { type RunOptions, runPipeline } from "./run.js";
+export { type OpRunOptions, type RunOptions, runOpPipeline, runPipeline } from "./run.js";
 export { manualSourceFromDql, manualSourceFromPaths, scanSource, watchSource } from "./sources.js";
 export type * from "./types.js";

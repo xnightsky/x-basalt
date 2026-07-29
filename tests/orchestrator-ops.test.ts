@@ -160,6 +160,72 @@ test("Op-D5 Given registerBuiltinOps 已调 When resolve('apply llm-wiki') Then 
   assert.equal(op.rowwise, true);
 });
 
+// === Op-D7 写算子改文件时 changed[] 含该 path ===
+// set 算子 dryRun=false 且文件有变化 → outcome.changed 含路径、outcome.skipped 不含
+
+test("Op-D7 Given 写算子（set）dryRun=false 改了文件 When run Then outcome.changed 含路径", async () => {
+  const dir = mkVault({ "a.md": "---\nkey: old\n---\nbody\n" });
+  const indexer = new VaultIndexer({ vaultPath: dir, dbPath: join(dir, "i.db") });
+  try {
+    const set = resolve("set key=new") as Op;
+    const ctx: OpContext = { vaultPath: dir, indexer, dryRun: false };
+    const rows: Row[] = [{ path: "a.md", fields: {} }];
+
+    const outcome = await set.run(rows, ctx);
+
+    assert.deepEqual(outcome.changed, ["a.md"]);
+    assert.equal(outcome.skipped.length, 0);
+    assert.equal(outcome.failed.length, 0);
+  } finally {
+    indexer.close();
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+// === Op-D8 dryRun 下写算子的行进 skipped[] 而不进 changed[] ===
+// set 算子 dryRun=true → outcome.skipped 含路径、outcome.changed 为空
+
+test("Op-D8 Given 写算子（set）dryRun=true When run Then outcome.skipped 含路径、changed 为空", async () => {
+  const dir = mkVault({ "a.md": "---\nkey: old\n---\nbody\n" });
+  const indexer = new VaultIndexer({ vaultPath: dir, dbPath: join(dir, "i.db") });
+  try {
+    const set = resolve("set key=new") as Op;
+    const ctx: OpContext = { vaultPath: dir, indexer, dryRun: true };
+    const rows: Row[] = [{ path: "a.md", fields: {} }];
+
+    const outcome = await set.run(rows, ctx);
+
+    assert.deepEqual(outcome.skipped, ["a.md"]);
+    assert.equal(outcome.changed.length, 0);
+    assert.equal(outcome.failed.length, 0);
+  } finally {
+    indexer.close();
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+// === Op-D9 只读算子（parse）的 changed[] 为空 ===
+// parse 不写任何东西 → outcome.changed 恒为空数组
+
+test("Op-D9 Given 只读算子（parse）When run Then outcome.changed 为空", async () => {
+  const dir = mkVault({ "a.md": "# A\nOK\n" });
+  const indexer = new VaultIndexer({ vaultPath: dir, dbPath: join(dir, "i.db") });
+  try {
+    const parse = resolve("parse") as Op;
+    const ctx: OpContext = { vaultPath: dir, indexer, dryRun: true };
+    const rows: Row[] = [{ path: "a.md", fields: {} }];
+
+    const outcome = await parse.run(rows, ctx);
+
+    assert.equal(outcome.changed.length, 0);
+    assert.equal(outcome.skipped.length, 0);
+    assert.equal(outcome.failed.length, 0);
+  } finally {
+    indexer.close();
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
 // === Op-D6 event 缺省时默认 "change" ===
 // row.event 未指定时 Op.run 应投影为 ChangeEvent.type = "change"
 

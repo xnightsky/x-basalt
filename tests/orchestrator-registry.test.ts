@@ -12,7 +12,7 @@ function fakeOp(name: string): Op {
     write: false,
     rowwise: true,
     async run() {
-      return { rows: [], failed: [] };
+      return { rows: [], failed: [], changed: [], skipped: [] };
     },
   };
 }

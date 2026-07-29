@@ -108,9 +108,30 @@ export interface Op {
   run(rows: Row[], ctx: OpContext): Promise<OpOutcome>;
 }
 
-/** 算子产出：行与失败分开返回——调度层据 failed 把失败行从后续算子的输入中剔除（onError=continue 的新语义）。 */
+/** 算子产出：**行、失败、变更三者分开返回**。
+ * 调度层据 failed 把失败行从后续算子的输入中剔除（onError=continue 的新语义）。
+ * `changed` / `skipped` 见 D9：旧模型这两个信号来自 `ActionResult.changed/skipped`，
+ * `RunReport` 的 `changed`/`skipped`/`changedPaths`/`byAction` 全部由它们聚合而来；
+ * 如果只返回 `rows` + `failed`，这些字段会静默归零——而 `changedPaths` 正是写后刷索引
+ * （`d04d47d`）赖以工作的输入。 */
 export interface OpOutcome {
   rows: Row[];
+  failed: OpFailure[];
+  /** 本算子真正改动了的行 path（写 DB 或写 .md）。只读算子恒为空数组。 */
+  changed: string[];
+  /** 本算子跳过的行 path（dry-run 的写算子、或无需处理）。 */
+  skipped: string[];
+}
+
+/** 算子级执行步骤报告（runOpPipeline 产出，每条 Op 一条）。 */
+export interface StepReport {
+  /** 算子名。 */
+  op: string;
+  /** 进入该 Op 的行数。 */
+  rowsIn: number;
+  /** 成功通过该 Op 的行数（rowsOut = rowsIn - failed 条数）。 */
+  rowsOut: number;
+  /** 该 Op 产生的失败记录。 */
   failed: OpFailure[];
 }
 
@@ -176,4 +197,6 @@ export interface RunReport {
   byAction: Record<string, number>;
   /** 写后自动刷进索引的文件数（dry-run 或动作链已含 index 时为 0）。见 engine.runBatch。 */
   reindexed: number;
+  /** 算子管道执行步骤流水（仅 runOpPipeline 会填充，向后兼容保持可选）。 */
+  steps?: StepReport[];
 }
