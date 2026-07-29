@@ -7,8 +7,8 @@ tags:
   - orchestration
   - pipeline
   - x-basalt
-timestamp: 2026-07-29T18:14:16Z
-sha256: bafcc209446f6ee15a7f0b25a2372080a7347498e1887ef4c363e3c45fcfa10a
+timestamp: 2026-07-29T18:39:12Z
+sha256: c5f8e4df736586c875054fde35b84dae137dcd174f7fc0113a4f2ce3890fcbbe
 ---
 # 内置 pipeline 改造：统一算子模型
 
@@ -26,6 +26,11 @@ sha256: bafcc209446f6ee15a7f0b25a2372080a7347498e1887ef4c363e3c45fcfa10a
 > **2026-07-30 增补**：动手前发现原文有两处设计缺口 + 一条假判据，已补齐并落 D6/D7/D8——
 > 批算子模型下并发无处安放（§3.2.1）、`Op.run → Row[]` 表达不了逐行失败（§3.2）、
 > 片一「测试全绿即迁移正确」与「要改测试」自相矛盾（§9.1）。§12 的未决问题相应从 3 条重排。
+>
+> **2026-07-30 二次增补（S4 实现撞出来的两条）**：D9——`OpOutcome` 漏了 `changed`/`skipped`
+> 信号，不补则 `RunReport` 四个字段静默归零并连带打回 `d04d47d` 的写后刷索引；D10——§3.2.1 的
+> 「切成片」与 §9.1-B 的「同时在跑的行数 ≤ concurrency」互斥，钉死为逐行领取。
+> 两条都是**写代码时才暴露的设计歧义**，不是实现错误。
 
 ## 1. 要解决的问题
 
@@ -104,13 +109,21 @@ interface Op {
 }
 
 /**
- * 算子产出：**行与失败分开返回**。
- * 调度层据 `failed` 把失败行从后续算子的输入中剔除（onError=continue 的新语义，§6）——
- * 光靠 `Row[]` 表达不了「哪些行失败了」，而这正是现有「跳过该文件剩余动作」的等价物。
+ * 算子产出：**行、失败、变更三者分开返回**。
+ * - `failed`：调度层据此把失败行从后续算子的输入中剔除（onError=continue 的新语义，§6）——
+ *   光靠 `Row[]` 表达不了「哪些行失败了」，而这正是现有「跳过该文件剩余动作」的等价物。
+ * - `changed` / `skipped`：见 D9。旧模型这两个信号来自 `ActionResult.changed/skipped`，
+ *   `RunReport` 的 `changed`/`skipped`/`changedPaths`/`byAction` 全部由它们聚合而来；
+ *   新模型若只返回 `rows` + `failed`，这些字段会静默归零——**而 `changedPaths` 正是写后刷索引
+ *   （`d04d47d`）赖以工作的输入**，归零等于把那个刚修好的缺陷再打回去。
  */
 interface OpOutcome {
   rows: Row[];
   failed: OpFailure[];
+  /** 本算子真正改动了的行 path（写 DB 或写 .md）。只读算子恒为空数组。 */
+  changed: string[];
+  /** 本算子跳过的行 path（dry-run 的写算子、或无需处理）。 */
+  skipped: string[];
 }
 
 interface OpFailure {
@@ -147,8 +160,19 @@ interface OpFailure {
 
 采纳方案的规则很短：
 
-- `rowwise: true` → 调度层把批切成片、按 `concurrency` 并发喂给算子，**复用现有 worker 池那段代码**（`run.ts:101-112`），并发语义与今天逐字等价。现有 7 个动作（`index`/`parse`/`normalize`/`apply`/`set`/`unset`/`rename`）全部属此类。
-- `rowwise: false` → 整批一次调用，不切。`dedup`/`limit`/`emit` 以及任何需要看全批才能算的汇总类算子属此类。
+- `rowwise: true` → 调度层用 worker 池**逐行领取**、并发调用该算子（每次 `op.run([row], ctx)`），
+  **复用现有 worker 池那段代码**（`run.ts:101-112`），并发语义与今天逐字等价。
+  现有 7 个动作（`index`/`parse`/`normalize`/`apply`/`set`/`unset`/`rename`）全部属此类。
+- `rowwise: false` → 整批一次调用，不拆。`dedup`/`limit`/`emit` 以及任何需要看全批才能算的汇总类算子属此类。
+
+> **为什么是「逐行领取」而不是「切成 N 片」**（2026-07-30 钉死，原文此处措辞含糊，实现时撞出来）：
+> 切片方案与 §9.1-B 的判据「同时在跑的**行**数 ≤ `concurrency`」直接矛盾——真切片时同时在跑的
+> 行数约等于全批，能限住的只是**片**数。两者只能二选一，选逐行领取，理由：
+> ①`rowwise` 按定义就是逐行独立，批量优化空间本来就小，而真正需要批量优化的算子
+> （`query`/`base`/`search` 一次查库）恰恰都是 `rowwise: false`、走整批分支，收不到切片的好处；
+> ②逐行领取才是「与今天逐字等价」，而旧语义正是本片一唯一的兼容锚点。
+> 代价是 N 行 = N 次调用，可接受；若将来出现「既逐行独立又值得批量优化」的算子，再引入
+> 第三档（如 `chunkSize`），不在片一预留。
 
 **默认 `false`（保守）**：新算子作者不声明就是整批一次，最多损失并发；反过来默认 `true`
 则会让「其实依赖全批」的算子被静默切开，产出错误结果且难以复现。
@@ -306,6 +330,8 @@ base tasks.base#overdue → meta.set status={{row.next_status}}
 | D6 | 并发由调度层按 `Op.rowwise` 切批实现，默认 `false` | 两层循环对调后 `concurrency` 失去落点（§3.2.1）；`rowwise` 让现有 7 动作的并发逐字等价，同时保护「必须看全批」的算子 | ①每个算子自己实现并发——同一段 worker 池重复 8 次且口径会漂；②取消并发——IO 密集算子性能倒退；③默认 `true`——依赖全批的算子被静默切开，错得难复现 |
 | D7 | `Op.run` 返回 `{rows, failed}` 而非 `Row[]` | `onError=continue` 要求调度层知道**哪些行**失败以便从后续算子剔除，`Row[]` 表达不了 | ①失败编码进 `Row.fields`——污染数据面，且与 §12 诊断键名问题纠缠；②抛异常——只能表达整批失败，等于把 `continue` 降级成 `stop` |
 | D8 | 片一判据换成「对外契约机械比对 + 重定义语义新立用例」 | 原判据「测试全绿=行为不变」自相矛盾：D6/D7 已决定要改那批测试 | 保留原判据——会导致要么不敢改测试（模型被旧执行语义焊死），要么改了测试却失去唯一判据 |
+| D9 | `OpOutcome` 补 `changed[]` / `skipped[]` 两个 path 列表 | D7 只定了 `rows`+`failed`，漏了「哪些行真的被改了」——而 `RunReport` 的 `changed`/`skipped`/`changedPaths`/`byAction` 全靠这个信号聚合，缺了就静默归零，连带打回 `d04d47d` 的写后刷索引（它以 `changedPaths` 为输入）。S4 实现时撞出来 | ①从 `rows` 反推——无从区分「跑过没改」与「改了」；②在 `Row.fields` 里约定魔法键——污染数据面且与 §12 的诊断键名冲突；③让 engine 自己 diff 磁盘——把已知信息扔掉再花 IO 猜回来 |
+| D10 | `rowwise` 并发是「逐行领取」而非「切成 N 片」 | §3.2.1 原措辞「切成片」与 §9.1-B 判据「同时在跑的**行**数 ≤ concurrency」互斥，且真正值得批量优化的算子都是 `rowwise: false` 走整批分支、收不到切片好处；逐行才是「与今天逐字等价」 | 切成 N 片——判据要改写成限制片数，失去与旧语义的等价锚点，而这是片一唯一的兼容判据 |
 
 ## 11. 验收口径
 
