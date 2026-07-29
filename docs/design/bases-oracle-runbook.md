@@ -80,38 +80,56 @@ Obsidian 升级后重跑（本手册结论绑定 1.12.7 + §2 的 fixture 指纹
 
 ### 1.1 2026-07-28 函数覆盖率批次新增的暂定口径（⑩ 起）
 
-> 这批**没有现成 fixture view**——写 fixture 属 oracle 阶段的工作，本轮功能补齐未做。
-> 逐条实现细节见[实现状态追踪 §6](bases-status.md) 各片明细；跑 oracle 前需先为下表补 view。
+> 逐条实现细节见[实现状态追踪 §6](bases-status.md) 各片明细。
+> **fixture ✅ 2026-07-29 已补齐**（§1.3），下表的 `fixture view` 列即取证入口。
 
-| # | 暂定口径 | 出处 |
-| --- | --- | --- |
-| ⑩ | `string.title()` = 按空白切词 + 词首大写 + 词余小写 | 片一 |
-| ⑪ | `slice(start, end?)`（string/list）负索引与越界钳制沿用 JS 语义 | 片一 |
-| ⑫ | `replace(a, b)` 为**字面子串全局替换**（非 regex，`$&` 不展开，空串报错） | 片一 |
-| ⑬ | `reverse()`（string）按 code point 反转（字素簇仍会拆） | 片一 |
-| ⑭ | `number.isEmpty()` / `date.isEmpty()` 恒 false | 片一/片二 |
-| ⑮ | `date.time()` 返回**当日 UTC 零点起的 duration**（而非 `"HH:mm"` 字符串） | 片二 |
-| ⑯ | `date.format()` 只做数字 token，本地化 token 报错；同字符游程分词 | 片二 |
-| ⑰ | `date.relative()` 固定英文 + 固定阶梯（month=30d / year=365d） | 片二 |
-| ⑱ | `date(number)` 按 epoch 毫秒、`duration(number)` 按毫秒（自建扩展） | 片二 |
-| ⑲ | `file(path)` 只在**当前查询行集**内解析；同键多文件取 path 升序第一个 | 片三 |
-| ⑳ | `linksTo(file 值)` 走解析、`linksTo(string/link)` 走文本匹配 | 片三 |
-| ㉑ | `matches` 的 ReDoS 静态判据（哪些正则被拒）与「非法即报诊断」 | 片四 |
-| ㉒ | 组级汇总 `groups[].summaries` 计算集 = 该组 **limit 后**的行 | 片五 |
-| ㉓ | 分组键组序：可比标量 < link < null/MISSING | 片五 |
+| # | 暂定口径 | 出处 | fixture view |
+| --- | --- | --- | --- |
+| ⑩ | `string.title()` = 按空白切词 + 词首大写 + 词余小写 | 片一 | `types::str-list-methods` |
+| ⑪ | `slice(start, end?)`（string/list）负索引与越界钳制沿用 JS 语义 | 片一 | `types::str-list-methods` |
+| ⑫ | `replace(a, b)` 为**字面子串全局替换**（非 regex，`$&` 不展开，空串报错） | 片一 | `types::str-list-methods` |
+| ⑬ | `reverse()`（string）按 code point 反转（字素簇仍会拆） | 片一 | `types::str-list-methods` |
+| ⑭ | `number.isEmpty()` / `date.isEmpty()` 恒 false | 片一/片二 | `types::is-empty-nonstring` |
+| ⑮ | `date.time()` 返回**当日 UTC 零点起的 duration**（而非 `"HH:mm"` 字符串） | 片二 | `types::date-methods` |
+| ⑯ | `date.format()` 只做数字 token，本地化 token 报错；同字符游程分词 | 片二 | `types::date-methods` + `date-format-localized`（隔离） |
+| ⑰ | `date.relative()` 固定英文 + 固定阶梯（month=30d / year=365d） | 片二 | `types::date-methods` |
+| ⑱ | `date(number)` 按 epoch 毫秒、`duration(number)` 按毫秒（自建扩展） | 片二 | `types::ext-constructors`（隔离） |
+| ⑲ | `file(path)` 只在**当前查询行集**内解析；同键多文件取 path 升序第一个 | 片三 | `types::file-fn-resolve` |
+| ⑳ | `linksTo(file 值)` 走解析、`linksTo(string/link)` 走文本匹配 | 片三 | `types::file-fn-resolve` |
+| ㉑ | `matches` 的 ReDoS 静态判据（哪些正则被拒）与「非法即报诊断」 | 片四 | ❌ **不可取证**（见 §1.3） |
+| ㉒ | 组级汇总 `groups[].summaries` 计算集 = 该组 **limit 后**的行 | 片五 | `group-summary::group-limit-summary` |
+| ㉓ | 分组键组序：可比标量 < link < null/MISSING | 片五 | `group-summary::group-desc-nullpos` |
 
 ### 1.2 2026-07-28 调研补登记：此前漏登的暂定口径（㉔ 起）
 
 > 这三条在源码注释里已自认「官方未明示/官方未定义」，但**从未进入本手册的观察清单**——即本手册 §1 此前并非争议全集。
-> 同样无 fixture view。
+> fixture ✅ 2026-07-29 已补齐（§1.3）。
 
-| # | 暂定口径 | 落点 |
-| --- | --- | --- |
-| ㉔ | `Median` 汇总：偶数个样本取中间两值的**均值**（而非取下中位） | `src/base/summaries.ts:118` |
-| ㉕ | `Stddev` 汇总：取**总体**标准差（÷n），非样本标准差（÷(n−1)） | `src/base/summaries.ts:128` |
-| ㉖ | Duration 的 `month` = 30 day、`year` = 365 day 固定换算，作用于**全部 duration 算术**（非仅 `date.relative()`）——⑰ 只登记了 `relative()` 的阶梯，登记面窄于实际影响面 | `src/base/values.ts:144` |
+| # | 暂定口径 | 落点 | fixture view |
+| --- | --- | --- | --- |
+| ㉔ | `Median` 汇总：偶数个样本取中间两值的**均值**（而非取下中位） | `src/base/summaries.ts:118` | `group-summary::agg-median-even` |
+| ㉕ | `Stddev` 汇总：取**总体**标准差（÷n），非样本标准差（÷(n−1)） | `src/base/summaries.ts:128` | `group-summary::agg-stddev` |
+| ㉖ | Duration 的 `month` = 30 day、`year` = 365 day 固定换算，作用于**全部 duration 算术**（非仅 `date.relative()`）——⑰ 只登记了 `relative()` 的阶梯，登记面窄于实际影响面 | `src/base/values.ts:144` | `types::duration-units` |
 
-**fixture 缺口合计：⑩..㉖ 共 17 条无 view**；现有 26 个 view 只覆盖 ①..⑨。
+### 1.3 fixture 补齐（2026-07-29）
+
+原缺口是「⑩..㉖ 共 17 条无 view」。现已补 **12 个 view**覆盖其中 16 条，全部在 x-basalt 侧跑通、有确定读数、无 error 级诊断。
+
+**为什么 17 条只用了 12 个 view**：这批的判据**全在投影列的值里**，不在行集里，而取证脚本已经在采 `cells`（2026-07-28 为定论 ③⑧⑨ 加的）。所以一个 view 挂一批常量表达式列，一次渲染就读回多条口径的答案——不必一条一个 view。
+
+**三条硬约束**（违反任何一条都会让既有 26 条观察记录作废或读数失真）：
+
+1. **只往已有 `.base` 加 view，绝不新建 `.base` 文件。** 官方默认数据集把 `.base` 自身也算作行，每多一个文件所有无 filter view 的行数就 +1。
+2. **同理不新增 `.md`。** 口径⑲⑳ 需要一篇有正文出链的笔记，解法是往**已有的** `CaseE.md` 正文里加一行 `[[CaseB]]`——改内容不改文件数，既有行集不动。（`fixtureHashes` 会变，那是有意的：提醒重跑时 fixture 已不是上次那份。）
+3. **filter 用 `file.path` 不用 `file.name`。** 官方渲染 `file.name` 不带扩展名、x-basalt 带（§4 注），拿它做 filter 会两边行集不同。
+
+**隔离原则**：已知会报错或可能是本仓自建扩展的表达式**单独占一个 view**——官方遇到不认识的函数可能整个 view 求值失败，混在一起会把同伴的读数一起废掉。据此隔离了三个：`mean-mixed-list`（⑧(a) 前置，最不能被连坐）、`date-format-localized`（⑯ 本地化 token，本仓已知报错）、`ext-constructors`（⑱ 自建扩展，官方很可能没有）。x-basalt 侧实测是列级隔离（同 view 一列报错不影响其他列），官方是否如此未知，故按最坏情况处理。
+
+**㉑ 判定为不可取证**：`matches` 的 ReDoS 静态判据是**本仓自己的安全策略**（三层防护，拒绝哪些正则由本仓定），官方没有对应语义可观察。它的终局直接是 documented boundary，不需要 view。
+
+**补 view 时顺带确认的一处本仓不一致**（㉓ 的漏登维度）：`group-desc-nullpos` 实测组序为 `null[4] → 2 → 1`，**空值组排最前**。即顶层 sort 的空值恒排最后（② 已校正冻结），而 `groupBy.direction: DESC` 仍把整个次序取反、连空值组一起翻。官方若两个方向都把空值组排最后 → 与 ② 同源按 bug 修；若也取反 → 维持现状 + 落文档。
+
+**fixture 缺口现状：⑩..㉖ 中 16 条已有 view，㉑ 判定不可取证。** view 总数 26 → 38，下次取证会连既有 26 条一起重跑（免费回归）。
 
 ## 2. 前置
 
