@@ -6,8 +6,8 @@ tags:
   - architecture
   - overview
   - x-basalt
-timestamp: 2026-07-09T05:53:07Z
-sha256: 7c9013aad876acc9bc8123b814f595b04fa5344050048ac7e240171cf11371a8
+timestamp: 2026-07-29T04:31:35Z
+sha256: 929605e17393c2f1efc9af68e50a3a1e15f50f82e4c3b27a37359c8f02e19e29
 ---
 
 # x-basalt 架构总览
@@ -240,4 +240,261 @@ tests/        Node 原生测试 + fixtures/sample-vault
 
 - 读侧（parser/indexer/query/skill/cli）+ 写侧（meta：CRUD/normalize/profile-apply，三套 profile）均已落地，272 测试绿，处于 dogfood 观察期。
 - 待 dogfood 暴露真实需求再开的方向（migrate 批量改造、lint schema 校验、watch pipeline 常驻管线）见 [`TODO.md`](../../TODO.md)。
-- **2026-07 更新**：新增一级单元 `src/base/`（Bases 无头引擎，P0 文档层 → P1 查询 → P2 formulas/类型/分组汇总，只读边界；all-files/context 属 P3，schema 决策见 [`../specs/2026-07-27-bases-p3-vault-entries-decision.md`](bases-vault-entries.md)）。
+- **2026-07 更新**：新增一级单元 `src/base/`（Bases 无头引擎，P0 文档层 → P1 查询 → P2 formulas/类型/分组汇总，只读边界；all-files/context 属 P3，schema 决策见 [`bases-vault-entries.md`](bases-vault-entries.md)）。
+
+## 13. Bases 模块内部架构（zoom-in）
+
+`src/base/` 是七一级单元之一，因其是**最核心的新增模块**（也是当前正在给你讲的部分），特此放大画出内部架构图。
+
+### 13.1 架构线框图
+
+```text
+┌──────────────────────────────────────────────────────────────────┐
+│                    CLI 薄出口（未来）                              │
+│                BaseEngine.query({...})                           │
+└────────────────────────────┬─────────────────────────────────────┘
+                             │
+                             ▼
+┌──────────────────────────────────────────────────────────────────┐
+│  🎮 执行引擎                    engine.ts                        │
+│                                                                  │
+│  ┌─────────────┐  ┌──────────────┐  ┌───────────────────┐       │
+│  │ planner.ts  │  │ evaluator.ts │  │   source.ts       │       │
+│  │  (编译计划)  │─▶│  (逐行求值)   │  │  (SQLite 数据源)   │       │
+│  └──────┬──────┘  └──────┬───────┘  └────────┬──────────┘       │
+│         │                │                    │                  │
+│         │     ┌──────────▼────────┐          │                  │
+│         │     │  values.ts        │          │                  │
+│         │     │  (值语义/比较/     │          │                  │
+│         │     │   序列化)          │          │                  │
+│         │     └───────────────────┘          │                  │
+│         │                                    │                  │
+│         │     ┌──────────┐   ┌────────────┐  │                  │
+│         │     │ parser.ts│   │ tokens.ts  │  │                  │
+│         │     │ (AST 编译)│   │ (词法分析)  │  │                  │
+│         │     └──────────┘   └────────────┘  │                  │
+│         │                                    │                  │
+│         ▼                                    ▼                  │
+│  ┌──────────────────────────────────────────────────────────────┐│
+│  │  summaries.ts  │  typeschema.ts  │  functions.ts             ││
+│  │  (15内置汇总+   │  (类型表只读)   │  (函数注册表)             ││
+│  │   自定义汇总)    │               │                            ││
+│  └──────────────────────────────────────────────────────────────┘│
+└──────────────────────────────────────────────────────────────────┘
+                             │
+                             ▲
+                             │ 调用
+┌──────────────────────────────────────────────────────────────────┐
+│  📋 P0 文档层                       document.ts                 │
+│                                                                  │
+│  职责链（5 道防线，顺序执行）：                                    │
+│  ① 路径越界检查 ── resolveInsideVault()                          │
+│  ② 文档大小预算 ── stat → maxDocumentBytes                      │
+│  ③ YAML 解析    ── parseDocument + alias 预算（防 alias bomb）    │
+│  ④ Schema 校验   ── views/type/name/limit/sort/groupBy/summaries │
+│  ⑤ 浅扫描       ── scanExpression（白名单核对 + token 预算）      │
+│                                                                  │
+│  产出：BaseDocument { path, views[], filters, diagnostics[] }    │
+└──────────────────────────────────────────────────────────────────┘
+                             │
+                             ▼
+┌──────────────────────────────────────────────────────────────────┐
+│  🏗️ 类型定义 + 诊断契约           types.ts + errors.ts            │
+│                                                                  │
+│  types.ts: BaseDocument / BaseView / BaseFilter / BaseExpr(AST)  │
+│            BaseDocumentLimits / BaseExecutionLimits(10 道预算)    │
+│                                                                  │
+│  errors.ts: BASE_RULES(20+ 条 rule id) + baseDiagnostic 构造器   │
+│             诊断形状: { file, line, col, rule, severity, message }│
+└──────────────────────────────────────────────────────────────────┘
+```
+
+### 13.2 组件依赖方向
+
+```text
+源文件                  依赖                          被依赖
+───────                ──────                        ────────
+index.ts               ──                            types.ts, errors.ts, document.ts
+                       (聚合出口，cli / engine 消费)   parser, evaluator, source 等
+
+types.ts               ──                            全部 15 个文件
+                       无依赖（纯 type/interface 定义）
+
+errors.ts              types.ts                      全部诊断产出方
+                       ../diagnostic.ts               （document/planner/evaluator/engine）
+
+document.ts            types.ts, errors.ts,           engine.ts(planBaseQuery)
+                       expressions.ts                 （唯一 .base 读取边界）
+                       yaml, node:fs
+
+expressions.ts         errors.ts                     document.ts（浅扫描），
+                                                      functions.ts（白名单共享）
+
+parser.ts              tokens.ts                     planner.ts（编译 filter/sort/order）
+(tokens.ts → 词法)      types.ts, chevrotain?
+
+planner.ts             document.ts, parser.ts         engine.ts（接收编译计划）
+                       errors.ts, types.ts
+
+evaluator.ts           values.ts, functions.ts        engine.ts
+                       errors.ts, types.ts
+
+values.ts              types.ts                       evaluator.ts, source.ts
+                       （值语义/比较/序列化）
+
+source.ts              values.ts, types.ts            engine.ts（SQLite → BaseRow）
+                       better-sqlite3
+
+engine.ts              上述全部                      CLI 薄出口
+                       better-sqlite3
+
+summaries.ts           types.ts, values.ts            engine.ts（内置 15 汇总函数）
+
+functions.ts           types.ts                       evaluator.ts（函数分派）
+
+typeschema.ts          node:fs                        engine.ts（.obsidian/types.json）
+```
+
+### 13.3 执行流水线（engine.query 内 8 步）
+
+```text
+SQLite
+  │
+  ▼
+readBaseRows ──→ filter 逐行（truthy 判定，行级错误跳过）
+  │                   │
+  │                   ▼
+  │             sort 多键稳定排序（恒附 file.path ASC tie-break）
+  │                   │
+  │                   ▼
+  │             limit 截断（total = filter 后 limit 前真实行数）
+  │                   │
+  │                   ▼
+  │             投影序列化（行级错误 cell → null，不崩）
+  │                   │
+  │                   ▼
+  │             groupBy 分桶（P2b：list 键扇出）
+  │                   │
+  │                   ▼
+  │             summaries 汇总（内置 15 名 / 自定义）
+  │                   │
+  ▼                   ▼
+BaseQueryResult { conformance, base, view, columns, total, rows, groups?, summaries?, diagnostics }
+```
+
+### 13.4 10 道安全预算防线
+
+| 防线 | 字段 | 默认值 | 约束目标 | 触发后果 |
+|------|------|--------|----------|----------|
+| 1 | maxDocumentBytes | 1 MiB | 超大文件不读 | 读取前拒绝（stat 预判） |
+| 2 | maxYamlAliases | 100 | YAML alias bomb | toJS 时拒绝，返空结果 |
+| 3 | maxFilterDepth | 32 | filter 嵌套深度（迭代栈实现） | 不展开分支，防栈溢出 |
+| 4 | maxExpressionNodes | 1000 | P0 token / P1 AST 节点 | 解析终止 |
+| 5 | maxCallDepth | 64 | 函数调用嵌套 | 求值终止 |
+| 6 | maxFormulaNodes | 256 | 公式数量 | 不建依赖图 |
+| 7 | maxFormulaDepth | 64 | 公式依赖链长度 | 不执行公式 |
+| 8 | maxRows | 100,000 | 单次查询候选行 | source 层截断 |
+| 9 | maxOperations | 1,000,000 | 单表达式求值操作数 | 转 execution-budget error |
+| 10 | maxTotalOperations | 50,000,000 | 整次查询操作数总额 | 兜底：防 maxRows×列数淹过 |
+
+### 13.5 关键不变量
+
+1. **不写 vault/DB** — engine 以 `readonly` 打开 SQLite，不写 .md、不写 .base、不写索引
+2. **无 `eval` / `new Function`** — AST 解释器手写，不动态生成代码
+3. **预算耗尽不返回部分结果** — 任何一道防线碰壁即 `execution-budget` error + 空结果
+4. **行级错误不崩查询** — filter 行当作 unselected，投影 cell 置 null
+5. **错误经 diagnostics 返回，不 throw** — 唯一例外：索引库打不开（fileMustExist）
+6. **诊断字节稳定** — 产出顺序固定（文档层→planner→引擎→行级），不随行数无界增长
+
+### 13.6 BaseDocument 类型对象关系
+
+```text
+BaseDocument
+  ├── path: string  （vault 相对 POSIX 路径）
+  ├── filters?: BaseFilter
+  │     ├── kind="expr"  ──→ { expr: string, span: SourceSpan }
+  │     └── kind="and"|"or"|"not"
+  │           └── children: BaseFilter[]  ← 递归引用自身（树形结构）
+  ├── formulas?: Record<string, BaseFormulaDef>
+  │     └── BaseFormulaDef = { expr: string, span: SourceSpan }
+  ├── summaries?: Record<string, BaseFormulaDef>  （结构同 formulas）
+  ├── properties?: Record<string, { displayName?: string }>
+  ├── views: BaseView[]      （必填，≥1 个；error 诊断使其空时不执行）
+  │     └── BaseView
+  │           ├── type: string         （"table" | 未知 | 插件，不猜测）
+  │           ├── name: string         （唯一，重名 → error）
+  │           ├── filters?: BaseFilter （view 级 filter，P1 与顶层 AND 合并）
+  │           ├── order?: string[]     （投影列 property-ref 列表）
+  │           ├── sort?: BaseViewSort[]
+  │           │     └── { property: string, direction: "ASC"|"DESC" }
+  │           ├── limit?: number
+  │           ├── groupBy?: BaseViewGroupBy  （P2b）
+  │           ├── summaries?: Record<string, string>  （P2b：prop→汇总名）
+  │           └── span: SourceSpan     （view 在 YAML 中的位置）
+  ├── unknownKeys: Record<string, unknown>  （未知顶层 key 保留原值，warning）
+  ├── viewsSpan: SourceSpan   （views 键的位置）
+  └── diagnostics: BasaltDiagnostic[]
+
+聚合关系（→ = 引用，⇒ = 包含数组）：
+  BaseDocument ⇒ views: BaseView[]
+  BaseFilter → BaseFilter[].children（递归）
+  BaseView → BaseViewSort | BaseViewGroupBy
+  BaseFormulaDef → SourceSpan
+```
+
+### 13.7 BaseExpr AST 节点（10 种）
+
+```text
+所有节点共有字段：
+  offset: number  — 表达式内 UTF-16 code unit 位置（0-based），P1 诊断换算用
+
+kind           字段                                  含义/举例
+────           ─────                                  ────────
+literal        value: null | boolean | number | str   字面量："Done", 42, true
+
+list           items: BaseExpr[]                      列表 [a, b, c]
+
+property       base: "note" | "file" |                属性引用：
+               "formula" | "this"                      status → note.status
+               path: string[]                           file.name → file
+                                                         formula.x → 跨行公式
+
+member         target: BaseExpr                       成员访问：
+               name: string                             file.properties.author
+
+index          target: BaseExpr                       下标访问：
+               index: BaseExpr                          note["Review Status"]
+
+call           name: string                           函数/方法调用：
+               receiver: BaseExpr | null                contains(status, "x")  [receiver=null]
+               args: BaseExpr[]                         status.contains("x")  [receiver=status]
+
+not            arg: BaseExpr                           !isTruthy(status)
+
+neg            arg: BaseExpr                           -amount
+
+duration       amount: number                         duration 字面量：
+               unit: BaseDurationUnit                   3days, 1hour, 6month
+
+binary         op: "&&"|"||"|"=="|"!="|             二元运算：
+                  "<"|">"|"<="|">="|               status == "Done"
+                  "+"|"-"|"*"|"/"                    amount * 2
+               left: BaseExpr
+               right: BaseExpr
+
+
+节点树形关系（缩进=子节点引用）：
+  binary  ← left/right  → binary | not | call | property | literal | ...
+  call    ← args[]      → 任意 BaseExpr
+  call    ← receiver    → 方法调用的主体表达式
+  list    ← items[]     → 任意 BaseExpr
+  member  ← target      → 任意 BaseExpr
+  index   ← target + index → 各为任意 BaseExpr
+```
+
+### 13.8 场景索引
+
+查询流程见 §13.3；filter 合并策略见 §13.5；P0 文档层防线见 §13.1；
+公式编译与依赖图算法见 `src/base/planner.ts`（Kahn 拓扑排序 + 循环检测）；
+行级错误处理、contextFile 接线、groupBy 扇出、summaries 计算集等见 `src/base/engine.ts`。
+
