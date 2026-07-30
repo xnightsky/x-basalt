@@ -4,13 +4,33 @@
 
 ## [Unreleased]
 
-## [0.2.0] - 2026-07-30
+## [0.8.0] - 2026-07-31
 
-> 0.1.0（MVP）之后、dogfood 观察期内的累积变更：Bases 无头引擎全阶段（P0..P3a + oracle 校正）、meta 写侧、变更编排器与统一算子模型（含片四 steps）、两处 Windows 路径判定假阳修复。含 breaking（见 Changed 段）。
+> 统一算子模型片四（声明式 steps）、pipe-closure 评审修复、两处 Windows 路径判定假阳修复、管道写后自动刷索引。含 breaking（见 Changed 段）。
 
 ### Added
 
 - **`--pipe step=<spec>` 声明式步骤列表（统一算子模型片四，D12）** —— `--pipe` 新增可重复 `step=<spec>`：一 flag 一算子、按出现顺序成链、**不做逗号切分**；配置段对应 `pipelines.<name>.steps` 字符串数组（一元素一算子 spec，只收数组）。解决统一算子模型片二/三接入的算子参数含顶层逗号（DQL、`filter status == "a,b"`、`.base#view`）时，逗号分隔面 `actions=` 把单条 spec 劈碎、后半段被当算子名报「未知操作」的缺口——能力已落地但 CLI 表达不出来。`steps` 存在时优先于 `actions`；命令行显式给出链（`step` 或 `actions` 任一形态）整体覆盖配置基底链。`actions` 的括号感知切分行为逐字不变。
+
+### Changed
+
+- **（源码级 API breaking，CLI/配置/报告契约不变）统一算子模型片四**：`PipelineConfig.actions` 由必填降为可选（新增 `steps?: string[]`，两者至少其一、`steps` 优先）；`parsePipeFlags` 返回形状由 `Record<string, string>` 改为 `{ kv, steps }`（承载可重复 `step`，原 Record 形态重复键互相覆盖）。**只影响源码级消费者**——本包发布面是纯 CLI（无 `main`/`exports`），命令行 `actions=`、配置段与 `RunReport` 行为逐字不变。
+- **（breaking）`RunReport.changed` / `skipped` 改为「文件数」，与 `total` 同单位**。此前数的是**动作结果数**（文件 × 动作）：`actions=set,index` 跑 28 个文件会报 `total:28 / changed:56`——`changed > total` 直接说不通，调用方根本判断不出「到底改了几篇」。现同一文件被多个动作改动只计一次；旧口径的明细没丢，挪到新增的 `byAction`（动作名 → 该动作改动了几个文件）。报告另增 `changedPaths`（改动文件路径，写后刷索引与调用方复核都靠它）与 `reindexed`。受影响面：`run`/`scan --pipe`/`watch --pipe` 的 `--json` 输出与 chat 的 `pipeline_run` 返回值。现有测试断言的都是单动作场景（两种口径同值），未受影响。
+
+### Fixed
+
+- **两处 Windows 路径判定假阳修复（安全门/根解析）**：①`run --stdin` 的 vault 越界门（`assertPathsInVault`，pipe-closure C1）自写 `startsWith(root + sep)` 前缀比较——win32 下正斜杠路径（Git Bash 常见 `D:/vault/x.md`）与盘符小写形态（`d:\vault\…`）的**根内合法路径**被误判越界，整条 `run --stdin` 被拒；改为先 `resolve` 收拢形态（分隔符、`..` 归一）再复用「路径包含」单一真相源 `isPathInside`（win32 大小写归一），测试根形态对齐生产不变量「roots 已 resolve」，并补正斜杠/盘符小写回归用例。②`resolveVaultLayout` 根集合去重原按精确字符串——win32 下 `C:\vault` 与 `c:\vault` 同一目录被当两个根保留，随后误报「多根目录名冲突」（indexer / orchestrator / base 共用该根解析）；去重改按 `pathCaseKey` 口径（win32 忽略大小写），保留首次出现形态。
+- **`search` 的匹配口径与文档不符，且命令本身在消费侧文档里根本没有**。CLI 帮助与 chat 工具描述都写「整体按字面短语匹配」——这对纯 ASCII 成立，**对含中文的查询不成立**：实现走的是 trigram 并集 **OR 宽松召回**（`src/query/index.ts` 档 1，有意设计：中文无空白分词，严格短语会大量漏召，完整子串命中者由 bm25 排最前）。后果是 `total` 被当成「确实含该短语的篇数」而误读——实测 `search "回归网"` 与 `search "回归网-不存在"` 都返回 85（「不存在」单独搜是 0，却不缩小结果）。这是**文档与实现漂移**，与此前那次 tag 口径漂移同类，对 AI 消费者尤其致命（它按 `total` 下结论）。同批补齐三处既存缺口：(1) `docs/use/commands.md` **完全没有 `search` 章节**，而 `docs/use/README.md` 却指向该锚点（死链）——现补完整章节并入目录；(2) `skills-data/core.json5` 的 rules 里**没有 `search`**，运行时自我说明书缺这一整个命令；(3) `docs/use/ai-and-skills.md` 仍写全文检索「FTS5，规划中，尚未落地」，而它早已落地——这条会直接劝退使用者。另订正最短查询长度：文档写 3，实际是 **2**（`MIN_FTS_QUERY_LEN`，P4 已放宽）。**行为一行未改**，只让说明与实现一致。
+- **管道写动作落盘后不刷索引 —— 「成功回执」与「验证通道」互相矛盾**。`run` 的写动作改的是 `.md`，`query` 读的是 SQLite 索引，两者之间需要一次刷新。引擎里其实**已有**索引新鲜度纪律，但只做了一半：`runBatch` 在 `where` 过滤**之前**会先把候选落库（避免按陈旧索引选错），写完**却不刷回去**。于是实测轨迹长这样：`run --apply --pipe actions="set type=note" --pipe where=…` 报 `28 改动` → 紧接着 `query` 仍返回「28 篇缺 type」→ `scan` 显示 `modified: 28`（盘上确实改了）→ 只好再跑一次 `actions=index` → 第三次 `query` 才是 0。**管道自己报成功、而验证它的正规手段说没成功**，任何调用方（人或 AI）都只能不信、去重验，白走 `query → scan → run(index) → query` 四步；自然语言驱动时这一圈能吃掉大半个步数预算。现补上对称的另一半：非 dry-run 且确有改动时，自动把改动过的文件刷进索引（报告新增 `reindexed` = 刷新篇数，CLI 输出缀 `/ N 已刷索引`）。动作链自带 `index` 时**不重复刷**（那一步已落库）；`unlink` 事件按类型走 `removeByKey`，不会让 `update` 抛。默认开启，`--pipe refresh-index=false` 可关——关掉即回到旧行为（落盘与索引静默不一致），仅建议在「稍后必定统一 index」的批处理里用。
+- **列举类回答会「按规律补齐」凑数——生成不存在的路径**。实测让 chat 列全某目录下 72 篇笔记的路径：它一次 `list` 就拿到了完整正确的 72 条，却输出了一份**分月份、格式工整、结尾写着「合计 72 条，全部列出完毕」**的清单，其中 **17 条（24%）是凭空捏造的文件名**——真实的 `…/2026/06/` 下是 `backlog-79 / faq-80 / faq-82 / 对照表`，它写成了 `backlog-72 / index-73 / 决策记录-06 / 概览-07`。捏造集中在列表尾部，形态像是照抄了前 55 条之后按命名规律「续写」到承诺的条数。**比截断更危险**：截断至少看得出没列全，这个是自信、完整、可信度极高的假清单。SYSTEM_PROMPT 补一条通用纪律（不硬编码任何答案）：列具体条目时只能从工具返回逐条转写原文，不得改写 / 按命名规律推演补齐 / 为凑条数编造；条目多先翻页取全，实在列不全就如实说「只列出前 N 条、共 M 条」——宁可承认没列全，也不给一份掺假的完整清单。同批另补一条：`pipeline_run` 返回 `changed>0` 即已写成功且索引已刷新，不必再 `query`/`scan` 复核。**验证**：同一任务修后连跑两次，均为 72/72 逐条属实、0 捏造 0 漏列（修前 17 条捏造）。
+- **DQL 缺查询头（裸子句）只报文法期望列表，不指方向**。调用方常把「过滤条件」当成一整条 DQL 传（尤其管道 `where=`），写成 `FROM "inbox" WHERE type = null` 或直接 `WHERE …`；chevrotain 吐的是 `Expecting: one of these possible Token sequences: 1.[List] 2.[Table] 3.[Task] but found: 'FROM'`——这串东西不告诉人「补个 `LIST` 就行」。现首 token 即子句关键字（`FROM`/`WHERE`/`SORT`/`GROUP`/`FLATTEN`/`LIMIT`）时改抛定向错误，点名须以 `LIST`/`TABLE`/`TASK` 开头并把**补好头的原句**作为示例给出（可直接照抄）。做法与既有的 `LIKE → contains` 引导同源。**只作用于句首**：`LIST FROM "a" FROM "b"` 这类非句首文法错误仍报原始信息，不误导。
+
+## [0.7.0] - 2026-07-29
+
+> Bases 无头引擎全阶段落地（P0..P3a + 函数覆盖率六片 + oracle 校正）与配套质量门禁/docs 重组。含多条行为收紧与 oracle 校正 breaking（见 Changed 段）。
+
+### Added
+
 - **Bases 无头引擎（`src/base/`）+ `base` 命令** —— 无 GUI、无 Obsidian 运行时执行 `.base` view 查询（conformance `bases-markdown-2026-07`）：独立 Chevrotain 表达式文法（与 DQL token/AST 零共用）、递归 `and`/`or`/`not` filter、note/file 属性、白名单函数（string/list/object/file/time/number）、`order`/`sort`/`limit`、稳定 JSON 契约（`total` 为 limit 前行数、`file.path` 稳定 tie-break、字节稳定）、执行预算（文档/深度/节点/行数/集合/操作数硬上限）。P2 增量：`formulas`（依赖图拓扑 + `base/formula-cycle`）、算术与 duration 字面量、Date/Duration/Link 值、`today`/`now`（clock 注入）、list 高阶（`filter`/`map`/`reduce`/`flat`/`sort`/`unique`/`join`/`mean`）、`.obsidian/types.json` 可选只读、view `groupBy`（`groups` 增量字段）与 15 内置汇总 + 自定义 `values` 汇总。数据集默认 md-only（恒发 `base/markdown-only-dataset` warning；附件不为行，P3a 起可用 `--conformance bases-all-files-2026-07` 切换）；官方争议语义为暂定口径，待串行 oracle 冻结。
 - **Bases P3a 附件数据集（all-files）** —— indexer 将非 `.md` 附件（图片 / PDF / `.base` / `.canvas` 等一切非隐藏文件）以纯 stat 元数据写入独立 `vault_entries` 表（`index` / `scan` / `watch` 同步，跨表 path 唯一，`scan --json` 报告新增附件计数字段）；`base` 新增 `--conformance <id>`：`bases-all-files-2026-07` 把附件并入数据集为行（附件行 `file.*` stat 字段可用、note 属性投影 `null`、`file.tags` / `file.links` 恒 `[]`、不发 md-only warning），缺省 `bases-markdown-2026-07` 行为不变；旧库无 `vault_entries` 表时自动降级 md-only + compat warning。**DQL 数据集不变——附件永不进 `query` 结果。**
 - **Bases 函数覆盖率补齐（片一）** —— 新增 16 个叶子函数：string `replace`（字面子串全局替换，非正则）/ `repeat` / `reverse`（按 Unicode 码点）/ `slice` / `split` / `title` / `isEmpty`，number `abs` / `ceil` / `floor` / `toFixed`（返 string）/ `isEmpty`，list `reverse` / `slice`，global `max` / `min`（变长 number 参）。**number 独立成分派组**（`round` 由 `any` 组迁入，语义不变）。渲染类 `escapeHTML` / `html` / `image` / `icon` 进白名单但显式拒绝：报 `base/unsupported-feature`「无头内核不渲染」而非误导性的 `base/unknown-function`。`random()` 同样显式拒绝，但理由是**与字节稳定契约冲突**（同一输入必得同一输出是本引擎最硬的保证，不为一个叶子函数让路）——诊断消息与渲染类分开。
@@ -19,19 +39,8 @@
 - **Bases 函数覆盖率补齐（片四 · 正则）** —— `string.matches(pattern)`（pattern 是**字符串**，正则字面量 `/…/` 仍在文法层拒绝；子串命中语义）+ **三层 ReDoS 防护**：①静态拒绝灾难性回溯构造（无界量词套无界量词/交替，如 `(a+)+`）与反向引用；②限长（pattern 200 / 被匹配串 10000，与 DQL 侧同档）；③有界编译缓存（上限 64）。新增 rule `base/invalid-regex`——非法或不安全的正则**行级报错，不静默当作「不匹配」**（与 DQL 侧 `regexmatch` 降级为 0 的策略有意不同：那边在 SQLite 自定义函数内不便产诊断，Bases 侧硬约束是不静默忽略）。
 - **Bases 函数覆盖率补齐（片五 · 分组键与组级汇总）** —— `groupBy` 不再拒绝多值键：**list 分组键扇出**（一行进入它每个元素的组，`groupBy: tags` 的自然语义；行内元素先去重，空 list 视同缺失键单独成组，不丢行），link 作为**标量**键按路径感知相等分组。扇出使 `groups` 各组行数之和可能大于 `rows.length`——顶层 `rows` 仍是平铺一份，契约已显式声明。新增 `groups[].summaries` 组级汇总（计算集 = 该组 limit 后的行，与顶层「filter 后 limit 前全量」有意不同）。
 - **Bases 函数覆盖率补齐（片六 · 显式动态上下文）** —— `x-basalt base --context-file <path>` 为 `this.*` 提供**显式**上下文：`this.file.*` 取该文件的 file 字段、`this.<属性>` 取它的 frontmatter、裸 `this` 是它的整个 frontmatter，公式体内同样可用。路径写法与 `file(path)` 一致（完整路径 / 去扩展名忽略大小写 / 文件名）；不传就报 `base/dynamic-context-required`（无头执行没有「当前活动文件」，不猜），传了却找不到该文件则 error + 空结果（不静默当没给）。Markdown 内嵌 ```` ```base ```` 代码块与 `![[View.base#Name]]` 嵌入**明确不做**，但在**读文件之前**的入口形态检查处给出 `base/unsupported-feature` 诊断并附替代写法（`#锚点` → `--view`；非 `.base` → 单独存成 `.base`），不再退化成一句 YAML 解析失败。
-- **`meta` 命令 —— 首个写侧能力**（只改 frontmatter、正文逐字节不动）：`get` / `set` / `unset` / `rename`；`normalize` 归一（tags/aliases/cssclasses 列表化、tags 去 `#`、去重、单数键→复数键迁移）；`profile list` / `show` 与 `apply <profile>`（内置 `pkm-note` / `llm-wiki` / `ssg-blog` 三套策略：机械补 created/modified/sha256 + `--set` 补语义 + 收尾自动归一）。YAML 往返保键序/注释、原子写、幂等、`--dry-run`、非法 YAML 拒写。
-- **`scan` 命令** —— 无常驻 watcher 的按需增量重索引：diff 文件系统 vs 库、只重扫变化的（`--rehash` 按内容、`--dry-run`、`--json`）。
-- **`skills` 子命令扩展**：`get <name>`（按名取整篇）、`get --all`、`path [name]`；所有读子命令支持 `--json`（默认输出人类 / AI 可读 Markdown）。
-- **DQL 子集大幅扩展**：`TASK` / `GROUP BY` / `FLATTEN` / `WITHOUT ID`、多键 `SORT`、`WHERE field = null`、日期 ISO 比较、字符串谓词 `contains/icontains/startswith/endswith/regexmatch`、内置函数 `lower/upper/length/round` 与 `date(today)/date(now)`。
-- **`X_BASALT_DIR` 环境变量**：自定义 `.x-basalt` 基目录（config 与 `index.db` 都落其下）。
-- **全局使用技能** `skills-def/cli/x-basalt/SKILL.md`（`scope: global`，`pnpm run skills:install:global` 装到 `~/.claude/skills/` 与 `~/.agents/skills/`），教任意 AI 会话驱动本 CLI。
-- 本地 git 门禁：受版本控制的 `.githooks/pre-push`（push 前跑 typecheck + test + lint），`pnpm install` 经 `prepare`（`scripts/setup-hooks.mjs`）自动接线 `core.hooksPath`，零新依赖、不依赖云端 CI。
-- 打包就绪：`LICENSE`（MIT）、`CHANGELOG.md`、`package.json` 的 `author` 与 `prepublishOnly` 发布门（typecheck + test + build）。
 
 ### Changed
-
-- **（源码级 API breaking，CLI/配置/报告契约不变）统一算子模型片四**：`PipelineConfig.actions` 由必填降为可选（新增 `steps?: string[]`，两者至少其一、`steps` 优先）；`parsePipeFlags` 返回形状由 `Record<string, string>` 改为 `{ kv, steps }`（承载可重复 `step`，原 Record 形态重复键互相覆盖）。**只影响源码级消费者**——本包发布面是纯 CLI（无 `main`/`exports`），命令行 `actions=`、配置段与 `RunReport` 行为逐字不变。
-- **（breaking）`RunReport.changed` / `skipped` 改为「文件数」，与 `total` 同单位**。此前数的是**动作结果数**（文件 × 动作）：`actions=set,index` 跑 28 个文件会报 `total:28 / changed:56`——`changed > total` 直接说不通，调用方根本判断不出「到底改了几篇」。现同一文件被多个动作改动只计一次；旧口径的明细没丢，挪到新增的 `byAction`（动作名 → 该动作改动了几个文件）。报告另增 `changedPaths`（改动文件路径，写后刷索引与调用方复核都靠它）与 `reindexed`。受影响面：`run`/`scan --pipe`/`watch --pipe` 的 `--json` 输出与 chat 的 `pipeline_run` 返回值。现有测试断言的都是单动作场景（两种口径同值），未受影响。
 
 - **Bases oracle 第二批四条出决策（⑦⑨㉗ 落 documented boundary，⑧ 跟官方待实现）** —— 无代码改动，只是把「跟 / 不跟」和理由写死在 [vs-official §5](./docs/design/bases-vs-official.md)：**⑦ 分组时的顶层 `rows` 顺序不跟**（本轮只测到顶层行序、**没测到官方的分组内容与组序**——观察记录里的 `groups` 字段是坏的，连没有 `groupBy` 的 view 也报了组；跟等于照抄症状，且会牺牲字节稳定契约，而分组次序本就在独立的 `groups` 字段里）；**⑨ `+` 的字符串拼接保留**（官方那里是静默的空，不是语义，砍掉纯亏，与本仓「不静默」立场一致——但这是**超集不是等价**，要逐字节对齐官方就别用 `+` 拼字符串）；**㉗ 默认数据集不改**（差异恒发 `markdown-only-dataset` warning、不静默；官方读数只证明 `.base` 是行、**没证明附件也是行**，切默认等于顺带断言未取证的事；要对齐加一个 `--conformance` 即可）。**⑧ summary `values` 决定跟官方**（空值计入分母 + 按 limit 后），但实现待落——(b) 可直接改，(a) 卡在一条硬前置：要复现官方的 0.25 必须同时把通用函数 `list.mean()` 改成「非 number 不计分子、计分母」，而官方从没给过它在混合列表上的读数，先补 view 取证再动手。
 - **Bases oracle 校正后复跑对照**：同一份官方观察记录，**分歧 7 → 2，无新增分歧**（24 一致 / 2 分歧 / 26 view）。剩余两条即 ⑦，已决定不跟。复跑不需要 Obsidian 在跑（对照器读冻结的观察记录），只需 `pnpm build`；⚠️ 它只比行集不比列值，覆盖不到 ⑧ 与 ⑨。
@@ -42,24 +51,8 @@
 - **`.githooks/pre-push` 纳入 `format:check`**（此前只跑 typecheck / test / lint）。钩子里排除它的原注释「仓库存在既有 markdown/prose 格式基线漂移，纳入会误阻断」已随作用域收敛为 `src tests scripts`（不含 markdown）而失效，注释一并改写；行尾一致性由 `.gitattributes` 保证，该门禁不再随「文件最近有没有被工具重写过」随机红绿，可作硬门禁。**这是行尾问题能长期潜伏的直接原因**——唯一会发现它的命令此前没有任何时刻被强制执行。实测：全绿时钩子四门通过（format 段 1.6s，占 push 总时长约 4%）；故意破坏格式时 `set -e` 阻断、退出码 1。报错时跑 `pnpm run format` 自动修。
 - **`docs/` 按读者重组**（原按文档类型分 `guides`/`specs`/`plans`/`research`/`testing`/`architecture`）：`use/`（怎么用，文件名去日期）、`design/`（当前有效的设计，去日期）、`history/`（归档，保留日期前缀，只进不出）、`plans/`（仅活跃计划，完成后 `git mv` 进 `history/plans/`）。**Bases 三份指南合一** —— `writing-bases.md` + `querying-bases.md` + 总纲 → 一份 `use/bases.md`（是什么 → 六步教程 → 语法速查 → 命令与输出契约 → 报错速查，一份读完就会用），原理部分独立为 `design/bases-vs-official.md`（官方 CLI 架构与五个实测坑 / 我们的流水线与六个关键决策 / 9 项待 oracle 暂定语义）。四份 README 全部重写为分流入口而非文件清单。72 份文件经 `git mv` 保留历史；内链按 git 重命名记录批量重写，docs 断链 85 → 50（剩余全部为归档内既有断链，`design/` 与 `use/` 零断链）。
 - **`format` / `format:check` 作用域收敛为 `src tests scripts`**（原 `oxfmt .`），并新增 `.prettierignore` 豁免 `tests/fixtures/`（oxfmt 只认 `.gitignore` / `.prettierignore`，无 `.oxfmtignore`）。此前该门禁**从未可通过**：fixtures 里有故意写坏的 JSON（BASE-TYPE-003 回退用例），格式化器解析即报错中止整次检查。同时一次性格式化了此前从未被覆盖的 13 个代码文件（纯换行合并/拆分）。docs 的 80 个 md 暂不纳入作用域——markdown 重排与本轮无关且会淹没内容改动。
-- **skills-def 入口薄化 + `cli/`/`dev/` 目录分组**：外层 `x-basalt` 入口 skill 改为薄「触发 + 指路」——用法一律 `x-basalt skills get core`，不再重抄命令表/DQL 细节，消开发文档与运行时 `core` 的二次漂移。`skills-def/` 按受众分 `cli/`（消费侧入口，装宿主全局）与 `dev/`（`biz-*` 开发侧，装本仓）；`install-skills.mjs` 改按**目录**路由（原按 `scope` frontmatter），`skills:install` / `skills:install:global` 两脚本语义不变。运行时 `core` 补 `X_BASALT_DIR` 说明。
-- **（breaking）`skill` 命令组改名为 `skills`**（复数，**不保留单数别名**），对齐 agent-browser / Gemini CLI / Claude Code 等生态惯例。
-- **（breaking）skill 运行时数据目录 `skills/` → `skills-data/`**，避免与 `skills` 命令前缀混淆、对齐 agent-browser；外部覆盖路径 `OBSIDIAN_SKILL_PATH` / 配置 `skillPath` / `~/.obsidian-core/skills` 不变。
-- **（breaking）内置自我说明书 skill 改名 `x-basalt-usage` → `x-basalt`**（作为全局主 skill 反向召回的对象，用工具名最直观）。
-- `skills` 读子命令默认输出由 JSON 改为人类 / AI 可读 Markdown，`--json` 切回结构化。
-- DQL 引擎改用 chevrotain（词法 + parser），越界带位置报 `DqlSyntaxError`；旧手写 tokenizer 移除。
-- skill 召回改用 Fuse.js（模糊容错 + 相关性排序）；`SkillDefinition` 增 `description` 字段。
-- config 加载改用 cosmiconfig；YAML 解析 / 序列化改用 `yaml` 包（修以 `---` 开头被吞键）；CLI 输出序列化抽到 `src/format.ts`。
-- 索引：大库流式 rebuild（分批事务，内存 O(批)）；inlinks/outlinks 路径感知（qualified 链接精确匹配、bare 链接按 basename 回退）。
-- 解析层评估后保留自建（不引入 remark-obsidian-md）；清理 `unified` / `remark-parse` / `@flowershow/remark-wiki-link` / `zod` 等零 import 死依赖。
 
 ### Fixed
-
-- **两处 Windows 路径判定假阳修复（安全门/根解析）**：①`run --stdin` 的 vault 越界门（`assertPathsInVault`，pipe-closure C1）自写 `startsWith(root + sep)` 前缀比较——win32 下正斜杠路径（Git Bash 常见 `D:/vault/x.md`）与盘符小写形态（`d:\vault\…`）的**根内合法路径**被误判越界，整条 `run --stdin` 被拒；改为先 `resolve` 收拢形态（分隔符、`..` 归一）再复用「路径包含」单一真相源 `isPathInside`（win32 大小写归一），测试根形态对齐生产不变量「roots 已 resolve」，并补正斜杠/盘符小写回归用例。②`resolveVaultLayout` 根集合去重原按精确字符串——win32 下 `C:\vault` 与 `c:\vault` 同一目录被当两个根保留，随后误报「多根目录名冲突」（indexer / orchestrator / base 共用该根解析）；去重改按 `pathCaseKey` 口径（win32 忽略大小写），保留首次出现形态。
-- **`search` 的匹配口径与文档不符，且命令本身在消费侧文档里根本没有**。CLI 帮助与 chat 工具描述都写「整体按字面短语匹配」——这对纯 ASCII 成立，**对含中文的查询不成立**：实现走的是 trigram 并集 **OR 宽松召回**（`src/query/index.ts` 档 1，有意设计：中文无空白分词，严格短语会大量漏召，完整子串命中者由 bm25 排最前）。后果是 `total` 被当成「确实含该短语的篇数」而误读——实测 `search "回归网"` 与 `search "回归网-不存在"` 都返回 85（「不存在」单独搜是 0，却不缩小结果）。这是**文档与实现漂移**，与此前那次 tag 口径漂移同类，对 AI 消费者尤其致命（它按 `total` 下结论）。同批补齐三处既存缺口：(1) `docs/use/commands.md` **完全没有 `search` 章节**，而 `docs/use/README.md` 却指向该锚点（死链）——现补完整章节并入目录；(2) `skills-data/core.json5` 的 rules 里**没有 `search`**，运行时自我说明书缺这一整个命令；(3) `docs/use/ai-and-skills.md` 仍写全文检索「FTS5，规划中，尚未落地」，而它早已落地——这条会直接劝退使用者。另订正最短查询长度：文档写 3，实际是 **2**（`MIN_FTS_QUERY_LEN`，P4 已放宽）。**行为一行未改**，只让说明与实现一致。
-- **管道写动作落盘后不刷索引 —— 「成功回执」与「验证通道」互相矛盾**。`run` 的写动作改的是 `.md`，`query` 读的是 SQLite 索引，两者之间需要一次刷新。引擎里其实**已有**索引新鲜度纪律，但只做了一半：`runBatch` 在 `where` 过滤**之前**会先把候选落库（避免按陈旧索引选错），写完**却不刷回去**。于是实测轨迹长这样：`run --apply --pipe actions="set type=note" --pipe where=…` 报 `28 改动` → 紧接着 `query` 仍返回「28 篇缺 type」→ `scan` 显示 `modified: 28`（盘上确实改了）→ 只好再跑一次 `actions=index` → 第三次 `query` 才是 0。**管道自己报成功、而验证它的正规手段说没成功**，任何调用方（人或 AI）都只能不信、去重验，白走 `query → scan → run(index) → query` 四步；自然语言驱动时这一圈能吃掉大半个步数预算。现补上对称的另一半：非 dry-run 且确有改动时，自动把改动过的文件刷进索引（报告新增 `reindexed` = 刷新篇数，CLI 输出缀 `/ N 已刷索引`）。动作链自带 `index` 时**不重复刷**（那一步已落库）；`unlink` 事件按类型走 `removeByKey`，不会让 `update` 抛。默认开启，`--pipe refresh-index=false` 可关——关掉即回到旧行为（落盘与索引静默不一致），仅建议在「稍后必定统一 index」的批处理里用。
-- **列举类回答会「按规律补齐」凑数——生成不存在的路径**。实测让 chat 列全某目录下 72 篇笔记的路径：它一次 `list` 就拿到了完整正确的 72 条，却输出了一份**分月份、格式工整、结尾写着「合计 72 条，全部列出完毕」**的清单，其中 **17 条（24%）是凭空捏造的文件名**——真实的 `…/2026/06/` 下是 `backlog-79 / faq-80 / faq-82 / 对照表`，它写成了 `backlog-72 / index-73 / 决策记录-06 / 概览-07`。捏造集中在列表尾部，形态像是照抄了前 55 条之后按命名规律「续写」到承诺的条数。**比截断更危险**：截断至少看得出没列全，这个是自信、完整、可信度极高的假清单。SYSTEM_PROMPT 补一条通用纪律（不硬编码任何答案）：列具体条目时只能从工具返回逐条转写原文，不得改写 / 按命名规律推演补齐 / 为凑条数编造；条目多先翻页取全，实在列不全就如实说「只列出前 N 条、共 M 条」——宁可承认没列全，也不给一份掺假的完整清单。同批另补一条：`pipeline_run` 返回 `changed>0` 即已写成功且索引已刷新，不必再 `query`/`scan` 复核。**验证**：同一任务修后连跑两次，均为 72/72 逐条属实、0 捏造 0 漏列（修前 17 条捏造）。
-- **DQL 缺查询头（裸子句）只报文法期望列表，不指方向**。调用方常把「过滤条件」当成一整条 DQL 传（尤其管道 `where=`），写成 `FROM "inbox" WHERE type = null` 或直接 `WHERE …`；chevrotain 吐的是 `Expecting: one of these possible Token sequences: 1.[List] 2.[Table] 3.[Task] but found: 'FROM'`——这串东西不告诉人「补个 `LIST` 就行」。现首 token 即子句关键字（`FROM`/`WHERE`/`SORT`/`GROUP`/`FLATTEN`/`LIMIT`）时改抛定向错误，点名须以 `LIST`/`TABLE`/`TASK` 开头并把**补好头的原句**作为示例给出（可直接照抄）。做法与既有的 `LIKE → contains` 引导同源。**只作用于句首**：`LIST FROM "a" FROM "b"` 这类非句首文法错误仍报原始信息，不误导。
 
 - **脱敏：公开仓里残留的私有评估库仓名**（6 处，全部为既存泄露，非本轮引入）。项目规则要求 AI/agent 行为评估用的私有兄弟仓「不在公开 repo 留任何痕迹」，但 `design/bases-scenarios.md` 与 `design/bases-vs-official.md` 直接写了仓名与仓内脚本路径，`history/` 下另有 4 处。已统一改为「兄弟私有仓」这类中性表述，位置只留在 gitignore 的 `AGENTS.local.md` 里。**注意：本仓已开源，这些名字在 git 历史里仍可查到**——本次修复只能防止继续扩散，抹不掉已公开的事实。`history/` 的「只进不出」纪律指的是不删归档文件，不排斥脱敏。
 - **`format:check` 门禁此前不可信（随机红绿）—— 新增 `.gitattributes` 统一行尾为 LF**。仓库一直没有 `.gitattributes`，行尾完全由各人本机 `core.autocrlf` 决定：Windows 上（Git for Windows 系统级 gitconfig 默认 `autocrlf=true`）checkout 把工作区转成 CRLF，而 oxfmt / 编辑器改写文件时又写回 LF——于是 `oxfmt --check` 报不报错取决于「某个文件最近有没有被工具重写过」，与仓库内容无关（index 侧本就 100% LF，把 HEAD 原始 blob 取出单跑 `--check` 是通过的）。这道门还**单向漂移**：被改过的文件转 LF 变绿，看着像在自愈，但全新 clone 上作用域内文件会大面积红。7826506 那次「修好 format 门禁」只处理了作用域与 fixtures 豁免，没碰行尾，故未根治。现加 `* text=auto eol=lf` 让 checkout 也写 LF；`git add --renormalize .` 对 index **零改动**（内容本就干净），本次提交无任何文件内容变更。**注**：`.githooks/pre-push` 仍只跑 typecheck / test / lint、不含 `format:check`，这层缺口未在本次处理。
@@ -72,8 +65,92 @@
   - 新增 **`maxTotalOperations`** 查询级操作数总额（默认 5000 万，跨行累计）：此前 `maxOperations` 每次表达式求值即重置，最坏总量 `maxRows × 列数 × maxOperations` ≈ 1e11 而预算「从未耗尽」；groupBy 分桶与 summaries 迭代原本各自另开一份额度，现并入同一份总额。
   - 表达式解析缓存改为有界 LRU（512 条）——此前模块级 `Map` 无淘汰，长驻进程（chat REPL）内存随会话累计的 `.base` 数量单调增长。
 - **不加引号的 frontmatter 日期不再静默失去日期语义**（真实 vault 普遍命中的静默错）：`due: 2026-08-10` 此前经 gray-matter 内置 js-yaml（YAML 1.1 `!!timestamp`）解析为 JS `Date`，落库变 `"2026-08-10T00:00:00.000Z"`（含毫秒），超出 Bases 严格 ISO 推断形态 → 退化为普通字符串 → `due < now()` 一类比较只给行级 warning + cell `null`，而查询仍以退出码 0「成功」。读侧 frontmatter 解析改用 `yaml` 包（YAML 1.2 core 无 timestamp 隐式类型，**与写侧 `src/meta` 统一引擎**），日期保持字符串、由值层按词法判定精度——`YYYY-MM-DD` → date、`YYYY-MM-DDTHH:mm[:ss]` → datetime，加不加引号完全等价且 date 精度不退化。
-- parser：剔除围栏代码块（` ``` `/`~~~`）与行内代码（成对反引号）内的 `#tag` 与 `==高亮==`，不再把代码里的 `# 注释`、字符串误识为标签 / 高亮（修复真实 vault 上 `FROM #tag` 静默多命中）。
-- skills 安装：frontmatter `scope` 检测兼容 CRLF 行尾（Windows `autocrlf`）——此前 CRLF 下正则匹配失败致 `scope` 永远落到 `project`，全局安装一个都装不上、项目安装误纳 global 技能。
+
+## [0.6.0] - 2026-07-22
+
+> KB compiler P2/P3：诊断契约升格为公共契约，`lint` 命令与 `--profile` 校验体系落地。
+
+### Added
+
+- **`BasaltDiagnostic` 公共诊断契约** —— links 的 `BasaltIssue` 更名为 `BasaltDiagnostic` 并提升为 `src/diagnostic.ts` 跨模块公共契约（KB compiler P2），后续 lint / base 等各层诊断统一此形状。
+- **`lint` 命令与 `--profile` 校验体系** —— 最小 `lint --rules links` 壳（与 `links check` 共用 `BasaltDiagnostic` 契约）；`lint --profile <builtin>` 校验内置 profile 的 required 字段（P3a）；自定义 config profile：`extends` 合并内置 profile + `metadata` / `enum-invalid` 校验（P3b），docs 元数据自举经 `lint --profile llm-wiki docs` 归零验证。
+
+## [0.5.0] - 2026-07-15
+
+> KB compiler P0/P1（链接检查）、召回质量四修（中文 search / skills / chat 纪律）、skills-def 薄化与目录定形。含 breaking（见 Changed 段）。
+
+### Added
+
+- **`links check` / `links suggest`（KB compiler P0/P1）** —— 链接定位契约（parser 侧）；白名单目标索引 + vault 文件枚举；wikilink / markdown link 目标判定（bare / qualified / 资源 / 相对 / outside / backslash / external）；`lint.ignore` 配置段与 ignore 匹配（paths / targets / rules + 极简 glob）；`checkVault` / `checkFile` 编排（解析 → 判定 → ignore → 排序）与人读 report。
+- **`search` 中文相关性** —— 多词切词 AND / CJK trigram-OR 召回 / 2 字 LIKE 兜底；最短查询长度 3 → 2。
+- **skills 召回中文召回率** —— 内置 skill 补中文触发词 + 查询多词切词并集匹配。
+- **chat 可用性改进** —— 「未索引 / 没有 index」类问题引导 `scan`、不误当 frontmatter；零 vault 工具作答时如实标注未召回、不短路；新增 chat 程序化输出契约。
+- **DQL `LIKE` 定向报错引导** —— 对标官方 Dataview 不新增 `LIKE` 算子，误用时定向提示改用 `contains`。
+- **全局使用技能** `skills-def/cli/x-basalt/SKILL.md`（`pnpm run skills:install:global` 装到宿主全局），教任意 AI 会话驱动本 CLI。
+
+### Changed
+
+- **skills-def 入口薄化 + `cli/`/`dev/` 目录分组**：外层 `x-basalt` 入口 skill 改为薄「触发 + 指路」——用法一律 `x-basalt skills get core`，不再重抄命令表/DQL 细节，消开发文档与运行时 `core` 的二次漂移。`skills-def/` 按受众分 `cli/`（消费侧入口，装宿主全局）与 `dev/`（`biz-*` 开发侧，装本仓）；`install-skills.mjs` 改按**目录**路由（原按 `scope` frontmatter），`skills:install` / `skills:install:global` 两脚本语义不变。运行时 `core` 补 `X_BASALT_DIR` 说明。
+- **（breaking）skill 运行时数据目录 `skills/` → `skills-data/`**（经 `skill-data/` 过渡），避免与 `skills` 命令前缀混淆、对齐 agent-browser；外部覆盖路径 `OBSIDIAN_SKILL_PATH` / 配置 `skillPath` / `~/.obsidian-core/skills` 不变。
+
+## [0.4.0] - 2026-07-02
+
+> DQL 真值/存在性与隐式字段扩展、FTS5 全文检索落地、inline fields、chat 工具面成形。
+
+### Added
+
+- **DQL 一元 `!` 与裸字段真值**（对标官方 Dataview `isTruthy`）；chat 侧教会助手用存在性惯用法（真相源 + 错误引导）。
+- **`file.frontmatter` 隐式字段** —— 顶层键存在性判断与选列。
+- **FTS5 全文检索** —— trigram 索引 + `search` 命令 / chat `search` 工具（`src/query` 档 1 为 CJK trigram-OR 宽松召回 + bm25 排序）。
+- **inline fields（`key:: value`）** —— 三形态解析、索引与查询期合并（parser / indexer / query 三层贯通）。
+- **chat 工具面成形** —— `read_note` + `list` 工具（读正文 / 列笔记）；工具错误结构化 + 换策略引导；撞顶区分续跑；`--trace` 落盘 JSONL（完整事件不截断、文本合并、退出打印路径）。
+- **`scan` 按目录分组计数（byDir）** + 缺失 vault 根 warn-and-skip。
+
+### Fixed
+
+- **管道 `index` 动作假成功** —— 按主键精确删除旧键（多根下同 basename 不再互相污染）；多根 `toAbs` 未知前缀由静默放行改为报错；汇报真实 `changed` / `dryRun`。
+
+## [0.3.0] - 2026-06-30
+
+> 变更编排器 P0/P1 与统一 `--pipe` 命令面、CLI chat（读+写）落地、query/scan 分页。
+
+### Added
+
+- **变更编排器（`src/orchestrator/`）P0** —— 事件去重折叠（路径 LWW + 类型折叠）、堆积 debounce + maxWait（防饿死）、路由 match/glob + DQL 语义选择、内建动作 `index` / `normalize` / `parse`（写动作 dry-run）、串行管道执行引擎（有界并发 + 超时 + 失败策略）、scan / 手动 / watch 统一 `ChangeEvent`、防回环 + 优雅退出；配置 `pipelines` 段 + `run` / `watch --pipe` 接线。
+- **编排器 P1：写动作进管道** —— `apply` / `set` / `unset` / `rename` + `if-exists` 条件；`meta apply --refresh-derived` 重算内容派生机械字段。
+- **统一 `--pipe` 管道模型** —— 命令行为规范 + 配置 `use` 引用 + 内联 `--apply`；`scan --pipe` 对称补齐。
+- **CLI `chat`（读 + 写）** —— provider 配置解析 + 懒加载 model（`AI_GATEWAY_*` 契约，`ai` / `@ai-sdk/*` 为 optionalDependencies）、防注入边界包裹 + 结果截断、工具面 `buildTools` + agentic 循环、写动作直接落盘（Ctrl+C 中断，无确认闸）、单发 `runOnce` + REPL、SIGINT 隔离守门。
+- **`query` / `scan` 分页** —— `offset` / `size` + `total` / `counts` 元信息。
+
+## [0.2.0] - 2026-06-28
+
+> 0.1.0（MVP）之后第一轮硬化：DQL chevrotain 内核重写、索引健壮性（阶段3）、阶段4 选型替换（Fuse.js / yaml / cosmiconfig）、`scan`、`meta` 写侧、`skills` 命令组重构、`X_BASALT_DIR`、本地 git 门禁与打包就绪。含 breaking（见 Changed 段）。
+
+### Added
+
+- **`meta` 命令 —— 首个写侧能力**（只改 frontmatter、正文逐字节不动）：`get` / `set` / `unset` / `rename`；`normalize` 归一（tags/aliases/cssclasses 列表化、tags 去 `#`、去重、单数键→复数键迁移）；`profile list` / `show` 与 `apply <profile>`（内置 `pkm-note` / `llm-wiki` / `ssg-blog` 三套策略：机械补 created/modified/sha256 + `--set` 补语义 + 收尾自动归一）。YAML 往返保键序/注释、原子写、幂等、`--dry-run`、非法 YAML 拒写。
+- **`scan` 命令** —— 无常驻 watcher 的按需增量重索引：diff 文件系统 vs 库、只重扫变化的（`--rehash` 按内容、`--dry-run`、`--json`）。
+- **`skills` 子命令扩展**：`get <name>`（按名取整篇）、`get --all`、`path [name]`；所有读子命令支持 `--json`（默认输出人类 / AI 可读 Markdown）。
+- **DQL 子集大幅扩展**：`TASK` / `GROUP BY` / `FLATTEN` / `WITHOUT ID`、多键 `SORT`、`WHERE field = null`、日期 ISO 比较、字符串谓词 `contains/icontains/startswith/endswith/regexmatch`、内置函数 `lower/upper/length/round` 与 `date(today)/date(now)`。
+- **`X_BASALT_DIR` 环境变量**：自定义 `.x-basalt` 基目录（config 与 `index.db` 都落其下）。
+- 本地 git 门禁：受版本控制的 `.githooks/pre-push`（push 前跑 typecheck + test + lint），`pnpm install` 经 `prepare`（`scripts/setup-hooks.mjs`）自动接线 `core.hooksPath`，零新依赖、不依赖云端 CI。
+- 打包就绪：`LICENSE`（MIT）、`CHANGELOG.md`、`package.json` 的 `author` 与 `prepublishOnly` 发布门（typecheck + test + build）。
+
+### Changed
+
+- **（breaking）`skill` 命令组改名为 `skills`**（复数，**不保留单数别名**），对齐 agent-browser / Gemini CLI / Claude Code 等生态惯例。
+- **（breaking）内置自我说明书 skill 改名 `x-basalt-usage` → `x-basalt`**（作为全局主 skill 反向召回的对象，用工具名最直观）。
+- `skills` 读子命令默认输出由 JSON 改为人类 / AI 可读 Markdown，`--json` 切回结构化。
+- DQL 引擎改用 chevrotain（词法 + parser），越界带位置报 `DqlSyntaxError`；旧手写 tokenizer 移除。
+- skill 召回改用 Fuse.js（模糊容错 + 相关性排序）；`SkillDefinition` 增 `description` 字段。
+- config 加载改用 cosmiconfig；YAML 解析 / 序列化改用 `yaml` 包（修以 `---` 开头被吞键）；CLI 输出序列化抽到 `src/format.ts`。
+- 索引：大库流式 rebuild（分批事务，内存 O(批)）；inlinks/outlinks 路径感知（qualified 链接精确匹配、bare 链接按 basename 回退）。
+- 解析层评估后保留自建（不引入 remark-obsidian-md）；清理 `unified` / `remark-parse` / `@flowershow/remark-wiki-link` / `zod` 等零 import 死依赖。
+
+### Fixed
+
+- parser：剔除围栏代码块（` ``` `/`~~~`）与行内代码（成对反引号）内的 `#tag` 与 `==高亮==`，不再把代码里的 `# 注释`、字符串误识为标签 / 高亮（修复真实 vault 上 `FROM #tag` 静默多命中）。（该 commit 实际落在 0.1.0 发布窗口内，因 0.1.0 段已冻结，回溯归入本段。）
+- skills 安装：frontmatter `scope` 检测兼容 CRLF 行尾（Windows `autocrlf`）——此前 CRLF 下正则匹配失败致 `scope` 永远落到 `project`，全局安装一个都装不上、项目安装误纳 global 技能。（同上，commit 落在 0.1.0 发布窗口内，回溯归入本段。）
 
 ## [0.1.0] - 2026-06-25
 
@@ -86,5 +163,12 @@
 - skill：JSON5 加载 + 模糊召回，内置 `obsidian-base-spec` 与 `x-basalt-usage` 兜底。
 - cli：commander 五子命令 `parse / index / query / skill / watch`，支持 `--format`、`--watch`、`--on-change`，及项目 / 全局配置文件。
 
-[Unreleased]: https://github.com/xnightsky/x-basalt/compare/v0.1.0...HEAD
+[Unreleased]: https://github.com/xnightsky/x-basalt/compare/v0.8.0...HEAD
+[0.8.0]: https://github.com/xnightsky/x-basalt/compare/v0.7.0...v0.8.0
+[0.7.0]: https://github.com/xnightsky/x-basalt/compare/v0.6.0...v0.7.0
+[0.6.0]: https://github.com/xnightsky/x-basalt/compare/v0.5.0...v0.6.0
+[0.5.0]: https://github.com/xnightsky/x-basalt/compare/v0.4.0...v0.5.0
+[0.4.0]: https://github.com/xnightsky/x-basalt/compare/v0.3.0...v0.4.0
+[0.3.0]: https://github.com/xnightsky/x-basalt/compare/v0.2.0...v0.3.0
+[0.2.0]: https://github.com/xnightsky/x-basalt/compare/v0.1.0...v0.2.0
 [0.1.0]: https://github.com/xnightsky/x-basalt/releases/tag/v0.1.0

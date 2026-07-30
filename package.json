@@ -1,6 +1,6 @@
 {
   "name": "x-basalt",
-  "version": "0.2.0",
+  "version": "0.8.0",
   "description": "纯 Node.js CLI：零依赖 Obsidian 运行时，解析 / 索引 / 查询（Dataview 子集）/ Skill 召回 Obsidian Vault",
   "keywords": [
     "cli",
