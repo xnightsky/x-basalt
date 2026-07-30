@@ -29,6 +29,7 @@ export const PIPE_KEYS = [
   "if-exists",
   "on-error",
   "on-busy",
+  "refresh-index",
 ] as const;
 
 /** `--pipe` key → 配置段 key（同名者省略）；仅多词键需要映射。 */
@@ -36,6 +37,7 @@ const CONFIG_KEY_OF: Record<string, string> = {
   "if-exists": "ifExists",
   "on-error": "onError",
   "on-busy": "onBusy",
+  "refresh-index": "refreshIndex",
 };
 
 /** 合法事件类型（对齐 chokidar add/change/unlink 与 scan diff 三态）。 */
@@ -161,6 +163,18 @@ export function toEnum<T extends string>(
 }
 
 /**
+ * 布尔开关（`refresh-index`）：命令行给 `true|false` 字面量、配置段给布尔。
+ * 非法值报错，别静默当成 false（关了写后刷索引却不自知，query 会一直查到旧值）。
+ */
+export function toBoolean(v: unknown, src: string): boolean | undefined {
+  if (v === undefined) return undefined;
+  if (typeof v === "boolean") return v;
+  const s = String(v).trim();
+  if (s !== "true" && s !== "false") throw new Error(`${src} 仅接受 true|false，得到 "${s}"`);
+  return s === "true";
+}
+
+/**
  * 重启语义（`onBusy`，spec §211）。
  *
  * 现状边界：执行引擎只实现 `queue`（批之间串行成链）。`restart`（弃旧重跑）与 `ignore`
@@ -266,6 +280,9 @@ export function resolvePipelineParams(
     debounce: toDebounce(pick(kv, base, "debounce"), "--pipe debounce"),
     onBusy: toOnBusy(pick(kv, base, "on-busy"), "--pipe on-busy"),
     onError: toEnum(pick(kv, base, "on-error"), ["continue", "stop"] as const, "--pipe on-error"),
+    // refresh-index：写动作落盘后是否自动刷索引；undefined 由引擎层 `?? true` 兜底，
+    // 只有「稍后必定统一 index」的批处理才该显式关掉。
+    refreshIndex: toBoolean(pick(kv, base, "refresh-index"), "--pipe refresh-index"),
     // --apply 是运行时闸，覆盖管道定义；否则用基底 dryRun，缺省保守预览。
     dryRun: opts.apply ? false : (base?.dryRun ?? true),
     ifExists: toEnum(

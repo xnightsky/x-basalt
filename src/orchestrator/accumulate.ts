@@ -2,7 +2,7 @@ import type { ChangeEvent } from "./types.js";
 
 // === 自建实现: 堆积（debounce + maxWait 防饿死）===
 //
-// 设计：docs/specs/2026-06-29-change-orchestration-design.md §6.2、§14.2 算子 `debounce`。
+// 设计：docs/design/change-orchestration.md §6.2、§14.2 算子 `debounce`。
 // 借鉴：RxJS debounceTime（静默窗）+ Lodash debounce 的 maxWait（持续活动时的强制上限）。
 // 关注点分离：本类只管「攒事件 + 判断该不该 flush」，时间由调用方传入（push(ev, now)/shouldFlush(now)）——
 // 纯逻辑、确定性可测，不内嵌定时器；引擎层用真实 setTimeout 驱动 shouldFlush 的轮询/调度。

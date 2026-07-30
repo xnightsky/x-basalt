@@ -452,3 +452,60 @@ test("TASK WHERE completed = false LIMIT 可解析并编译", () => {
   assert.match(c.sql, /LIMIT \?/);
   assert.deepEqual(c.params, [5]);
 });
+
+// === 自建实现: 缺查询头（裸子句）的定向引导 ===
+// 背景：调用方（尤其管道 where=）常把「过滤条件」当整条 DQL 传，写成 `FROM "x" WHERE y`。
+// chevrotain 只吐 "Expecting: one of these possible Token sequences: 1.[List] 2.[Table] 3.[Task]
+// but found: 'FROM'"，不告诉人「补个 LIST 就行」。下列用例锁住定向报错，防回退成裸文法错误。
+
+test("S2.24 裸 FROM 起头：报错点名须以 LIST/TABLE/TASK 开头并给出补法示例", () => {
+  assert.throws(
+    () => parseDql('FROM "inbox" WHERE type = null'),
+    (e: unknown) => {
+      assert.ok(e instanceof DqlSyntaxError);
+      assert.match(e.message, /必须以 LIST \/ TABLE \/ TASK 开头/);
+      assert.match(e.message, /不能直接从 FROM 起头/);
+      assert.match(e.message, /LIST FROM "inbox" WHERE type = null/); // 例子=补好头的原句，可直接照抄
+      return true;
+    },
+  );
+});
+
+test("S2.24 裸 WHERE 起头：同样给定向引导", () => {
+  assert.throws(
+    () => parseDql('WHERE status = "draft"'),
+    (e: unknown) => {
+      assert.ok(e instanceof DqlSyntaxError);
+      assert.match(e.message, /不能直接从 WHERE 起头/);
+      return true;
+    },
+  );
+});
+
+test("S2.24 前导空白不影响判定（首 token 仍视为句首）", () => {
+  assert.throws(
+    () => parseDql('   FROM "inbox"'),
+    (e: unknown) => {
+      assert.ok(e instanceof DqlSyntaxError);
+      assert.match(e.message, /必须以 LIST \/ TABLE \/ TASK 开头/);
+      return true;
+    },
+  );
+});
+
+test("S2.24 非句首的文法错误不套用该引导（仍报原始文法错误）", () => {
+  // FROM 出现在合法查询头之后又重复——这不是「缺查询头」，不该被误导向补 LIST。
+  assert.throws(
+    () => parseDql('LIST FROM "a" FROM "b"'),
+    (e: unknown) => {
+      assert.ok(e instanceof DqlSyntaxError);
+      assert.doesNotMatch(e.message, /必须以 LIST \/ TABLE \/ TASK 开头/);
+      return true;
+    },
+  );
+});
+
+test("S2.24 合法查询不受影响", () => {
+  const q = parseDql('LIST FROM "inbox" WHERE type = null');
+  assert.equal(q.type, "LIST");
+});

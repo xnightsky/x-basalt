@@ -2,7 +2,7 @@ import { Document, parseDocument } from "yaml";
 
 // === 自建实现: frontmatter 往返内核（写侧地基）===
 //
-// 设计：docs/plans/2026-06-28-meta-frontmatter-write.md（调研结论：用 yaml Document API 往返，
+// 设计：docs/history/plans/2026-06-28-meta-frontmatter-write.md（调研结论：用 yaml Document API 往返，
 // 保留键序/注释、对需引号的值自动加引号；不用 gray-matter 写回——它从对象重序列化丢注释）。
 //
 // 职责：content ⇄ FrontmatterParts。纯字符串/对象变换，不碰 fs（fs 在 src/meta/index.ts）。

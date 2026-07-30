@@ -323,10 +323,10 @@ test("file.frontmatter 存在性：有键 1 篇 vs 无键（空围栏+无围栏�
 
     const missing = e.query("LIST WHERE !file.frontmatter");
     assert.equal(missing.total, 2);
-    assert.deepEqual(
-      missing.rows.map((r) => r["file.name"]).toSorted(),
-      ["empty-fence", "no-fence"],
-    );
+    assert.deepEqual(missing.rows.map((r) => r["file.name"]).toSorted(), [
+      "empty-fence",
+      "no-fence",
+    ]);
 
     // = null / != null 是同一存在性判断的另一惯用法，应与真值/!真值同集。
     assert.equal(e.query("LIST WHERE file.frontmatter = null").total, 2);
@@ -438,7 +438,13 @@ test("list：无过滤返回全部文件（含 folder/mtime），按 path 排序
   assert.equal(r.hasMore, false);
   assert.deepEqual(
     r.files.map((f) => f.path),
-    ["Daily/2026-06-25.md", "Index.md", "Notes/Concepts.md", "Projects/Alpha.md", "Projects/Beta.md"],
+    [
+      "Daily/2026-06-25.md",
+      "Index.md",
+      "Notes/Concepts.md",
+      "Projects/Alpha.md",
+      "Projects/Beta.md",
+    ],
   );
   assert.ok(r.files.every((f) => typeof f.mtime === "number" && typeof f.folder === "string"));
 });
@@ -450,7 +456,12 @@ test("list：folder 前缀过滤（含子目录）", () => {
 
 test("list：tag 前缀语义（area 命中 area/work 等嵌套标签）", () => {
   const r = engine.list({ tag: "area" });
-  assert.deepEqual(r.files.map((f) => f.name).toSorted(), ["2026-06-25", "Alpha", "Concepts", "Index"]);
+  assert.deepEqual(r.files.map((f) => f.name).toSorted(), [
+    "2026-06-25",
+    "Alpha",
+    "Concepts",
+    "Index",
+  ]);
 });
 
 test("list：tag 精确匹配非嵌套（project 命中 Alpha/Beta，不误命中其他）", () => {
@@ -460,12 +471,18 @@ test("list：tag 精确匹配非嵌套（project 命中 Alpha/Beta，不误命�
 
 test("list：name 子串不区分大小写", () => {
   const r = engine.list({ name: "alpha" });
-  assert.deepEqual(r.files.map((f) => f.name), ["Alpha"]);
+  assert.deepEqual(
+    r.files.map((f) => f.name),
+    ["Alpha"],
+  );
 });
 
 test("list：folder+tag 组合 AND", () => {
   const r = engine.list({ folder: "Projects", tag: "status/done" });
-  assert.deepEqual(r.files.map((f) => f.name), ["Beta"]);
+  assert.deepEqual(
+    r.files.map((f) => f.name),
+    ["Beta"],
+  );
 });
 
 test("list：分页 total/hasMore 独立于窗口大小", () => {

@@ -3,7 +3,7 @@ import type { ChangeEvent, EventType } from "./types.js";
 
 // === 自建实现: 路由（事件类型 + glob 入口过滤）===
 //
-// 设计：docs/specs/2026-06-29-change-orchestration-design.md §6.4、§14.4 算子 match/glob。
+// 设计：docs/design/change-orchestration.md §6.4、§14.4 算子 match/glob。
 // 自实现简易 glob（`**`=跨目录任意、`*`=同级任意、`?`=单个非 / 字符），不引第三方，守零依赖身份。
 // where(dql) 语义路由见 selectByDql（复用 query 层，下个子步加）。
 

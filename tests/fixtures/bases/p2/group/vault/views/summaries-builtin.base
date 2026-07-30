@@ -1,0 +1,87 @@
+# P2b 片三 BASE-SUM-001 fixture：15 个内置汇总（每 view 单条，map key=property-ref 不可重复）。
+# 数值口径：score=[10,20,30]（Delta/Epsilon/Tagger 缺失）；rating=[1,2,"high"]（混合类型跳过）。
+views:
+  - type: table
+    name: average
+    summaries:
+      score: Average
+  - type: table
+    name: min
+    summaries:
+      score: Min
+  - type: table
+    name: max
+    summaries:
+      score: Max
+  - type: table
+    name: sum
+    summaries:
+      score: Sum
+  - type: table
+    name: range
+    summaries:
+      score: Range
+  - type: table
+    name: median
+    summaries:
+      score: Median
+  - type: table
+    name: stddev
+    summaries:
+      score: Stddev
+  # 混合类型跳过：rating 的 number 值只有 1 与 2（"high" 与 missing 跳过）→ Average 1.5
+  - type: table
+    name: mixedSkip
+    summaries:
+      rating: Average
+  # 全部跳过 → null：无任何行有 ghost 属性
+  - type: table
+    name: allSkipped
+    summaries:
+      ghost: Average
+  # date 组：due=[2026-08-01, 2026-08-05, 2026-07-20, 2026-08-03]
+  - type: table
+    name: earliest
+    summaries:
+      due: Earliest
+  - type: table
+    name: latest
+    summaries:
+      due: Latest
+  - type: table
+    name: dateRange
+    summaries:
+      due: Range
+  # boolean 组：done=[true,false,true,false,true,缺失]
+  - type: table
+    name: checked
+    summaries:
+      done: Checked
+  - type: table
+    name: unchecked
+    summaries:
+      done: Unchecked
+  # any 组：area=[front,back,front,back,缺失,缺失]
+  - type: table
+    name: empty
+    summaries:
+      area: Empty
+  - type: table
+    name: filled
+    summaries:
+      area: Filled
+  - type: table
+    name: unique
+    summaries:
+      area: Unique
+  # 计算集 = limit 后（2026-07-29 oracle⑧(b) 跟官方，原「limit 前全量」已翻）：
+  # sort score ASC → Alpha(10)/Beta(20) 为前两行，limit 2 → Sum=30（限前全量为 60）。
+  # 三个值互不相等，能区分「limit 后」「limit 前全量」「只取首行」三种口径。
+  - type: table
+    name: limitAfter
+    sort:
+      - property: score
+        direction: ASC
+    limit: 2
+    summaries:
+      score: Sum

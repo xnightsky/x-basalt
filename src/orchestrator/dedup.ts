@@ -2,7 +2,7 @@ import type { ChangeEvent, EventType } from "./types.js";
 
 // === 自建实现: 事件去重折叠（L2 路径 LWW + L3 类型折叠）===
 //
-// 设计：docs/specs/2026-06-29-change-orchestration-design.md §6.3（折叠规则表）；§14.3 算子 `coalesce`/`foldEvents`。
+// 设计：docs/design/change-orchestration.md §6.3（折叠规则表）；§14.3 算子 `coalesce`/`foldEvents`。
 // 借鉴：@parcel/watcher 在 C++ 层对同文件事件做折叠（add+delete 抵消）——此处用纯逻辑在 JS 层等价实现。
 // 纯函数：一批事件 → 每文件最多一个折叠后事件；按 path 首次出现顺序输出；不碰 fs/DB。
 

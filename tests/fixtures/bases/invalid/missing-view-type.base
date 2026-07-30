@@ -1,0 +1,4 @@
+# view 缺少必填 type：曾静默当 table 执行（与 unsupported-view-type「不按 table 猜测」矛盾）
+views:
+  - name: NoType
+    limit: 1

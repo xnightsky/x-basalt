@@ -1,0 +1,50 @@
+# 2026-07-28 覆盖率片一..片四的 **e2e** fixture：这些函数此前只有求值层单测，
+# 从未经 BaseEngine 真跑过——尤其 file()/asFile() 依赖 engine 注入行集解析器，
+# 那条接线删掉后单测仍全绿（变异检验证实），必须由本 fixture 兜住。
+views:
+  # 片一：string / number / global 叶子函数（锁定到 Alpha 一行，断言确定）
+  - type: table
+    name: leaf
+    filters: file.name == "Alpha.md"
+    order:
+      - status.title()
+      - status.slice(0, 3)
+      - status.reverse()
+      - status.replace("act", "ACT")
+      - file.name.split(".")
+      - status.isEmpty()
+      - priority.toFixed(2)
+      - priority.abs()
+      - max(priority, 2)
+      - min(priority, 2)
+  # 片四：regex 参与 filter（真实过滤，不是投影）
+  - type: table
+    name: regex
+    filters: status.matches("^act")
+    order:
+      - file.name
+  # 片四：非法正则在真实查询里落 base/invalid-regex 行级诊断，不静默当「不匹配」
+  - type: table
+    name: badRegex
+    filters: status.matches("[")
+    order:
+      - file.name
+  # 片二：date/duration 构造与 date 方法（relative 依赖注入 clock）
+  - type: table
+    name: dateFns
+    filters: file.name == "Alpha.md"
+    order:
+      - date(due).format("YYYY/MM/DD")
+      - due.format("[到期] MM-DD")
+      - date("2026-08-01T09:30:00Z").time()
+      - due.relative()
+      - duration("2 hours")
+  # 片三：file()/link().asFile() —— engine 注入 resolveFile 的唯一 e2e 兜底
+  - type: table
+    name: fileLink
+    filters: file.name == "Alpha.md"
+    order:
+      - file("Gamma").basename
+      - link("Beta").asFile().path
+      - file.asLink("别名")
+      - file.linksTo("Gamma")

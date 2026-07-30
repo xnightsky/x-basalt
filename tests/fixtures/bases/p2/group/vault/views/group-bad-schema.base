@@ -1,0 +1,7 @@
+# P2b 片三 fixture：groupBy 结构非法（direction 非 ASC/DESC）→ base/invalid-schema（error）。
+views:
+  - type: table
+    name: bad
+    groupBy:
+      property: status
+      direction: SIDEWAYS

@@ -1,0 +1,6 @@
+# P2b 片三 fixture：未知汇总名 → base/unknown-function（error，计划「关键取舍」#11）。
+views:
+  - type: table
+    name: unknown
+    summaries:
+      score: DefinitelyNotASummary

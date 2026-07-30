@@ -174,7 +174,9 @@ test("config：vault 单字符串仍按原样（向后兼容）", () => {
 // 其余根照常；全缺才报错。
 
 /** 临时接管 console.warn 收集调用文本，finally 里原样恢复（避免测试间互相污染）。 */
-async function captureWarnings<T>(fn: () => Promise<T>): Promise<{ result: T; warnings: string[] }> {
+async function captureWarnings<T>(
+  fn: () => Promise<T>,
+): Promise<{ result: T; warnings: string[] }> {
   const original = console.warn;
   const warnings: string[] = [];
   console.warn = (...args: unknown[]) => {

@@ -1,0 +1,8 @@
+# FORM-004 fixture：公式依赖循环 a → b → a，planner 产 base/formula-cycle（error），
+# message 含完整循环链；执行终止不挂死。
+formulas:
+  a: formula.b + 1
+  b: formula.a + 1
+views:
+  - type: table
+    name: main

@@ -1,0 +1,6 @@
+# BASE-DOC-008：旧版 snake_case 函数 contains_all → base/unknown-function（带表达式位置，不静默迁移）
+# 同表达式内字符串字面量含 "foo(1)"：tokenizer 跳过字符串内容，不得误报
+views:
+  - type: table
+    name: Active
+    filters: name == "foo(1)" && tags.contains_all(["x"])

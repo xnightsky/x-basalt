@@ -1,0 +1,4 @@
+# BASE-DOC-007a：已知但未支持的 view type cards → base/unsupported-feature
+views:
+  - type: cards
+    name: Cards

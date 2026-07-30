@@ -1,0 +1,8 @@
+# BASE-TYPE-003 未知类型名验证：未知条目忽略、大小写不敏感收纳
+views:
+  - type: table
+    name: main
+    order:
+      - file.name
+      - rating
+      - due

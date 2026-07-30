@@ -26,7 +26,12 @@ export interface SearchResult {
   size?: number;
   returned: number;
   hasMore: boolean;
-  rows: { path: string; name: string; snippet: string }[];
+  /**
+   * 搜索结果行。
+   * `score` 字段：FTS 路径为 bm25 排名值（越小越相关），LIKE 兜底路径为 0。
+   * 供编排器 search 算子填充 Row.fields.score。
+   */
+  rows: { path: string; name: string; snippet: string; score: number }[];
 }
 
 /** 全文检索最短查询长度（P4 放宽 3→2：2 字 CJK 是常见词，改走 LIKE 子串兜底，见 {@link DataviewEngine.search}）。 */
@@ -290,13 +295,13 @@ export class DataviewEngine {
   private searchFts(matchExpr: string, opts: { offset?: number; size?: number }): SearchResult {
     // 片段截取列 = content（第 2 列，0-based）；ORDER BY 内联在基础 SQL 里，随 paginate 分页窗口保序。
     const baseSql =
-      "SELECT path AS path, name AS name, snippet(files_fts, 2, '[', ']', ' … ', 16) AS snippet, bm25(files_fts) AS rank " +
-      "FROM files_fts WHERE files_fts MATCH ? ORDER BY rank, path ASC";
+      "SELECT path AS path, name AS name, snippet(files_fts, 2, '[', ']', ' … ', 16) AS snippet, bm25(files_fts) AS score " +
+      "FROM files_fts WHERE files_fts MATCH ? ORDER BY score, path ASC";
     let paged: ReturnType<
-      typeof this.paginate<{ path: string; name: string; snippet: string; rank: number }>
+      typeof this.paginate<{ path: string; name: string; snippet: string; score: number }>
     >;
     try {
-      paged = this.paginate<{ path: string; name: string; snippet: string; rank: number }>(
+      paged = this.paginate<{ path: string; name: string; snippet: string; score: number }>(
         baseSql,
         [matchExpr],
         opts,
@@ -307,7 +312,12 @@ export class DataviewEngine {
       }
       throw e;
     }
-    const rows = paged.rows.map(({ path, name, snippet }) => ({ path, name, snippet }));
+    const rows = paged.rows.map(({ path, name, snippet, score }) => ({
+      path,
+      name,
+      snippet,
+      score,
+    }));
     return {
       total: paged.total,
       offset: paged.offset,
@@ -340,6 +350,7 @@ export class DataviewEngine {
       path,
       name,
       snippet: likeSnippet(content, terms),
+      score: 0,
     }));
     return {
       total: paged.total,

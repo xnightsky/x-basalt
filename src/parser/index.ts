@@ -34,7 +34,7 @@ const BLOCKREF_RE = /(?:^|\s)\^([A-Za-z0-9-]+)\s*$/;
 
 // === Obsidian 规范来源: Dataview inline fields（key:: value 三形态）===
 // 整行 `key:: value`（允许列表项前缀 `- ` / `* `）、方括号 `[key:: value]`（键可见）、
-// 圆括号 `(key:: value)`（键隐藏）。设计真相源 docs/specs/2026-07-02-inline-fields-design.md §6.1。
+// 圆括号 `(key:: value)`（键隐藏）。设计真相源 docs/design/inline-fields.md §6.1。
 // === 自建实现: v1 子集收窄 ===
 // key 仅收 [A-Za-z0-9_]+（与查询层字段名白名单对齐 → DQL 文法零改动，D4；带空格/连字符 key 列 backlog）；
 // 三条正则均线性、无嵌套量词（ReDoS 安全口径见 spec §7）。`https://x` 天然不命中（`//` 非 `::`）。

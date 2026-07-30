@@ -1,0 +1,21 @@
+# 空 filter 数组：oracle runbook ④（官方 1.12.7 实测冻结）——按空集布尔代数默认值处理，
+# and: [] = 真（全量）、or: [] = 假（空集）、not: [] = 真（全量）。此前实现是直接拒绝。
+views:
+  - type: table
+    name: empty-and
+    filters:
+      and: []
+    order:
+      - file.path
+  - type: table
+    name: empty-or
+    filters:
+      or: []
+    order:
+      - file.path
+  - type: table
+    name: empty-not
+    filters:
+      not: []
+    order:
+      - file.path

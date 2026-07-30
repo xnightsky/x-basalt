@@ -123,3 +123,36 @@ test("CO-E2 Given 慢动作 + timeout When runPipeline Then 超时记 failed 不
   assert.equal(report.failed.length, 1);
   assert.match(report.failed[0]?.error ?? "", /超时|timeout/i);
 });
+
+// === 报告口径：changed/skipped 与 total 同为「文件数」（2026-07-30 订正）===
+// 此前数的是动作结果数（文件 × 动作），`actions=set,index` 跑 N 个文件会报 changed=2N，
+// changed > total 直接说不通。分动作明细挪到 byAction，信息不丢。
+
+test("CO-E1 Given 多写动作命中同一批文件 When runPipeline Then changed 按文件计、不随动作数翻倍", async () => {
+  const log: string[] = [];
+  const report = await runPipeline(
+    [ev("a.md"), ev("b.md")],
+    [recording("set", log), recording("index", log)],
+    ctx,
+  );
+  assert.equal(report.total, 2);
+  assert.equal(report.changed, 2, "两个文件——不是 2 文件 × 2 动作 = 4");
+  assert.ok(report.changed <= report.total, "changed 不得超过 total（同单位）");
+  assert.deepEqual(report.byAction, { set: 2, index: 2 }, "分动作明细保留旧口径");
+  assert.deepEqual(report.changedPaths, ["a.md", "b.md"]);
+});
+
+test("CO-E1 Given 同文件多动作只有一个 changed When runPipeline Then 该文件只计一次", async () => {
+  const noop: Action = {
+    name: "noop",
+    write: false,
+    async run(e) {
+      return { action: "noop", path: e.path, changed: false, skipped: false };
+    },
+  };
+  const log: string[] = [];
+  const report = await runPipeline([ev("a.md")], [recording("set", log), noop], ctx);
+  assert.equal(report.changed, 1);
+  assert.deepEqual(report.byAction, { set: 1 }, "未改动的动作不进 byAction");
+  assert.deepEqual(report.changedPaths, ["a.md"]);
+});

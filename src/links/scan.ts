@@ -8,7 +8,7 @@ import type { CollectedFile, TargetIndex } from "./types.js";
 // 上游：src/links/check.ts 在 checkVault 开头调用；下游：resolve.ts 消费索引判存在性/建议。
 // 设计要点：一次遍历同时产出「待解析 .md 列表」与「所有文件白名单」——资源 embed（![[img.png]]）
 // 的目标是非 .md 文件，故白名单必须收全部文件，否则图片链接永远误报 not_found。
-// 规则真相源：docs/specs/2026-07-09-kb-compiler-lint-links-design.md §5。
+// 规则真相源：docs/design/kb-compiler.md §5。
 
 /** 向「key → 值列表」Map 追加一项（缺 key 时新建列表）。 */
 function pushValue(m: Map<string, string[]>, k: string, v: string): void {

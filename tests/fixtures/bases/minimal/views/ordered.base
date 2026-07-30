@@ -1,0 +1,10 @@
+# filter children 顺序回归 fixture：and 多子节点必须保持 YAML 声明顺序
+# （validateFilter 用 LIFO 显式栈，倒序入栈才能保证弹出顺序 = 声明顺序）
+filters:
+  and:
+    - status == "first"
+    - status == "second"
+    - status == "third"
+views:
+  - type: table
+    name: Ordered

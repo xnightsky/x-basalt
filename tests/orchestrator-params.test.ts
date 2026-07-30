@@ -210,6 +210,7 @@ test("PC-1c Given PIPE_KEYS When 对照配置段字段 Then 一一对应（use �
     "on-busy",
     "on-error",
     "paths",
+    "refresh-index",
     "use",
     "where",
   ]);

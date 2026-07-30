@@ -1,0 +1,22 @@
+# oracle 争议语义④：空 filter 数组（and: [] / or: [] / not: []）语义（设计 §6）
+# 观察官方：and: [] 是否恒 true（全部行）、or: [] 是否恒 false（零行）、not: [] 是否恒 true，
+# 以及是否稳定可重放（同一 view 连跑两次结果一致）。若官方报错或不稳定，记录为 implementation-defined。
+views:
+  - type: table
+    name: empty-and
+    filters:
+      and: []
+    order:
+      - file.name
+  - type: table
+    name: empty-or
+    filters:
+      or: []
+    order:
+      - file.name
+  - type: table
+    name: empty-not
+    filters:
+      not: []
+    order:
+      - file.name

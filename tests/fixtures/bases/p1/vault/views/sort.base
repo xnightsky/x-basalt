@@ -1,0 +1,40 @@
+# 多键 sort（优先级 + 方向）与单键 sort 稳定 tie-break（file.path ASC 兜底）
+# null-last-asc / null-last-desc：oracle runbook ②（BASE-RESULT-002）——
+# 空值（NullProps 的显式 null、Empty 的属性缺失）在两个方向下都必须排最后。
+views:
+  - type: table
+    name: multi
+    filters: 'type == "project"'
+    order:
+      - file.name
+      - priority
+    sort:
+      - property: priority
+        direction: DESC
+      - property: file.name
+        direction: ASC
+  - type: table
+    name: stable
+    filters: 'type == "project"'
+    order:
+      - file.path
+      - priority
+    sort:
+      - property: priority
+        direction: ASC
+  - type: table
+    name: null-last-asc
+    order:
+      - file.path
+      - status
+    sort:
+      - property: status
+        direction: ASC
+  - type: table
+    name: null-last-desc
+    order:
+      - file.path
+      - status
+    sort:
+      - property: status
+        direction: DESC

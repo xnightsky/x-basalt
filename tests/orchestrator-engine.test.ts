@@ -129,3 +129,141 @@ test("I1 Given 手动源含不存在路径且带 where When runManual Then warn 
     rmSync(dir, { recursive: true, force: true });
   }
 });
+
+// === CO-F2 写后索引新鲜度（§6.4 纪律的另一半）===
+// 背景（dogfood 实测）：写动作落盘后不刷索引 → 管道报 changed:N，紧接着 query 却查到旧值，
+// 「成功回执」与「验证通道」互相矛盾，调用方只能 scan + 手动 index 兜一圈才敢信。
+// 下列用例锁住：写完立刻查即为新值；opt-out 能关；动作链自带 index 时不重复刷。
+
+/** 建库 + 落库，返回 vault 目录与 db 路径。 */
+function mkIndexedVault(files: Record<string, string>): { dir: string; dbPath: string } {
+  const dir = mkVault(files);
+  return { dir, dbPath: join(dir, "i.db") };
+}
+
+/** 数一下当前索引里 type 仍缺失的篇数。 */
+function countMissingType(dbPath: string): number {
+  const engine = new DataviewEngine(dbPath);
+  try {
+    return engine.query("LIST WHERE type = null").rows.length;
+  } finally {
+    engine.close();
+  }
+}
+
+const TWO_UNTYPED = { "a.md": "---\ncaptured: x\n---\nA\n", "b.md": "---\ncaptured: y\n---\nB\n" };
+
+test("CO-F2 Given 写动作落盘 When runManual Then 索引已刷新、紧接着 query 即为新值", async () => {
+  const { dir, dbPath } = mkIndexedVault(TWO_UNTYPED);
+  const orch = new Orchestrator({ vaultPath: dir, dbPath });
+  try {
+    await orch.runScan({ actions: ["index"], dryRun: true });
+    assert.equal(countMissingType(dbPath), 2, "前置：两篇都缺 type");
+
+    const report = await orch.runManual(
+      { actions: ["set type=note"], dryRun: false },
+      { dql: "LIST WHERE type = null" },
+    );
+    assert.equal(report.changed, 2);
+    assert.equal(report.reindexed, 2, "写完应自动刷索引");
+    // 关键断言：**不再手动 index**，直接查——此前这里会仍然返回 2（索引陈旧）。
+    assert.equal(countMissingType(dbPath), 0, "写完立刻查就该是新值");
+  } finally {
+    orch.close();
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test("CO-F2 Given refreshIndex=false When runManual Then 不刷索引（opt-out 生效，索引保持陈旧）", async () => {
+  const { dir, dbPath } = mkIndexedVault(TWO_UNTYPED);
+  const orch = new Orchestrator({ vaultPath: dir, dbPath });
+  try {
+    await orch.runScan({ actions: ["index"], dryRun: true });
+    const report = await orch.runManual(
+      { actions: ["set type=note"], dryRun: false, refreshIndex: false },
+      { dql: "LIST WHERE type = null" },
+    );
+    assert.equal(report.changed, 2, "盘上确实改了");
+    assert.equal(report.reindexed, 0);
+    assert.equal(countMissingType(dbPath), 2, "关掉刷新后索引保持陈旧——这正是 opt-out 的代价");
+  } finally {
+    orch.close();
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test("CO-F2 Given 动作链自带 index When runManual Then 不重复刷（reindexed=0 但索引仍新鲜）", async () => {
+  const { dir, dbPath } = mkIndexedVault(TWO_UNTYPED);
+  const orch = new Orchestrator({ vaultPath: dir, dbPath });
+  try {
+    await orch.runScan({ actions: ["index"], dryRun: true });
+    const report = await orch.runManual(
+      { actions: ["set type=note", "index"], dryRun: false },
+      { dql: "LIST WHERE type = null" },
+    );
+    assert.equal(report.reindexed, 0, "index 动作已落库，再刷是纯浪费");
+    assert.equal(report.changed, 2, "仍按文件计——不是 2 文件 × 2 动作");
+    assert.equal(countMissingType(dbPath), 0);
+  } finally {
+    orch.close();
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test("CO-F2 Given dry-run When runManual Then 不写盘也不刷索引", async () => {
+  const { dir, dbPath } = mkIndexedVault(TWO_UNTYPED);
+  const orch = new Orchestrator({ vaultPath: dir, dbPath });
+  try {
+    await orch.runScan({ actions: ["index"], dryRun: true });
+    const report = await orch.runManual(
+      { actions: ["set type=note"], dryRun: true },
+      { dql: "LIST WHERE type = null" },
+    );
+    assert.equal(report.reindexed, 0);
+    assert.equal(countMissingType(dbPath), 2, "dry-run 不该动盘也不该动索引");
+  } finally {
+    orch.close();
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test("CO-F2 Given watch 源跑写管道 When 落盘 Then 同样刷索引、且不因自刷触发回环", async () => {
+  // watch 与 scan/手动源共用 runBatch，写后刷索引对它同样生效。这条专门守两件事：
+  //   ① 常驻模式下写完索引也是新鲜的（否则 watch 维护的库会越跑越偏离磁盘）；
+  //   ② 刷索引只写 DB、不写 .md，不该把自己的写当成新变更再触发一轮（§9 坑① 防回环）。
+  const dir = mkVault({ "a.md": "---\ncaptured: x\n---\nA\n" });
+  const dbPath = join(dir, "i.db");
+  const orch = new Orchestrator({ vaultPath: dir, dbPath });
+  const reports: { changed: number; reindexed: number }[] = [];
+  await new Promise<void>((resolve) => {
+    orch.watch(
+      { actions: ["set type=note"], dryRun: false, debounce: { wait: 100, maxWait: 500 } },
+      (r) => reports.push({ changed: r.changed, reindexed: r.reindexed }),
+      () => resolve(),
+    );
+  });
+  try {
+    writeFileSync(join(dir, "b.md"), "---\ncaptured: y\n---\nB\n");
+    for (let i = 0; i < 80 && reports.length === 0; i++) await sleep(50);
+    assert.ok(reports.length >= 1, "watch 应至少跑一次管道");
+    const hit = reports.find((r) => r.changed > 0);
+    assert.ok(hit, "应有一批真的改到文件");
+    assert.equal(hit.reindexed, hit.changed, "改了几篇就该刷几篇");
+
+    // 再等一段防回环观察窗：刷索引不碰 .md，不该凭空多出「又有文件改了」的批次。
+    const afterWrite = reports.length;
+    await sleep(600);
+    const extraChanged = reports.slice(afterWrite).filter((r) => r.changed > 0).length;
+    assert.equal(extraChanged, 0, "自刷索引不得触发新一轮写（回环）");
+
+    const engine = new DataviewEngine(dbPath);
+    try {
+      assert.equal(engine.query("LIST WHERE type = null").rows.length, 0, "索引应已是新值");
+    } finally {
+      engine.close();
+    }
+  } finally {
+    await orch.stop();
+    rmSync(dir, { recursive: true, force: true });
+  }
+});

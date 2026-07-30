@@ -9,7 +9,7 @@ import { type ProfileConfig, resolveLintProfile } from "./profile.js";
 // === 自建实现: metadata 规则（内置 + 自定义 config profile 校验，P3a required / P3b enum）===
 //
 // 上游：src/lint/index.ts 的 runLint（rule=metadata）；下游：resolveLintProfile（extends 合并）
-// + meta 的 readFrontmatter（只读读字段值）。设计真相源：docs/specs/2026-07-09-kb-compiler-lint-links-design.md §8.1/§8.2。
+// + meta 的 readFrontmatter（只读读字段值）。设计真相源：docs/design/kb-compiler.md §8.1/§8.2。
 // 只读（读 frontmatter 判 required/enum），不写 .md（写侧仍唯一在 src/meta）；纯内存 per-run，不碰 SQLite。
 // collectFiles/compileIgnore/globToRegExp 复用 links 的通用件（非 links 专有语义）。
 

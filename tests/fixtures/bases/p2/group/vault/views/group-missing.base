@@ -1,0 +1,11 @@
+# P2b 片三 BASE-GROUP-001 fixture：missing 分组键成组（排最后，暂定口径）。
+# area：Alpha/Gamma=front、Beta/Delta=back、Epsilon/Tagger 缺失 → 组序 back/front/null。
+views:
+  - type: table
+    name: byArea
+    order:
+      - file.name
+      - area
+    groupBy:
+      property: area
+      direction: ASC

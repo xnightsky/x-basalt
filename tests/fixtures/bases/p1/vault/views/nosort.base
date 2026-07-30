@@ -1,0 +1,6 @@
+# 无显式 sort：最终按 file.path ASC 稳定排序 + info 诊断（BASE-RESULT-004）
+views:
+  - type: table
+    name: nosort
+    order:
+      - file.path

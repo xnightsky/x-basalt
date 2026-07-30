@@ -43,7 +43,8 @@
 | Runtime / 语言               | Node.js 22+（开发用 24.x）+ TypeScript 5.x（ESM / NodeNext）                                                 |
 | CLI                          | commander                                                                                                    |
 | Obsidian 专有语法 / 基础解析 | **自建提取**（wikilink/embed/callout/highlight/task/blockRef），纯正则、不建完整 mdast、无第三方 wikilink 库 |
-| Frontmatter                  | gray-matter                                                                                                  |
+| 查询语言文法（DQL / Bases 表达式） | chevrotain（词法 + parser；两套 token/AST 完全独立，**自建 grammar**，不依赖 obsidian-dataview 执行层） |
+| Frontmatter                  | gray-matter（仅做 `---` 分隔符/正文切分）+ **`yaml` 包做 YAML 本体**（读写两侧同引擎；不用 gray-matter 内置 js-yaml——YAML 1.1 的 `!!timestamp` 会把不加引号的日期转成 `Date`，词法形态丢失） |
 | 文件监听                     | chokidar                                                                                                     |
 | 索引存储                     | better-sqlite3（单文件 SQLite，同步 API）                                                                    |
 | Skill 文件格式               | json5                                                                                                        |
@@ -57,9 +58,10 @@
 ```
 src/parser/   解析层：内容 → ObsidianNode[]（纯函数，不碰 fs/DB）
 src/indexer/  索引层：调 parser 写 SQLite，chokidar 增量
-src/query/    查询层：手写 DQL tokenizer→ast→sql-generator，编译为参数化 SQL
+src/query/    查询层：DQL tokenizer→ast→sql-generator（chevrotain 文法），编译为参数化 SQL
 src/skill/    Skill 召回：json5 加载 + 模糊匹配，内置 obsidian-base-spec 兜底
 src/meta/     元数据写侧：frontmatter 往返内核(yaml Document) + CRUD + 原子写（唯一写 .md 的层）
+src/base/     Bases 无头引擎：.base 文档层 + 查询/公式/类型/分组汇总 + all-files 附件数据集（P0..P2b 与 P3a 已落地；embedded code block/context 属 P3 余项）
 src/utils/    路径等工具
 src/cli.ts    commander 入口
 skills-data/   产品运行时 Skill 数据（SkillRecall 加载，含 obsidian-base-spec.json5）
@@ -77,7 +79,7 @@ docs/         research / specs / plans / guides / architecture / testing（见 d
 - `pnpm run typecheck`：`tsc --noEmit`。
 - `pnpm test`：Node 原生 test runner 跑 `tests/*.test.ts`。
 - `pnpm run lint` / `pnpm run lint:fix`：oxlint 检查 / 自动修复（配置 `.oxlintrc.json`）。
-- `pnpm run format` / `pnpm run format:check`：oxfmt 格式化 / 校验。
+- `pnpm run format` / `pnpm run format:check`：oxfmt 格式化 / 校验（作用域 `src tests scripts`；`tests/fixtures/` 经 `.prettierignore` 豁免——里面有故意非法的样例，格式化器解析即中止。docs 的 md 不在作用域内）。
 - `pnpm cli -- <args>`：开发态直接跑 CLI（tsx），例：`pnpm cli -- parse tests/fixtures/sample-vault/Index.md`。
 - `pnpm dev`：等同 `cli`，便于联调。
 
@@ -144,6 +146,7 @@ docs/         research / specs / plans / guides / architecture / testing（见 d
 - 读写路由见 `docs/README.md`；改动前读直接相关文档，结论写回对应目录。
 - 大改动记入对应 `specs/` 决策/设计文档（`-decision`/`-design`）或当前阶段 `plans/`；小改动至少同步直接受影响的规范/实现说明/计划，不静默覆盖原规则。
 - **文档元数据自举（dogfood）**：在 `docs/` 新增或重写文档后，用 x-basalt 自己给它补 frontmatter 元数据（默认 profile `llm-wiki`），不手写——机械字段（`timestamp`/`sha256`）由工具补，语义字段（`type`/`title`/`description`/`tags`）作为消费者读 `meta profile show` 后经 `--set` 补：`x-basalt meta apply llm-wiki <doc> --set type=… --set title=… --set description=… --set tags=…`。x-basalt 的文档由 x-basalt 维护，是写侧能力的持续 dogfood。
+  - **改动已有文档后必须带 `--refresh-derived`**（`x-basalt meta apply llm-wiki <doc> --refresh-derived`）：不带时 `apply` 只补**缺失**字段，已存在的 `timestamp`/`sha256` 原样保留——正文改了而 sha256 停在旧值，漂移检测就此失效。`created`/`pubDate` 恒定不动，无需担心被重写。
 
 ## 脱敏
 
@@ -157,3 +160,4 @@ docs/         research / specs / plans / guides / architecture / testing（见 d
 - 默认最小充分验证：优先跑受影响边界的 `typecheck`、`build` 与本次改动直接覆盖的测试；不把全量测试当默认动作。
 - 只有触及跨模块公共契约、根级脚本/配置、测试基础设施或用户明确要求时，才升级到全量 lint/typecheck/build/test。
 - 声称「完成 / 通过 / 可用」前，必须运行与改动风险匹配的验证命令，并依据实际输出说明结果；跳过的全量项要列出原因与剩余风险。
+- **提交 / 收口前必须同步受影响的教学文档**（`docs/use/` 命令与教程、`README.md`、`CHANGELOG.md`、运行时自我说明书 `skills-data/core.json5`）：命令签名 / 选项 / 输出契约 / 不支持清单有任何变化，这些消费侧说明必须同批更新，文档缺口视为未完成——不等用户提醒。

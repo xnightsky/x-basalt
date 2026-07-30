@@ -2,7 +2,7 @@
   // 内置兜底 skill：即使外部 skill 目录为空，也能召回 Obsidian 基础规范。
   // 由 src/skill（SkillRecall）在运行时加载；triggers 用于模糊召回。
   name: "obsidian-base-spec",
-  description: "Obsidian Markdown 与 Dataview(DQL) 子集语法规范：wikilink/embed/Markdown link/frontmatter/tag/callout/task/highlight/blockRef/inline fields(key:: value) 提取规则与 DQL 文法。",
+  description: "Obsidian Markdown 与 Dataview(DQL) 子集语法规范：wikilink/embed/Markdown link/frontmatter/tag/callout/task/highlight/blockRef/inline fields(key:: value) 提取规则与 DQL 文法。本篇讲 Obsidian Markdown 语法与 Dataview(DQL) 文法，不涉及 Bases（`.base` 视图文件）的语法与函数——`core` 里只有 `base` 命令的调用方式与输出契约，没有 `.base` 语法规范，本 CLI 目前没有 Bases 语法 skill。",
   triggers: [
     "wikilink",
     "link",
@@ -111,9 +111,16 @@
       examples: ["---\\ntitle: A\\ntags: [x, y]\\nstatus: active\\n---"],
     },
     {
-      pattern: "(^|\\s)#([A-Za-z0-9_\\-/]+)",
-      description: "Tag：行内 #tag 与嵌套 #parent/child；frontmatter tags 也并入。归一化存不带 # 的文本，FROM #a 命中嵌套子标签 #a/b（前缀匹配）。纯数字 #123 不算标签。",
-      examples: ["#project", "#area/work", "#status/active"],
+      pattern: "(?<![\\p{L}\\p{N}_])#([\\p{L}\\p{N}_/-]+)",
+      description: "Tag：行内 #tag 与嵌套 #parent/child；frontmatter tags 也并入。归一化存不带 # 的文本，FROM #a 命中嵌套子标签 #a/b（前缀匹配）。**本条 pattern 必须带 `u` flag**（`/…/gu`）——`\\p{L}` / `\\p{N}` 是 Unicode 属性转义，无 `u` 时不报错但会被当字面字符处理，静默错配。纯数字 #123 不算标签，这条由 pattern 之外的后置判定实现（匹配结果须含至少一个 `\\p{L}` 或下划线），光靠 pattern 会放行 #123。**边界**：`#` 前不能是 Unicode 字母/数字/下划线（负向后顾，非「行首或空白」），故 `word#x` / `123#x` / wikilink 锚点 `[[Note#heading]]` 不成标签，而 CJK 标点后可以（`标签：#moc` → moc）；标签体只取 Unicode 字母/数字/下划线/连字符/斜杠，遇其余字符即终止，故中文 `#概念` 成立。**已知有意差异（documented boundary）**：Obsidian 实际实现会把紧跟标签的非空白 Unicode 标点（如全角句号）计入标签本身——正文 `再打一次 #概念。` 在 Obsidian 得到标签 `概念。`，x-basalt 在标点处终止得 `概念`。该边界在 Obsidian 侧无权威规格（官方文档所列允许字符与实测行为不符，且实际字符集逐版本变动），跟随它会让标签按句读碎片化（`概念` / `概念。` / `概念，` 各成一个），故有意不跟。",
+      examples: [
+        "#project",
+        "#area/work",
+        "#status/active",
+        "#概念",
+        "正文再打一次 #概念。 → 标签为 `概念`（全角句号不计入；Obsidian 侧为 `概念。`）",
+        "标签：#moc → 标签为 `moc`（CJK 标点后可起标签）",
+      ],
     },
     {
       pattern: "^>\\s*\\[!([a-zA-Z]+)\\]([+-]?)\\s*(.*)$",

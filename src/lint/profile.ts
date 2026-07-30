@@ -2,7 +2,7 @@ import { getProfile, listProfiles } from "../meta/index.js";
 
 // === 自建实现: 自定义 config profile 解析（extends 合并；KB compiler P3b）===
 //
-// 设计真相源：docs/specs/2026-07-09-kb-compiler-lint-links-design.md §8.2。
+// 设计真相源：docs/design/kb-compiler.md §8.2。
 // 分层：`ProfileConfig` 是 `.x-basalt/config` 的 `profiles.<name>` 原始解析形状（由 src/config.ts
 // 的 parseProfiles 宽容挑键产出，不解 extends、不校验父）；`resolveLintProfile` 再把它按 extends
 // 合并成可直接校验的 `LintProfile`。config.ts import type 本文件，避免反向依赖实现。

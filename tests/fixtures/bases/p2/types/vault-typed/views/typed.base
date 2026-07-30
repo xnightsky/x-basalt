@@ -1,0 +1,22 @@
+# P2b 片二 BASE-TYPE fixture：显式类型优先 / text 抑制推断 / 声明冲突（TYPE-004）
+views:
+  - type: table
+    name: byDue
+    order:
+      - file.name
+      - due
+    sort:
+      - property: due
+        direction: ASC
+  - type: table
+    name: ratingGt
+    filters: 'rating > 1'
+    order:
+      - file.name
+      - rating
+  - type: table
+    name: versionProj
+    order:
+      - file.name
+      - version
+      - rawdate

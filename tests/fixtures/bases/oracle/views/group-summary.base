@@ -1,0 +1,100 @@
+# oracle 争议语义⑦⑧：list/tag 分组键一行多组（GROUP-002）与自定义 summary 的 values 边界（SUM-002）
+# 样本：CaseF（tags=[project,area]、scores=[1,2,3]）、CaseB/C（sortable=1/2）。
+# 观察：list 键分组是一行多组还是拒绝/首元素；values 是否含 null/missing、是否仅当前结果集目标列。
+summaries:
+  meanOfValues: values.mean()
+views:
+  - type: table
+    name: group-by-tags
+    groupBy:
+      property: file.tags
+      direction: ASC
+    order:
+      - file.name
+  - type: table
+    name: group-by-list-prop
+    groupBy:
+      property: scores
+      direction: ASC
+    order:
+      - file.name
+  - type: table
+    name: summary-custom
+    order:
+      - file.name
+      - sortable
+    summaries:
+      sortable: meanOfValues
+  - type: table
+    name: summary-custom-limited
+    limit: 1
+    order:
+      - file.name
+      - sortable
+    summaries:
+      sortable: meanOfValues
+
+# ============================================================================
+# 2026-07-29 补：㉒㉓㉔㉕ 的 fixture view（runbook §1.1/§1.2 的 fixture 缺口）
+#
+# 这四条的判据在**汇总值与组结构**里，不是常量表达式能覆盖的，故放这里而非 types.base。
+# 前置：取证脚本的 groups 读取路径已于 2026-07-29 修好（首轮 26 个 view 全部把 groups
+# 采成 key=null/rows=[]，㉒㉓ 当时一条都判不了）。
+# ============================================================================
+
+  # ㉔ Median 在**偶数个样本**上取中间两值的均值，还是取下中位。
+  # filter 掉空值使样本恰为 [1, 2]：均值口径 → 1.5，下中位口径 → 1，两者不同故可判。
+  # x-basalt 当前：1.5
+  - type: table
+    name: agg-median-even
+    filters: 'sortable != null'
+    order:
+      - file.path
+      - sortable
+    summaries:
+      sortable: Median
+
+  # ㉕ Stddev 取总体标准差（÷n）还是样本标准差（÷(n−1)）。
+  # 样本 [1, 2]：总体 → 0.5，样本 → 0.7071…，差距明显。x-basalt 当前：0.5
+  - type: table
+    name: agg-stddev
+    filters: 'sortable != null'
+    order:
+      - file.path
+      - sortable
+    summaries:
+      sortable: Stddev
+
+  # ㉒ 组级汇总的计算集 = 该组 **limit 后**的行。
+  # sort sortable ASC + limit 2 → 只剩 CaseB(1)/CaseC(2) 两行，各成一组。
+  # 若组级按 limit 前算，被 limit 掉的四行（sortable 缺失）会另成组或改变汇总。
+  # x-basalt 当前：顶层 Sum=3（⑧(b) 落地后同为 limit 后）· 组 1[1] / 2[1]
+  - type: table
+    name: group-limit-summary
+    sort:
+      - property: sortable
+        direction: ASC
+    limit: 2
+    groupBy:
+      property: sortable
+      direction: ASC
+    order:
+      - file.path
+      - sortable
+    summaries:
+      sortable: Sum
+
+  # ㉓ 分组键组序：可比标量 < link < null/MISSING，以及**这个次序是否与 direction 无关**。
+  # 后半截此前漏登（runbook §5.1）：② 修完后顶层 sort 的空值恒排最后，而 groupBy 的
+  # DESC 把整个次序取反、连空值组一起翻。
+  # x-basalt 实测（2026-07-29，DESC）：**null[4] → 2 → 1**，空值组排在**最前**。
+  # 即本仓两处确实不一致（顶层 sort 空值恒最后 vs 分组 DESC 空值最前），这正是要取证的。
+  # 官方若两个方向都把空值组排最后 → 与 ② 同源，按 bug 修；若也取反 → 维持现状 + 落文档。
+  - type: table
+    name: group-desc-nullpos
+    groupBy:
+      property: sortable
+      direction: DESC
+    order:
+      - file.path
+      - sortable

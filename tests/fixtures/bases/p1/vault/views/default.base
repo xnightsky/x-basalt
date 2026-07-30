@@ -1,0 +1,9 @@
+# 默认 view：无 filter 无 sort（默认 view 选择 / md-only 全量 / order 投影 / 缺失列 null 用例）
+views:
+  - type: table
+    name: default
+    order:
+      - file.name
+      - status
+      - 'note["Review Status"]'
+      - missing_prop

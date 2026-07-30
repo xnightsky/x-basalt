@@ -1,0 +1,7 @@
+# BASE-TYPE-003 回退推断验证：顶层无 types map 不影响 YAML 值推断
+views:
+  - type: table
+    name: main
+    order:
+      - file.name
+      - due

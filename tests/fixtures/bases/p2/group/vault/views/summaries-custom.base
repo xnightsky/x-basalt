@@ -1,0 +1,41 @@
+# P2b 片三 SUM-002（暂定，待 oracle）fixture：顶层自定义汇总 + 隐式 values 作用域。
+# customAverage 为官方示例形态 values.mean().round(3)；customBad 越权引用 file.name
+# （无行上下文 → MISSING → 结果 null，暂定口径可观察）。
+summaries:
+  customAverage: 'values.mean().round(3)'
+  customBad: 'file.name'
+views:
+  - type: table
+    name: custom
+    summaries:
+      score: customAverage
+  - type: table
+    name: customBadScope
+    summaries:
+      score: customBad
+  # groupBy 与 summaries 同现：顶层与组级各产出一份（此 view 无 limit，两者行集相同）
+  - type: table
+    name: withGroup
+    order:
+      - file.name
+      - status
+      - score
+    groupBy:
+      property: status
+      direction: ASC
+    summaries:
+      score: Average
+  # ⑧(b) 收益锁定（2026-07-29）：groupBy + limit + summaries 同现时顶层与组级口径统一。
+  # sort score ASC + limit 2 → Alpha(active,10)/Beta(active,20)，都落在 active 组。
+  # 顶层 Average=15 且组级 active 也是 15；旧口径（limit 前全量）顶层会是 20，两者分裂。
+  - type: table
+    name: withGroupLimited
+    sort:
+      - property: score
+        direction: ASC
+    limit: 2
+    groupBy:
+      property: status
+      direction: ASC
+    summaries:
+      score: Average

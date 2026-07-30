@@ -1,0 +1,19 @@
+# P2b list 高阶 engine e2e：HOF 在 filter 与 formula 中的整链路（BASE-LIST-001 e2e 半段）
+# 标签 ground truth：仅 Alpha 有 tags（frontmatter [area] + 行内 #area/x）——
+# map+contains 命中恰 1 行；reduce 计数 Alpha=2、其余=0。
+formulas:
+  tagcount: file.tags.reduce(acc + 1, 0)
+views:
+  - type: table
+    name: by-tag
+    filters: file.tags.map(value.lower()).contains("area")
+    order:
+      - file.name
+  - type: table
+    name: tag-count
+    order:
+      - file.name
+      - formula.tagcount
+    sort:
+      - property: formula.tagcount
+        direction: DESC

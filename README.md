@@ -12,6 +12,7 @@
 | `index` | 全量扫描 Vault → 单文件 SQLite 索引                                                                                               |
 | `scan`  | **按需增量重索引**：diff 文件系统 vs 库，只重扫新增/改动/删除（无需常驻进程）                                                     |
 | `query` | 自建 Dataview（DQL）子集 → 参数化 SQL → JSON 结果                                                                                 |
+| `base`  | `.base` view 无头查询（Bases Markdown conformance 2026-07，可选 all-files 模式将附件并入为行）→ 稳定 JSON |
 | `skill` | 加载规范知识库，Fuse.js 模糊召回 Obsidian / DQL 语法                                                                              |
 | `watch` | chokidar 常驻监听，实时增量更新 + 变更联动命令                                                                                    |
 
@@ -25,7 +26,7 @@ pnpm run build        # tsc → dist/cli.js
 npm link              # 全局安装：之后任意目录可用 x-basalt 命令
 ```
 
-> 全局命令跑的是编译产物 `dist/cli.js`；改了源码需 `pnpm run build` 重新编译生效。开发态也可免构建直接跑：`pnpm run cli -- <command>`。详见 [安装与运行](docs/guides/installation.md)。
+> 全局命令跑的是编译产物 `dist/cli.js`；改了源码需 `pnpm run build` 重新编译生效。开发态也可免构建直接跑：`pnpm run cli -- <command>`。详见 [安装与运行](./docs/use/install.md)。
 
 ## 快速上手
 
@@ -38,15 +39,17 @@ x-basalt scan ./my-vault                                    # 之后增量重扫
 x-basalt skills get obsidian-base-spec                      # 召回语法规范
 ```
 
-不想每次传 `--db`/`<vault>`？写个 `.x-basalt/config.yaml`，或用 `X_BASALT_DIR` 环境变量——见 [配置与基目录](docs/guides/configuration.md)。
+不想每次传 `--db`/`<vault>`？写个 `.x-basalt/config.yaml`，或用 `X_BASALT_DIR` 环境变量——见 [配置与基目录](./docs/use/config.md)。
 
 ## 📖 完整教程
 
-**[`docs/guides/usage.md`](docs/guides/usage.md)** 是教程总目录，分章覆盖：
+**[`docs/use/`](./docs/use/README.md)** 按「我想做什么」索引全部用法：
 
-- [安装与运行](docs/guides/installation.md) · [命令参考](docs/guides/commands.md) · [DQL 查询指南](docs/guides/querying-dql.md)
-- [索引与同步](docs/guides/indexing-and-sync.md) · [配置与基目录](docs/guides/configuration.md) · [Obsidian 语法](docs/guides/obsidian-syntax.md)
-- [与 AI 协作（技能召回 + 全局使用技能）](docs/guides/ai-and-skills.md) · [故障排查与限制](docs/guides/troubleshooting.md)
+- [安装与运行](./docs/use/install.md) · [命令参考](./docs/use/commands.md) · [索引与同步](./docs/use/indexing.md) · [配置与基目录](./docs/use/config.md)
+- 查笔记：[DQL 指南](./docs/use/dql.md)（`LIST FROM #tag WHERE …`） · [Bases 指南](./docs/use/bases.md)（官方 `.base` 文件，含教程与语法速查）
+- [Obsidian 语法](./docs/use/obsidian-syntax.md) · [与 AI 协作](./docs/use/ai-and-skills.md) · [chat 怎么玩](./docs/use/chat.md) · [故障排查](./docs/use/troubleshooting.md)
+
+想知道内部怎么设计的 → **[`docs/design/`](./docs/design/README.md)**；想查历史决策 → **[`docs/history/`](./docs/history/README.md)**。
 
 ## 开发
 

@@ -1,0 +1,70 @@
+# P2a formulas 主 fixture：
+# - 常量与简单算术（FORM-001）/ note+file 属性引用（FORM-002）/ 公式引用公式（FORM-003）
+# - chain_b 依赖 chain_a 但 YAML 先声明 chain_b——拓扑排序与键序无关（FORM-003）
+# - div_zero 触发除零行级错误（FORM-001 负边界）
+# - days_open 为官方示例形态 (now() - file.ctime) / 1day（FORM-006 注入固定 clock）
+formulas:
+  chain_b: formula.chain_a + 8
+  chain_a: 40 + 2
+  double_priority: priority * 2
+  negative: -(1 + 2)
+  div_zero: 1 / 0
+  due_day: due
+  due_plus: due + 1day
+  days_open: (now() - file.ctime) / 1day
+views:
+  - type: table
+    name: constants
+    order:
+      - file.name
+      - formula.chain_a
+      - formula.chain_b
+      - formula.double_priority
+      - formula.negative
+  - type: table
+    name: refs
+    filters: 'file.name == "Schedule.md"'
+    order:
+      - file.name
+      - formula.due_day
+      - formula.due_plus
+      - due
+      - created
+      - related
+  - type: table
+    name: divzero
+    order:
+      - file.name
+      - formula.div_zero
+  - type: table
+    name: clock
+    filters: 'file.name == "Schedule.md"'
+    order:
+      - file.name
+      - formula.days_open
+  - type: table
+    name: filter-formula
+    filters: 'formula.double_priority > 5'
+    order:
+      - file.name
+  # 日期比较/排序（BASE-TYPE-005 暂定机制，待 oracle）：due 升级为 DateValue 后按 epoch 比较
+  - type: table
+    name: by-due
+    sort:
+      - property: due
+        direction: ASC
+    order:
+      - file.name
+      - due
+  - type: table
+    name: due-before
+    filters: 'due < "2026-08-01"'
+    order:
+      - file.name
+      - due
+  # frontmatter wikilink 投影（BASE-TYPE-006 暂定机制，待 oracle）
+  - type: table
+    name: links
+    order:
+      - file.name
+      - related

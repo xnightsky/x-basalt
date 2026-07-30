@@ -515,6 +515,21 @@ export function parseDql(dql: string): DqlQuery {
         tok.startOffset,
       );
     }
+    // === 自建实现: 缺查询头（裸子句）的定向引导 ===
+    // 调用方常把「过滤条件」当成一条完整 DQL 传进来（尤其管道的 where=），写成 `FROM "x" WHERE y`
+    // 或直接 `WHERE y`。chevrotain 只吐 "Expecting: one of these possible Token sequences:
+    // 1.[List] 2.[Table] 3.[Task] but found: 'FROM'" —— 这串东西不告诉人「补个 LIST 就行」。
+    // 首 token 就是子句关键字时，改抛点名补法的错误（同上面 LIKE 的思路）。
+    if (tok && tok.startOffset === dql.length - dql.trimStart().length) {
+      const head = /^(from|where|sort|group|flatten|limit)$/i.exec(tok.image)?.[1];
+      if (head) {
+        throw new DqlSyntaxError(
+          `DQL 语句必须以 LIST / TABLE / TASK 开头，不能直接从 ${head.toUpperCase()} 起头。` +
+            `在前面补一个查询头即可，例：LIST ${dql.trim()}`,
+          tok.startOffset,
+        );
+      }
+    }
     throw new DqlSyntaxError(e.message, tok?.startOffset ?? 0);
   }
   return ast;

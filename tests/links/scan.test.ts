@@ -20,7 +20,10 @@ test("buildTargetIndex: pathSet 含全部文件（小写 POSIX）", () => {
 
 test("buildTargetIndex: notesByStem 聚合同名 .md（歧义可查）", () => {
   const idx = buildTargetIndex(files);
-  assert.deepEqual(idx.notesByStem.get("alpha")?.toSorted(), ["Archive/Alpha.md", "Notes/Alpha.md"]);
+  assert.deepEqual(idx.notesByStem.get("alpha")?.toSorted(), [
+    "Archive/Alpha.md",
+    "Notes/Alpha.md",
+  ]);
 });
 
 test("buildTargetIndex: notesByPathKey 用 pathKey（去扩展名 POSIX 小写）", () => {

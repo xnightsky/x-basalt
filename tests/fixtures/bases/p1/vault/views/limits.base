@@ -1,0 +1,18 @@
+# limit 边界：0 / 1 / N / 超总量（total 恒为 filter 后 limit 前行数）
+views:
+  - type: table
+    name: zero
+    filters: 'status == "active"'
+    limit: 0
+  - type: table
+    name: one
+    filters: 'status == "active"'
+    limit: 1
+  - type: table
+    name: two
+    filters: 'status == "active"'
+    limit: 2
+  - type: table
+    name: over
+    filters: 'status == "active"'
+    limit: 999

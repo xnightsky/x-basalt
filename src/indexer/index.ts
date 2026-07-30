@@ -43,15 +43,28 @@ export interface ScanDiff {
   unchanged: number;
 }
 
+/**
+ * 附件（vault_entries）差异计数（Bases P3 片一）：scan 报告/进度的**增量字段**，
+ * 既有 ScanDiff 字段语义不动；无附件时四项全 0。只给计数不给文件名，与 byDir 同口径（常数大小）。
+ */
+export interface ScanAttachmentCounts {
+  added: number;
+  modified: number;
+  deleted: number;
+  unchanged: number;
+}
+
 /** scan 增量重索引的最终报告：{@link ScanDiff} + 按目录聚合。 */
 export interface ScanReport extends ScanDiff {
   /**
    * 按目录聚合的标量计数（key = 相对 Vault 的 POSIX 目录路径，根目录下的文件归 `"."`）。
-   * 对治「按子目录统计」误路由到逐文件列举、灌爆 context 撞顶（见 docs/plans/2026-07-02-deterministic-eval-gaps.md）：
+   * 对治「按子目录统计」误路由到逐文件列举、灌爆 context 撞顶（见 docs/history/plans/2026-07-02-deterministic-eval-gaps.md）：
    * 这里只给计数、不给文件名，规模再大也是常数大小。仅在最终报告投影一次（scan()），
    * scanIter 每批 yield 的 {@link ScanProgress} 不含此字段，避免每批重复聚合。
    */
   byDir: Record<string, ScanDirCounts>;
+  /** 附件差异计数（增量字段，Bases P3 片一；不含在 {@link byDir} 聚合内）。 */
+  attachments: ScanAttachmentCounts;
 }
 
 /**
@@ -80,6 +93,8 @@ export function groupByDir(report: {
 export interface ScanProgress extends ScanDiff {
   /** 还有多少「新增+改动」文件待处理（调用方据此决定是否续跑）。 */
   remaining: number;
+  /** 附件差异计数（增量字段，Bases P3 片一）。 */
+  attachments: ScanAttachmentCounts;
 }
 
 /** 单文件落库前的完整负载（一次解析的全部行，供事务内批量写入）。 */
@@ -138,6 +153,27 @@ interface InlineFieldRow {
   keyNorm: string;
   value: string;
   lineNumber: number;
+}
+
+/**
+ * 附件（vault_entries）落库负载：纯 stat、不读内容不解析（决策 §3「不做」）。
+ * name/extension/folder/mtime/ctime 口径与 files 表完全一致（同一映射逻辑产出），
+ * 唯 extension 小写归一（`.PNG` 与 `.png` 同键，files 侧历史存量不追改）。
+ */
+interface VaultEntryPayload {
+  path: string;
+  name: string;
+  extension: string;
+  folder: string;
+  size: number;
+  mtime: number;
+  ctime: number;
+}
+
+/** computeDiff 的内部完整差异：.md（ScanDiff）+ 附件（同形 ScanDiff，仅计数外发）。 */
+interface VaultDiff {
+  md: ScanDiff;
+  entries: ScanDiff;
 }
 
 // rebuild 流式分批大小（S3.3）：单批并发读盘后立即落库，使内存占用 O(批) 而非 O(整库)，
@@ -224,20 +260,34 @@ function isUnderAnyRoot(abs: string, roots: string[]): boolean {
   return roots.some((root) => isUnderRoot(abs, root));
 }
 
-/** 递归收集 Vault 下所有 `.md`，跳过隐藏项与 `.obsidian/`（任意以 `.` 开头的目录/文件）。 */
-async function collectMarkdownFiles(root: string): Promise<string[]> {
-  const out: string[] = [];
+/** 扩展名是否 `.md`（大小写不敏感）：update 的 .md / 附件分派口径，与收集器的 endsWith 判定一致。 */
+function isMarkdownFile(p: string): boolean {
+  return p.toLowerCase().endsWith(".md");
+}
+
+/**
+ * 递归收集 Vault 下全部文件，分 .md 笔记与附件两清单；跳过隐藏项与 `.obsidian/`（任意以 `.` 开头的目录/文件）。
+ * 附件 = 非隐藏 && 是文件 && 扩展名非 `.md`（大小写不敏感）——扩展名白名单即「除 .md 外全部」（计划片一 §2）。
+ */
+async function collectVaultFiles(
+  root: string,
+): Promise<{ markdown: string[]; attachments: string[] }> {
+  const markdown: string[] = [];
+  const attachments: string[] = [];
   const walk = async (dir: string): Promise<void> => {
     const entries = await readdir(dir, { withFileTypes: true });
     for (const e of entries) {
       if (e.name.startsWith(".")) continue; // 隐藏文件与 .obsidian/ 等一律跳过
       const full = join(dir, e.name);
       if (e.isDirectory()) await walk(full);
-      else if (e.isFile() && e.name.toLowerCase().endsWith(".md")) out.push(full);
+      else if (e.isFile()) {
+        if (e.name.toLowerCase().endsWith(".md")) markdown.push(full);
+        else attachments.push(full);
+      }
     }
   };
   await walk(root);
-  return out;
+  return { markdown, attachments };
 }
 
 export class VaultIndexer {
@@ -264,6 +314,8 @@ export class VaultIndexer {
     delInlineFields: Statement;
     delFts: Statement;
     getContent: Statement;
+    insertEntry: Statement;
+    delEntry: Statement;
   };
 
   constructor(opts: IndexerOptions) {
@@ -318,6 +370,12 @@ export class VaultIndexer {
       // 按 path 删（files_fts 自存 path 列），不依赖 files.id/rowid 回查，与 delFile 顺序无关。
       delFts: this.db.prepare(`DELETE FROM files_fts WHERE path = ?`),
       getContent: this.db.prepare(`SELECT content FROM files WHERE path = ?`),
+      // 附件（vault_entries）：stat-only upsert / 按 path 删除（Bases P3 片一）。
+      insertEntry: this.db.prepare(
+        `INSERT INTO vault_entries (path, name, extension, folder, size, mtime, ctime)
+         VALUES (@path, @name, @extension, @folder, @size, @mtime, @ctime)`,
+      ),
+      delEntry: this.db.prepare(`DELETE FROM vault_entries WHERE path = ?`),
     };
   }
 
@@ -328,7 +386,7 @@ export class VaultIndexer {
    *
    * 对治场景库 scale/doc-migration-count 坐实的缺口：多根 vault 含尚未创建的目录（如迁移目标）
    * 时，旧行为是 `readdir` 直接 ENOENT、整条 index/scan 全量失败（见
-   * docs/plans/2026-07-02-deterministic-eval-gaps.md [冲突提示]，并非该场景原描述的"静默接受"）。
+   * docs/history/plans/2026-07-02-deterministic-eval-gaps.md [冲突提示]，并非该场景原描述的"静默接受"）。
    *
    * @behavior
    * Given 多根中一个目录不存在
@@ -360,15 +418,23 @@ export class VaultIndexer {
   }
 
   /**
-   * 遍历所有根收集 `.md`（多根并发，跳过缺失根，见 {@link partitionRoots}）；
+   * 遍历所有根收集 `.md` 与附件（多根并发，跳过缺失根，见 {@link partitionRoots}）；
    * 根已剔子根、通常无重叠，仍按绝对路径去重保险。
    *
-   * @returns files - 收集到的绝对路径；missingRoots - 本次被跳过的根（供 computeDiff 排除误判删除）
+   * @returns files - .md 绝对路径；attachments - 附件绝对路径；missingRoots - 本次被跳过的根（供 computeDiff 排除误判删除）
    */
-  private async collectAllMarkdown(): Promise<{ files: string[]; missingRoots: string[] }> {
+  private async collectAllFiles(): Promise<{
+    files: string[];
+    attachments: string[];
+    missingRoots: string[];
+  }> {
     const { existing, missing } = await this.partitionRoots();
-    const per = await Promise.all(existing.map((r) => collectMarkdownFiles(r)));
-    return { files: [...new Set(per.flat())], missingRoots: missing };
+    const per = await Promise.all(existing.map((r) => collectVaultFiles(r)));
+    return {
+      files: [...new Set(per.flatMap((c) => c.markdown))],
+      attachments: [...new Set(per.flatMap((c) => c.attachments))],
+      missingRoots: missing,
+    };
   }
 
   /**
@@ -398,13 +464,13 @@ export class VaultIndexer {
    *      需要"缺失根旧记录原样保留"的场景应用增量 {@link scan}，见其对应 @behavior
    */
   async rebuild(): Promise<void> {
-    const { files } = await this.collectAllMarkdown();
+    const { files, attachments } = await this.collectAllFiles();
     // 手动事务跨 await：better-sqlite3 的 db.transaction() 仅接同步函数，无法在其中 await 读盘，
     // 故用裸 BEGIN/COMMIT/ROLLBACK 在分批异步读取之间保持同一事务（原子 + 流式）。
     this.db.exec("BEGIN");
     try {
       this.db.exec(
-        "DELETE FROM files; DELETE FROM links; DELETE FROM tags; DELETE FROM tasks; DELETE FROM blocks; DELETE FROM inline_fields; DELETE FROM files_fts;",
+        "DELETE FROM files; DELETE FROM links; DELETE FROM tags; DELETE FROM tasks; DELETE FROM blocks; DELETE FROM inline_fields; DELETE FROM files_fts; DELETE FROM vault_entries;",
       );
       for (let i = 0; i < files.length; i += REBUILD_BATCH) {
         const batch = files.slice(i, i + REBUILD_BATCH);
@@ -419,6 +485,19 @@ export class VaultIndexer {
           ),
         );
         for (const p of payloads) if (p) this.insertPayload(p);
+      }
+      // 附件：stat-only（无内容读取/解析），同款分批 + 单文件失败降级；与 md 共用同一事务。
+      for (let i = 0; i < attachments.length; i += REBUILD_BATCH) {
+        const batch = attachments.slice(i, i + REBUILD_BATCH);
+        const payloads = await Promise.all(
+          batch.map((abs) =>
+            this.buildEntryPayload(abs).catch((err) => {
+              console.warn(`⚠ 跳过无法索引的附件 ${abs}：${(err as Error).message}`);
+              return null;
+            }),
+          ),
+        );
+        for (const p of payloads) if (p) this.stmts.insertEntry.run(p);
       }
       this.db.exec("COMMIT");
     } catch (err) {
@@ -442,8 +521,8 @@ export class VaultIndexer {
    *      与 {@link rebuild} 的"全量重置"语义刻意不同：增量 scan 的契约是"只同步我看得见的"，
    *      看不见的根 = 未知态，不是"已确认删除"。
    */
-  private async computeDiff(rehash: boolean): Promise<ScanDiff> {
-    const { files: absFiles, missingRoots } = await this.collectAllMarkdown();
+  private async computeDiff(rehash: boolean): Promise<VaultDiff> {
+    const { files: absFiles, attachments: absEntries, missingRoots } = await this.collectAllFiles();
     const fsMap = new Map<string, { mtime: number; size: number }>();
     for (const abs of absFiles) {
       const st = await stat(abs);
@@ -491,6 +570,56 @@ export class VaultIndexer {
     added.sort();
     modified.sort();
     deleted.sort();
+
+    // 附件：与 .md 同规则 diff（FS 附件集 vs vault_entries 快照；缺失根下记录同样不判 deleted）。
+    // 附件不存内容，rehash 对其无意义，恒走 mtime+size 快判。
+    const fsEntryMap = new Map<string, { mtime: number; size: number }>();
+    for (const abs of absEntries) {
+      const st = await stat(abs);
+      fsEntryMap.set(this.layout.toKey(abs), {
+        mtime: Math.floor(st.mtimeMs),
+        size: st.size,
+      });
+    }
+    const dbEntryRows = this.db.prepare("SELECT path, mtime, size FROM vault_entries").all() as {
+      path: string;
+      mtime: number;
+      size: number;
+    }[];
+    const entries = this.diffStatOnly(fsEntryMap, dbEntryRows, missingRoots);
+
+    return { md: { added, modified, deleted, unchanged }, entries };
+  }
+
+  /**
+   * mtime+size 快判 diff（附件专用：无内容可比，与 files 的 floored-ms 快判同口径）。
+   * 缺失根下的库内记录不判 deleted（与 {@link computeDiff} 的 .md 规则一致）。
+   */
+  private diffStatOnly(
+    fsMap: Map<string, { mtime: number; size: number }>,
+    dbRows: { path: string; mtime: number; size: number }[],
+    missingRoots: string[],
+  ): ScanDiff {
+    const dbMap = new Map(dbRows.map((r) => [r.path, { mtime: r.mtime, size: r.size }]));
+    const added: string[] = [];
+    const modified: string[] = [];
+    const deleted: string[] = [];
+    let unchanged = 0;
+    for (const path of dbMap.keys()) {
+      if (fsMap.has(path)) continue;
+      if (missingRoots.length > 0 && isUnderAnyRoot(this.layout.toAbs(path), missingRoots))
+        continue;
+      deleted.push(path);
+    }
+    for (const [rel, fs] of fsMap) {
+      const db = dbMap.get(rel);
+      if (db === undefined) added.push(rel);
+      else if (fs.mtime !== db.mtime || fs.size !== db.size) modified.push(rel);
+      else unchanged++;
+    }
+    added.sort();
+    modified.sort();
+    deleted.sort();
     return { added, modified, deleted, unchanged };
   }
 
@@ -518,24 +647,55 @@ export class VaultIndexer {
     opts: { rehash?: boolean; dryRun?: boolean; batchSize?: number } = {},
   ): AsyncGenerator<ScanProgress> {
     const batchSize = opts.batchSize ?? REBUILD_BATCH;
-    const { added, modified, deleted, unchanged } = await this.computeDiff(opts.rehash ?? false);
+    const diff = await this.computeDiff(opts.rehash ?? false);
+    const { added, modified, deleted, unchanged } = diff.md;
+    // 附件计数：报告/进度的增量字段，既有字段语义不动（无附件时全 0）。
+    const attachments: ScanAttachmentCounts = {
+      added: diff.entries.added.length,
+      modified: diff.entries.modified.length,
+      deleted: diff.entries.deleted.length,
+      unchanged: diff.entries.unchanged,
+    };
 
     if (opts.dryRun) {
-      yield { added, modified, deleted, unchanged, remaining: 0 };
+      yield { added, modified, deleted, unchanged, remaining: 0, attachments };
       return;
     }
 
-    // 删除便宜，一次性清（即便无新增/改动也执行）。
-    if (deleted.length > 0) {
+    // 删除便宜，一次性清（即便无新增/改动也执行）；deleteByPath 双表幂等，附件 deleted 走同一入口。
+    if (deleted.length > 0 || diff.entries.deleted.length > 0) {
       const delTx = this.db.transaction(() => {
         for (const rel of deleted) this.deleteByPath(rel);
+        for (const rel of diff.entries.deleted) this.deleteByPath(rel);
       });
       delTx();
     }
 
+    // 附件 upsert：stat-only，单事务一次落库（无解析成本，无需分批流式）。
+    const entryWork = [...diff.entries.added, ...diff.entries.modified];
+    if (entryWork.length > 0) {
+      const entryPayloads = (
+        await Promise.all(
+          entryWork.map((rel) =>
+            this.buildEntryPayload(this.toAbsolute(rel)).catch((err) => {
+              console.warn(`⚠ 跳过无法索引的附件 ${rel}：${(err as Error).message}`);
+              return null;
+            }),
+          ),
+        )
+      ).filter((p): p is VaultEntryPayload => p !== null);
+      const entryTx = this.db.transaction(() => {
+        for (const p of entryPayloads) {
+          this.deleteByPath(p.path); // 双表口径：先清（幂等）再插，改动不重复累加
+          this.stmts.insertEntry.run(p);
+        }
+      });
+      entryTx();
+    }
+
     const work = [...added, ...modified]; // 待 (re)build 的相对路径
     if (work.length === 0) {
-      yield { added: [], modified: [], deleted, unchanged, remaining: 0 };
+      yield { added: [], modified: [], deleted, unchanged, remaining: 0, attachments };
       return;
     }
 
@@ -570,6 +730,7 @@ export class VaultIndexer {
         deleted,
         unchanged,
         remaining: work.length - (i + batch.length),
+        attachments,
       };
     }
   }
@@ -592,16 +753,35 @@ export class VaultIndexer {
           unchanged: last.unchanged,
         }
       : { added: [], modified: [], deleted: [], unchanged: 0 };
-    return { ...report, byDir: groupByDir(report) };
+    const attachments: ScanAttachmentCounts = last?.attachments ?? {
+      added: 0,
+      modified: 0,
+      deleted: 0,
+      unchanged: 0,
+    };
+    return { ...report, attachments, byDir: groupByDir(report) };
   }
 
   /**
    * 增量更新单个文件的索引（先删后插，事务保证原子）。
+   * 按扩展名分派：`.md` 走 files 六表 + FTS 全解析路径；其余（附件）只 stat upsert vault_entries。
    *
    * @param filePath - 绝对路径或相对 Vault 的路径
    */
   async update(filePath: string): Promise<void> {
-    const payload = await this.buildPayload(this.toAbsolute(filePath));
+    const abs = this.toAbsolute(filePath);
+    if (!isMarkdownFile(abs)) {
+      // 附件：stat-only；文件已被删则 stat 抛错向上传播（与 .md update 的 readFile 失败行为对齐，
+      // watch 回调侧 catch 降级为 warn）。
+      const entry = await this.buildEntryPayload(abs);
+      const tx = this.db.transaction((e: VaultEntryPayload) => {
+        this.deleteByPath(e.path); // 双表口径：清旧行（幂等）再插
+        this.stmts.insertEntry.run(e);
+      });
+      tx(entry);
+      return;
+    }
+    const payload = await this.buildPayload(abs);
     const tx = this.db.transaction((p: FilePayload) => {
       this.deleteByPath(p.path);
       this.insertPayload(p);
@@ -611,6 +791,7 @@ export class VaultIndexer {
 
   /**
    * 删除单个文件的索引记录（供 watch 等文件系统路径调用方使用）。
+   * 无需按扩展名分派：{@link deleteByPath} 双表幂等，.md 与附件走同一入口。
    *
    * @param filePath - 绝对路径或相对 Vault 的路径
    */
@@ -651,18 +832,24 @@ export class VaultIndexer {
         .then(() => onEvent?.(event, p))
         .catch((e) => console.warn(`⚠ 索引${event === "add" ? "新增" : "更新"}失败 ${p}：${e}`));
     };
+    // unlink 对 .md 与附件同一入口：remove → deleteByPath 双表幂等。
+    const onUnlink = (p: string): void => {
+      // I2：删除失败仅 warn，不让一个文件异常拖垮监听循环。
+      try {
+        this.remove(p);
+        onEvent?.("unlink", p);
+      } catch (e) {
+        console.warn(`⚠ 索引删除失败 ${p}：${e}`);
+      }
+    };
     this.stopWatch = startWatch(this.layout.roots, {
       onAdd: (p) => onWrite("add", p),
       onChange: (p) => onWrite("change", p),
-      onUnlink: (p) => {
-        // I2：删除失败仅 warn，不让一个文件异常拖垮监听循环。
-        try {
-          this.remove(p);
-          onEvent?.("unlink", p);
-        } catch (e) {
-          console.warn(`⚠ 索引删除失败 ${p}：${e}`);
-        }
-      },
+      onUnlink,
+      // 附件事件复用同一批回调：update/remove 内部按扩展名分派（Bases P3 片一）。
+      onEntryAdd: (p) => onWrite("add", p),
+      onEntryChange: (p) => onWrite("change", p),
+      onEntryUnlink: onUnlink,
       // I1：监听器错误不崩进程，降级为告警。
       onError: (e) => console.warn(`⚠ 文件监听错误：${e}`),
       onReady,
@@ -684,6 +871,31 @@ export class VaultIndexer {
   /** 把任意输入路径归一化为索引主键（POSIX；单根=相对根，多根=根名命名空间）。 */
   private toRelative(filePath: string): string {
     return this.layout.toKey(this.layout.toAbs(filePath));
+  }
+
+  /** 读取并解析单文件，组装成可直接落库的 FilePayload。 */
+  /**
+   * 附件 stat-only 负载（不读内容、不解析；决策 §3「不做」附件内容解析）。
+   * name/extension/folder/mtime/ctime 与 {@link buildPayload} 同一映射口径，
+   * 唯 extension 小写归一（`.PNG` → `png`）；path 经 layout.toKey（多根带命名空间）。
+   */
+  private async buildEntryPayload(absPath: string): Promise<VaultEntryPayload> {
+    const st = await stat(absPath);
+    const rel = this.layout.toKey(absPath);
+    const ext = extname(rel);
+    const name = basename(rel, ext);
+    const slash = rel.lastIndexOf("/");
+    const folder = slash === -1 ? "" : rel.slice(0, slash);
+    return {
+      path: rel,
+      name,
+      extension: (ext.startsWith(".") ? ext.slice(1) : ext).toLowerCase(),
+      folder,
+      size: st.size,
+      mtime: Math.floor(st.mtimeMs),
+      // 与 files 表同口径：部分文件系统 birthtime 为 0，回退到 ctime。
+      ctime: Math.floor(st.birthtimeMs || st.ctimeMs),
+    };
   }
 
   /** 读取并解析单文件，组装成可直接落库的 FilePayload。 */
@@ -817,7 +1029,7 @@ export class VaultIndexer {
     for (const f of p.inlineFields) this.stmts.insertInlineField.run(f);
   }
 
-  /** 删除某文件在六表 + files_fts 中的全部记录（调用方负责包事务）。 */
+  /** 删除某文件在六表 + files_fts + vault_entries 中的全部记录（双表幂等；调用方负责包事务）。 */
   private deleteByPath(rel: string): boolean {
     const info = this.stmts.delFile.run(rel);
     this.stmts.delLinks.run(rel);
@@ -826,6 +1038,9 @@ export class VaultIndexer {
     this.stmts.delBlocks.run(rel);
     this.stmts.delInlineFields.run(rel);
     this.stmts.delFts.run(rel);
+    // 附件侧同步删：同一物理文件只进一张表（扩展名分派），正常为 0 changes；
+    // 双表都删可防扩展名判断与库内现状不一致（决策 §4 跨表 path 唯一性不变量）。
+    this.stmts.delEntry.run(rel);
     return info.changes > 0;
   }
 }

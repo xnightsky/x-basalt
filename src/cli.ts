@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 import { exec } from "node:child_process";
-import { existsSync, readFileSync } from "node:fs";
+import { readFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
 import { Command } from "commander";
@@ -34,6 +34,7 @@ import { runLinksCheck, runLinksSuggest } from "./links/index.js";
 import { renderHuman } from "./links/report.js";
 import { runLint } from "./lint/index.js";
 import { renderHuman as renderLintHuman } from "./lint/report.js";
+import { BaseEngine, type BaseQueryOptions } from "./base/index.js";
 import { DataviewEngine } from "./query/index.js";
 import { SkillRecall } from "./skill/index.js";
 import { renderSkill, renderSkillList, renderSkills } from "./skill/render.js";
@@ -44,18 +45,15 @@ import { renderSkill, renderSkillList, renderSkills } from "./skill/render.js";
 // 本文件只做参数装配与输出格式化，不内联业务逻辑（逻辑在各层并各有单测）。
 
 // 启动时加载一次项目/全局配置；各命令以 `flag ?? config.X ?? 内置默认` 解析，免去重复传参。
-// CLI 显式传入 X_BASALT_DIR；若环境变量指向的目录不存在（如测试子进程换了 cwd），
-// 则忽略它，避免外部进程环境污染项目配置发现。
+// X_BASALT_DIR 原样交给 loadConfig：它按「该目录下有没有 config.*」决定用还是回退就近发现，
+// 外部进程的无关 env（如测试子进程换了 cwd）自然落回项目配置。
+// 此处**不得**再加 existsSync 预判——BASE_DIR 无条件用同一个 env 且 indexer 会自动建目录，
+// 「目录存不存在」会被自己的副作用翻转（详见 loadConfig 注释）。
 // 配置校验错（如 pipelines 字段非法）在此终止：报带来源的错误并 exit 1，不裸抛栈（I2）；
 // 语法解析错已在 loadConfig 内 warn 降级，不会走到这里。
-const envBaseDir = process.env.X_BASALT_DIR;
 let config: BasaltConfig;
 try {
-  config = loadConfig(
-    process.cwd(),
-    homedir(),
-    envBaseDir && existsSync(envBaseDir) ? envBaseDir : undefined,
-  );
+  config = loadConfig(process.cwd(), homedir(), process.env.X_BASALT_DIR);
 } catch (err) {
   console.error(`✗ ${(err as Error).message}`);
   process.exit(1);
@@ -188,8 +186,11 @@ function reportRun(report: RunReport, name: string, json: boolean): void {
     emit(report);
   } else {
     const mark = report.failed.length === 0 ? "✓" : "⚠";
+    // 计数一律「文件」为单位（含 changed/skipped，见 RunReport 口径注释）；
+    // 刷索引数单独缀在后面，让「写完能不能立刻查到」这件事在输出里可见、不用猜。
+    const refreshed = report.reindexed > 0 ? ` / ${report.reindexed} 已刷索引` : "";
     console.log(
-      `${mark} run ${name}：${report.total} 文件 / ${report.changed} 改动 / ${report.skipped} 跳过 / ${report.failed.length} 失败${report.dryRun ? "（dry-run，写动作未落盘）" : ""}`,
+      `${mark} run ${name}：${report.total} 文件 / ${report.changed} 改动 / ${report.skipped} 跳过 / ${report.failed.length} 失败${refreshed}${report.dryRun ? "（dry-run，写动作未落盘）" : ""}`,
     );
     for (const f of report.failed) console.error(`  ✗ ${f.action} ${f.path}：${f.error}`);
   }
@@ -320,7 +321,8 @@ program
             if (entries.length === 0) {
               console.log("  （无变更，按目录明细为空）");
             } else {
-              for (const [dir, c] of entries) console.log(`  ${dir}  +${c.added} ~${c.modified} -${c.deleted}`);
+              for (const [dir, c] of entries)
+                console.log(`  ${dir}  +${c.added} ~${c.modified} -${c.deleted}`);
             }
           }
         }
@@ -353,7 +355,10 @@ program
 program
   .command("search")
   .description("全文检索笔记正文（FTS5 + trigram 子串匹配，覆盖中英文；S3.5）")
-  .argument("<query>", "查询文本，至少 3 个字符（整体按字面短语匹配，不支持 FTS5 查询语法）")
+  .argument(
+    "<query>",
+    "查询文本，至少 2 个字符，不支持 FTS5 查询语法。纯 ASCII 按字面短语（多词 AND）；含 CJK 走 trigram 并集 OR 宽松召回——部分片段命中也计入 total，完整子串由 bm25 排最前",
+  )
   .option("--vault <path>", "Vault 目录（查询仅读索引，可省略）")
   .option("--db <path>", "SQLite 索引文件路径（默认 .x-basalt/index.db，可由配置 db 覆盖）")
   .option("--offset <n>", "结果起始偏移（默认 0）")
@@ -369,6 +374,72 @@ program
       engine.close();
     }
   });
+
+program
+  .command("base")
+  .description("执行 .base view 查询（Bases 无头引擎 P1；稳定 JSON 契约，不渲染表格）")
+  .argument("<file>", ".base 文件路径（vault 相对或绝对）")
+  .option("--view <name>", "指定 view 名（缺省取 views[0]）")
+  .option(
+    "--vault <path>",
+    "Vault 目录（可多个，重复 --vault；可回退配置 vault）",
+    collectVault,
+    [] as string[],
+  )
+  .option("--db <path>", "SQLite 索引文件路径（默认 .x-basalt/index.db，可由配置 db 覆盖）")
+  .option("--format <fmt>", "输出格式 json|yaml（默认 json，可由配置 format 覆盖）")
+  .option(
+    "--conformance <id>",
+    "数据集 conformance id（默认 bases-markdown-2026-07；bases-all-files-2026-07 附件作为行）",
+  )
+  .option(
+    "--context-file <path>",
+    "this.* 的显式上下文文件（vault 内路径；无头执行没有「当前活动文件」，不给则 this.* 报诊断）",
+  )
+  .action(
+    (
+      file: string,
+      opts: {
+        view?: string;
+        vault: string[];
+        db?: string;
+        format?: string;
+        conformance?: string;
+        contextFile?: string;
+      },
+    ) => {
+      // 薄出口（设计 §15 API 先于 CLI）：只装配，业务逻辑全在 BaseEngine。
+      // vaultRoots 非空是 SEC-008 路径防线的前置（.base 必须落在 vault 内）。
+      const vaultInput = requireVault(
+        opts.vault,
+        config.vault,
+        "需要 --vault 参数或在配置文件中设置 vault",
+      );
+      const vaultRoots = Array.isArray(vaultInput) ? vaultInput : [vaultInput];
+      const dbPath = opts.db ?? config.db ?? DEFAULT_DB;
+      const engine = new BaseEngine();
+      try {
+        const result = engine.query({
+          basePath: file,
+          view: opts.view,
+          dbPath,
+          vaultRoots,
+          // CLI 薄透传（P3 片三）：不做白名单校验，未知 id 由引擎诊断
+          // （base/invalid-schema error → exit 1），契约单点留在 BaseEngine。
+          conformance: opts.conformance as BaseQueryOptions["conformance"],
+          // 片六薄透传：解析与「找不到即 error」的口径单点留在 BaseEngine。
+          ...(opts.contextFile !== undefined ? { contextFile: opts.contextFile } : {}),
+        });
+        // JSON 即契约：BaseQueryResult 原样 emit（含 error 结果），不裁剪字段。
+        emit(result, opts.format ?? config.format ?? "json");
+        // 退出码策略：设计 §11 留给薄出口计划拍板——diagnostics 含任一 error 级 → 1；
+        // 仅 warning/info（如 md-only 恒发 warning）→ 0。query() 不 throw，此处是唯一判定点。
+        if (result.diagnostics.some((d) => d.severity === "error")) process.exitCode = 1;
+      } finally {
+        engine.close();
+      }
+    },
+  );
 
 const skills = program
   .command("skills")
@@ -795,7 +866,10 @@ links
       process.exitCode = 2;
       return;
     }
-    const { diagnostics, exitCode } = await runLinksSuggest(file, { vault, ignore: config.lint?.ignore });
+    const { diagnostics, exitCode } = await runLinksSuggest(file, {
+      vault,
+      ignore: config.lint?.ignore,
+    });
     if (opts.format === "json" || opts.format === "yaml") emit(diagnostics, opts.format);
     else console.log(renderHuman(diagnostics));
     process.exitCode = exitCode;
@@ -803,7 +877,9 @@ links
 
 program
   .command("lint")
-  .description("按规则集诊断 vault，产出统一 BasaltDiagnostic（KB compiler；规则：links、metadata）")
+  .description(
+    "按规则集诊断 vault，产出统一 BasaltDiagnostic（KB compiler；规则：links、metadata）",
+  )
   .argument("[vault...]", "Vault 目录（可多个；省略则回退配置 vault）")
   .option("--rules <list>", "规则集，逗号分隔（默认 links；给 --profile 时默认 metadata）")
   .option(

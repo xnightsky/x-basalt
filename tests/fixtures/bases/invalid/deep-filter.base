@@ -1,0 +1,39 @@
+# BASE-DOC-009：超深递归 filter（33 层 and 嵌套，超 maxFilterDepth=32 预算）
+views:
+  - type: table
+    name: Deep
+    filters:
+      and:
+        - and:
+            - and:
+                - and:
+                    - and:
+                        - and:
+                            - and:
+                                - and:
+                                    - and:
+                                        - and:
+                                            - and:
+                                                - and:
+                                                    - and:
+                                                        - and:
+                                                            - and:
+                                                                - and:
+                                                                    - and:
+                                                                        - and:
+                                                                            - and:
+                                                                                - and:
+                                                                                    - and:
+                                                                                        - and:
+                                                                                            - and:
+                                                                                                - and:
+                                                                                                    - and:
+                                                                                                        - and:
+                                                                                                            - and:
+                                                                                                                - and:
+                                                                                                                    - and:
+                                                                                                                        - and:
+                                                                                                                            - and:
+                                                                                                                                - and:
+                                                                                                                                    - and:
+                                                                                                                                    - status == "done"

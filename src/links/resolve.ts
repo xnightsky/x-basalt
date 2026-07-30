@@ -6,7 +6,7 @@ import type { LinkFinding, TargetIndex } from "./types.js";
 // === 自建实现: 链接目标判定（纯函数，吃白名单索引，不碰 fs）===
 //
 // 上游：src/links/check.ts 逐节点调用；下游：产出 LinkFinding（reason?/suggestions）交编排层组装 BasaltDiagnostic。
-// 规则真相源：docs/specs/2026-07-09-kb-compiler-lint-links-design.md §5。
+// 规则真相源：docs/design/kb-compiler.md §5。
 
 type WikilinkNode = Extract<ObsidianNode, { type: "wikilink" }>;
 type MarkdownLinkNode = Extract<ObsidianNode, { type: "markdownLink" }>;
@@ -41,7 +41,8 @@ export function resolveWikilink(
     }
     const hits = index.filesByBasename.get(basename(target).toLowerCase());
     if (!hits) return { reason: "not_found" };
-    if (hits.length > 1) return { reason: "ambiguous_target", suggestions: suggestFrom(fileRel, hits) };
+    if (hits.length > 1)
+      return { reason: "ambiguous_target", suggestions: suggestFrom(fileRel, hits) };
     return {};
   }
 
@@ -51,7 +52,8 @@ export function resolveWikilink(
   }
   const hits = index.notesByStem.get(linkKey(target));
   if (!hits) return { reason: "not_found" };
-  if (hits.length > 1) return { reason: "ambiguous_target", suggestions: suggestFrom(fileRel, hits) };
+  if (hits.length > 1)
+    return { reason: "ambiguous_target", suggestions: suggestFrom(fileRel, hits) };
   return {};
 }
 
@@ -72,7 +74,8 @@ export function resolveMarkdownLink(
 ): LinkFinding {
   const rawTarget = node.target;
   if (rawTarget === "") return {};
-  if (EXTERNAL_RE.test(rawTarget) || rawTarget.startsWith("#")) return { reason: "external_skipped" };
+  if (EXTERNAL_RE.test(rawTarget) || rawTarget.startsWith("#"))
+    return { reason: "external_skipped" };
 
   const backslash = rawTarget.includes("\\");
   const normalized = backslash ? rawTarget.replaceAll("\\", "/") : rawTarget;

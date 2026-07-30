@@ -1,0 +1,48 @@
+# 属性引用形态：裸属性 / note. 前缀 / note["带空格"] / Unicode 属性 / file.properties 对象
+# eq-null / ne-null：oracle runbook ①（BASE-PROP-004）——equality 上 MISSING 与 null 合并，
+# `status == null` 必须同时命中显式 null（NullProps）与属性缺失（Empty）两种行。
+views:
+  - type: table
+    name: bare
+    filters: 'status == "active"'
+    order:
+      - file.name
+      - status
+  - type: table
+    name: prefixed
+    filters: 'note.status == "active"'
+    order:
+      - file.name
+      - note.status
+  - type: table
+    name: spaced
+    filters: 'note["Review Status"] == "done"'
+    order:
+      - file.name
+      - 'note["Review Status"]'
+  - type: table
+    name: unicode
+    filters: '状态 == "启用"'
+    order:
+      - file.name
+      - 状态
+    sort:
+      - property: 状态
+        direction: ASC
+  - type: table
+    name: props-object
+    filters: 'file.name == "Alpha.md"'
+    order:
+      - file.properties
+  - type: table
+    name: eq-null
+    filters: "status == null"
+    order:
+      - file.path
+      - status
+  - type: table
+    name: ne-null
+    filters: "status != null"
+    order:
+      - file.path
+      - status

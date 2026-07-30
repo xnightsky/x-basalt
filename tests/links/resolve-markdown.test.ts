@@ -40,7 +40,10 @@ test("逃出 vault 根 → outside_vault", () => {
 });
 
 test("反斜杠路径 → backslash_path", () => {
-  assert.equal(resolveMarkdownLink(ml("sub\\Gamma.md"), idx, "Notes/x.md").reason, "backslash_path");
+  assert.equal(
+    resolveMarkdownLink(ml("sub\\Gamma.md"), idx, "Notes/x.md").reason,
+    "backslash_path",
+  );
 });
 
 test("外部 URL / mailto / anchor-only → external_skipped", () => {

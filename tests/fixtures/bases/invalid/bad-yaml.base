@@ -1,0 +1,3 @@
+# BASE-DOC-002：非法 YAML（flow seq 未闭合），执行终止
+views:
+  - type: [

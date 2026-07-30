@@ -49,7 +49,11 @@ test("正常落盘：session 元信息、完整字段、长 input 不截断、VA
       toolName: "echo",
       output: "<<VAULT_DATA abc123>>\nsecret content\n<<END_VAULT_DATA abc123>>",
     },
-    { type: "finish", stopReason: "done", usage: { inputTokens: 10, outputTokens: 5, totalTokens: 15 } },
+    {
+      type: "finish",
+      stopReason: "done",
+      usage: { inputTokens: 10, outputTokens: 5, totalTokens: 15 },
+    },
   ];
 
   for (const e of events) tracer.sink(e, 1);

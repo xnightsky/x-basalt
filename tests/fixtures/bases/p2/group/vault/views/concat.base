@@ -1,0 +1,11 @@
+# P2b 片三 fixture：字符串拼接 e2e（arithAdd string + string，
+# 官方示例 formatted_price 形态；P2b 片三小修正）。
+views:
+  - type: table
+    name: concat
+    order:
+      - file.name
+      - '"pre-" + status'
+    sort:
+      - property: file.name
+        direction: ASC

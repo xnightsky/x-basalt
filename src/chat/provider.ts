@@ -25,7 +25,7 @@ export type ProviderResolution = ProviderConfig | { error: "no-key" };
 
 /** 无 key 友好提示（指向文档，含离线方案）。 */
 export const NO_KEY_MESSAGE =
-  "✗ chat 未配置 AI。设置 AI_GATEWAY_API_KEY 启用 chat（离线可把 AI_GATEWAY_URL 指向本地 Ollama 的 OpenAI 兼容端点）。\n  详见 docs/guides/ai-and-skills.md。";
+  "✗ chat 未配置 AI。设置 AI_GATEWAY_API_KEY 启用 chat（离线可把 AI_GATEWAY_URL 指向本地 Ollama 的 OpenAI 兼容端点）。\n  详见 docs/use/ai-and-skills.md。";
 
 /**
  * 从环境变量 + --model 解析 provider 配置。

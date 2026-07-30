@@ -1,0 +1,6 @@
+# P2b 片三 fixture：view summaries 结构非法（非 map）→ base/invalid-schema（error）。
+views:
+  - type: table
+    name: bad
+    summaries:
+      - score

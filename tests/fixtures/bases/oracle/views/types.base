@@ -1,0 +1,159 @@
+# oracle 争议语义⑤⑥：date vs datetime 比较（BASE-TYPE-005）与 frontmatter wikilink → Link（BASE-TYPE-006）
+# 样本：CaseE（due="2026-07-27"、created="2026-07-01T10:30:00"、related="[[CaseB]]"）。
+# 观察：date 与 datetime 跨精度 == /< 的官方口径；wikilink 字符串是否成 Link 值、
+# `related == "[[CaseB]]"` 与裸字符串比较是否命中、投影呈现形态。
+views:
+  - type: table
+    name: date-eq-literal
+    filters: due == "2026-07-27"
+    order:
+      - file.name
+      - due
+  - type: table
+    name: date-lt-datetime
+    filters: due < created
+    order:
+      - file.name
+  - type: table
+    name: datetime-lt-date
+    filters: created < due
+    order:
+      - file.name
+  - type: table
+    name: link-eq-wikilink
+    filters: related == "[[CaseB]]"
+    order:
+      - file.name
+      - related
+  - type: table
+    name: link-projection
+    order:
+      - file.name
+      - related
+  # oracle 争议语义⑨：字符串→日期推断是否作用于 `+`（拼接语境）。
+  # x-basalt 暂定：推断对全部非短路二元运算生效，故 due 升为 Date、`date + string` 报类型错误。
+  # concat-plain-string 是对照组——先确认官方 string+string 拼接本身可用，
+  # 否则 concat-date-string 的错误无法区分「不支持拼接」与「拼接语境仍做日期推断」。
+  - type: table
+    name: concat-plain-string
+    order:
+      - file.name
+      - 'label + " 备注"'
+  - type: table
+    name: concat-date-string
+    order:
+      - file.name
+      - 'due + " 备注"'
+
+# ============================================================================
+# 2026-07-29 补：⑩..⑳㉖ 的 fixture view（runbook §1.1/§1.2 的 fixture 缺口）
+#
+# 这批口径的判据**全在投影列的值里**，不在行集里——所以不必一条一个 view，
+# 一个 view 挂一批常量表达式列，一次渲染就能读回全部答案（取证脚本已采 cells）。
+# 每个 view 都用 `file.path` 过滤到单行：`file.name` 官方渲染不带扩展名、
+# x-basalt 带（runbook §4 注），拿它做 filter 会两边行集不同。
+#
+# ⚠️ 隔离原则：**已知会报错或可能是本仓自建扩展的表达式单独占一个 view**。
+# 官方遇到不认识的函数可能整个 view 求值失败，混在一起会把同伴的读数一起废掉。
+# （x-basalt 侧实测是列级隔离——同 view 里一列报错不影响其他列；官方是否如此未知，
+# 所以按最坏情况隔离。）
+# ============================================================================
+
+  # ⑩ title / ⑪ slice（负索引与越界钳制）/ ⑫ replace / ⑬ reverse。全是低风险常量表达式。
+  # x-basalt 当前读数：Hello World Foo · def · bc · abc · a-b-c · olléh · [3,4]
+  # ⑫ 判别力：若 replace 是 regex，`.` 会匹配任意字符 → "-----"；字面替换才得 "a-b-c"。
+  # ⑬ 判别力：olléh 说明按 code point 反转且未拆坏组合字符。
+  - type: table
+    name: str-list-methods
+    filters: file.path == "notes/CaseA.md"
+    order:
+      - '"hello world foo".title()'
+      - '"abcdef".slice(-3)'
+      - '"abcdef".slice(1, 3)'
+      - '"abc".slice(0, 99)'
+      - '"a.b.c".replace(".", "-")'
+      - '"héllo".reverse()'
+      - 'list(1, 2, 3, 4).slice(-2)'
+
+  # ⑧(a) 的**硬前置**——单独占一个 view，绝不与别的表达式混：这是七条里唯一
+  # 「两个结果都能把决策钉死」的取证点，被同伴的求值失败连坐损失最大。
+  #
+  # x-basalt 当前：list(1,2,null).mean() → null + property-type-mismatch 诊断
+  #                （list.mean() 要求元素全为 number），list(1,2).mean() → 1.5
+  # 官方给 1     → M1 成立（values 含空值 + mean 按全长求平均）→ 改 list.mean() + values 作用域
+  # 官方报错/空 → M1 证伪，官方的 values 不含空值、0.25 的分母是汇总层自取
+  #                → ⑧(a) 从「跟官方」翻成「不跟 + boundary」，一行代码不用改
+  - type: table
+    name: mean-mixed-list
+    filters: file.path == "notes/CaseA.md"
+    order:
+      - 'list(1, 2, null).mean()'
+      - 'list(1, 2).mean()'
+
+  # ⑮ date.time() 返回什么（本仓：当日 UTC 零点起的 duration，非 "HH:mm" 字符串）
+  # ⑯ date.format() 的数字 token / ⑰ date.relative() 的措辞与阶梯
+  # x-basalt 当前（CaseE.created = 2026-07-01T10:30:00）：
+  #   time() → 37800000（=10h30m 的毫秒）· format("YYYY-MM-DD") → "2026-07-01"
+  #   format("HH:mm:ss") → "10:30:00" · relative() → "3 weeks ago"
+  # ⚠️ relative() 依赖当前时间，跨日重跑数值会变——判读看**措辞与阶梯**（英文？月=30d？），
+  # 不把具体字符串当稳定结论。
+  - type: table
+    name: date-methods
+    filters: file.path == "notes/CaseE.md"
+    order:
+      - 'created.time()'
+      - 'created.format("YYYY-MM-DD")'
+      - 'created.format("HH:mm:ss")'
+      - 'created.relative()'
+
+  # ⑯ 的另一半：本地化 token。**已知在 x-basalt 侧报错**故隔离——本仓有意只做数字 token
+  # （月名/星期名随界面语言变，非稳定输出）。看官方认不认 MMMM，认的话输出什么语言。
+  - type: table
+    name: date-format-localized
+    filters: file.path == "notes/CaseE.md"
+    order:
+      - 'created.format("MMMM")'
+
+  # ⑱ date(number) / duration(number) —— 源码自认「自建扩展」，官方很可能**根本没有**
+  # 这两个重载。隔离的理由就在这：它是本批最可能整个 view 炸掉的一个。
+  # x-basalt 当前：date(0) → 1970-01-01T00:00:00Z（epoch 毫秒）· duration(1000) → 1000（毫秒）
+  # 官方报错或给空 → 结论是「本仓超集」，落 boundary，不改实现。
+  - type: table
+    name: ext-constructors
+    filters: file.path == "notes/CaseA.md"
+    order:
+      - 'date(0)'
+      - 'duration(1000)'
+
+  # ㉖ duration 的 month/year 固定换算（本仓：month=30d、year=365d，作用于**全部** duration
+  # 算术而不只是 relative()）。x-basalt 当前：2592000000（30d）· 31536000000（365d）
+  - type: table
+    name: duration-units
+    filters: file.path == "notes/CaseA.md"
+    order:
+      - 'duration("1 month")'
+      - 'duration("1 year")'
+
+  # ⑭ number/date 的 isEmpty() 恒 false（本仓口径）。用常量而非行属性：
+  # 混用行属性会让 CaseA 行的 created 为 MISSING，读数掺进「空值怎么办」的第二个变量。
+  - type: table
+    name: is-empty-nonstring
+    filters: file.path == "notes/CaseA.md"
+    order:
+      - 'number(0).isEmpty()'
+      - 'date("2026-07-01").isEmpty()'
+
+  # ⑲ file(path) 的解析范围（本仓：只在**当前查询行集**内解析，不查库不碰文件系统）
+  # ⑳ linksTo 的两种入参语义（本仓：file 值走解析比 path，string/link 走文本匹配）
+  # 样本依赖 CaseE 正文里的 [[CaseB]]（2026-07-29 加，见该文件注释）。
+  # x-basalt 当前：notes/CaseB.md · null(解析不到) · true · true · true
+  # ⑲ 判别力：`file("不存在的笔记")` 给 null 而非报错，说明解析不到 → MISSING 而非伪造空值。
+  - type: table
+    name: file-fn-resolve
+    filters: file.path == "notes/CaseE.md"
+    order:
+      - 'file("CaseB").path'
+      - 'file("不存在的笔记").path'
+      - 'file.linksTo(file("CaseB"))'
+      - 'file.linksTo("CaseB")'
+      - 'file.hasLink("CaseB")'

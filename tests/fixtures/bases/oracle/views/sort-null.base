@@ -1,0 +1,20 @@
+# oracle 争议语义②：多键 sort 的 null / missing 排序位置（BASE-RESULT-002）
+# 样本：CaseA sortable=null、CaseB=1、CaseC=2、CaseD sortable 缺失。
+# 观察：ASC 与 DESC 下 null 与 missing 各自排前还是排后、彼此相对位置。
+views:
+  - type: table
+    name: sort-asc
+    order:
+      - file.name
+      - sortable
+    sort:
+      - property: sortable
+        direction: ASC
+  - type: table
+    name: sort-desc
+    order:
+      - file.name
+      - sortable
+    sort:
+      - property: sortable
+        direction: DESC

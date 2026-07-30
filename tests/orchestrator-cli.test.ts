@@ -318,7 +318,7 @@ test("PC-2a Given --pipe on-busy=restart Then 报「尚未实现」退出码 1�
   }
 });
 
-test("PC-3a Given --pipe actions=\"set k=[a, b],index\" Then 列表值落盘且括号内逗号不切碎", () => {
+test('PC-3a Given --pipe actions="set k=[a, b],index" Then 列表值落盘且括号内逗号不切碎', () => {
   const { vault, baseDir, db } = setup("{}\n", { "a.md": "---\n---\nbody\n" });
   try {
     const r = run(

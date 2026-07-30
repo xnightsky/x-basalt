@@ -1,0 +1,18 @@
+# 行尾规范化：仓库内一律 LF。
+#
+# 为什么必须有这份文件：本仓不设 .gitattributes 时，行尾完全由各人本机的
+# core.autocrlf 决定。Windows 上（Git for Windows 系统级 gitconfig 默认
+# core.autocrlf=true）checkout 会把工作区文件转成 CRLF，而 oxfmt / 编辑器 /
+# 各类工具改写文件时又写回 LF —— 于是 `pnpm run format:check` 报不报错，取决于
+# 「某个文件最近有没有被工具重写过」，而不是仓库内容对不对。
+#
+# 后果是这道门禁随机红绿且单向漂移：被改过的文件转 LF 变绿，看着像在自愈，
+# 但全新 clone 上作用域内文件会大面积红。index 侧本来就 100% LF（内容干净），
+# 红的全是工作区噪声。`eol=lf` 让 checkout 也写 LF，门禁才与仓库内容一致。
+#
+# 注：这条与 .githooks/pre-push 不含 format:check 是两回事——那是另一层缺口。
+* text=auto eol=lf
+
+# 二进制：禁止任何行尾/文本处理（本仓仅此两类）。
+*.png binary
+*.pdf binary

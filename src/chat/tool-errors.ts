@@ -2,7 +2,7 @@
 //
 // 上游：tools.ts（buildTools 末尾包裹每个工具的 execute）；下游：被包裹的原工具 execute。
 //
-// 定位（据 dogfood 实测修正，见 docs/research/2026-06-30-chat-gap-vs-agent-browser.md §2.1 取舍）：
+// 定位（据 dogfood 实测修正，见 docs/history/research/2026-06-30-chat-gap-vs-agent-browser.md §2.1 取舍）：
 //   chat 读多写少、工具皆一次性独立调用（无会话级读写事务/状态），并发写锁竞争几乎不存在——
 //   故「对同一调用机械精准重试」收益低，**不做退避重试循环**。
 //   真正值钱的是：失败时给模型一条**结构化、可据以换策略**的错误（分类标签 + 自纠方向），
@@ -55,7 +55,8 @@ export function classifyError(e: unknown): ErrorClass {
     if (code === "ENOENT" || code === "SQLITE_CANTOPEN") return "not-found";
   }
   const msg = e instanceof Error ? e.message : String(e);
-  if (/\bDQL\b|dataview|Expecting|NoViableAlt|MismatchedToken|EarlyExit|无法解析|语法/i.test(msg)) return "dql";
+  if (/\bDQL\b|dataview|Expecting|NoViableAlt|MismatchedToken|EarlyExit|无法解析|语法/i.test(msg))
+    return "dql";
   if (/ENOENT|no such file|unable to open database|不存在/i.test(msg)) return "not-found";
   if (/SQLITE_BUSY|database is locked|resource busy|EBUSY|EAGAIN/i.test(msg)) return "transient";
   if (/invalid|required|不合法|必填|缺少|类型/i.test(msg)) return "invalid";
@@ -107,7 +108,9 @@ export function wrapToolErrors<T extends Record<string, unknown>>(tools: T): T {
   for (const [name, t] of Object.entries(tools)) {
     const exec = (t as { execute?: unknown }).execute;
     out[name] =
-      typeof exec === "function" ? { ...(t as object), execute: wrapExecute(exec as AnyExecute) } : t;
+      typeof exec === "function"
+        ? { ...(t as object), execute: wrapExecute(exec as AnyExecute) }
+        : t;
   }
   return out as T;
 }

@@ -37,6 +37,55 @@ test("parseFrontmatter：首行 --- 时解析 YAML 并剥离正文", () => {
   assert.ok(body.includes("# 正文"));
 });
 
+// 不加引号的 YAML 日期必须保持字符串（YAML 1.2 core 无 timestamp 隐式类型）。
+// 回归点：原 gray-matter 内置 js-yaml 走 YAML 1.1，把它解析成 JS Date，经 indexer
+// JSON.stringify 落库变成 "2026-08-10T00:00:00.000Z"（含毫秒），词法形态丢失 →
+// 下游 Bases 的严格 ISO 推断不认小数秒 → 日期比较静默失效（只给行级 warning）。
+test("parseFrontmatter：不加引号的日期保持字符串，不转 Date（Obsidian 的实际写法）", () => {
+  const { frontmatter } = parseFrontmatter(
+    '---\nd: 2026-08-10\ndt: 2026-08-10T10:30:00\nq: "2026-08-10"\n---\n正文',
+  );
+  assert.equal(frontmatter.d, "2026-08-10");
+  assert.equal(frontmatter.dt, "2026-08-10T10:30:00");
+  // 加不加引号得到同一结果——写法差异不再造成语义差异。
+  assert.equal(frontmatter.q, "2026-08-10");
+  for (const k of ["d", "dt", "q"]) {
+    assert.ok(!(frontmatter[k] instanceof Date), `${k} 不得是 Date 实例`);
+  }
+  // 落库形态（indexer 用 JSON.stringify）必须无毫秒后缀。
+  assert.ok(!JSON.stringify(frontmatter).includes(".000Z"), "落库 JSON 不得出现毫秒形态");
+});
+
+// CRLF 行尾（Windows 编辑器 / core.autocrlf 的默认）不得改变 frontmatter 语义。
+// 回归点：gray-matter 交给 YAML engine 的 block 尾部总留一个裸 `\r`，而 `yaml` 包（YAML 1.2）
+// 不认孤立 `\r`——末行是标量则值被污染成 "done\r"（WHERE status = "done" 恒不中），
+// 末行是 flow 集合则抛错被 catch 成 {}（整份 frontmatter 静默消失）。两种坏法都无诊断。
+test("parseFrontmatter：CRLF 文件与 LF 文件解析结果逐键相等", () => {
+  const lf = "---\ntitle: 索引\ntags: [moc, home]\nstatus: active\n---\n\n# 正文\n内容";
+  const crlf = lf.replace(/\n/g, "\r\n");
+  const { frontmatter: fmLf } = parseFrontmatter(lf);
+  const { frontmatter: fmCrlf } = parseFrontmatter(crlf);
+  assert.deepEqual(fmCrlf, fmLf);
+  // 逐条钉住两种坏法：末行标量不带尾 \r；flow 集合没被降级成空。
+  assert.equal(fmCrlf.status, "active");
+  assert.deepEqual(fmCrlf.tags, ["moc", "home"]);
+});
+
+test("parseFrontmatter：CRLF 且末行为 flow 集合时不降级为空 frontmatter", () => {
+  // 末行落在 `tags: [a, b]` 上——修复前这里抛 "Unexpected scalar at node end"，
+  // 被 catch 吞成 {}，整份 frontmatter 无声消失（比错值更难发现）。
+  const { frontmatter } = parseFrontmatter("---\r\ntitle: x\r\ntags: [a, b]\r\n---\r\n正文");
+  assert.equal(frontmatter.title, "x");
+  assert.deepEqual(frontmatter.tags, ["a", "b"]);
+});
+
+test("parseFrontmatter：CRLF 下不加引号的日期仍保持字符串（与 LF 同）", () => {
+  // 两条修复不得互相抵消：行尾归一发生在 YAML 解析前，不改变 YAML 1.2 的 timestamp 口径。
+  const { frontmatter } = parseFrontmatter("---\r\nd: 2026-08-10\r\n---\r\n正文");
+  assert.equal(frontmatter.d, "2026-08-10");
+  assert.ok(!(frontmatter.d instanceof Date));
+});
+
 test("parseFrontmatter：无 frontmatter 时返回空对象与原文", () => {
   const { frontmatter, body } = parseFrontmatter("# 没有 frontmatter\n正文");
   assert.deepEqual(frontmatter, {});

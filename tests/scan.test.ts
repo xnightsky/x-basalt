@@ -171,7 +171,7 @@ test("Given 空变更 When groupByDir Then 空对象", () => {
   assert.deepEqual(groupByDir({ added: [], modified: [], deleted: [] }), {});
 });
 
-test("Given 根目录文件与多级子目录混合 When groupByDir Then 按目录分桶计数（根归 \".\"）", () => {
+test('Given 根目录文件与多级子目录混合 When groupByDir Then 按目录分桶计数（根归 "."）', () => {
   const byDir = groupByDir({
     added: ["A.md", "guides/intro.md", "guides/advanced/deep.md"],
     modified: ["guides/intro.md"],
@@ -203,7 +203,7 @@ test("Given 索引后未改动 When scan Then byDir 为空对象", async () => {
   idx.close();
 });
 
-test("Given 多级子目录变更 + 根目录新增 When scan Then byDir 按目录标量聚合（含根 \".\" 桶）", async () => {
+test('Given 多级子目录变更 + 根目录新增 When scan Then byDir 按目录标量聚合（含根 "." 桶）', async () => {
   const { vault, idx } = await setupVault();
   await writeFile(join(vault, "C.md"), "# C\n"); // 根目录新增
   await mkdir(join(vault, "guides", "advanced"), { recursive: true });

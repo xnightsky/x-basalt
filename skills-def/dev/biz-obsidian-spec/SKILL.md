@@ -7,7 +7,7 @@ description: Use when implementing or reviewing the parser of x-basalt (wikilink
 
 ## 简介
 
-x-basalt 的 parser 必须**精确复现** Obsidian 专有语法，且**零依赖 Obsidian 运行时**。本 skill 给出每类语法的文法与边界 case；完整论证见 `docs/research/2026-06-25-obsidian-spec-and-deps.md` §2。代码中以 `// === Obsidian 规范来源 ===` / `// === 自建实现 ===` 标注分界。
+x-basalt 的 parser 必须**精确复现** Obsidian 专有语法，且**零依赖 Obsidian 运行时**。本 skill 给出每类语法的文法与边界 case；完整论证见 `docs/history/research/2026-06-25-obsidian-spec-and-deps.md` §2。代码中以 `// === Obsidian 规范来源 ===` / `// === 自建实现 ===` 标注分界。
 
 > **规范对标原则（2026-06-26）**：严格对标 Obsidian 官方语法行为实现。本 skill 的自定义口径若与官方**无冲突**，一律以**官方规范为准**；仅在官方未定义、或本项目刻意收窄（如纯 headless 不渲染）处才用自定义口径，并须显式注明理由。
 
@@ -45,6 +45,8 @@ x-basalt 的 parser 必须**精确复现** Obsidian 专有语法，且**零依�
 ### Tag
 
 - 行内 `#tag`、嵌套 `#a/b/c`；`#` 前**不能是字母/数字/下划线**（word 字符）。比「行首或空白」更贴近 Obsidian：允许 CJK 标点后成标签（如 `标签：#moc`），同时排除 `word#x` / `123#x` / `Concepts#heading`（wikilink 锚点不会被误当标签）。
+- **标签体**：`[\p{L}\p{N}_/-]+`（Unicode 字母/数字/下划线/连字符/斜杠），遇其余字符即终止 —— `#概念` 成立，`#概念。` 只取 `概念`。
+- **已知有意差异（documented boundary）**：Obsidian 实际实现会把紧跟标签的非空白 Unicode 标点计入标签本身（`再打一次 #概念。` → Obsidian 得 `概念。`），x-basalt 在标点处终止。有意不跟：该边界在 Obsidian 侧无权威规格（官方文档与实现不符且逐版本变动），跟随会让标签按句读碎片化并使 `FROM #概念` 前缀查询在句末标签上失效。改 `TAG_RE` 前先看这条。
 - 排除：纯数字 `#123`（标签须含至少一个字母/下划线）；代码块/行内代码内的 `#` 通过 `maskCode` 剔除。
 - 归一化：存**不带 `#`**；`#a/b` 同时归属 `a` 前缀。同一文件内同名标签去重。
 
@@ -74,7 +76,7 @@ x-basalt 的 parser 必须**精确复现** Obsidian 专有语法，且**零依�
 - 在 **maskCode 后**的正文提取（代码区不误吃，行号仍对齐原文）；整行形态独占该行，不再叠加行内形态扫描。
 - key v1 仅 `[A-Za-z0-9_]+`（与 DQL 字段白名单对齐，D4；带空格/连字符 key 列 backlog）；空 key / 空 value 不产出；`https://x` 天然不命中（`//` 非 `::`）。
 - 同名 key（按小写归一）**last-wins**：只保留最后一次出现（D3）；节点 `key` 保留原大小写，`line` 为最后出现行（1-based 正文行号）。
-- 节点形态 `{ type: "inlineField"; key; value; line }`；设计真相源 `docs/specs/2026-07-02-inline-fields-design.md` §6.1。
+- 节点形态 `{ type: "inlineField"; key; value; line }`；设计真相源 `docs/design/inline-fields.md` §6.1。
 
 ## 硬约束提醒
 

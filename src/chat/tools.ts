@@ -261,7 +261,9 @@ export function buildTools(ctx: ToolContext, safety: Safety): ToolSet {
     }),
     search: tool({
       description:
-        "全文检索笔记正文（FTS5 + trigram 子串匹配，覆盖中英文；用它回答「哪篇笔记提到 X/讲了 X 的笔记」这类不知道具体是哪篇、需要按内容找的请求）。基于索引快照，新改动需先 scan/index 才能看见。query 至少 3 个字符（trigram 子串匹配要求，含 CJK；整体按字面短语匹配，不支持 FTS5 查询语法）。返回 total/returned/hasMore——数总量看 total，不要靠翻页枚举。size 默认 50（上限 500），offset 默认 0；翻页用 offset+=size。",
+        "全文检索笔记正文（FTS5 + trigram 子串匹配，覆盖中英文；用它回答「哪篇笔记提到 X/讲了 X 的笔记」这类不知道具体是哪篇、需要按内容找的请求）。基于索引快照，新改动需先 scan/index 才能看见。query 至少 2 个字符，不支持 FTS5 查询语法。" +
+        "**匹配口径分两档，别把 total 当成「含该短语的篇数」**：纯 ASCII 查询是字面短语、多词按 AND；含中日韩汉字的查询走 trigram 并集 **OR 宽松召回**——只命中部分片段的笔记**也会计入 total**（例：搜「回归网-不存在」与搜「回归网」返回同样多的结果）。完整连续子串命中者由 bm25 **排在最前**，所以判断「到底有没有这一串」要看靠前的结果、或改用 query 的 contains() 精确判定，不要只读 total。" +
+        "返回 total/returned/hasMore；size 默认 50（上限 500），offset 默认 0；翻页用 offset+=size。",
       inputSchema: jsonSchema<{ query: string; offset?: number; size?: number }>({
         type: "object",
         properties: {
@@ -424,7 +426,11 @@ export function buildTools(ctx: ToolContext, safety: Safety): ToolSet {
     }),
     pipeline_run: tool({
       description:
-        "对一批笔记跑声明式管道（actions: index/normalize/apply/set/unset/rename）。批量直接写入。where 用 DQL 选源（见 obsidian-base-spec），省略则用 scan 差异源；actions 语义见 core。",
+        "对一批笔记跑声明式管道（actions: index/normalize/apply/set/unset/rename）。批量直接写入。" +
+        "where 用**完整** DQL 选源（必须以 LIST/TABLE/TASK 开头，如 'LIST FROM \"inbox\" WHERE type = null'；" +
+        "不能只写 FROM…/WHERE… 裸子句），省略则用 scan 差异源；actions 语义见 core。" +
+        "返回 total/changed/skipped 均以**文件**为单位，byAction 给分动作明细。" +
+        "**写完索引已自动刷新**（reindexed 即刷新篇数），changed>0 就是写成功了——不必再 query/scan 复核一遍，那只会白烧步数。",
       inputSchema: jsonSchema<{
         actions: string[];
         where?: string;
@@ -463,6 +469,9 @@ export function buildTools(ctx: ToolContext, safety: Safety): ToolSet {
             skipped: r.skipped,
             failed: r.failed,
             dryRun: r.dryRun,
+            byAction: r.byAction,
+            // 回传刷新篇数：模型据此确认「现在 query 已经能查到新值」，不必再自己 scan+index 兜一圈。
+            reindexed: r.reindexed,
           });
         } finally {
           orch.close();
