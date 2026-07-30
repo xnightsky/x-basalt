@@ -4,6 +4,8 @@ import { BaseEngine } from "../base/index.js";
 import { resolveVaultLayout } from "../utils/path.js";
 import { runLint } from "../lint/index.js";
 import { runLinksCheck, runLinksSuggest } from "../links/index.js";
+import { hasInterpolation, interpolateToken } from "./interp.js";
+import { makeFilterOp, makeLimitOp, makeDedupOp, makeMapOp } from "./ops-pure.js";
 import type { ActionContext, Op, OpContext, OpFailure, OpOutcome, Row } from "./types.js";
 import type { BasaltDiagnostic } from "../diagnostic.js";
 
@@ -13,35 +15,86 @@ import type { BasaltDiagnostic } from "../diagnostic.js";
 // Op.run 遍历入参 rows，把每个 Row 投影成 ChangeEvent 喂给 Action.run，收集结果。
 // 无参算子（index/parse/normalize）在注册时绑定；带参算子（apply/set/unset/rename）在 resolve 时绑定。
 
+/**
+ * 构造 Op 包装。
+ *
+ * 无插值的 actionToken 走当前路径（parseAction 一次绑定，行为逐字节不变——§9.1-A 判据）。
+ * 含 {{row.xxx}} 插值的 actionToken 走插值路径：对每行渲染参数后再构造 Action。
+ *
+ * 这是 §5 数据传递的兑现点：base 的 formula 计算列经 {{row.x}} 抵达写算子。
+ */
 function buildOp(actionToken: string): Op {
-  const action = parseAction(actionToken);
+  // === §5 插值兑现：不含 {{row. 时走零开销逃逸路径（§9.1-A 判据保护） ===
+  if (!hasInterpolation(actionToken)) {
+    const action = parseAction(actionToken);
+    return {
+      name: action.name,
+      write: action.write,
+      rowwise: true,
+      async run(rows: Row[], ctx: OpContext): Promise<OpOutcome> {
+        const actCtx = ctx as ActionContext;
+        const outcome: OpOutcome = { rows: [], failed: [], changed: [], skipped: [] };
+
+        for (const row of rows) {
+          try {
+            const result = await action.run(
+              { path: row.path, type: row.event ?? "change" },
+              actCtx,
+            );
+            if (result.error) {
+              outcome.failed.push({ path: row.path, op: action.name, error: result.error });
+            } else {
+              outcome.rows.push(row);
+            }
+            if (result.changed) outcome.changed.push(row.path);
+            if (result.skipped) outcome.skipped.push(row.path);
+          } catch (err) {
+            outcome.failed.push({
+              path: row.path,
+              op: action.name,
+              error: String(err),
+            });
+          }
+        }
+
+        return outcome;
+      },
+    };
+  }
+
+  // === 插值路径：每行渲染后再构造/调用（守 §5 / D4「只读不求值」） ===
+  const verb = actionToken.split(/\s+/)[0]!;
   return {
-    name: action.name,
-    write: action.write,
+    name: verb,
+    write: true,
     rowwise: true,
     async run(rows: Row[], ctx: OpContext): Promise<OpOutcome> {
-      // OpContext 与 ActionContext 结构一致，直接投影
       const actCtx = ctx as ActionContext;
       const outcome: OpOutcome = { rows: [], failed: [], changed: [], skipped: [] };
 
       for (const row of rows) {
+        const [rendered, renderFailures] = interpolateToken(actionToken, row, verb);
+        outcome.failed.push(...renderFailures);
+        // 即使有渲染失败的字段（缺失字段→空串），仍然执行动作
         try {
-          const result = await action.run({ path: row.path, type: row.event ?? "change" }, actCtx);
+          const interpAction = parseAction(rendered);
+          const result = await interpAction.run(
+            { path: row.path, type: row.event ?? "change" },
+            actCtx,
+          );
           if (result.error) {
-            outcome.failed.push({ path: row.path, op: action.name, error: result.error });
+            outcome.failed.push({ path: row.path, op: verb, error: result.error });
           } else {
             outcome.rows.push(row);
           }
-          // D9: 收集 changed/skipped 信号（ActionResult 本就有，之前没外传）
           if (result.changed) outcome.changed.push(row.path);
           if (result.skipped) outcome.skipped.push(row.path);
         } catch (err) {
           outcome.failed.push({
             path: row.path,
-            op: action.name,
+            op: verb,
             error: String(err),
           });
-          // 抛异常的行：不变更不跳过，不加到 changed/skipped
         }
       }
 
@@ -69,14 +122,11 @@ const PARAM_OPS: Record<string, ParamBuilder> = {
  * query <dql> 算子工厂。既是源也是转换：
  * - 源模式（入参 rows 为空）：执行 DQL，每个命中文件产出为 Row（path=文件路径，fields=DQL 列值）。
  * - 转换模式（入参 rows 非空）：执行 DQL 得到命中 path 集合，过滤 rows 只保留命中行，
- *   并把 DQL 的列值合并进对应 Row 的 fields。合并策略：row.fields 已有同名键时不覆盖
- *   （上游流下来的结果优先），DQL 只填充新增键。
+ *   并把 DQL 的列值合并进对应 Row 的 fields（同名键以 DQL 的值为准，覆盖上游值）。
  *
  * DQL 错误处理策略：
  * - 源模式：返回空 rows + 一条 failed（path="<query>"）。
- * - 转换模式：返回 rows 原样透传 + 一条整体 failed。
- *   理由：过滤条件未能应用但行数据本身有效，清除行对上游损失太大；
- *   失败记录会在报告中清晰体现。
+ * - 转换模式：每行各记一条 failed + rows 原样透传。
  */
 function makeQueryOp(dql: string): Op {
   return {
@@ -158,9 +208,8 @@ function makeQueryOp(dql: string): Op {
         for (const row of rows) {
           if (hitPaths.has(row.path)) {
             const qf = dqlFieldsMap.get(row.path);
-            // 合并策略：DQL 列值填充新键，不覆盖 row.fields 已有同名键
-            // （上游流下来的结果优先于 DQL 列值）
-            const mergedFields = { ...qf, ...row.fields };
+            // 合并策略：DQL 列值覆盖上游同名键（设计：docs/design/pipeline-op-model.md §5 数据传递）
+            const mergedFields = { ...row.fields, ...qf };
             out.push({ ...row, fields: mergedFields });
           }
           // 不命中的行排除——query 作转换时也是过滤器
@@ -168,12 +217,21 @@ function makeQueryOp(dql: string): Op {
         return { rows: out, failed: [], changed: [], skipped: [] };
       } catch (err) {
         const errMsg = String(err);
-        const failedEntry: OpFailure = { path: "<query>", op: "query", error: errMsg };
         if (rows.length === 0) {
-          return { rows: [], failed: [failedEntry], changed: [], skipped: [] };
+          return {
+            rows: [],
+            failed: [{ path: "<query>", op: "query", error: errMsg }],
+            changed: [],
+            skipped: [],
+          };
         }
-        // 转换模式：行原样透传，同时报告失败（见模块注释的策略说明）
-        return { rows, failed: [failedEntry], changed: [], skipped: [] };
+        // 转换模式：每行各记一条 failed + rows 原样透传
+        return {
+          rows,
+          failed: rows.map((r) => ({ path: r.path, op: "query", error: errMsg })),
+          changed: [],
+          skipped: [],
+        };
       }
     },
   };
@@ -181,9 +239,10 @@ function makeQueryOp(dql: string): Op {
 
 /**
  * search <text> 算子工厂。双角色（源/转换）：
- * - 源模式（入参 rows 为空）：执行全文检索，每个命中文件产出为 Row（path=文件路径，fields={name,snippet}）。
+ * - 源模式（入参 rows 为空）：执行全文检索，每个命中文件产出为 Row（path=文件路径，
+ *   fields 含 score/name/snippet）。
  * - 转换模式（入参 rows 非空）：执行全文检索得到命中 path 集合，过滤 rows 只保留命中行，
- *   并把 search 的 name/snippet 合并进对应 Row 的 fields（上游同名键优先）。
+ *   并把 search 的字段合并进对应 Row 的 fields（同名键以 search 的值为准，覆盖上游值）。
  *
  * 错误处理策略同 query 算子。
  */
@@ -208,14 +267,19 @@ function makeSearchOp(text: string): Op {
         const hitPaths = new Set(result.rows.map((r) => r.path));
         const searchFieldsMap = new Map<string, Record<string, unknown>>();
         for (const r of result.rows) {
-          searchFieldsMap.set(r.path, { name: r.name, snippet: r.snippet });
+          // score 取自 DataviewEngine.search 的 bm25 排名（FTS 路径）或 0（LIKE 兜底路径）
+          searchFieldsMap.set(r.path, {
+            score: r.score,
+            name: r.name,
+            snippet: r.snippet,
+          });
         }
 
         // 源模式：忽略入参，从检索结果直接产出行
         if (rows.length === 0) {
           const out: Row[] = result.rows.map((r) => ({
             path: r.path,
-            fields: { name: r.name, snippet: r.snippet } as Record<string, unknown>,
+            fields: { score: r.score, name: r.name, snippet: r.snippet } as Record<string, unknown>,
           }));
           return { rows: out, failed: [], changed: [], skipped: [] };
         }
@@ -225,20 +289,29 @@ function makeSearchOp(text: string): Op {
         for (const row of rows) {
           if (hitPaths.has(row.path)) {
             const sf = searchFieldsMap.get(row.path);
-            // 合并策略：search 字段填充新键，不覆盖 row.fields 已有同名键
-            const mergedFields = { ...sf, ...row.fields };
+            // 合并策略：search 字段覆盖上游同名键
+            const mergedFields = { ...row.fields, ...sf };
             out.push({ ...row, fields: mergedFields });
           }
         }
         return { rows: out, failed: [], changed: [], skipped: [] };
       } catch (err) {
         const errMsg = String(err);
-        const failedEntry: OpFailure = { path: "<search>", op: "search", error: errMsg };
         if (rows.length === 0) {
-          return { rows: [], failed: [failedEntry], changed: [], skipped: [] };
+          return {
+            rows: [],
+            failed: [{ path: "<search>", op: "search", error: errMsg }],
+            changed: [],
+            skipped: [],
+          };
         }
-        // 转换模式：行原样透传，同时报告失败
-        return { rows, failed: [failedEntry], changed: [], skipped: [] };
+        // 转换模式：每行各记一条 failed + rows 原样透传
+        return {
+          rows,
+          failed: rows.map((r) => ({ path: r.path, op: "search", error: errMsg })),
+          changed: [],
+          skipped: [],
+        };
       }
     },
   };
@@ -609,5 +682,23 @@ export function registerBuiltinOps(): void {
   register("links.suggest", (params: string) => {
     if (!params) throw new Error("links.suggest 算子需要文件路径参数");
     return makeLinksSuggestOp(params);
+  });
+
+  // === 片三纯函数算子（设计：docs/design/pipeline-op-model.md §5 / §12、D4）===
+  // 全部 rowwise:false、write:false（纯函数，不碰 IO）。
+  register("filter", (params: string) => {
+    if (!params) throw new Error("filter 算子需要表达式参数");
+    return makeFilterOp(params);
+  });
+  register("limit", (params: string) => {
+    if (params === undefined || params.trim() === "") throw new Error("limit 算子需要数字参数");
+    return makeLimitOp(params);
+  });
+  register("dedup", (params: string) => {
+    return makeDedupOp(params); // params 可空（缺省按 path 去重）
+  });
+  register("map", (params: string) => {
+    if (!params) throw new Error("map 算子需要 <targetField>=<template> 参数");
+    return makeMapOp(params);
   });
 }

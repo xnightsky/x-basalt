@@ -62,9 +62,9 @@ test("Op-Q1 Given query 作源（空入参）When run Then 产出行数与 DQL �
 });
 
 // ---------------------------------------------------------------------------
-// Op-Q2 query 作转换（非空入参）：过滤 + fields 合并
+// Op-Q2 query 作转换（非空入参）：过滤 + fields 合并（DQL 覆盖上游同名键）
 // ---------------------------------------------------------------------------
-test("Op-Q2 Given query 作转换（非空入参）When run Then 只保留 DQL 命中行且上游同名键不被覆盖", async () => {
+test("Op-Q2 Given query 作转换（非空入参）When run Then 只保留 DQL 命中行且 DQL 列值覆盖上游同名键", async () => {
   const dir = mkVault({
     "a.md": "---\ntags: [fruit]\nstatus: active\n---\n# Apple\n",
     "b.md": "---\ntags: [fruit]\nstatus: draft\n---\n# Banana\n",
@@ -78,7 +78,7 @@ test("Op-Q2 Given query 作转换（非空入参）When run Then 只保留 DQL �
     const engine = new DataviewEngine(dbPath);
     try {
       const queryOp = resolve("query TABLE file.path, status FROM #fruit") as Op;
-      // 上游行：三行都传入，带上游 fields（其中 status 故意设不同值，验证上游优先）
+      // 上游行：三行都传入，带上游 fields（其中 status 故意设不同值，验证 DQL 覆盖上游）
       const input: Row[] = [
         { path: "a.md", fields: { remark: "from-upstream", status: "upstream-win" } },
         { path: "b.md", fields: { remark: "origin" } },
@@ -94,12 +94,10 @@ test("Op-Q2 Given query 作转换（非空入参）When run Then 只保留 DQL �
       const paths = result.rows.map((r) => r.path).toSorted();
       assert.deepEqual(paths, ["a.md", "b.md"]);
 
-      // a.md: upstream 的 status 不应被 DQL 的 "active" 覆盖
+      // a.md: DQL 的 status 应覆盖上游的 "upstream-win"
       const aRow = result.rows.find((r) => r.path === "a.md")!;
       assert.equal(aRow.fields.remark, "from-upstream");
-      assert.equal(aRow.fields.status, "upstream-win"); // 上游优先
-      // status 列被上游覆盖，但 TABLE 仍会添加其他 DQL 列（如 file.name）
-      assert.ok("status" in aRow.fields); // 存在（被上游覆盖了，但key还在）
+      assert.equal(aRow.fields.status, "active"); // DQL 覆盖上游
 
       // b.md: 上游没有 status，DQL 的值应出现
       const bRow = result.rows.find((r) => r.path === "b.md")!;
@@ -121,9 +119,9 @@ test("Op-Q2 Given query 作转换（非空入参）When run Then 只保留 DQL �
 });
 
 // ---------------------------------------------------------------------------
-// Op-S1 search 作源（空入参）
+// Op-S1 search 作源（空入参）：score/name/snippet 字段齐全
 // ---------------------------------------------------------------------------
-test("Op-S1 Given search 作源（空入参）When run Then 产出命中行", async () => {
+test("Op-S1 Given search 作源（空入参）When run Then 产出行带 score/name/snippet", async () => {
   const dir = mkVault({
     "a.md": "---\ntags: [fruit]\n---\n# Apple\napple pie content here\n",
     "b.md": "---\ntags: [fruit]\n---\n# Banana\nbanana smoothie blend\n",
@@ -145,6 +143,7 @@ test("Op-S1 Given search 作源（空入参）When run Then 产出命中行", as
       assert.ok(result.rows.length >= 1);
       const hit = result.rows.find((r) => r.path === "a.md");
       assert.ok(hit, "search 'apple' 应命中 a.md");
+      assert.equal(typeof hit!.fields.score, "number", "应有 score 字段且为数值");
       assert.ok(hit!.fields.name, "应有 name 字段");
       assert.ok(hit!.fields.snippet, "应有 snippet 字段");
     } finally {
@@ -187,11 +186,11 @@ test("Op-Q3 Given DQL 语法错误 When run Then 进 failed 且不抛出异常",
         const input: Row[] = [{ path: "a.md", fields: { x: 1 } }];
         const result = await queryOp.run(input, ctx);
 
-        // 行原样透传，同时报 failed
+        // 行原样透传，同时按每行记 failed
         assert.equal(result.rows.length, 1);
         assert.equal(result.rows[0]!.path, "a.md");
         assert.ok(result.failed.length > 0);
-        assert.equal(result.failed[0]!.path, "<query>");
+        assert.equal(result.failed[0]!.path, "a.md"); // 逐行路径
       }
     } finally {
       engine.close();
@@ -412,6 +411,113 @@ test("Op-Q6 Given TABLE DQL 不含 file.path（转换模式）When run Then 记�
     indexer.close();
     rmSync(dir, { recursive: true, force: true });
   }
+});
+
+// ---------------------------------------------------------------------------
+// Op-Q7 query 作转换时不新增上游没有的行（DQL 命中了上游不存在的文件也不能冒出来）
+// ---------------------------------------------------------------------------
+test("Op-Q7 Given query 作转换且 DQL 命中额外文件 When run Then 不新增上游没有的行", async () => {
+  const dir = mkVault({
+    "a.md": "---\ntags: [fruit]\n---\n# Apple\n",
+    "b.md": "---\ntags: [fruit]\n---\n# Banana\n",
+    "x.md": "---\ntags: [fruit]\n---\n# Extra\n", // 上游没传 x.md，DQL 会命中它但不能冒出来
+  });
+  const dbPath = join(dir, "i.db");
+  const indexer = new VaultIndexer({ vaultPath: dir, dbPath });
+  try {
+    for (const f of ["a.md", "b.md", "x.md"]) await indexer.update(f);
+
+    const engine = new DataviewEngine(dbPath);
+    try {
+      const queryOp = resolve("query TABLE file.path, status FROM #fruit") as Op;
+      // 上游只传 a.md、b.md，不传 x.md
+      const input: Row[] = [
+        { path: "a.md", fields: { label: "A" } },
+        { path: "b.md", fields: { label: "B" } },
+      ];
+      const result = await queryOp.run(input, ctxWith({ indexer, engine, dir }));
+
+      assert.equal(result.failed.length, 0);
+      // DQL 虽然命中了 x.md，但上游没有 x.md，不应新增
+      assert.equal(result.rows.length, 2);
+      const paths = result.rows.map((r) => r.path).toSorted();
+      assert.deepEqual(paths, ["a.md", "b.md"]);
+      // x.md 不应出现在结果中
+      assert.equal(
+        result.rows.find((r) => r.path === "x.md"),
+        undefined,
+      );
+    } finally {
+      engine.close();
+    }
+  } finally {
+    indexer.close();
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+// ---------------------------------------------------------------------------
+// Op-S2 search 作转换（非空入参）：过滤 + fields 合并（search 覆盖上游同名键）
+// ---------------------------------------------------------------------------
+test("Op-S2 Given search 作转换（非空入参）When run Then 只保留命中行且 search 字段覆盖上游同名键", async () => {
+  const dir = mkVault({
+    "a.md": "# Apple\napple pie content here\n",
+    "b.md": "# Banana\nbanana smoothie blend\n",
+    "c.md": "# Cherry\ncherry tart\n",
+  });
+  const dbPath = join(dir, "i.db");
+  const indexer = new VaultIndexer({ vaultPath: dir, dbPath });
+  try {
+    for (const f of ["a.md", "b.md", "c.md"]) await indexer.update(f);
+
+    const engine = new DataviewEngine(dbPath);
+    try {
+      const searchOp = resolve("search apple") as Op;
+      const input: Row[] = [
+        { path: "a.md", fields: { score: 999, upstream_flag: true } },
+        { path: "b.md", fields: { note: "banana" } },
+        { path: "c.md", fields: { note: "cherry" } }, // c 不命中 "apple" → 应被过滤
+      ];
+      const result = await searchOp.run(input, ctxWith({ indexer, engine, dir }));
+
+      assert.equal(result.failed.length, 0);
+      assert.equal(result.changed.length, 0);
+      // 只保留 a.md（命中 "apple"）
+      assert.equal(result.rows.length, 1);
+      assert.equal(result.rows[0]!.path, "a.md");
+
+      // search 的 score 应覆盖上游的 999（用实际 bm25 值覆盖）
+      const aRow = result.rows[0]!;
+      assert.equal(typeof aRow.fields.score, "number", "score 应为数值");
+      assert.notEqual(aRow.fields.score, 999, "search 的 score 应覆盖上游值");
+      assert.ok(aRow.fields.name, "应有 name 字段");
+      assert.ok(aRow.fields.snippet, "应有 snippet 字段");
+      assert.equal(aRow.fields.upstream_flag, true); // 非同名键保留
+      // b.md、c.md 被过滤
+      assert.equal(
+        result.rows.find((r) => r.path === "c.md"),
+        undefined,
+      );
+    } finally {
+      engine.close();
+    }
+  } finally {
+    indexer.close();
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+// ---------------------------------------------------------------------------
+// Op-Meta query/search 算子的 rowwise/write 元数据验证
+// ---------------------------------------------------------------------------
+test("Op-Meta Given query/search 算子 When 检查元数据 Then rowwise=false, write=false", () => {
+  const queryOp = resolve('query LIST FROM ""') as Op;
+  assert.equal(queryOp.rowwise, false, "query 应为 rowwise: false");
+  assert.equal(queryOp.write, false, "query 应为 write: false");
+
+  const searchOp = resolve("search test") as Op;
+  assert.equal(searchOp.rowwise, false, "search 应为 rowwise: false");
+  assert.equal(searchOp.write, false, "search 应为 write: false");
 });
 
 // ---------------------------------------------------------------------------
