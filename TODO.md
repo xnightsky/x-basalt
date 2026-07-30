@@ -1,3 +1,7 @@
+---
+timestamp: 2026-07-30T00:06:05Z
+sha256: ff18873651923657e96de0ecfb41e2a3348347face2ba3bdf7ded20b6bd62af3
+---
 # TODO · x-basalt
 
 > backlog / roadmap（存在 = 有待做项）。已完成的不堆这——见 git log、`docs/plans/`、`docs/specs/`。
@@ -99,6 +103,28 @@
 
 **技术细节**：入参 base 无文件路径 → 诊断的 `file` 字段给虚拟名（如 `<stdin>`）；路径越界检查（BASE-SEC-008）对入参不适用也不需要，因为根本不读文件；`.base` 内的 `file.inFolder()` 等仍作用于 vault，不受影响。改动点在 `src/base/document.ts` 的 `loadBaseDocument`——现为 `readFileSync(abs)` 取 source 后解析，把「取 source」与「解析 source」拆开即可。
 
+## 🔧 2026-07-30 统一算子模型（pipeline 改造）——片一/二/三已落地，剩片四
+
+设计真相源：[`pipeline-op-model.md`](./docs/design/pipeline-op-model.md)（四片切口见 §9，Decision Log 已到 D11）。
+
+**已完成**（四门全绿，test 912 → **1029**）：
+
+- [x] **片一 · Row/Op 模型地基与执行器切换**（`981c0ed` → `46d3b35`，5 个提交）
+  - `Row`/`Op`/`OpOutcome`/`OpFailure`/`OpContext` 类型 + `registry`（register/resolve）+ 7 个既有动作的 Op 包装。
+  - `runOpPipeline` 批算子执行器：外层串行跑算子、内层每算子吃整批（与旧模型循环嵌套对调）；`rowwise` 逐行领取并发；`onError` 语义重定义（continue 剔除失败行、stop 中止边界在算子之间）；`steps[]` 行数流水。
+  - `engine.runBatch` 切换到新执行器，**三条安全线原样保住并经端到端实证**：写后刷索引（`run --apply` 报「2 改动 / 2 已刷索引」且随后 `query` 返回 0，`d04d47d` 未被打回）、dry-run 闸、防回环。
+  - §9.1 A/B/C 八条判据落齐；**A2 契约对拍做过变异测试**（强制 `changed=0` 后场景 3 如期变红），证明判据有捕获力而非空转。
+- [x] **片二 · 五个只读算子接入**（`0cf1967` / `22be767` / `9ee12bf`）：`query`/`search`（含 D11 源角色缺陷修复）、`base`（formula 计算列进入管道）、`lint`/`links.check`/`links.suggest`。
+- [x] **片三 · 纯函数算子 + 插值**（`c6be4d2`）：`filter`/`map`/`limit`/`dedup` + `{{row.x}}` 插值（只读不求值，守 D4）；`search` 结果补 `score` 出参。
+
+**剩余**：
+
+- [ ] **片四 · 配置面**：`--pipe` 支持声明式步骤列表，保留现有 kv 写法兼容。验收＝新旧两种写法产出同一份 `RunReport`（§9 片四）。**这是「多平台 shell 管道」的前置**。
+- [ ] **§12 两条未决问题需回写定案**：①`links.check`/`lint` 的诊断挂在 `Row.fields` 哪个键（片二实现时已实际选定，需回写设计文档从「倾向」改为「已定」）；②多根 vault 下 `base`/`search` 产出行的 `path` 归一是否与索引主键零冲突（片二已跑通，需补一条显式断言而非依赖巧合）。
+- [ ] **🐞 间歇性测试失败（未定位）**：片三提交前观察到一次 `1028 pass / 1 fail`，同一工作区状态随后连跑三次全绿，**未捕获失败用例名**。疑似时序相关（watch/debounce 类）。下次复现时立刻记下用例名；若持续不复现也不要当作已解决——flaky 测试会掩盖真实回归。
+
+**编排过程中补的两条设计决策**（写代码才暴露的原文歧义，非实现错误）：`D9` `OpOutcome` 漏 `changed`/`skipped` 信号（不补则 `RunReport` 四字段静默归零、连带打回 `d04d47d` 的写后刷索引）；`D10` `rowwise` 并发是逐行领取而非切片（切片与 §9.1-B 判据互斥）。另 `D11` 执行器不得对空批短路（否则「源」角色被静默取消，表现为 0 行 / 退出码 0 / 无诊断）。
+
 ## 📋 功能覆盖 gap → backlog（待 dogfood 暴露真实需求再开）
 
 高频缺口（未做，各自待开计划/spec）：
@@ -110,8 +136,7 @@
 ## 💡 backlog（待 dogfood 暴露真实需求再开）
 
 - **变更编排器 P1 余项 / P2**：背压、缓存跳过、条件分支、检查点续跑、失败告警、管道 `set` 列表值。设计见 [`change-orchestration.md`](./docs/design/change-orchestration.md)。
-- **内置 pipeline 改造（统一算子模型）**：把流动单位从文件事件升级为 `Row`、算子统一单签名、调度与算子分离，让 `query`/`search`/`base`/`links`/`lint` 都能进管道。**设计已落地、代码未动**：[`pipeline-op-model.md`](./docs/design/pipeline-op-model.md)（四片切口见 §9）。
-- **多平台 shell 管道**：接外部工具的 stdin/stdout 跨平台契约；**依赖上一条先落地**。设计见 [`shell-pipe-portability.md`](./docs/design/shell-pipe-portability.md)（Windows PS 5.1 中文不可逆丢失的实测证据在 §2）。取代原 backlog 条目「原生管道 stdin」。
+- **多平台 shell 管道**：接外部工具的 stdin/stdout 跨平台契约；**依赖统一算子模型片四先落地**（见下）。设计见 [`shell-pipe-portability.md`](./docs/design/shell-pipe-portability.md)（Windows PS 5.1 中文不可逆丢失的实测证据在 §2）。取代原 backlog 条目「原生管道 stdin」。
 - **更多 profile**：按需扩。
 - **embedding 向量语义检索**：FTS5 全文已落地；embedding 仍 backlog（触发条件见 `docs/design/semantic-retrieval.md` §10）。
 - **S3.4 kysely 收编 DQL→SQL**（可选增强，按需再定）。
