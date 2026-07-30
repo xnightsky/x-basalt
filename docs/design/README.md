@@ -6,8 +6,8 @@ tags:
   - design
   - index
   - x-basalt
-timestamp: 2026-07-28T03:32:50Z
-sha256: f81c26e6e553033806a6bcc09b0542286f9070028baf8ad3254341c72865e813
+timestamp: 2026-07-30T23:50:42Z
+sha256: 302f4faa6b557925d8dc65a833762287dd8bce70a0a9db02fd2746c331a62fd7
 ---
 # 设计文档
 
@@ -67,6 +67,7 @@ sha256: f81c26e6e553033806a6bcc09b0542286f9070028baf8ad3254341c72865e813
 | [读写机制](chat-readwrite.md) | 工具调用的读侧与受闸写侧 |
 | [skill grounding](chat-skill-grounding.md) | 怎么让模型用对 CLI |
 | [trace](chat-trace.md) | 可观测性 |
+| [工具面单一真相源](chat-tool-surface.md) | **方向已拍板·待立计划**：chat 彻底切到 cli 单执行口（paths 漂移实证 + 对标 agent-browser + 防递归，含图） |
 
 ## KB compiler（lint / links）
 
