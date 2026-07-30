@@ -1,6 +1,6 @@
 ---
-timestamp: 2026-07-22T07:41:34Z
-sha256: b4ab55ce0de770a1c8f81cc22d02411547c7f685a67de0f0e47c7809f3c95dc2
+timestamp: 2026-07-30T08:51:31Z
+sha256: 1fc9ceae0fa0316997bf45b024b6d17342b0ea5a695507654de948b00f009f88
 type: guide
 title: 命令参考 · x-basalt
 description: x-basalt CLI 全部子命令的参数、输出形态与示例
@@ -163,7 +163,7 @@ x-basalt scan ./my-vault --pipe use=maintain # scan 出的变更跑管道（一�
 x-basalt scan ./my-vault --pipe actions=index,normalize --apply # 内联，免配置
 ```
 
-> 三种「源」对称（共享同一套 `--pipe` 管道）：`scan`（一次性 diff 源）/ [`watch`](#watch--常驻监听)（常驻事件源）/ [`run`](#run--变更编排管道)（默认 scan 源，`--pipe where=`/`paths=` 切手动源）。
+> 三种「源」对称（共享同一套 `--pipe` 管道）：`scan`（一次性 diff 源）/ [`watch`](#watch--常驻监听)（常驻事件源）/ [`run`](#run--变更编排管道)（默认 scan 源，`--pipe where=` 或 `--stdin` 切手动源）。
 > mtime 模式 vs `--rehash` 的权衡、断点续扫、数据模型细节——见 [indexing-and-sync.md](indexing-and-sync.md)。
 
 ---
@@ -405,7 +405,7 @@ x-basalt watch ./my-vault --pipe use=maintain     # 声明式管道维护（替�
 ## `run` — 变更编排管道
 
 ```
-x-basalt run [--pipe k=v]... [--apply] [--vault <path>]... [--db <path>] [--json]
+x-basalt run [--pipe k=v]... [--apply] [--stdin] [--vault <path>]... [--db <path>] [--json]
 ```
 
 按**管道**处理一批变更：源 → 去重（同文件折叠）→ 路由（事件类型 / glob / DQL）→ 执行内建动作链（`index` / `normalize` / `parse`…）。管道用 `--pipe k=v`（可重复）**内联定义**，或 `--pipe use=<name>` **引用配置段**——命令行是规范落地，配置段是命名快照。写动作默认 **dry-run**，`--apply` 才落盘。
@@ -417,10 +417,16 @@ x-basalt run [--pipe k=v]... [--apply] [--vault <path>]... [--db <path>] [--json
 | `use`         | name                   | 从配置 `pipelines.<name>` 加载作基底（其余 `--pipe` 覆盖它）                                                                         |
 | `actions`     | a,b,c                  | 内建动作链（必填）：`index` / `normalize` / `parse` / `apply <profile>` / `set <key>=<value>` / `unset <key>` / `rename <old> <new>` |
 | `where`       | DQL                    | 按 DQL 选文件（手动源 / 语义筛）                                                                                                     |
-| `paths`       | glob                   | 路径过滤                                                                                                                             |
-| `on`          | add,change             | 事件类型过滤                                                                                                                         |
-| `concurrency` | N                      | 文件间并发上限（默认 4）                                                                                                             |
+| `paths`       | glob                   | 路径过滤（**只过滤、不作源**；显式文件列表源用 `--stdin`）                                                                           |
+| `on`          | add,change             | 事件类型过滤（仅 `add`/`change`/`unlink`）                                                                                            |
+| `concurrency` | N                      | 文件间并发上限（正整数，默认 4）                                                                                                     |
+| `debounce`    | wait,maxWait           | 堆积窗毫秒数（`watch` 用；`wait` 不得大于 `maxWait`）                                                                                |
 | `if-exists`   | skip\|overwrite\|merge | `rename` 键冲突策略（默认 `skip`）                                                                                                   |
+| `on-error`    | continue\|stop         | 失败策略（默认 `continue`：跳过继续）                                                                                                |
+| `on-busy`     | queue                  | 重启语义（默认 `queue`；`restart`/`ignore` 尚未实现，给了即报错）                                                                    |
+
+> **值切分是括号感知的**：`[]`/`{}`/`()` 内的逗号视为字面量，故 `actions="set tags=[a, b],index"`、`paths="**/*.{md,txt}"` 都能正确切分。
+> **拼错与非法值一律报错**（退出码 1）并指明来源是命令行还是配置段——不静默忽略，避免过滤条件悄悄失效。
 
 **内建动作**
 
@@ -430,7 +436,7 @@ x-basalt run [--pipe k=v]... [--apply] [--vault <path>]... [--db <path>] [--json
 | `normalize`          | 是           | 归一 frontmatter：tags 列表化 / 去 `#` / 去重 / 单数键迁移                                                                  |
 | `parse`              | 否           | 只读解析校验                                                                                                                |
 | `apply <profile>`    | 是           | 套用 profile：机械补时间/哈希 + 自动标准化（**纯 top-up**，不带 `--set`/`--refresh-derived`；要补语义/刷新用 `meta apply`） |
-| `set <key>=<value>`  | 是           | 设置属性（**仅标量值**，不含空格/逗号；列表值暂不支持）                                                                     |
+| `set <key>=<value>`  | 是           | 设置属性；标量值不含空格，**列表值写 `[a, b]`**（`[]` = 空列表）                                                             |
 | `unset <key>`        | 是           | 删除属性                                                                                                                    |
 | `rename <old> <new>` | 是           | 改键名；目标键已存在时按 `if-exists` 策略处理                                                                               |
 
@@ -441,16 +447,26 @@ x-basalt run [--pipe k=v]... [--apply] [--vault <path>]... [--db <path>] [--json
 | 选项             | 默认                             | 说明                                                        |
 | ---------------- | -------------------------------- | ----------------------------------------------------------- |
 | `--apply`        | 关                               | 写动作落盘（默认 dry-run 只预览）；覆盖管道 `dryRun`        |
+| `--stdin`        | 关                               | 从 stdin 逐行读文件列表作**源**（见下「源」）               |
 | `--vault <path>` | 配置 `vault`                     | Vault 根目录                                                |
 | `--db <path>`    | `.x-basalt/index.db` / 配置 `db` | SQLite 路径                                                 |
 | `--json`         | 关                               | 结构化报告（`total`/`changed`/`skipped`/`failed`/`dryRun`） |
 
-**源**：`run` 默认 **scan 源**（全库 diff）；给 `--pipe where=` / `--pipe paths=` 切**手动源**。**退出码**：有动作失败时 `1`（明细打到 stderr）。
+**源**（三选一，命令只决定「源」）：
+
+1. 默认 **scan 源**：全库 FS↔DB diff；
+2. `--pipe where=<DQL>` → **DQL 手动源**（按语义选一批）；
+3. `--stdin` → **原生管道源**：逐行读文件列表（vault 相对路径）。
+
+`--stdin` 是与 `--pipe` **正交**的独立设计——源用 Unix 管道喂，动作链仍用 `--pipe` 定义。契约：读到 EOF；整行即一个路径（不按空格切，文件名可含空格）；跳空行与 `#` 注释行；**不猜 JSON**（结构化输入先用 `jq` 抽路径，单一职责）；空输入 = 空批（`total=0`）；stdin 是交互终端（没接管道）时**报错不挂起**；**路径须在 vault 内**（相对路径不越界、禁根外绝对路径），越界声明期报错并列出非法行。与 `--pipe where=` 同给时：stdin 供源、`where` 退化为语义过滤（取交集）。
+
+**退出码**：有动作失败时 `1`（明细打到 stderr）。
 
 **限制**
 
-- 管道 `set` **仅支持标量值**：token 按空格切，值不能含空格/逗号；列表值暂不支持（P2）。
+- 管道 `set` 的**标量**值不含空格（token 按空格切参数）；多值请用列表写法 `set tags=[a, b]`。
 - 管道 `apply` 是**纯 top-up**（只补缺字段 + 自动 normalize），不带 `meta apply` 的 `--set`/`--refresh-derived`；要补语义字段或重算 `sha256`/`modified` 等请用独立 `meta apply` 命令。
+- `--pipe on-busy` 只支持 `queue`：`restart`（弃旧重跑）/ `ignore`（忙时丢弃）尚未实现，给了会报错而**不会**静默按 `queue` 跑。
 
 **示例**
 
@@ -465,6 +481,14 @@ x-basalt run --pipe use=maintain --pipe concurrency=8 --vault ./v
 x-basalt run --pipe actions="apply pkm-note, normalize" --pipe where="LIST FROM #pkm" --apply --vault ./v
 # 批量改名：tag -> tags，冲突跳过
 x-basalt run --pipe actions="rename tag tags" --pipe if-exists=skip --apply --vault ./v
+# 批量设列表属性（括号内逗号不是动作分隔符）
+x-basalt run --pipe actions="set tags=[pkm, note],index" --apply --vault ./v
+# 原生管道：query 选文件 → jq 抽路径 → run 只处理这批
+x-basalt query "LIST FROM #pkm" --json --vault ./v \
+  | jq -r '.rows[]["file.path"]' \
+  | x-basalt run --stdin --pipe actions=normalize --apply --vault ./v
+# 也可直接喂手写清单（跳空行与 # 注释）
+printf 'pkm/A.md\n# 先不动 B\npkm/C.md\n' | x-basalt run --stdin --pipe actions=parse --vault ./v
 ```
 
 **配置段**（`.x-basalt/config.yaml`，命名快照；每个 key ⟷ 一个 `--pipe key=val`）：
@@ -475,11 +499,18 @@ pipelines:
     actions: [index, normalize] # 必填
     where: "contains(file.tags, 'pkm')"
     on: [add, change]
+    paths: ["pkm/**"]
+    debounce: { wait: 300, maxWait: 3000 } # watch 堆积窗
     concurrency: 4
+    onError: continue # continue | stop
+    onBusy: queue # 目前只支持 queue
+    ifExists: skip # rename 键冲突策略
     dryRun: true # 默认预览；命令行 --apply 覆盖
 ```
 
-> 三命令共享 `--pipe`，命令只决定「源」：[`scan`](#scan--增量重索引)（diff）/ [`watch`](#watch--常驻监听)（事件）/ `run`（默认 scan）。原生管道（stdin）是与 `--pipe` 正交的独立设计，后续可组装。
+> 配置段与命令行**一一对应**（命令行多词 key 用 kebab-case，如 `--pipe if-exists` ⟷ `ifExists`）；例外只有 `use`（引用入口）与 `dryRun`（由 `--apply` 承载）。配置段里的非法值同样在**加载期报错**，并定位到 `pipelines.<name>.<key>`。
+
+> 三命令共享 `--pipe`，命令只决定「源」：[`scan`](#scan--增量重索引)（diff）/ [`watch`](#watch--常驻监听)（事件）/ `run`（默认 scan，可用 `--pipe where=` 或 `--stdin` 切手动源）。
 
 ---
 

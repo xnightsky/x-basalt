@@ -7,8 +7,8 @@ tags:
   - orchestrator
   - design
   - x-basalt
-timestamp: 2026-06-29T23:59:11Z
-sha256: 54e58598055d53b7fed6611fd09e3dbd8df818b1474214b7faf78a90b6e6c8fb
+timestamp: 2026-07-30T08:51:11Z
+sha256: de01329453337cc5780f85e408793561dc96b870e3573772711653c555669c42
 ---
 
 # 设计评估：变更编排器（change orchestration）—— 统一 watch / scan / 手动 三源的声明式维护管线
@@ -209,6 +209,7 @@ sha256: 54e58598055d53b7fed6611fd09e3dbd8df818b1474214b7faf78a90b6e6c8fb
 
 - 有界并发 `concurrency=N`（默认保守，如 4；同步的 better-sqlite3 写动作天然串行，并发主要作用于读盘/解析）。
 - **重启语义 `onBusy`**：`queue`（默认，排队并对同文件合并）/ `restart`（弃旧重跑）/ `ignore`（忙时丢弃新批）。
+  - **现状（2026-07-30）**：只实现 `queue`（批之间 `.then` 串成链）。`restart`/`ignore` 需要给 `runPipeline` 串 `AbortSignal` 做协作取消，属执行引擎状态机余项（见 `TODO.md`）；在实现前，命令行与配置段给 `restart`/`ignore` 一律**报错**，不接受后静默按 `queue` 跑。
 - `timeout` 单动作超时（`Promise.race + AbortController`）。
 - **失败策略 `onError`**：`continue`（默认，单文件/单动作失败跳过+记录，沿用现有 warn 模式）/ `stop`。
 - 写动作默认 `dryRun:true`，显式 `--apply` 才落盘；非 TTY 默认拒写。
@@ -238,15 +239,24 @@ sha256: 54e58598055d53b7fed6611fd09e3dbd8df818b1474214b7faf78a90b6e6c8fb
 
 **管道定义**（归属"管道"；命令行 `--pipe k=v` 可重复 ⟷ 配置段 `pipelines.<name>` 一一对应）：
 
-| `--pipe` key  | 值           | 含义                                                                                | 配置段 key    |
-| ------------- | ------------ | ----------------------------------------------------------------------------------- | ------------- |
-| `use`         | name         | 从配置 `pipelines.<name>` 加载作基底（**"从配置读取"降为次级参数**，不是独立 flag） | （引用入口）  |
-| `actions`     | a,b,c        | 动作链（必填）                                                                      | `actions`     |
-| `where`       | DQL          | 按 DQL 选文件（手动源 / 语义筛）                                                    | `where`       |
-| `paths`       | glob         | 路径过滤（glob）                                                                    | `paths`       |
-| `on`          | add,change   | 事件类型过滤                                                                        | `on`          |
-| `concurrency` | N            | 并发上限                                                                            | `concurrency` |
-| `debounce`    | wait,maxWait | 堆积窗（watch 用）                                                                  | `debounce`    |
+| `--pipe` key  | 值                     | 含义                                                                                | 配置段 key    |
+| ------------- | ---------------------- | ----------------------------------------------------------------------------------- | ------------- |
+| `use`         | name                   | 从配置 `pipelines.<name>` 加载作基底（**"从配置读取"降为次级参数**，不是独立 flag） | （引用入口）  |
+| `actions`     | a,b,c                  | 动作链（必填）                                                                      | `actions`     |
+| `where`       | DQL                    | 按 DQL 选文件（手动源 / 语义筛）                                                    | `where`       |
+| `paths`       | glob                   | 路径过滤（glob）                                                                    | `paths`       |
+| `on`          | add,change             | 事件类型过滤                                                                        | `on`          |
+| `concurrency` | N                      | 并发上限                                                                            | `concurrency` |
+| `debounce`    | wait,maxWait           | 堆积窗（watch 用）                                                                  | `debounce`    |
+| `if-exists`   | skip\|overwrite\|merge | `rename` 键冲突策略                                                                 | `ifExists`    |
+| `on-error`    | continue\|stop         | 失败策略                                                                            | `onError`     |
+| `on-busy`     | queue                  | 重启语义（§6.6 的 `restart`/`ignore` 尚未实现，给了即报错，不静默按 queue 跑）      | `onBusy`      |
+
+**一一对应是不变量**：命令行多词 key 用 kebab-case、配置段用 camelCase，逐项对得上；例外只有 `use`（引用入口，无配置段项）与 `dryRun`（由运行时 `--apply` 承载）。两侧共用同一套解析与校验（`src/orchestrator/params.ts`），新增字段必须同时补两侧，否则一侧会**静默丢参数**。
+
+**值切分**：逗号切分**括号感知**——`[]`/`{}`/`()` 内的逗号是字面量，不是分隔符。因此 `actions=set tags=[a, b],index` 与 `paths=**/*.{md,txt}` 均可正确切分。
+
+**非法值口径**：未知 key、非法事件类型、非正整数并发、`wait > maxWait`、未知枚举值一律**声明期报错**并指明来源（`--pipe on` vs `pipelines.<name>.on`），不静默忽略、不静默降级——拼错的过滤条件比报错危险。
 
 **运行环境**（顶层 flag，与管道无关）：`--vault` `--db` `--json` `--apply`。
 
@@ -256,7 +266,9 @@ sha256: 54e58598055d53b7fed6611fd09e3dbd8df818b1474214b7faf78a90b6e6c8fb
 
 ### 8.2 三命令共享、命令只决定「源」
 
-`scan`（FS↔DB diff 源）/ `watch`（事件流源）/ `run`（默认 scan 源，`--pipe where/paths` 切手动源）共用同一套 `--pipe`：
+`scan`（FS↔DB diff 源）/ `watch`（事件流源）/ `run`（默认 scan 源，`--pipe where=` 切 DQL 手动源、`--stdin` 切文件列表手动源）共用同一套 `--pipe`：
+
+> **`paths` 不切源**：它始终只是 glob 路由过滤（在 `runBatch` 内 `matchEvent` 生效）。显式文件列表源归 §8.3 的 `--stdin`，不污染 `--pipe`。
 
 ```bash
 x-basalt run --pipe actions=index,normalize --pipe where="LIST FROM #pkm" --apply   # 纯内联（自包含）
@@ -285,7 +297,7 @@ pipelines:
 
 `--pipe`（内建**有状态**管道）和 Unix **原生管道**（stdin）是**两个独立设计：可组装、互不绑定**。stdin **不**塞进 `--pipe`（不是 `paths=-`），而是独立的「手动源来自 stdin」机制，与 `--pipe`（管道定义）正交：
 
-- **独立开关**（形态待定：`--stdin` 或位置 `-`）：从 `process.stdin` 读文件列表作手动源；不触碰 `--pipe`。
+- **独立开关**（已定为 `--stdin`，仅 `run` 有；`scan`/`watch` 的源由命令本身决定）：从 `process.stdin` 读文件列表作手动源；不触碰 `--pipe`。
 - **自由组合**——源用原生管道喂、动作链用内建 `--pipe` 定义：
 
 ```bash
@@ -294,6 +306,8 @@ x-basalt query "LIST FROM #pkm" --json | jq -r '.rows[]["file.path"]' \
 ```
 
 契约（架构）：读 `process.stdin` 到 EOF → 按行 trim、跳空行与 `#` 注释 → 相对 vault 路径 → 复用 `manualSourceFromPaths`；**不内置 JSON 猜测**（用 `jq`，单一职责）；stdin 是 TTY（无管道输入）报错不挂起；Windows 走 `process.stdin` 可靠。
+
+**已实现**（2026-07-30，`src/orchestrator/sources.ts` 的 `parsePathList`/`readPathList`/`assertPipedStdin` + `run --stdin`）。补充口径：整行即一个路径（**不按空格切**，文件名可含空格）；空输入 = 空批（`total=0`，不报错）；**stdin 路径须在 vault 内**（相对路径 resolve 后不越界、禁根外绝对路径），越界**声明期报错**并列出非法行（`assertPathsInVault`，安全闸：否则 `--apply` 下写动作可改写 vault 外文件）；路径存在性不在源层预判——不带 `where` 时不存在的路径由动作层如实上报 `failed`，与 `where` 同给时预索引失败的单条 warn 后剔除、不中断整批（同 indexer 单文件失败降级口径）；`--stdin` 与 `--pipe where=` 同给时 **stdin 供源、`where` 退化为语义过滤**（交集）。
 
 > **设计独立性**：stdin 只是"源接入"的一种，正交于 `--pipe`（管道定义）。未来若加别的源接入（如 `--from-file list.txt`）同样不污染 `--pipe`。两个设计可分期落地、可组装，**`--pipe` 不依赖它、它也不依赖 `--pipe`**。
 

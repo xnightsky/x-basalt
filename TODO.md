@@ -34,7 +34,7 @@
 
 ## 💡 backlog（待 dogfood 暴露真实需求再开）
 
-- **变更编排器 P1 余项 / P2**：背压、缓存跳过、条件分支、检查点续跑、失败告警、原生管道 stdin、管道 `set` 列表值。设计见 [`docs/specs/2026-06-29-change-orchestration-design.md`](docs/specs/2026-06-29-change-orchestration-design.md)。
+- **变更编排器 P1 余项 / P2**：`onBusy` 的 `restart`/`ignore`（**卡点**：需给 `runPipeline` 串 `AbortSignal` 做协作取消，才能弃旧重跑 / 忙时丢弃；在实现前给这两个值一律报错，不静默按 `queue` 跑）、背压、缓存跳过、条件分支、检查点续跑、失败告警。设计见 [`docs/specs/2026-06-29-change-orchestration-design.md`](docs/specs/2026-06-29-change-orchestration-design.md)（`--pipe` 参数面与原生管道 stdin、`set` 列表值已于 2026-07-30 收尾，见 [`docs/plans/2026-07-30-pipe-closure.md`](docs/plans/2026-07-30-pipe-closure.md)）。
 - **更多 profile**：按需扩。
 - **embedding 向量语义检索**：FTS5 全文已落地；embedding 仍 backlog（触发条件见 `docs/specs/2026-06-28-semantic-retrieval-integration.md` §10）。
 - **S3.4 kysely 收编 DQL→SQL**（可选增强，按需再定）。
