@@ -1,6 +1,6 @@
 ---
-timestamp: 2026-07-30T15:55:15Z
-sha256: 425321629a2ea6684fc877dad4d91e334162974b71bd5f04f0bac4e28f6ec91c
+timestamp: 2026-07-30T16:42:53Z
+sha256: ce28583bb1e27a6f924517994f567069b7f05c89aa0e172c5148accf058124fd
 type: guide
 title: 命令参考 · x-basalt
 description: x-basalt CLI 全部子命令的参数、输出形态与示例
@@ -517,6 +517,8 @@ x-basalt run [--pipe k=v]... [--apply] [--stdin] [--vault <path>]... [--db <path
 
 按**管道**处理一批变更：源 → 去重（同文件折叠）→ 路由（事件类型 / glob / DQL）→ 执行内建动作链（`index` / `normalize` / `parse`…）。管道用 `--pipe k=v`（可重复）**内联定义**，或 `--pipe use=<name>` **引用配置段**——命令行是规范落地，配置段是命名快照。写动作默认 **dry-run**，`--apply` 才落盘。
 
+> 本节是签名与默认值速查。**算子链怎么串、`step` 与 `actions` 怎么选、算子间怎么传数据（`{{row.x}}`）、报告怎么读** → [管道教程](pipelines.md)。
+
 **管道参数 `--pipe k=v`**（可重复；与配置段 `pipelines.<name>` 一一对应）：
 
 | key           | 值                     | 含义                                                                                                                                 |
@@ -550,6 +552,8 @@ x-basalt run [--pipe k=v]... [--apply] [--stdin] [--vault <path>]... [--db <path
 | `rename <old> <new>` | 是           | 改键名；目标键已存在时按 `if-exists` 策略处理                                                                               |
 
 所有**写动作**（`normalize` / `apply` / `set` / `unset` / `rename`）默认 **dry-run 只预览**，必须加 `--apply` 才落盘。
+
+> 除这七个动作外，`step=` 还可接查询/诊断/纯函数算子：`query <DQL>` / `search <text>` / `base <file>#<view>`（链首作源、中段作过滤+列合并）、`lint` / `links.check` / `links.suggest <file>`（诊断挂 `fields.diagnostics`）、`filter` / `limit` / `dedup` / `map`。逐个算子的语义与坑 → [管道教程 §5](pipelines.md#5-算子手册)。
 
 **写后索引新鲜度**：写动作改的是 `.md` 文件，而 `query` 读的是 SQLite 索引——两者之间需要一次
 刷新，否则「刚写完却查到旧值」。`run` 现在**默认在写动作落盘后自动把改动过的文件刷进索引**，

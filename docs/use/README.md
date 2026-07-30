@@ -7,8 +7,8 @@ tags:
   - index
   - usage
   - x-basalt
-timestamp: 2026-07-27T18:11:37Z
-sha256: 78fc6727d4fe69afe3a1a32a30f0373b39233468b189132f126413dbf00f2b4b
+timestamp: 2026-07-30T16:43:06Z
+sha256: 51be3b8c600662b3c5a5b4e987b178b25050a3e651770be202ebaf18f17624a6
 ---
 # 怎么用 x-basalt
 
@@ -51,7 +51,7 @@ x-basalt scan ./my-vault                        # 笔记改了之后增量重扫
 | | |
 | --- | --- |
 | 读 / 改 frontmatter（唯一写侧） | `x-basalt meta` → [命令参考](commands.md) |
-| 按管道批量改 | `x-basalt run` → [命令参考](commands.md) |
+| 按管道批量改 | `x-basalt run` → [管道教程](pipelines.md) / [命令参考](commands.md) |
 | 用自然语言驱动（需 AI key） | [chat 怎么玩](chat.md) |
 
 ### 体检 vault
@@ -66,6 +66,7 @@ x-basalt scan ./my-vault                        # 笔记改了之后增量重扫
 | | |
 | --- | --- |
 | `index` / `scan` / `watch` 什么时候用哪个 | [索引与同步](indexing.md) |
+| `--pipe` 算子链怎么串、数据怎么传 | [管道教程](pipelines.md) |
 | 解析器认得哪些 Obsidian 语法 | [Obsidian 语法](obsidian-syntax.md) |
 | 正文里的 `key:: value` 怎么用 | [inline fields 教程](tutorial-inline-fields.md) |
 | 配置文件、`X_BASALT_DIR` | [配置](config.md) |

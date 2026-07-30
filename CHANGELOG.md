@@ -4,6 +4,14 @@
 
 ## [Unreleased]
 
+### Added
+
+- **管道教程 [`docs/use/pipelines.md`](./docs/use/pipelines.md)** —— `--pipe` 算子链的完整教学：Row 心智模型与四种角色、`actions=` / `step=` 两种链写法的选择规则、逐个算子手册（含 0.8.0 新接的 query/search/base/lint/links.*/filter/limit/dedup/map）、`{{row.x}}` 插值取值优先级、`filter` 表达式语法、`RunReport` 口径（含「链首算子源自产行不计入 `total`」）、五个端到端配方。所有示例经真实 vault 冒烟验证；`docs/use/commands.md` 的 `run` 节与 `docs/use/README.md` 索引、运行时自我说明书 `skills-data/core.json5` 同步指路。
+
+### Fixed
+
+- **`base` 管道算子：view 未投影 `file.path` 时由「静默产出空 path 行」改为显式报错**（教程 dogfood 实测撞出）：BaseEngine 只把 view `order` 列出的键投进行，`order` 不含 `file.path` 时算子此前把行 path 映射为空串，下游写算子拿到空 path 后以 `EISDIR` 之类错误崩溃、报错完全不指向根因。现与 `query` 算子同一规则——源模式该步报「view 未投影 file.path 列，base 算子无法映射行路径」并给出补法示例（`order` 加 `file.path`），转换模式每行各记一条 failed。回归用例 Op-B8。
+
 ## [0.8.0] - 2026-07-31
 
 > 统一算子模型片四（声明式 steps）、pipe-closure 评审修复、两处 Windows 路径判定假阳修复、管道写后自动刷索引。含 breaking（见 Changed 段）。
