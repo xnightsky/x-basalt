@@ -4,7 +4,9 @@
 
 ## [Unreleased]
 
-> 0.1.0（MVP）之后、dogfood 观察期内的累积变更，尚未发布。
+## [0.2.0] - 2026-07-30
+
+> 0.1.0（MVP）之后、dogfood 观察期内的累积变更：Bases 无头引擎全阶段（P0..P3a + oracle 校正）、meta 写侧、变更编排器与统一算子模型（含片四 steps）、两处 Windows 路径判定假阳修复。含 breaking（见 Changed 段）。
 
 ### Added
 
