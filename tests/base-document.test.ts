@@ -261,7 +261,9 @@ function flipFirstLetter(p: string): string {
   assert.ok(idx >= 0, `fixture 路径应含字母：${p}`);
   const ch = p[idx] as string;
   return (
-    p.slice(0, idx) + (ch === ch.toLowerCase() ? ch.toUpperCase() : ch.toLowerCase()) + p.slice(idx + 1)
+    p.slice(0, idx) +
+    (ch === ch.toLowerCase() ? ch.toUpperCase() : ch.toLowerCase()) +
+    p.slice(idx + 1)
   );
 }
 
@@ -269,7 +271,10 @@ test("BASE-SEC-008: vault 根盘符大小写不同不误判越界（Windows 大�
   const base = join(MINIMAL, "views", "projects.base");
   // 两个变体：根路径首字母（Windows 上即盘符）+ 目录段首字母——后者覆盖盘符之外组件的
   // 大小写不敏感（win32 resolve 不做任何大小写归一，整条路径的等价性都靠 isPathInside 归一）。
-  const variants = [flipFirstLetter(MINIMAL), join(dirname(MINIMAL), flipFirstLetter(basename(MINIMAL)))];
+  const variants = [
+    flipFirstLetter(MINIMAL),
+    join(dirname(MINIMAL), flipFirstLetter(basename(MINIMAL))),
+  ];
   for (const flipped of variants) {
     const doc = loadBaseDocument({ basePath: base, vaultRoots: [flipped] });
     if (process.platform === "win32") {

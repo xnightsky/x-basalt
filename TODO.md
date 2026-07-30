@@ -1,6 +1,6 @@
 ---
-timestamp: 2026-07-30T00:08:39Z
-sha256: f02be1bebc9ba2b5e2c7cda516bdc84214d1bfd25744ccee6bda9aa378bf764e
+timestamp: 2026-07-30T15:58:11Z
+sha256: c7f384c1150ebf326ac4ee51dbd287ce1692cb6a140a669cfd1f7b4884c8b737
 ---
 # TODO · x-basalt
 
@@ -119,12 +119,8 @@ sha256: f02be1bebc9ba2b5e2c7cda516bdc84214d1bfd25744ccee6bda9aa378bf764e
 
 **剩余**：
 
-- [ ] **片四 · 配置面：`--pipe` 声明式步骤列表 + kv 兼容**。验收＝新旧两种写法产出同一份 `RunReport`（§9 片四）。**这是「多平台 shell 管道」的前置**。
-  - **⚠️ 核心问题是分隔符，且它是片二/三落地后才出现的**（片一时只有 7 个动作、参数都很短，撞不上）：现在 `actions=` 走逗号分隔（`splitList`，`src/cli.ts:195`），而片二/三接进来的算子参数**天然含逗号**——`query LIST FROM "x" WHERE contains(tags, "a")`、`filter tags contains "a,b"`、`base tasks.base#view`。逗号一切就把一个算子 spec 劈成两半，后半段被当算子名去 `resolve()` → 报「未知算子 "b\""」。
-    - 好消息：**是报错不是静默**（`registry.resolve` 未命中即抛，`981c0ed`），所以不会算错只会挡住合法用法；坏消息：**片二/三接的算子在 CLI 上目前基本没法用**——能力落地了但配置面表达不出来。这条是片四的真实动机，不只是「顺手做个新语法」。
-  - **建议形态**（未定案，动手前先在设计文档补一条 D 记录）：配置侧加 `pipelines.<name>.steps: string[]`（YAML 数组，一元素一算子 spec，天然无分隔符问题）；CLI 侧加可重复的 `--pipe step=<spec>`（一次一个算子，按出现顺序成链），与现有 `--pipe actions=` 并存。`actions` 保留且行为逐字不变（D5 向后兼容），`steps`/`step` 存在时优先。
-  - **改动锚点**：`src/cli.ts:201` `resolvePipeline`（kv 解析与 `use=` 基底合并）、`src/cli.ts:195` `splitList`、`src/config.ts:124` `parsePipelines`（当前**强制要求** `actions` 字符串数组，缺就报错——加 `steps` 后这个校验要改成「二者至少有一个」，注意别把「两个都没有」放过去）、`PipelineConfig`（`src/orchestrator/types.ts:177`）。
-  - **验收要用已有的对拍手法**：仿 `tests/orchestrator-contract.test.ts` 的 A2 写法，同一条算子链分别用 `actions=` 与 `steps=` 表达，断言两份 `RunReport` 既有字段逐字段相等；并补一条「参数含逗号的算子（如 `filter tags contains "a,b"`）在 `steps` 下正确、在 `actions` 下按既有行为报错」的用例，把这个差异钉成契约而不是留成暗坑。
+- [x] **片四 · 配置面：`--pipe` 声明式步骤列表 + kv 兼容（2026-07-30 落地）**：`--pipe step=<spec>`（可重复，一 flag 一算子、不切分）⟷ 配置段 `pipelines.<name>.steps: string[]`；`steps` 存在时优先于 `actions`，命令行显式给链（任一形态）整体覆盖基底链（D12 细化）；`actions` 括号感知切分逐字不变。验收对拍：同一算子链 `actions=` vs `step=` 产出 `RunReport` 既有字段逐字段相等；含逗号 spec（`filter status == "a,b"`）在 `step=` 下整条保留、在 `actions=` 下按既有行为劈碎报「未知操作」（差异钉成契约）。计划：[`docs/plans/2026-07-30-pipeline-slice4-steps.md`](docs/plans/2026-07-30-pipeline-slice4-steps.md)。**「多平台 shell 管道」的前置阻塞就此解除。**
+  - ~~⚠️ 核心问题是分隔符~~（已解决）：原 `actions=` 逗号分隔把含逗号算子 spec 劈碎（`splitTopLevel` 只认括号不认引号），片二/三算子在 CLI 上表达不出来——`step`/`steps` 一元素一算子，无分隔符问题。注意 TODO 原举例 `filter tags contains "a,b"` 与实现不符（filter 表达式子集无 `contains`，只有 ==/!=/>/…），契约用例改用等值比较 + 含逗号字符串字面量。
 - [ ] **§12 两条未决问题需回写定案**：①`links.check`/`lint` 的诊断挂在 `Row.fields` 哪个键（片二实现时已实际选定，需回写设计文档从「倾向」改为「已定」）；②多根 vault 下 `base`/`search` 产出行的 `path` 归一是否与索引主键零冲突（片二已跑通，需补一条显式断言而非依赖巧合）。
 - [ ] **🐞 间歇性测试失败（未定位）**：片三提交前观察到一次 `1028 pass / 1 fail`，同一工作区状态随后连跑三次全绿，**未捕获失败用例名**。疑似时序相关（watch/debounce 类）。下次复现时立刻记下用例名；若持续不复现也不要当作已解决——flaky 测试会掩盖真实回归。
 
@@ -141,7 +137,7 @@ sha256: f02be1bebc9ba2b5e2c7cda516bdc84214d1bfd25744ccee6bda9aa378bf764e
 ## 💡 backlog（待 dogfood 暴露真实需求再开）
 
 - **变更编排器 P1 余项 / P2**：`onBusy` 的 `restart`/`ignore`（**卡点**：需给 `runPipeline` 串 `AbortSignal` 做协作取消，才能弃旧重跑 / 忙时丢弃；在实现前给这两个值一律报错，不静默按 `queue` 跑）、背压、缓存跳过、条件分支、检查点续跑、失败告警。设计见 [`change-orchestration.md`](./docs/design/change-orchestration.md)（`--pipe` 参数面与原生管道 stdin、`set` 列表值已于 2026-07-30 收尾，见 [`docs/plans/2026-07-30-pipe-closure.md`](docs/plans/2026-07-30-pipe-closure.md)）。
-- **多平台 shell 管道**：接外部工具的 stdin/stdout 跨平台契约；**依赖统一算子模型片四先落地**（见上）。设计见 [`shell-pipe-portability.md`](./docs/design/shell-pipe-portability.md)（Windows PS 5.1 中文不可逆丢失的实测证据在 §2）。取代原 backlog 条目「原生管道 stdin」（原生 stdin 源已随 pipe-closure 落地，见上条）。
+- **多平台 shell 管道**：接外部工具的 stdin/stdout 跨平台契约；前置的统一算子模型片四已落地（2026-07-30，见上），阻塞解除，可按需开片。设计见 [`shell-pipe-portability.md`](./docs/design/shell-pipe-portability.md)（Windows PS 5.1 中文不可逆丢失的实测证据在 §2）。取代原 backlog 条目「原生管道 stdin」（原生 stdin 源已随 pipe-closure 落地，见上条）。
 - **更多 profile**：按需扩。
 - **embedding 向量语义检索**：FTS5 全文已落地；embedding 仍 backlog（触发条件见 `docs/design/semantic-retrieval.md` §10）。
 - **S3.4 kysely 收编 DQL→SQL**（可选增强，按需再定）。
