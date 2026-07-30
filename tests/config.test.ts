@@ -138,6 +138,30 @@ test("畸形配置降级为不抛错（返回对象）", () => {
   assert.equal(typeof cfg, "object");
 });
 
+// === I2：配置错误分两类（计划 docs/plans/2026-07-30-pipe-closure.md PC-6）===
+// 语法解析失败（YAML/JSON5 不合法）→ 维持 warn + 降级 {}；
+// 校验失败（pipelines 字段非法，如 on: [modifed]）→ 直接抛出——warn 吞掉会让拼错的过滤条件静默生效。
+
+test("I2 Given 配置 pipelines.on 非法 When loadConfig Then 抛出（不再 warn 吞掉）", () => {
+  const dir = freshDir();
+  writeFileSync(
+    join(dir, ".x-basalt.yaml"),
+    "pipelines:\n  x:\n    actions: [index]\n    on: [modifed]\n",
+  );
+  assert.throws(() => loadConfig(dir, freshDir()), /pipelines\.x\.on.*modifed/s);
+});
+
+test("I2 Given YAML 语法错 When loadConfig Then 仍 warn + 降级 {}（不抛）", () => {
+  const dir = freshDir();
+  writeFileSync(join(dir, ".x-basalt.yaml"), "db: [unclosed\npipelines: {");
+  let cfg: ReturnType<typeof loadConfig> | undefined;
+  assert.doesNotThrow(() => {
+    cfg = loadConfig(dir, freshDir());
+  });
+  assert.equal(typeof cfg, "object");
+  assert.equal(cfg?.db, undefined, "语法错降级为空配置");
+});
+
 // === P3b: profiles 段解析（自定义 config profile；design §8.2）===
 
 test("profiles 段：解析 extends/required/enums/include", () => {

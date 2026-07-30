@@ -1,3 +1,4 @@
+import { isAbsolute, resolve, sep } from "node:path";
 import type { VaultIndexer } from "../indexer/index.js";
 import { startWatch } from "../indexer/watcher.js";
 import type { DataviewEngine } from "../query/index.js";
@@ -33,7 +34,8 @@ export function manualSourceFromPaths(paths: string[]): ChangeEvent[] {
  *
  * 边界：按行 trim、跳空行与 `#` 注释行；**不按空格切**（文件名可含空格）；
  * **不猜 JSON**——结构化输入先用 `jq` 抽路径，保持单一职责（例见 guides/commands.md）。
- * 路径合法性不在此校验：不存在的路径由动作层如实上报 failed，源层不预判。
+ * 存在性不在此校验：不存在的路径由动作层如实上报 failed，源层不预判；
+ * vault 边界（`..` 越界 / 根外绝对路径）另由 {@link assertPathsInVault} 在接线处声明期拦截。
  *
  * @param text - stdin 读到 EOF 的全部文本
  * @returns 去空行与注释后的相对路径列表（可能为空）
@@ -43,6 +45,40 @@ export function parsePathList(text: string): string[] {
     .split("\n")
     .map((line) => line.trim())
     .filter((line) => line !== "" && !line.startsWith("#"));
+}
+
+/**
+ * stdin 文件列表源的 vault 边界校验（安全闸）：任一路径 resolve 后逃出全部根即声明期报错。
+ *
+ * 为什么必须在校验：下游 `layout.toAbs` 对 `..` 会归一化逃根、对绝对路径透传，
+ * `--apply` 下写动作（set/normalize/apply/rename）可借此改写 vault 外文件（C1）。
+ * 单根逐根校验、多根落在任一根内即合法（与多根 toAbs 的「根名命名空间」两种解读都留在根内一致）。
+ *
+ * 边界：本函数只挡「逃出根」——`../x.md`（归一化越界）、根外绝对路径；
+ * **不存在的相对路径不算非法**，仍由动作层如实上报 failed（spec §8.3 口径不变）。
+ * 纯路径演算，不碰 fs（存在性不在此预判）。
+ *
+ * @param paths - parsePathList 产出的路径列表
+ * @param roots - vault 根集合（已 resolve 的绝对路径，取自 VaultLayout.roots）
+ * @throws 存在越界路径时抛出，错误信息列出全部非法行与可用根
+ */
+export function assertPathsInVault(paths: string[], roots: string[]): void {
+  const bad = paths.filter((p) => {
+    if (isAbsolute(p)) {
+      // 绝对路径：必须落在某根内（根外绝对路径是越界的主要形态之一）。
+      return !roots.some((root) => p === root || p.startsWith(root + sep));
+    }
+    // 相对路径：按根 resolve 归一化 `..` 后仍须留在根内。
+    return !roots.some((root) => {
+      const abs = resolve(root, p);
+      return abs === root || abs.startsWith(root + sep);
+    });
+  });
+  if (bad.length > 0) {
+    throw new Error(
+      `--stdin 路径越出 vault 根（非法行）：\n  ${bad.join("\n  ")}\nvault 根：${roots.join(", ")}`,
+    );
+  }
 }
 
 /**

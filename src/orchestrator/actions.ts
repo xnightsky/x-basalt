@@ -227,12 +227,22 @@ export function applyRenamePolicy(
  * Then 产出字符串列表，落盘为 YAML 列表（`[]` 即空列表）
  *
  * @behavior
+ * Given 方括号不成对（如 `set k=[a,b` 或 `set k=a,b]`）
+ * When parseSetValue
+ * Then 抛错——多半是没闭合的列表，静默落标量字符串 `"[a,b"` 会把拼错写进 frontmatter（M1）
+ *
+ * @behavior
  * Given 标量值含空格（如 `set title=a b`）
  * When parseSetValue
  * Then 抛错并指路列表写法，而非把 `b` 当成下一个参数静默丢弃
  */
 function parseSetValue(raw: string): unknown {
-  if (raw.startsWith("[") && raw.endsWith("]")) return coerceValue(raw.slice(1, -1), "list");
+  const opens = raw.startsWith("[");
+  const closes = raw.endsWith("]");
+  if (opens !== closes) {
+    throw new Error(`set 的列表值方括号不成对（应写 [a, b]），得到 "${raw}"`);
+  }
+  if (opens) return coerceValue(raw.slice(1, -1), "list");
   if (/\s/.test(raw)) {
     throw new Error(`set 的标量值不含空格（多值请写 [a, b]），得到 "${raw}"`);
   }

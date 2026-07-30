@@ -22,7 +22,14 @@ import type { PipelineConfig } from "./orchestrator/types.js";
 // 上游：cli.ts 启动时加载一次；下游：各子命令以 `flag ?? config.X ?? 内置默认` 解析。
 // 不在 git 管理（项目配置已 gitignore）：相当于「本机/本项目该怎么跑」的记忆。
 // 路径搜索用 cosmiconfig（M4.3）：项目配置从 cwd 向上找 searchPlaces；全局固定 <home>/.x-basalt/config.*。
-// 解析：yaml 走 `yaml` 包、json5/json 走 JSON5。仅挑出已知字符串键；解析失败降级为 {}（warn 不抛错）。
+// 解析：yaml 走 `yaml` 包、json5/json 走 JSON5。仅挑出已知字符串键。
+// 错误分两类（I2）：**语法解析失败**降级为 {}（warn 不抛错）；**校验失败**（pipelines 字段非法）
+// 抛 {@link ConfigValidationError} 直接终止——warn 吞掉会让拼错的过滤条件静默生效。
+
+/** 配置校验错（字段非法）。与语法解析错区分：语法错 warn 降级，校验错必须抛出终止（I2）。 */
+export class ConfigValidationError extends Error {
+  override readonly name = "ConfigValidationError";
+}
 
 /** 配置项（全部可选，字符串）。键名与 CLI 概念对应。 */
 export interface BasaltConfig {
@@ -192,7 +199,14 @@ function pickConfig(obj: Record<string, unknown>): BasaltConfig {
   }
   const vault = pickVault(obj.vault);
   if (vault !== undefined) out.vault = vault;
-  if (obj.pipelines !== undefined) out.pipelines = parsePipelines(obj.pipelines);
+  if (obj.pipelines !== undefined) {
+    try {
+      out.pipelines = parsePipelines(obj.pipelines);
+    } catch (err) {
+      // 校验错（如 on: [modifed]）标记为 ConfigValidationError：上游只对语法解析错降级（I2）。
+      throw new ConfigValidationError((err as Error).message, { cause: err });
+    }
+  }
   if (obj.lint !== undefined) out.lint = parseLintConfig(obj.lint);
   if (obj.profiles !== undefined) out.profiles = parseProfiles(obj.profiles);
   return out;
@@ -207,18 +221,19 @@ function makeExplorer(): PublicExplorerSync {
   });
 }
 
-/** 项目配置：从 cwd 向上搜索 SEARCH_PLACES；解析失败降级为 {}（warn 不抛错）。 */
+/** 项目配置：从 cwd 向上搜索 SEARCH_PLACES；语法解析失败降级为 {}（warn 不抛错），校验错抛出（I2）。 */
 function loadProject(explorer: PublicExplorerSync, cwd: string): BasaltConfig {
   try {
     const r = explorer.search(cwd);
     return pickConfig((r?.config ?? {}) as Record<string, unknown>);
   } catch (err) {
+    if (err instanceof ConfigValidationError) throw err; // 校验错不降级：声明期终止（I2）
     console.warn(`⚠ 跳过无法解析的项目配置（从 ${cwd} 向上）：${(err as Error).message}`);
     return {};
   }
 }
 
-/** 从某 `.x-basalt` 目录加载 `config.{ext}`（不向上走）；解析失败降级为 {}。 */
+/** 从某 `.x-basalt` 目录加载 `config.{ext}`（不向上走）；语法解析失败降级为 {}，校验错抛出（I2）。 */
 function loadConfigDir(explorer: PublicExplorerSync, dir: string): BasaltConfig {
   for (const ext of GLOBAL_EXTS) {
     const p = join(dir, `config.${ext}`);
@@ -226,6 +241,7 @@ function loadConfigDir(explorer: PublicExplorerSync, dir: string): BasaltConfig 
     try {
       return pickConfig((explorer.load(p)?.config ?? {}) as Record<string, unknown>);
     } catch (err) {
+      if (err instanceof ConfigValidationError) throw err; // 校验错不降级：声明期终止（I2）
       console.warn(`⚠ 跳过无法解析的配置文件 ${p}：${(err as Error).message}`);
       return {};
     }
@@ -259,9 +275,14 @@ function loadConfigDir(explorer: PublicExplorerSync, dir: string): BasaltConfig 
  * Then 项目键覆盖全局，全局独有键保留
  *
  * @behavior
- * Given 命中的配置文件畸形（解析抛错）
+ * Given 命中的配置文件语法畸形（YAML/JSON5 解析抛错）
  * When 加载
  * Then warn 并降级为空配置，不中断 CLI
+ *
+ * @behavior
+ * Given 命中的配置 pipelines 段字段非法（校验错，如 on: [modifed]）
+ * When 加载
+ * Then 抛 ConfigValidationError 终止（不 warn 降级）——拼错的过滤条件比报错危险（I2）
  */
 export function loadConfig(
   cwd: string = process.cwd(),

@@ -404,3 +404,103 @@ test("PC-4b Given run --stdin 同时给 where= Then stdin 供源、where 退化�
     rmSync(vault, { recursive: true, force: true });
   }
 });
+
+// === C1：stdin 路径穿越对抗（安全）===
+// `../outside.md` 经 toAbs 归一化会逃出 vault 根，--apply 下写动作可改写 vault 外文件。
+// 口径：声明期报错（exit 1）并列出非法行，vault 外文件不被改写。
+
+test("C1 Given run --stdin 喂 ../ 越界路径 + --apply Then 报错退出码 1 且 vault 外文件不被改写", () => {
+  const parent = mkdtempSync(join(tmpdir(), "xb-ocli-c1-"));
+  const vault = join(parent, "vault");
+  const baseDir = join(vault, ".x-basalt");
+  mkdirSync(baseDir, { recursive: true });
+  writeFileSync(join(baseDir, "config.yaml"), "{}\n");
+  const outside = join(parent, "outside.md");
+  writeFileSync(outside, "---\n---\n原内容\n");
+  writeFileSync(join(vault, "a.md"), "A\n");
+  try {
+    const r = run(
+      [
+        "run",
+        "--stdin",
+        "--pipe",
+        "actions=set x=y",
+        "--apply",
+        "--vault",
+        vault,
+        "--db",
+        join(baseDir, "index.db"),
+      ],
+      { X_BASALT_DIR: baseDir },
+      "../outside.md\n",
+    );
+    assert.equal(r.status, 1, "越界路径应声明期失败");
+    assert.match(r.stderr, /\.\.\/outside\.md/, "错误应列出非法行");
+    assert.equal(readFileSync(outside, "utf8"), "---\n---\n原内容\n", "vault 外文件不得被改写");
+  } finally {
+    rmSync(parent, { recursive: true, force: true });
+  }
+});
+
+test("C1 Given run --stdin 喂根外绝对路径 Then 报错退出码 1", () => {
+  const parent = mkdtempSync(join(tmpdir(), "xb-ocli-c1-"));
+  const vault = join(parent, "vault");
+  const baseDir = join(vault, ".x-basalt");
+  mkdirSync(baseDir, { recursive: true });
+  writeFileSync(join(baseDir, "config.yaml"), "{}\n");
+  const outside = join(parent, "outside.md");
+  writeFileSync(outside, "原内容\n");
+  try {
+    const r = run(
+      [
+        "run",
+        "--stdin",
+        "--pipe",
+        "actions=parse",
+        "--vault",
+        vault,
+        "--db",
+        join(baseDir, "index.db"),
+      ],
+      { X_BASALT_DIR: baseDir },
+      `${outside}\n`,
+    );
+    assert.equal(r.status, 1, "根外绝对路径应声明期失败");
+    assert.match(r.stderr, /outside\.md/);
+  } finally {
+    rmSync(parent, { recursive: true, force: true });
+  }
+});
+
+// I1：stdin + where= 时不存在路径不再裸崩（warn 剔除，真实文件照常过滤）。
+
+test("I1 Given run --stdin 含不存在路径且带 where= Then 不裸崩：ghost 被剔除并 warn、真实文件走 where 过滤", () => {
+  const { vault, baseDir, db } = setup("{}\n", {
+    "a.md": "---\ntags: [pkm]\n---\nA\n",
+    "b.md": "B\n",
+  });
+  try {
+    const r = run(
+      [
+        "run",
+        "--stdin",
+        "--pipe",
+        "actions=parse",
+        "--pipe",
+        "where=LIST FROM #pkm",
+        "--vault",
+        vault,
+        "--db",
+        db,
+        "--json",
+      ],
+      { X_BASALT_DIR: baseDir },
+      "ghost.md\na.md\nb.md\n",
+    );
+    assert.equal(r.status, 0, `不应 exit 1 裸崩：${r.stderr}`);
+    assert.match(r.stderr, /ghost\.md/, "warn 应指出被剔除的路径");
+    assert.equal(JSON.parse(r.stdout).total, 1, "ghost 剔除 + where 只留 a.md");
+  } finally {
+    rmSync(vault, { recursive: true, force: true });
+  }
+});

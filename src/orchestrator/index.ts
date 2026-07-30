@@ -22,6 +22,7 @@ export {
 export { matchEvent, type RouteFilter, selectByDql } from "./route.js";
 export { type RunOptions, runPipeline } from "./run.js";
 export {
+  assertPathsInVault,
   assertPipedStdin,
   manualSourceFromDql,
   manualSourceFromPaths,

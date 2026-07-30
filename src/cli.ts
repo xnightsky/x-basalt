@@ -4,7 +4,7 @@ import { existsSync, readFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
 import { Command } from "commander";
-import { loadConfig } from "./config.js";
+import { loadConfig, type BasaltConfig } from "./config.js";
 import { emit } from "./format.js";
 import { VaultIndexer } from "./indexer/index.js";
 import { VaultParser } from "./parser/index.js";
@@ -46,12 +46,20 @@ import { renderSkill, renderSkillList, renderSkills } from "./skill/render.js";
 // 启动时加载一次项目/全局配置；各命令以 `flag ?? config.X ?? 内置默认` 解析，免去重复传参。
 // CLI 显式传入 X_BASALT_DIR；若环境变量指向的目录不存在（如测试子进程换了 cwd），
 // 则忽略它，避免外部进程环境污染项目配置发现。
+// 配置校验错（如 pipelines 字段非法）在此终止：报带来源的错误并 exit 1，不裸抛栈（I2）；
+// 语法解析错已在 loadConfig 内 warn 降级，不会走到这里。
 const envBaseDir = process.env.X_BASALT_DIR;
-const config = loadConfig(
-  process.cwd(),
-  homedir(),
-  envBaseDir && existsSync(envBaseDir) ? envBaseDir : undefined,
-);
+let config: BasaltConfig;
+try {
+  config = loadConfig(
+    process.cwd(),
+    homedir(),
+    envBaseDir && existsSync(envBaseDir) ? envBaseDir : undefined,
+  );
+} catch (err) {
+  console.error(`✗ ${(err as Error).message}`);
+  process.exit(1);
+}
 
 // 基目录：env `X_BASALT_DIR` 指定则用它（可把 .x-basalt 整块搬到任意位置），否则就近隐藏目录 `.x-basalt/`。
 const BASE_DIR = process.env.X_BASALT_DIR ?? ".x-basalt";
@@ -600,6 +608,7 @@ program
         // 源三选一（命令只决定「源」）：--stdin 文件列表 → --pipe where= 的 DQL → 默认 scan diff。
         // --pipe paths= 始终只是 glob 路由过滤（runBatch 内 matchEvent 生效），不作源——显式文件列表源归 --stdin（§8.1/§8.3）。
         // --stdin 与 where= 同给时：stdin 供源、where 退化为语义过滤（runBatch 内按索引筛）。
+        if (stdinPaths !== undefined) orch.assertStdinPaths(stdinPaths); // C1：越界路径声明期报错
         const report =
           stdinPaths !== undefined
             ? await orch.runManual(pipeline, { paths: stdinPaths })

@@ -322,6 +322,12 @@ test("PC-3a Given set key=[a, b] When parseAction Then 值为列表（元素 tri
   }
 });
 
+// M1：方括号不成对（`[a,b` / `a,b]`）此前走标量路径静默落盘为字符串，属声明期错误。
+test("M1 Given set 值方括号不成对 When parseAction Then 声明期报错（不静默落标量）", () => {
+  assert.throws(() => parseAction("set k=[a,b"), /方括号不成对/);
+  assert.throws(() => parseAction("set k=a,b]"), /方括号不成对/);
+});
+
 test("PC-3a Given set key=[a, b] 非 dryRun Then 落盘为 YAML 列表", async () => {
   const dir = mkVault({ "a.md": "---\n---\nbody\n" });
   const indexer = new VaultIndexer({ vaultPath: dir, dbPath: join(dir, "i.db") });

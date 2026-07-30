@@ -4,7 +4,13 @@ import { Accumulator } from "./accumulate.js";
 import { parseAction } from "./actions.js";
 import { foldEvents } from "./dedup.js";
 import { matchEvent, selectByDql } from "./route.js";
-import { manualSourceFromDql, manualSourceFromPaths, scanSource, watchSource } from "./sources.js";
+import {
+  assertPathsInVault,
+  manualSourceFromDql,
+  manualSourceFromPaths,
+  scanSource,
+  watchSource,
+} from "./sources.js";
 import type { ActionContext, ChangeEvent, PipelineConfig, RunReport } from "./types.js";
 import { runPipeline } from "./run.js";
 import { resolveVaultLayout, type VaultLayout } from "../utils/path.js";
@@ -71,10 +77,24 @@ export class Orchestrator {
 
     // 索引新鲜度（§6.4）：where 读的是索引，先把候选落库再查询，避免按陈旧索引选错/漏选。
     if (pipeline.where && routed.length > 0) {
+      const indexed: ChangeEvent[] = [];
       for (const e of routed) {
-        if (e.type === "unlink") this.indexer.removeByKey(e.path);
-        else await this.indexer.update(e.path);
+        if (e.type === "unlink") {
+          this.indexer.removeByKey(e.path);
+          indexed.push(e);
+          continue;
+        }
+        try {
+          await this.indexer.update(e.path);
+          indexed.push(e);
+        } catch (err) {
+          // I1：单文件失败（如 stdin 源的不存在路径 ENOENT）降级——warn 指出路径 + 从 routed 剔除，
+          // 不让一条事件拖垮整批（同 indexer 批内「单文件失败降级跳过」策略；
+          // 不带 where 时不存在路径仍由动作层如实上报 failed，§8.3 口径不变）。
+          console.warn(`⚠ 预索引失败，剔除 ${e.path}：${(err as Error).message}`);
+        }
       }
+      routed = indexed;
       const engine = new DataviewEngine(this.dbPath);
       try {
         const hit = selectByDql(engine, pipeline.where);
@@ -100,6 +120,14 @@ export class Orchestrator {
   /** 一次性：scan 源（FS↔DB diff）跑一条管道。 */
   async runScan(pipeline: PipelineConfig): Promise<RunReport> {
     return this.runBatch(await scanSource(this.indexer), pipeline);
+  }
+
+  /**
+   * stdin 文件列表源的 vault 边界校验（C1 安全闸）：越界即声明期报错，列出非法行。
+   * 接线在引擎层（而非 CLI 重算布局）——roots 只有这里知道，保证与动作层 toAbs 同源。
+   */
+  assertStdinPaths(paths: string[]): void {
+    assertPathsInVault(paths, this.layout.roots);
   }
 
   /** 一次性：手动源（DQL 选 或 文件列表）跑一条管道——原 migrate 的"语义选一批改造"。 */

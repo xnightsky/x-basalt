@@ -102,3 +102,30 @@ test("CO-F2 Given watch 模式新建文件 When 触发后 stop Then 跑过管道
     rmSync(dir, { recursive: true, force: true });
   }
 });
+
+// I1：where= 预索引单文件失败降级（计划 docs/plans/2026-07-30-pipe-closure.md PC-6）。
+// 此前 indexer.update(ghost) 的 ENOENT 会让整个 runBatch reject（裸崩）；
+// 口径对齐 indexer 批内「单文件失败降级跳过」：warn 指出路径 + 从 routed 剔除，不中断整批。
+
+test("I1 Given 手动源含不存在路径且带 where When runManual Then warn 剔除该路径、整批不崩", async () => {
+  const dir = mkVault({ "a.md": "---\ntags: [pkm]\n---\nA\n" });
+  const orch = new Orchestrator({ vaultPath: dir, dbPath: join(dir, "i.db") });
+  const warns: string[] = [];
+  const origWarn = console.warn;
+  console.warn = (...args: unknown[]) => warns.push(args.map(String).join(" "));
+  try {
+    const report = await orch.runManual(
+      { actions: ["parse"], dryRun: true, where: "LIST" },
+      { paths: ["ghost.md", "a.md"] },
+    );
+    assert.equal(report.total, 1, "ghost.md 被剔除，只处理 a.md");
+    assert.ok(
+      warns.some((w) => w.includes("ghost.md")),
+      `warn 应指出被剔除的路径，实际：${warns.join(" | ")}`,
+    );
+  } finally {
+    console.warn = origWarn;
+    orch.close();
+    rmSync(dir, { recursive: true, force: true });
+  }
+});

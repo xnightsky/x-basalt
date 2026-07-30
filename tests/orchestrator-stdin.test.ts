@@ -1,7 +1,12 @@
 import assert from "node:assert/strict";
 import { Readable } from "node:stream";
 import { test } from "node:test";
-import { assertPipedStdin, parsePathList, readPathList } from "../src/orchestrator/sources.js";
+import {
+  assertPathsInVault,
+  assertPipedStdin,
+  parsePathList,
+  readPathList,
+} from "../src/orchestrator/sources.js";
 
 // === 原生管道（stdin）源（spec §8.3）===
 // 计划：docs/plans/2026-07-30-pipe-closure.md PC-4。
@@ -48,4 +53,43 @@ test("PC-4a Given stdin 是交互终端 When assertPipedStdin Then 报错不挂�
   assert.throws(() => assertPipedStdin(true), /--stdin/);
   assert.doesNotThrow(() => assertPipedStdin(false));
   assert.doesNotThrow(() => assertPipedStdin(undefined)); // 管道时 isTTY 为 undefined
+});
+
+// === C1：stdin 路径 vault 边界校验（安全对抗）===
+// 计划：docs/plans/2026-07-30-pipe-closure.md PC-6。
+// 背景：`..` 归一化或根外绝对路径会经 layout.toAbs 逃出 vault 根，写动作可改写 vault 外文件。
+// 口径：「逃出根」声明期报错并列出非法行；「不存在的相对路径」不算非法（仍由动作层上报 failed）。
+
+test("C1 Given 相对路径 .. 越出根 When assertPathsInVault Then 报错并列出非法行", () => {
+  assert.throws(() => assertPathsInVault(["a/b.md", "../outside.md"], ["/vault"]), /outside\.md/);
+});
+
+test("C1 Given 绝对路径指向根外 When assertPathsInVault Then 报错", () => {
+  assert.throws(() => assertPathsInVault(["/etc/x.md"], ["/vault"]), /\/etc\/x\.md/);
+});
+
+test("C1 Given 嵌套 a/../../x.md 归一化后越界 When assertPathsInVault Then 报错", () => {
+  assert.throws(() => assertPathsInVault(["a/../../x.md"], ["/vault"]), /a\/\.\.\/\.\.\/x\.md/);
+});
+
+test("C1 Given 多条越界行 When assertPathsInVault Then 错误全部列出", () => {
+  assert.throws(
+    () => assertPathsInVault(["../a.md", "/abs/b.md"], ["/vault"]),
+    (err: unknown) => {
+      const msg = (err as Error).message;
+      return msg.includes("../a.md") && msg.includes("/abs/b.md");
+    },
+  );
+});
+
+test("C1 Given 合法相对路径与根内路径 When assertPathsInVault Then 通过", () => {
+  assert.doesNotThrow(() => assertPathsInVault(["a/b.md", "c.md"], ["/vault"]));
+  // 根内徘徊的 ..（不归一出根）合法；根内绝对路径合法
+  assert.doesNotThrow(() => assertPathsInVault(["a/../b.md", "/vault/d.md"], ["/vault"]));
+});
+
+test("C1 Given 多根 When assertPathsInVault Then 逐根校验（落在任一根内即合法）", () => {
+  const roots = ["/v/alpha", "/v/beta"];
+  assert.doesNotThrow(() => assertPathsInVault(["/v/beta/x.md", "a.md"], roots));
+  assert.throws(() => assertPathsInVault(["/v/gamma/x.md"], roots), /gamma/);
 });
