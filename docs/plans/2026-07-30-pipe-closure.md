@@ -7,8 +7,8 @@ tags:
   - orchestrator
   - pipeline
   - cli
-timestamp: 2026-07-30T09:12:55Z
-sha256: 172edad7674a143bfb0244da2f367670f776c9288505dddd29a330ff464aef3e
+timestamp: 2026-07-30T16:04:39Z
+sha256: 0f0bd127af4ae750fac4e02ef129725b6b2921052d6abd1fcdd20be1bffa7711
 ---
 # 变更编排管道收尾计划（pipe closure）
 
@@ -132,6 +132,8 @@ src/cli.ts                   resolvePipeline 变薄壳；run 新增 --stdin 选�
 - [x] **M2 弱断言补强**：`set tags=[pkm, note ,]` 用例落盘验证列表值本身（元素 trim、丢空尾项）。
 
 - [x] **PC-6 commit**（已授权；按 feat/fix/docs 三提交收口 → fix `9a6790d`）
+
+> **PC-6 追加（2026-07-30 片四期间发现）**：C1 的 `assertPathsInVault` 自写 `startsWith(root + sep)` 前缀比较，win32 下正斜杠（Git Bash 形态）与盘符小写的**根内合法路径**被误判越界——安全门假阳，`run --stdin` 整条被拒；且对抗用例因「全都抛」而假性通过，两个正向用例在 Windows 确定性红。修复：先 `resolve` 收拢形态再复用 `isPathInside` 单一真相源；测试根形态对齐生产不变量「roots 已 resolve」，补正斜杠/盘符小写回归用例。教训：路径包含判定禁止绕过 `utils/path.ts` 自写 `startsWith`。
 
 文档同步（同批）：spec §8.3 补「stdin 路径须在 vault 内」契约句与 I1 口径；guide `run --stdin` 章节补路径约束。
 

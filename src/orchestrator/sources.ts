@@ -1,7 +1,8 @@
-import { isAbsolute, resolve, sep } from "node:path";
+import { isAbsolute, resolve } from "node:path";
 import type { VaultIndexer } from "../indexer/index.js";
 import { startWatch } from "../indexer/watcher.js";
 import type { DataviewEngine } from "../query/index.js";
+import { isPathInside } from "../utils/path.js";
 import { selectByDql } from "./route.js";
 import type { ChangeEvent } from "./types.js";
 
@@ -64,15 +65,16 @@ export function parsePathList(text: string): string[] {
  */
 export function assertPathsInVault(paths: string[], roots: string[]): void {
   const bad = paths.filter((p) => {
-    if (isAbsolute(p)) {
+    // 先 resolve 收拢形态（win32 正斜杠 → 反斜杠、`..` 归一），再交 isPathInside——
+    // 本仓路径包含判定的单一真相源（win32 大小写归一）。自写 startsWith(root + sep)
+    // 会在 win32 上把正斜杠/盘符小写的根内合法路径误判越界（PC-6 实测回归）。
+    const abs = isAbsolute(p) ? resolve(p) : undefined;
+    if (abs !== undefined) {
       // 绝对路径：必须落在某根内（根外绝对路径是越界的主要形态之一）。
-      return !roots.some((root) => p === root || p.startsWith(root + sep));
+      return !roots.some((root) => isPathInside(abs, root));
     }
     // 相对路径：按根 resolve 归一化 `..` 后仍须留在根内。
-    return !roots.some((root) => {
-      const abs = resolve(root, p);
-      return abs === root || abs.startsWith(root + sep);
-    });
+    return !roots.some((root) => isPathInside(resolve(root, p), root));
   });
   if (bad.length > 0) {
     throw new Error(
