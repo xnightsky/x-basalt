@@ -398,10 +398,26 @@ function makeBaseOp(params: string): Op {
 
         const columns = result.columns;
 
+        // === 自建实现：view 未投影 file.path 时显式失败（与 query 算子同一规则）===
+        // BaseEngine 只在 view 的 order 里列出 file.path 时才把它投影进行（file.path 稳定
+        // tie-break 是执行内部行为，不进结果列）。缺了它就无法映射行路径——此前此处退化为
+        // 空串 path，下游写算子拿到空 path 后以 EISDIR 之类错误崩溃（2026-07-31 教程
+        // dogfood 实测）。改为与 query 算子一致的显式报错 + 补法提示。
+        const noFilePathError =
+          "view 未投影 file.path 列，base 算子无法映射行路径。请在该 view 的 order 中显式加入 file.path（例如 order: [file.path, file.name, …]）";
+
         // 源模式：忽略入参，从 BaseEngine 结果直接产出行
         if (rows.length === 0) {
           if (baseFailed.length > 0) {
             return { rows: [], failed: baseFailed, changed: [], skipped: [] };
+          }
+          if (!columns.includes("file.path")) {
+            return {
+              rows: [],
+              failed: [{ path: "<base>", op: "base", error: noFilePathError }],
+              changed: [],
+              skipped: [],
+            };
           }
           const out: Row[] = result.rows.map((r) => {
             const path = String(r["file.path"] ?? "");
@@ -418,6 +434,14 @@ function makeBaseOp(params: string): Op {
         if (baseFailed.length > 0) {
           // 有 error 诊断时，行原样透传（不丢弃有效数据），同时报告失败
           return { rows, failed: baseFailed, changed: [], skipped: [] };
+        }
+        if (!columns.includes("file.path")) {
+          return {
+            rows: [],
+            failed: rows.map((r) => ({ path: r.path, op: "base", error: noFilePathError })),
+            changed: [],
+            skipped: [],
+          };
         }
 
         const hitPaths = new Set<string>();

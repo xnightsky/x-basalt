@@ -6,7 +6,7 @@
  *
  * 测试风格参照 tests/orchestrator-ops-query.test.ts。
  * .base 文件是纯 YAML，有顶层 `views:` 列表（与 tests/fixtures/bases/ 下 fixture 一致）。
- * view 的 order 必须含 file.path 以便算子映射行路径。
+ * view 的 order 必须含 file.path 以便算子映射行路径；缺失时算子显式报错（Op-B8）。
  */
 
 import assert from "node:assert/strict";
@@ -396,6 +396,59 @@ test("Op-BD11 Given 空事件批 + runManual When base 作源 Then 仍产出行�
     assert.equal(report.steps[0]!.failed.length, 0, "base 不应有 failed");
   } finally {
     orch.close();
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+// ---------------------------------------------------------------------------
+// Op-B8 view 未投影 file.path → 显式报错（与 query 算子同一规则），不退化为空 path
+// ---------------------------------------------------------------------------
+test("Op-B8 Given view 的 order 不含 file.path When run Then 显式报错并提示补法", async () => {
+  const dir = mkVault({
+    // order 里没有 file.path——BaseEngine 不会把它投影进结果行
+    "nopath.base": `views:
+  - type: table
+    name: all
+    order:
+      - file.name
+`,
+    "a.md": "# A\n",
+    "b.md": "# B\n",
+  });
+  const vaultRoots = [dir];
+  const dbPath = join(dir, "i.db");
+  const indexer = new VaultIndexer({ vaultPath: dir, dbPath });
+  try {
+    for (const f of ["a.md", "b.md"]) await indexer.update(f);
+
+    const baseOp = resolve("base nopath.base#all") as Op;
+    const ctx: OpContext = { vaultPath: dir, indexer, dryRun: true, vaultRoots, dbPath };
+
+    // 作源：0 行 + 一条 failed，错误信息点名 file.path 与补法
+    {
+      const result = await baseOp.run([], ctx);
+      assert.equal(result.rows.length, 0, "缺 file.path 不得产出行（尤其不得产出空 path 行）");
+      assert.equal(result.failed.length, 1);
+      assert.equal(result.failed[0]!.op, "base");
+      assert.ok(
+        result.failed[0]!.error.includes("file.path"),
+        `报错应点名 file.path：${result.failed[0]!.error}`,
+      );
+    }
+
+    // 作转换：每行各记一条 failed
+    {
+      const input: Row[] = [
+        { path: "a.md", fields: {} },
+        { path: "b.md", fields: {} },
+      ];
+      const result = await baseOp.run(input, ctx);
+      assert.equal(result.rows.length, 0);
+      assert.equal(result.failed.length, 2);
+      assert.ok(result.failed.every((f) => f.error.includes("file.path")));
+    }
+  } finally {
+    indexer.close();
     rmSync(dir, { recursive: true, force: true });
   }
 });
