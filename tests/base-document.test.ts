@@ -6,7 +6,7 @@
  */
 
 import assert from "node:assert/strict";
-import { join } from "node:path";
+import { basename, dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { test } from "node:test";
 import { loadBaseDocument, selectView } from "../src/base/index.js";
@@ -253,27 +253,36 @@ test("设计 §5: order 非字符串项 / sort 非 map 项 / sort 空 property �
 });
 
 // BASE-SEC-008 延伸：Windows 盘符大小写不得导致合法路径被安全门假阳拒绝
+//
+// 翻转路径中**首个字母**的大小写：Windows 大小写不敏感 → 等价路径；
+// POSIX 上是另一个（不存在的）目录。不能翻转首字符——POSIX 绝对路径首字符是 `/`，翻转它是 no-op。
+function flipFirstLetter(p: string): string {
+  const idx = p.search(/[a-zA-Z]/);
+  assert.ok(idx >= 0, `fixture 路径应含字母：${p}`);
+  const ch = p[idx] as string;
+  return (
+    p.slice(0, idx) + (ch === ch.toLowerCase() ? ch.toUpperCase() : ch.toLowerCase()) + p.slice(idx + 1)
+  );
+}
+
 test("BASE-SEC-008: vault 根盘符大小写不同不误判越界（Windows 大小写不敏感）", () => {
   const base = join(MINIMAL, "views", "projects.base");
-  // 翻转根路径中**首个字母**的大小写：Windows 盘符大小写不敏感 → 等价路径；
-  // POSIX 上是另一个（不存在的）目录。不能翻转首字符——POSIX 绝对路径首字符是 `/`，翻转它是 no-op。
-  const idx = MINIMAL.search(/[a-zA-Z]/);
-  const ch = MINIMAL[idx] as string;
-  const flipped =
-    MINIMAL.slice(0, idx) +
-    (ch === ch.toLowerCase() ? ch.toUpperCase() : ch.toLowerCase()) +
-    MINIMAL.slice(idx + 1);
-  const doc = loadBaseDocument({ basePath: base, vaultRoots: [flipped] });
-  if (process.platform === "win32") {
-    assert.deepEqual(
-      doc.diagnostics.filter((x) => x.rule === "base/path-outside-vault"),
-      [],
-      "Windows 下小写盘符与大写盘符指向同一目录，不得判越界",
-    );
-    assert.equal(doc.views.length, 1);
-  } else {
-    // POSIX 大小写敏感：翻转后确实是别的路径，仍应拒绝（本用例在此平台锁「不误放行」）。
-    assert.equal(doc.diagnostics[0]?.rule, "base/path-outside-vault");
+  // 两个变体：根路径首字母（Windows 上即盘符）+ 目录段首字母——后者覆盖盘符之外组件的
+  // 大小写不敏感（win32 resolve 不做任何大小写归一，整条路径的等价性都靠 isPathInside 归一）。
+  const variants = [flipFirstLetter(MINIMAL), join(dirname(MINIMAL), flipFirstLetter(basename(MINIMAL)))];
+  for (const flipped of variants) {
+    const doc = loadBaseDocument({ basePath: base, vaultRoots: [flipped] });
+    if (process.platform === "win32") {
+      assert.deepEqual(
+        doc.diagnostics.filter((x) => x.rule === "base/path-outside-vault"),
+        [],
+        `Windows 下 ${flipped} 与 ${MINIMAL} 指向同一目录，不得判越界`,
+      );
+      assert.equal(doc.views.length, 1);
+    } else {
+      // POSIX 大小写敏感：翻转后确实是别的路径，仍应拒绝（本用例在此平台锁「不误放行」）。
+      assert.equal(doc.diagnostics[0]?.rule, "base/path-outside-vault");
+    }
   }
 });
 

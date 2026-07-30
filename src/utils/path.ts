@@ -167,7 +167,16 @@ function isStrictlyUnder(p: string, q: string): boolean {
  */
 export function resolveVaultLayout(input: string | string[]): VaultLayout {
   const resolved = (Array.isArray(input) ? input : [input]).map((p) => resolve(p));
-  const uniq = [...new Set(resolved)];
+  // 去重按 pathCaseKey 口径：win32 resolve 不归一盘符大小写，`D:\v` 与 `d:\v` 是同一目录；
+  // 精确字符串去重会把它们当两个根保留下来，随后撞 basename 冲突误报（同一目录被判成多根命名空间冲突）。
+  // 保留首次出现的原始大小写形态（不能用 new Map(entries)——重复键后者覆盖前者）。
+  const seenCaseKeys = new Set<string>();
+  const uniq = resolved.filter((p) => {
+    const key = pathCaseKey(p);
+    if (seenCaseKeys.has(key)) return false;
+    seenCaseKeys.add(key);
+    return true;
+  });
   if (uniq.length === 0) throw new Error("vault 不能为空");
   const roots = uniq.filter((p) => !uniq.some((q) => isStrictlyUnder(p, q)));
 

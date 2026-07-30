@@ -69,6 +69,19 @@ test("resolveVaultLayout：去重 + 剔除被包含的子根（保留更上层�
   assert.equal(layout.toKey(join(parent, "docs", "a.md")), "docs/a.md"); // 单根 → 纯相对，无前缀
 });
 
+test("resolveVaultLayout：Windows 同一根的大小写变体去重为单根（不误报目录名冲突）", () => {
+  // win32 的 resolve 不归一盘符大小写：同一目录写成 `C:\…` 与 `c:\…` 是两个字符串。
+  // 旧精确字符串去重会把二者当两个根，随后撞 basename 冲突误报（实测抛「多根目录名冲突」）。
+  if (process.platform !== "win32") return; // POSIX 大小写敏感，变体确属不同目录
+  const dir = freshDir();
+  const variant = dir.replace(/^[a-zA-Z]/, (c) =>
+    c === c.toLowerCase() ? c.toUpperCase() : c.toLowerCase(),
+  );
+  assert.notEqual(variant, dir, "变体应与原路径字符串不同（否则本用例无意义）");
+  const layout = resolveVaultLayout([dir, variant]);
+  assert.deepEqual(layout.roots, [dir]); // 同一目录 → 去重为单根，保留首次出现的形态
+});
+
 test("resolveVaultLayout：多根目录名（basename）冲突直接报错", () => {
   const a = join(freshDir(), "docs");
   const b = join(freshDir(), "docs"); // 同名 docs、分属不同父 → 命名空间冲突
