@@ -8,8 +8,8 @@ tags:
   - ai
   - skill
   - x-basalt
-timestamp: 2026-06-30T06:41:18Z
-sha256: 95b9ccb1b27f3baa4aeb6c99fb9b304d17991e7dd9ea0ccb68e709dd52a40f08
+timestamp: 2026-07-30T23:06:12Z
+sha256: bc0e29a4434b9a6816b10cf412eba6db8d2a47d18538f7dd28e264c2d1172abd
 ---
 # chat 技能接地（skill grounding）设计 — v2
 
@@ -48,7 +48,7 @@ sha256: 95b9ccb1b27f3baa4aeb6c99fb9b304d17991e7dd9ea0ccb68e709dd52a40f08
 | `query` | 构造 DQL 不确定文法 → `obsidian-base-spec` |
 | `meta_set` / `meta_normalize` | 值类型/归一规则 → `obsidian-base-spec` |
 | `meta_apply` | profile 语义 → `core` |
-| `pipeline_run` | where=DQL → `obsidian-base-spec`；actions → `core` |
+| `pipeline_run` | where=DQL → `obsidian-base-spec`；actions/steps 算子语义 → `core` |
 | `parse`/`scan`/`meta_get`/`meta_unset`/`meta_rename` | 无（入参平凡） |
 
 ### 3.3 两层内部 skill（`skills-data/*.json5`，运行时 SkillRecall 读）

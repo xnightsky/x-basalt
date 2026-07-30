@@ -6,6 +6,8 @@
 
 ### Added
 
+- **chat `pipeline_run` 工具接入 `steps` 声明式步骤链** —— 此前 chat 的批量写工具只暴露 `actions`（七个经典动作）+ `where`，pipelines.md 里的 `step=` 算子链（query/search/base 作源或转换、filter/limit/dedup/map、lint/links. 诊断、`{{row.x}}` 插值写回）模型根本表达不出来——能力在编排器里、CLI 也有，唯独 chat 工具面缺这个口。现 `pipeline_run` 新增 `steps?: string[]`（一元素一完整算子 spec、不切分），与 CLI 同规则：`steps` 存在时优先于 `actions`、两者至少其一（全缺在工具层即报 `invalid` 结构化错误，不让引擎静默跑空链）；返回值新增 `steps[]` 逐步行数流水（op/rowsIn/rowsOut/failed），模型据此定位「行在哪一步被滤掉」，无需重跑排查。工具描述同步点明两种写法的选择规则并指向 core 取算子语义。回归用例：steps 链落盘 + 流水回传、steps 优先于 actions、空链报 invalid（`tests/chat/tools.test.ts`）。
+
 - **管道教程 [`docs/use/pipelines.md`](./docs/use/pipelines.md)** —— `--pipe` 算子链的完整教学：Row 心智模型与四种角色、`actions=` / `step=` 两种链写法的选择规则、逐个算子手册（含 0.8.0 新接的 query/search/base/lint/links.*/filter/limit/dedup/map）、`{{row.x}}` 插值取值优先级、`filter` 表达式语法、`RunReport` 口径（含「链首算子源自产行不计入 `total`」）、五个端到端配方。所有示例经真实 vault 冒烟验证；`docs/use/commands.md` 的 `run` 节与 `docs/use/README.md` 索引、运行时自我说明书 `skills-data/core.json5` 同步指路。
 
 ### Fixed

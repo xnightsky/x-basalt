@@ -8,8 +8,8 @@ tags:
   - ai
   - design
   - x-basalt
-timestamp: 2026-06-29T23:59:11Z
-sha256: 1a63c5ec23494db528ecba68b25dfe28b29a139567e53ac4696cdddc3b25d181
+timestamp: 2026-07-30T23:06:26Z
+sha256: f1a9b7162f2210b6aa8b14181a781001560a421b45527d49883ffada973ae043
 ---
 
 # 设计：CLI chat（读+写，自然语言驱动 vault）—— 可落地实现设计
@@ -112,9 +112,10 @@ src/chat/
 | `meta_rename`    | `{ file, oldKey, newKey }`                                       | `editMeta(file, d=>renameMeta(d,oldKey,newKey))`         |
 | `meta_normalize` | `{ file, sortKeys? }`                                            | `editMeta(file, d=>normalizeDoc(d,{sortKeys}))`          |
 | `meta_apply`     | `{ profile, file, sets?, refreshDerived? }`                      | `applyProfile(file, profile, {sets,refreshDerived})`     |
-| `pipeline_run`   | `{ actions: string[], where?, paths?, ifExists?, concurrency? }` | `Orchestrator.runManual({where}) ／ runScan()`，**批量** |
+| `pipeline_run`   | `{ actions?: string[], steps?: string[], where?, paths?, ifExists?, concurrency? }` | `Orchestrator.runManual({where}) ／ runScan()`，**批量** |
 
 - **单文件 vs 批量两路并存（用户拍板）**：模型按任务选——「改这个文件」走 `meta_*`；「对一批笔记做 X」走 `pipeline_run`（编排器）。
+- **`pipeline_run` 链两种写法（2026-07-30 对齐 CLI）**：`steps`（一元素一完整算子 spec、不切分，支持 query/search/base/filter/lint 等算子与 `{{row.x}}` 插值）存在时优先于 `actions`（七个经典动作），两者至少其一——全缺在工具层即报 invalid，不静默跑空链；返回值带 `steps[]` 逐步行数流水（行在哪一步被滤掉一眼定位）。
 - **直接落盘、无确认**：写工具 `execute` 直接以非 dry-run 调原语落盘并返回结果摘要。安全性靠 ① 既有**原子写**（tmp+rename，kill 中途不损坏文件）② 用户可 **Ctrl+C 中断**在途循环 ③ git 是用户兜底。不再先 dry-run 预览再确认。
 
 ### 5.3 接口契约草案

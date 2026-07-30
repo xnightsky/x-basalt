@@ -148,3 +148,51 @@ test("search：查询过短 → 结构化 invalid 错误", async () => {
   await assert.rejects(tools.search.execute!({ query: "a" }, {} as never), /\[工具失败·invalid\]/);
   rmSync(sdir, { recursive: true, force: true });
 });
+
+test("pipeline_run：steps 链（query 源 + set）落盘并回传 steps 流水", async () => {
+  const pdir = mkdtempSync(join(tmpdir(), "xb-pipe-"));
+  writeFileSync(join(pdir, "a.md"), "---\nstatus: draft\n---\n# a\n", "utf8");
+  writeFileSync(join(pdir, "b.md"), "---\nstatus: draft\n---\n# b\n", "utf8");
+  writeFileSync(join(pdir, "c.md"), "---\nstatus: done\n---\n# c\n", "utf8");
+  const idx = new VaultIndexer({ vaultPath: pdir, dbPath: join(pdir, "index.db") });
+  await idx.rebuild();
+  idx.close();
+  const tools = buildTools({ dbPath: join(pdir, "index.db"), vaultPath: pdir }, safety);
+  // 刚 rebuild 完 scan diff 为空 → 链首 query 入参为空、按源模式执行（pipelines.md §3 语义）。
+  const json = unwrap(
+    await tools.pipeline_run.execute!(
+      { steps: ['query LIST FROM "" WHERE status = "draft"', "set status=done"] },
+      {} as never,
+    ),
+  );
+  assert.equal(json.changed, 2); // 只选中两篇 draft，c 不被动
+  assert.equal(json.reindexed, 2); // 写后自动刷索引
+  assert.deepEqual(
+    (json.steps as { op: string }[]).map((s) => s.op),
+    ["query", "set"],
+  );
+  assert.match(readFileSync(join(pdir, "a.md"), "utf8"), /status: done/);
+  assert.match(readFileSync(join(pdir, "b.md"), "utf8"), /status: done/);
+  rmSync(pdir, { recursive: true, force: true });
+});
+
+test("pipeline_run：steps 存在时优先于 actions（D12，与 CLI 同规则）", async () => {
+  const pdir = mkdtempSync(join(tmpdir(), "xb-pipe-prio-"));
+  writeFileSync(join(pdir, "a.md"), "---\nstatus: draft\n---\n# a\n", "utf8");
+  // where 走 DQL 手动源、读的是索引——先建库，否则空批静默（与 CLI 一致）。
+  const idx = new VaultIndexer({ vaultPath: pdir, dbPath: join(pdir, "index.db") });
+  await idx.rebuild();
+  idx.close();
+  const tools = buildTools({ dbPath: join(pdir, "index.db"), vaultPath: pdir }, safety);
+  await tools.pipeline_run.execute!(
+    { actions: ["set status=actions-won"], steps: ["set status=steps-won"], where: 'LIST FROM ""' },
+    {} as never,
+  );
+  assert.match(readFileSync(join(pdir, "a.md"), "utf8"), /status: steps-won/);
+  rmSync(pdir, { recursive: true, force: true });
+});
+
+test("pipeline_run：steps 与 actions 都缺 → invalid 错误（不静默跑空链）", async () => {
+  const tools = buildTools(ctx(), safety);
+  await assert.rejects(tools.pipeline_run.execute!({}, {} as never), /\[工具失败·invalid\]/);
+});

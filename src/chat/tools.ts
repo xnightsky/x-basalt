@@ -426,13 +426,18 @@ export function buildTools(ctx: ToolContext, safety: Safety): ToolSet {
     }),
     pipeline_run: tool({
       description:
-        "对一批笔记跑声明式管道（actions: index/normalize/apply/set/unset/rename）。批量直接写入。" +
+        "对一批笔记跑声明式管道，批量直接写入。链两种写法，**steps 存在时优先于 actions**（与 CLI 同规则）：" +
+        "actions=[index/normalize/apply/set/unset/rename] 七个经典动作，参数不含顶层逗号时用它；" +
+        "steps=['完整算子 spec', …] 一元素一步、**不切分**——query/search/base/lint/links.check/filter/limit/dedup/map " +
+        "等算子与 {{row.x}} 插值只能走它，如 ['base reports/a.base#v', 'filter formula.urgency > 4', 'set priority={{row.formula.urgency}}']；" +
+        "算子与插值语义详见 core（skills_get 取）。两者至少给一个。" +
         "where 用**完整** DQL 选源（必须以 LIST/TABLE/TASK 开头，如 'LIST FROM \"inbox\" WHERE type = null'；" +
-        "不能只写 FROM…/WHERE… 裸子句），省略则用 scan 差异源；actions 语义见 core。" +
-        "返回 total/changed/skipped 均以**文件**为单位，byAction 给分动作明细。" +
+        "不能只写 FROM…/WHERE… 裸子句），省略则用 scan 差异源；链首放 query/base/search 算子亦可直接以查询结果为源。" +
+        "返回 total/changed/skipped 均以**文件**为单位，byAction 给分动作明细，steps[] 给逐步行数流水（定位行在哪一步被滤掉）。" +
         "**写完索引已自动刷新**（reindexed 即刷新篇数），changed>0 就是写成功了——不必再 query/scan 复核一遍，那只会白烧步数。",
       inputSchema: jsonSchema<{
-        actions: string[];
+        actions?: string[];
+        steps?: string[];
         where?: string;
         paths?: string[];
         ifExists?: string;
@@ -441,17 +446,23 @@ export function buildTools(ctx: ToolContext, safety: Safety): ToolSet {
         type: "object",
         properties: {
           actions: { type: "array", items: { type: "string" } },
+          steps: { type: "array", items: { type: "string" } },
           where: { type: "string" },
           paths: { type: "array", items: { type: "string" } },
           ifExists: { type: "string", enum: ["skip", "overwrite", "merge"] },
           concurrency: { type: "number" },
         },
-        required: ["actions"],
+        required: [],
         additionalProperties: false,
       }),
-      execute: async ({ actions, where, paths, ifExists, concurrency }) => {
+      execute: async ({ actions, steps, where, paths, ifExists, concurrency }) => {
+        // 引擎层 steps ?? actions 空链会静默零算子跑空批——在工具层就拦下，给模型可自纠的 invalid 错误。
+        if (!steps?.length && !actions?.length) {
+          throw new Error("缺少链定义：steps 与 actions 至少给一个（steps 存在时优先于 actions）");
+        }
         const cfg: PipelineConfig = {
           actions,
+          steps,
           where,
           paths: paths?.map(toAbs),
           ifExists: (ifExists as PipelineConfig["ifExists"]) ?? "skip",
@@ -470,6 +481,8 @@ export function buildTools(ctx: ToolContext, safety: Safety): ToolSet {
             failed: r.failed,
             dryRun: r.dryRun,
             byAction: r.byAction,
+            // 逐步行数流水：模型据此定位「行在哪一步消失」（pipelines.md §9 口径），无需重跑排查。
+            steps: r.steps,
             // 回传刷新篇数：模型据此确认「现在 query 已经能查到新值」，不必再自己 scan+index 兜一圈。
             reindexed: r.reindexed,
           });
