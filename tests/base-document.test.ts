@@ -255,10 +255,14 @@ test("设计 §5: order 非字符串项 / sort 非 map 项 / sort 空 property �
 // BASE-SEC-008 延伸：Windows 盘符大小写不得导致合法路径被安全门假阳拒绝
 test("BASE-SEC-008: vault 根盘符大小写不同不误判越界（Windows 大小写不敏感）", () => {
   const base = join(MINIMAL, "views", "projects.base");
-  // 把根的首字符翻转大小写：Windows 上等价路径，POSIX 上则是另一个（不存在的）目录。
-  const first = MINIMAL[0] as string;
+  // 翻转根路径中**首个字母**的大小写：Windows 盘符大小写不敏感 → 等价路径；
+  // POSIX 上是另一个（不存在的）目录。不能翻转首字符——POSIX 绝对路径首字符是 `/`，翻转它是 no-op。
+  const idx = MINIMAL.search(/[a-zA-Z]/);
+  const ch = MINIMAL[idx] as string;
   const flipped =
-    (first === first.toLowerCase() ? first.toUpperCase() : first.toLowerCase()) + MINIMAL.slice(1);
+    MINIMAL.slice(0, idx) +
+    (ch === ch.toLowerCase() ? ch.toUpperCase() : ch.toLowerCase()) +
+    MINIMAL.slice(idx + 1);
   const doc = loadBaseDocument({ basePath: base, vaultRoots: [flipped] });
   if (process.platform === "win32") {
     assert.deepEqual(
