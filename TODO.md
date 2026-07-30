@@ -1,6 +1,6 @@
 ---
-timestamp: 2026-07-30T00:06:05Z
-sha256: ff18873651923657e96de0ecfb41e2a3348347face2ba3bdf7ded20b6bd62af3
+timestamp: 2026-07-30T00:08:39Z
+sha256: f02be1bebc9ba2b5e2c7cda516bdc84214d1bfd25744ccee6bda9aa378bf764e
 ---
 # TODO · x-basalt
 
@@ -119,7 +119,12 @@ sha256: ff18873651923657e96de0ecfb41e2a3348347face2ba3bdf7ded20b6bd62af3
 
 **剩余**：
 
-- [ ] **片四 · 配置面**：`--pipe` 支持声明式步骤列表，保留现有 kv 写法兼容。验收＝新旧两种写法产出同一份 `RunReport`（§9 片四）。**这是「多平台 shell 管道」的前置**。
+- [ ] **片四 · 配置面：`--pipe` 声明式步骤列表 + kv 兼容**。验收＝新旧两种写法产出同一份 `RunReport`（§9 片四）。**这是「多平台 shell 管道」的前置**。
+  - **⚠️ 核心问题是分隔符，且它是片二/三落地后才出现的**（片一时只有 7 个动作、参数都很短，撞不上）：现在 `actions=` 走逗号分隔（`splitList`，`src/cli.ts:195`），而片二/三接进来的算子参数**天然含逗号**——`query LIST FROM "x" WHERE contains(tags, "a")`、`filter tags contains "a,b"`、`base tasks.base#view`。逗号一切就把一个算子 spec 劈成两半，后半段被当算子名去 `resolve()` → 报「未知算子 "b\""」。
+    - 好消息：**是报错不是静默**（`registry.resolve` 未命中即抛，`981c0ed`），所以不会算错只会挡住合法用法；坏消息：**片二/三接的算子在 CLI 上目前基本没法用**——能力落地了但配置面表达不出来。这条是片四的真实动机，不只是「顺手做个新语法」。
+  - **建议形态**（未定案，动手前先在设计文档补一条 D 记录）：配置侧加 `pipelines.<name>.steps: string[]`（YAML 数组，一元素一算子 spec，天然无分隔符问题）；CLI 侧加可重复的 `--pipe step=<spec>`（一次一个算子，按出现顺序成链），与现有 `--pipe actions=` 并存。`actions` 保留且行为逐字不变（D5 向后兼容），`steps`/`step` 存在时优先。
+  - **改动锚点**：`src/cli.ts:201` `resolvePipeline`（kv 解析与 `use=` 基底合并）、`src/cli.ts:195` `splitList`、`src/config.ts:124` `parsePipelines`（当前**强制要求** `actions` 字符串数组，缺就报错——加 `steps` 后这个校验要改成「二者至少有一个」，注意别把「两个都没有」放过去）、`PipelineConfig`（`src/orchestrator/types.ts:177`）。
+  - **验收要用已有的对拍手法**：仿 `tests/orchestrator-contract.test.ts` 的 A2 写法，同一条算子链分别用 `actions=` 与 `steps=` 表达，断言两份 `RunReport` 既有字段逐字段相等；并补一条「参数含逗号的算子（如 `filter tags contains "a,b"`）在 `steps` 下正确、在 `actions` 下按既有行为报错」的用例，把这个差异钉成契约而不是留成暗坑。
 - [ ] **§12 两条未决问题需回写定案**：①`links.check`/`lint` 的诊断挂在 `Row.fields` 哪个键（片二实现时已实际选定，需回写设计文档从「倾向」改为「已定」）；②多根 vault 下 `base`/`search` 产出行的 `path` 归一是否与索引主键零冲突（片二已跑通，需补一条显式断言而非依赖巧合）。
 - [ ] **🐞 间歇性测试失败（未定位）**：片三提交前观察到一次 `1028 pass / 1 fail`，同一工作区状态随后连跑三次全绿，**未捕获失败用例名**。疑似时序相关（watch/debounce 类）。下次复现时立刻记下用例名；若持续不复现也不要当作已解决——flaky 测试会掩盖真实回归。
 
