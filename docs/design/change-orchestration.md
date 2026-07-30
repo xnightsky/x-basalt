@@ -7,8 +7,8 @@ tags:
   - orchestrator
   - design
   - x-basalt
-timestamp: 2026-07-30T09:47:20Z
-sha256: dde68786292a92df6daedb57ea1d1a64f22767602cf275bb22987e3a91c46774
+timestamp: 2026-07-30T15:53:52Z
+sha256: ff136760667bd418bf735a45f906d5ccf8992ca512304e4925d8de87bc4e423f
 ---
 
 # 设计评估：变更编排器（change orchestration）—— 统一 watch / scan / 手动 三源的声明式维护管线
@@ -242,7 +242,8 @@ sha256: dde68786292a92df6daedb57ea1d1a64f22767602cf275bb22987e3a91c46774
 | `--pipe` key  | 值                     | 含义                                                                                | 配置段 key    |
 | ------------- | ---------------------- | ----------------------------------------------------------------------------------- | ------------- |
 | `use`         | name                   | 从配置 `pipelines.<name>` 加载作基底（**"从配置读取"降为次级参数**，不是独立 flag） | （引用入口）  |
-| `actions`     | a,b,c                  | 动作链（必填）                                                                      | `actions`     |
+| `actions`     | a,b,c                  | 动作链（逗号分隔；与 `step`/`steps` 至少其一）                                      | `actions`     |
+| `step`        | spec                   | 声明式步骤（可重复，一 flag 一算子 spec、**不切分**；`steps` 存在时优先，D12）      | `steps`       |
 | `where`       | DQL                    | 按 DQL 选文件（手动源 / 语义筛）                                                    | `where`       |
 | `paths`       | glob                   | 路径过滤（glob）                                                                    | `paths`       |
 | `on`          | add,change             | 事件类型过滤                                                                        | `on`          |
@@ -254,7 +255,7 @@ sha256: dde68786292a92df6daedb57ea1d1a64f22767602cf275bb22987e3a91c46774
 
 **一一对应是不变量**：命令行多词 key 用 kebab-case、配置段用 camelCase，逐项对得上；例外只有 `use`（引用入口，无配置段项）与 `dryRun`（由运行时 `--apply` 承载）。两侧共用同一套解析与校验（`src/orchestrator/params.ts`），新增字段必须同时补两侧，否则一侧会**静默丢参数**。
 
-**值切分**：逗号切分**括号感知**——`[]`/`{}`/`()` 内的逗号是字面量，不是分隔符。因此 `actions=set tags=[a, b],index` 与 `paths=**/*.{md,txt}` 均可正确切分。
+**值切分**：逗号切分**括号感知**——`[]`/`{}`/`()` 内的逗号是字面量，不是分隔符。因此 `actions=set tags=[a, b],index` 与 `paths=**/*.{md,txt}` 均可正确切分。括号外的引号内逗号仍是分隔符（splitTopLevel 不认引号）——算子参数含顶层逗号时（如 `filter status == "a,b"`）改用 `step`/`steps` 声明式写法：一元素一算子 spec，**不做任何切分**；`steps` 存在时优先于 `actions`（D12）。命令行显式给出链（`step` 或 `actions` 任一形态）时整体覆盖基底链，基底的另一形态不沿用。
 
 **非法值口径**：未知 key、非法事件类型、非正整数并发、`wait > maxWait`、未知枚举值一律**声明期报错**并指明来源（`--pipe on` vs `pipelines.<name>.on`），不静默忽略、不静默降级——拼错的过滤条件比报错危险。
 
@@ -284,7 +285,10 @@ x-basalt watch --pipe use=maintain --apply                                      
 # .x-basalt/config
 pipelines:
   maintain:
-    actions: [index, normalize] # 必填
+    actions: [index, normalize] # 与 steps 至少其一（逗号分隔面）
+    # steps: # 声明式步骤列表（一元素一算子 spec，不切分；存在时优先于 actions）
+    #   - filter status == "a,b"
+    #   - limit 5
     where: "contains(file.tags, 'pkm')"
     on: [add, change]
     paths: ["pkm/**"]

@@ -1,6 +1,6 @@
 ---
-timestamp: 2026-07-30T09:46:06Z
-sha256: 92bd74ecadc9a3fd4efe5fa80678b9a69f5368192ebf6fdc063805c584dd5d04
+timestamp: 2026-07-30T15:55:15Z
+sha256: 425321629a2ea6684fc877dad4d91e334162974b71bd5f04f0bac4e28f6ec91c
 type: guide
 title: 命令参考 · x-basalt
 description: x-basalt CLI 全部子命令的参数、输出形态与示例
@@ -522,7 +522,8 @@ x-basalt run [--pipe k=v]... [--apply] [--stdin] [--vault <path>]... [--db <path
 | key           | 值                     | 含义                                                                                                                                 |
 | ------------- | ---------------------- | ------------------------------------------------------------------------------------------------------------------------------------ |
 | `use`         | name                   | 从配置 `pipelines.<name>` 加载作基底（其余 `--pipe` 覆盖它）                                                                         |
-| `actions`     | a,b,c                  | 内建动作链（必填）：`index` / `normalize` / `parse` / `apply <profile>` / `set <key>=<value>` / `unset <key>` / `rename <old> <new>` |
+| `actions`     | a,b,c                  | 内建动作链（逗号分隔；与 `step` 至少其一）：`index` / `normalize` / `parse` / `apply <profile>` / `set <key>=<value>` / `unset <key>` / `rename <old> <new>` |
+| `step`        | spec                   | 声明式步骤（可重复，一 flag 一算子 spec、**不切分**；算子参数含顶层逗号时用它，如 `step=filter status == "a,b"`；存在时优先于 `actions`） |
 | `where`       | DQL                    | 按 DQL 选文件（手动源 / 语义筛）                                                                                                     |
 | `paths`       | glob                   | 路径过滤（**只过滤、不作源**；显式文件列表源用 `--stdin`）                                                                           |
 | `on`          | add,change             | 事件类型过滤（仅 `add`/`change`/`unlink`）                                                                                            |
@@ -533,7 +534,7 @@ x-basalt run [--pipe k=v]... [--apply] [--stdin] [--vault <path>]... [--db <path
 | `on-busy`     | queue                  | 重启语义（默认 `queue`；`restart`/`ignore` 尚未实现，给了即报错）                                                                    |
 | `refresh-index` | true\|false          | 写动作落盘后是否自动把改动文件刷进索引（默认 `true`，见下「写后索引新鲜度」）                                                        |
 
-> **值切分是括号感知的**：`[]`/`{}`/`()` 内的逗号视为字面量，故 `actions="set tags=[a, b],index"`、`paths="**/*.{md,txt}"` 都能正确切分。
+> **值切分是括号感知的**：`[]`/`{}`/`()` 内的逗号视为字面量，故 `actions="set tags=[a, b],index"`、`paths="**/*.{md,txt}"` 都能正确切分。括号外引号内的逗号仍是分隔符——算子参数含顶层逗号时改用 `--pipe step=<spec>`（一 flag 一算子，不切分）。
 > **拼错与非法值一律报错**（退出码 1）并指明来源是命令行还是配置段——不静默忽略，避免过滤条件悄悄失效。
 
 **内建动作**

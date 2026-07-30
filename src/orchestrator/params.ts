@@ -21,6 +21,7 @@ import type { EventType, PipelineConfig } from "./types.js";
 export const PIPE_KEYS = [
   "use",
   "actions",
+  "step",
   "where",
   "paths",
   "on",
@@ -32,8 +33,9 @@ export const PIPE_KEYS = [
   "refresh-index",
 ] as const;
 
-/** `--pipe` key → 配置段 key（同名者省略）；仅多词键需要映射。 */
+/** `--pipe` key → 配置段 key（同名者省略）；仅多词键与单复数不同的键需要映射。 */
 const CONFIG_KEY_OF: Record<string, string> = {
+  step: "steps",
   "if-exists": "ifExists",
   "on-error": "onError",
   "on-busy": "onBusy",
@@ -106,6 +108,18 @@ export function toPaths(v: unknown, src: string): string[] | undefined {
 /** 动作链（`actions`）：命令行逗号串（`set k=[a, b]` 内逗号不切）或配置段数组。 */
 export function toActions(v: unknown, src: string): string[] | undefined {
   return toStringList(v, src);
+}
+
+/**
+ * 声明式步骤列表（`steps`，D12）：只收**字符串数组**，一元素一算子 spec，不做逗号切分——
+ * 逗号切分正是 `actions` 面表达不了含逗号 spec 的病根，steps 若也切就白做了。
+ */
+export function toSteps(v: unknown, src: string): string[] | undefined {
+  if (v === undefined) return undefined;
+  if (!Array.isArray(v) || v.some((x) => typeof x !== "string")) {
+    throw new Error(`${src} 需字符串数组（一元素一算子 spec；逗号分隔写法请用 actions）`);
+  }
+  return v as string[];
 }
 
 /** 有界并发上限：必须正整数（`Number()` 出 NaN / 0 / 负数 / 小数一律报错，不静默降级）。 */
@@ -196,9 +210,18 @@ export function toOnBusy(v: unknown, src: string): PipelineConfig["onBusy"] {
   return mode;
 }
 
+/** `parsePipeFlags` 产出：单例 k=v 映射 + 可重复的 step 列表（分开放，避免重复键互相覆盖）。 */
+export interface PipeFlags {
+  /** 单例 key → 值（同 key 重复给时后者覆盖前者，与既有行为一致）。 */
+  kv: Record<string, string>;
+  /** 可重复的 `step=<spec>`，按出现顺序成链——一 flag 一算子，不做任何切分（D12）。 */
+  steps: string[];
+}
+
 /** 把可重复的 `--pipe k=v` 收成映射；未知 key 与非 `k=v` 形态在此报错（拼错不静默）。 */
-export function parsePipeFlags(flags: string[]): Record<string, string> {
+export function parsePipeFlags(flags: string[]): PipeFlags {
   const kv: Record<string, string> = {};
+  const steps: string[] = [];
   for (const f of flags) {
     const i = f.indexOf("=");
     if (i <= 0) throw new Error(`--pipe 需 key=value 形式，得到 "${f}"`);
@@ -206,9 +229,11 @@ export function parsePipeFlags(flags: string[]): Record<string, string> {
     if (!(PIPE_KEYS as readonly string[]).includes(key)) {
       throw new Error(`未知 --pipe key "${key}"，已知：${PIPE_KEYS.join(", ")}`);
     }
-    kv[key] = f.slice(i + 1);
+    // step 是可重复 key：Record 形态会把前面的 occurrence 静默覆盖掉，必须单独收集。
+    if (key === "step") steps.push(f.slice(i + 1));
+    else kv[key] = f.slice(i + 1);
   }
-  return kv;
+  return { kv, steps };
 }
 
 /** 取某 key 的值：命令行优先，回落配置基底（基底用 camelCase key）。 */
@@ -246,15 +271,20 @@ export interface ResolvePipelineOptions {
  * Then 抛错并列出配置里已知的管道名
  *
  * @behavior
- * Given 既无 actions 也无带 actions 的基底
+ * Given 命令行显式给出链（step 或 actions 任一形态）
  * When resolvePipelineParams
- * Then 抛错并指出内联与引用两种写法（不空跑一条无动作管道）
+ * Then 命令行链整体覆盖基底链（含基底 steps）；同一来源内 steps 优先于 actions（D12 细化）
+ *
+ * @behavior
+ * Given 既无 actions/step 也无带链基底
+ * When resolvePipelineParams
+ * Then 抛错并指出 actions / step / use 三种写法（不空跑一条无算子管道）
  */
 export function resolvePipelineParams(
   flags: string[],
   opts: ResolvePipelineOptions,
 ): PipelineConfig {
-  const kv = parsePipeFlags(flags);
+  const { kv, steps: cliSteps } = parsePipeFlags(flags);
   let base: PipelineConfig | undefined;
   if (kv.use !== undefined) {
     const name = kv.use.trim();
@@ -264,15 +294,26 @@ export function resolvePipelineParams(
       throw new Error(`未知管道 "${name}"（配置 pipelines 段；已知：${known}）`);
     }
   }
+  // 链形态选择（D12 细化）：命令行显式给出链（任一形态）→ 整体覆盖基底链，基底 steps 不沿用——
+  // 否则用户显式写的 actions= 会被基底 steps 静默吞掉。命令行没给链时才回落基底 steps。
+  const cliHasChain = cliSteps.length > 0 || kv.actions !== undefined;
+  const steps =
+    cliSteps.length > 0
+      ? cliSteps
+      : cliHasChain
+        ? undefined
+        : toSteps(base?.steps, "use 基底 steps");
   const actions = toActions(pick(kv, base, "actions"), "--pipe actions");
-  if (!actions || actions.length === 0) {
+  const chain = steps ?? actions;
+  if (!chain || chain.length === 0) {
     throw new Error(
-      "缺少管道动作：用 --pipe actions=index,normalize（内联）或 --pipe use=<配置管道>",
+      "缺少管道算子链：--pipe actions=index,normalize（逗号分隔）、--pipe step=<spec>（可重复，一 flag 一算子）或 --pipe use=<配置管道>",
     );
   }
   const where = pick(kv, base, "where");
   return {
     actions,
+    steps,
     where: where === undefined ? undefined : String(where),
     paths: toPaths(pick(kv, base, "paths"), "--pipe paths"),
     on: toEventTypes(pick(kv, base, "on"), "--pipe on"),

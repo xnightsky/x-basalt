@@ -7,8 +7,8 @@ tags:
   - orchestration
   - pipeline
   - x-basalt
-timestamp: 2026-07-29T23:14:21Z
-sha256: cd7ccdf8d2e0cf1ca60e30e6e13885bc10e456f207c3682bacb8c0508679f6e2
+timestamp: 2026-07-30T15:56:28Z
+sha256: fe531b0bb44cadd194e8fd686295f636e30260781cbcfbee73fd6c992dd2098c
 ---
 # 内置 pipeline 改造：统一算子模型
 
@@ -340,6 +340,7 @@ base tasks.base#overdue → meta.set status={{row.next_status}}
 | D9 | `OpOutcome` 补 `changed[]` / `skipped[]` 两个 path 列表 | D7 只定了 `rows`+`failed`，漏了「哪些行真的被改了」——而 `RunReport` 的 `changed`/`skipped`/`changedPaths`/`byAction` 全靠这个信号聚合，缺了就静默归零，连带打回 `d04d47d` 的写后刷索引（它以 `changedPaths` 为输入）。S4 实现时撞出来 | ①从 `rows` 反推——无从区分「跑过没改」与「改了」；②在 `Row.fields` 里约定魔法键——污染数据面且与 §12 的诊断键名冲突；③让 engine 自己 diff 磁盘——把已知信息扔掉再花 IO 猜回来 |
 | D10 | `rowwise` 并发是「逐行领取」而非「切成 N 片」 | §3.2.1 原措辞「切成片」与 §9.1-B 判据「同时在跑的**行**数 ≤ concurrency」互斥，且真正值得批量优化的算子都是 `rowwise: false` 走整批分支、收不到切片好处；逐行才是「与今天逐字等价」 | 切成 N 片——判据要改写成限制片数，失去与旧语义的等价锚点，而这是片一唯一的兼容判据 |
 | D11 | 执行器**不得**对空批短路；`ctx` 资源也不得按「有行才准备」条件供给 | 「源」的定义就是 `0 → N` 忽略入参，空批跳过等于静默取消源角色，且表现为「0 行 / 退出码 0 / 无诊断」。片一未暴露是因为那 7 个动作全是 `N → N` 透传型；片二接 `query` 作源时当场撞上 | ①保留短路 + 给 `Op` 加 `source: boolean` 标志——违反 D2（不分算子类型），且分类边界的争议会回来；②保留短路 + 例外名单——每加一个源算子都要改执行器，接缝失效 |
+| D12 | 片四配置面：配置段 `steps: string[]`（一元素一算子 spec，**不切分**）+ CLI 可重复 `--pipe step=<spec>`（按出现顺序成链）；存在时优先于 `actions`，`actions` 切分行为逐字不变。细化：命令行显式给出链（`step` 或 `actions` 任一形态）时**整体覆盖基底链**，基底的另一形态不沿用——否则用户显式写的 `actions=` 会被基底 `steps` 静默吞掉。**`actions` 不下线**：它是简单链的紧凑写法（dogfood 在用），与 `steps` 长期并存，执行层同一行消费；若未来退役须证明「存量可无损改写 + 双口径持续误用」并走 breaking 流程 | 片二/三算子参数天然含逗号（DQL、`contains "a,b"`、`.base#view`），逗号分隔面把单条 spec 劈碎、后半段被当算子名报错——能力已落地但 CLI 表达不出来，这是片四的真实动机 | ①给 `splitTopLevel` 加引号感知——shell 已先剥过一层引号，CLI 拿到的串里引号语义不可靠，且改动 `actions` 既有切分行为违反 D5；②算子参数禁逗号——削已落地的能力；③退役 `actions` 只留 `steps`——破坏 dogfood 存量（违反 D5），且简单链失去紧凑写法 |
 
 ## 11. 验收口径
 
@@ -347,7 +348,10 @@ base tasks.base#overdue → meta.set status={{row.next_status}}
 2. 每个新接算子有「作源」「作中段」两种用法的独立用例。
 3. `base` 的 formula 计算列能经 `{{row.x}}` 抵达写动作，有端到端用例。
 4. 调度层可替换性有实证：至少存在一个不经 debounce/watch 的最小执行器跑通同一条算子链。
-5. dry-run 闸与防回环在新模型下仍受现有用例保护（不新增豁免）。
+5. 片四：同一算子链 `actions` 与 `steps` 两种写法产出 `RunReport` 既有字段逐字段相等（对拍）；
+   含逗号参数的算子（如 `filter tags contains "a,b"`）在 `steps` 下正确、在 `actions` 下按既有
+   行为报错——把该差异钉成契约而非暗坑（D12）。
+6. dry-run 闸与防回环在新模型下仍受现有用例保护（不新增豁免）。
 
 ## 12. 未决问题
 

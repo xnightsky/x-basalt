@@ -11,6 +11,7 @@ export {
   PIPE_KEYS,
   parsePipeFlags,
   resolvePipelineParams,
+  type PipeFlags,
   type ResolvePipelineOptions,
   splitTopLevel,
   toConcurrency,
@@ -18,6 +19,7 @@ export {
   toEnum,
   toEventTypes,
   toOnBusy,
+  toSteps,
 } from "./params.js";
 export { matchEvent, type RouteFilter, selectByDql } from "./route.js";
 export { type OpRunOptions, type RunOptions, runOpPipeline, runPipeline } from "./run.js";

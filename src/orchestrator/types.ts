@@ -173,8 +173,13 @@ export interface PipelineConfig {
    * 关掉 = 落盘后索引与磁盘静默不一致，`query` 会查到旧值；只有在「稍后必定统一 index」时才该关。
    */
   refreshIndex?: boolean;
-  /** 内建动作名序列（串行 pipe 执行）。 */
-  actions: string[];
+  /** 内建动作名序列（串行 pipe 执行）。与 {@link steps} 至少一个非空；steps 存在时优先（D12）。 */
+  actions?: string[];
+  /**
+   * 声明式步骤列表（D12）：一元素一算子 spec，**不做逗号切分**——配置段 `steps` / CLI `--pipe step=`。
+   * 算子参数天然含逗号（DQL、`contains "a,b"`、`.base#view`），逗号分隔面 `actions` 表达不了这类 spec。
+   */
+  steps?: string[];
 }
 
 /**

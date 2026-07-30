@@ -74,6 +74,31 @@ test("CO-G1 Given pipeline 缺 actions When parsePipelines Then 抛错", () => {
   assert.throws(() => parsePipelines({ bad: { actions: "index" } }), /actions/);
 });
 
+// --- S4 片四：配置段 steps（一元素一算子 spec，不做逗号切分——切分正是本片要消除的病，D12）---
+
+test("S4 Given 配置段 steps 字符串数组（含逗号 spec）When parsePipelines Then 原样保留、不切分", () => {
+  const r = parsePipelines({ decl: { steps: ['filter tags contains "a,b"', "limit 3"] } });
+  assert.deepEqual(r.decl?.steps, ['filter tags contains "a,b"', "limit 3"]);
+  assert.equal(r.decl?.actions, undefined);
+});
+
+test("S4 Given 配置段 steps 非法形态 When parsePipelines Then 报错并定位 pipelines.<name>.steps", () => {
+  // 字符串（逗号分隔）正是本片要消除的切分病，steps 只收数组。
+  assert.throws(() => parsePipelines({ bad: { steps: "index,lint" } }), /pipelines\.bad\.steps/);
+  assert.throws(() => parsePipelines({ bad: { steps: ["index", 42] } }), /pipelines\.bad\.steps/);
+});
+
+test("S4 Given 配置段 actions 与 steps 同给 When parsePipelines Then 两者都保留（steps 优先由消费方体现）", () => {
+  const r = parsePipelines({ m: { actions: ["index"], steps: ["lint"] } });
+  assert.deepEqual(r.m?.actions, ["index"]);
+  assert.deepEqual(r.m?.steps, ["lint"]);
+});
+
+test("S4 Given 配置段 actions 与 steps 皆缺/皆空 When parsePipelines Then 报错（不空跑无算子管道）", () => {
+  assert.throws(() => parsePipelines({ bad: {} }), /actions 或 steps/);
+  assert.throws(() => parsePipelines({ bad: { actions: [], steps: [] } }), /actions 或 steps/);
+});
+
 test("CO-G1 Given null/undefined When parsePipelines Then 空对象", () => {
   assert.deepEqual(parsePipelines(undefined), {});
   assert.deepEqual(parsePipelines(null), {});

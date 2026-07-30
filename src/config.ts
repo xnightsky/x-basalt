@@ -15,6 +15,7 @@ import {
   toEventTypes,
   toOnBusy,
   toPaths,
+  toSteps,
 } from "./orchestrator/params.js";
 import type { PipelineConfig } from "./orchestrator/types.js";
 
@@ -142,12 +143,23 @@ export function parsePipelines(raw: unknown): Record<string, PipelineConfig> {
   const out: Record<string, PipelineConfig> = {};
   for (const [name, value] of Object.entries(raw as Record<string, unknown>)) {
     const p = (value ?? {}) as Record<string, unknown>;
-    if (!Array.isArray(p.actions) || p.actions.some((a) => typeof a !== "string")) {
-      throw new Error(`pipeline "${name}" 缺少 actions（字符串数组）`);
-    }
     const at = (key: string): string => `pipelines.${name}.${key}`;
+    // actions 与 steps 至少一个非空（D12）：actions 是逗号分隔面（兼容），
+    // steps 是声明式步骤列表（一元素一算子 spec，不切分）；两者皆缺/皆空 = 无算子管道，声明期报错。
+    if (
+      p.actions !== undefined &&
+      (!Array.isArray(p.actions) || p.actions.some((a) => typeof a !== "string"))
+    ) {
+      throw new Error(`pipeline "${name}" 的 actions 需字符串数组`);
+    }
+    const steps = toSteps(p.steps, at("steps"));
+    const actions = p.actions as string[] | undefined;
+    if ((!actions || actions.length === 0) && (!steps || steps.length === 0)) {
+      throw new Error(`pipeline "${name}" 缺少 actions 或 steps（字符串数组，至少其一）`);
+    }
     out[name] = {
-      actions: p.actions as string[],
+      actions,
+      steps,
       on: toEventTypes(p.on, at("on")),
       paths: toPaths(p.paths, at("paths")),
       where: typeof p.where === "string" ? p.where : undefined,

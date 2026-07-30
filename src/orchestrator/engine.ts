@@ -108,8 +108,8 @@ export class Orchestrator {
 
       // 注册内建算子（幂等：重复调仅覆盖同名注册，不会出错）
       registerBuiltinOps();
-      // 解析 action tokens 为 Op 实例
-      const ops = pipeline.actions.map((token) => resolve(token));
+      // 解析 action tokens 为 Op 实例；steps（声明式步骤列表，D12）存在时优先于逗号分隔面的 actions
+      const ops = (pipeline.steps ?? pipeline.actions ?? []).map((token) => resolve(token));
       // 投影 ChangeEvent[] → Row[]
       const rows: Row[] = routed.map((e) => ({
         path: e.path,

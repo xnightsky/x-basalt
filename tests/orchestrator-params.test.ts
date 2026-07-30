@@ -211,7 +211,71 @@ test("PC-1c Given PIPE_KEYS When 对照配置段字段 Then 一一对应（use �
     "on-error",
     "paths",
     "refresh-index",
+    "step",
     "use",
     "where",
   ]);
+});
+
+// --- S4 片四：声明式步骤列表（--pipe step= ⟷ 配置段 steps，D12）---
+// 动机：片二/三算子参数天然含逗号，逗号分隔面把单条 spec 劈碎；step/steps 一元素一算子，无分隔符问题。
+
+/** 带 steps 的配置基底（声明式链，spec 内含逗号——actions= 表达不了的形态）。 */
+const DECL_BASE: Record<string, PipelineConfig> = {
+  decl: {
+    steps: ['filter tags contains "a,b"', "limit 3"],
+    dryRun: true,
+  },
+};
+
+test("S4 Given 可重复 --pipe step=（含逗号 spec）When resolvePipelineParams Then 按出现顺序成链、不切分", () => {
+  const p = resolvePipelineParams(
+    [
+      'step=query LIST FROM "notes" WHERE contains(tags, "a")',
+      'step=filter tags contains "a,b"',
+      "step=limit 5",
+    ],
+    { apply: false },
+  );
+  assert.deepEqual(p.steps, [
+    'query LIST FROM "notes" WHERE contains(tags, "a")',
+    'filter tags contains "a,b"',
+    "limit 5",
+  ]);
+  // 只给 step 时不强求 actions（引擎消费 steps ?? actions）。
+  assert.equal(p.actions, undefined);
+});
+
+test("S4 Given 命令行 step 与 actions 同给 When resolvePipelineParams Then 同来源内 steps 优先（actions 原样保留）", () => {
+  const p = resolvePipelineParams(["actions=index", "step=lint"], { apply: false });
+  assert.deepEqual(p.steps, ["lint"]);
+  assert.deepEqual(p.actions, ["index"]);
+});
+
+test("S4 Given use= 基底带 steps When resolvePipelineParams Then 沿用基底 steps", () => {
+  const p = resolvePipelineParams(["use=decl"], { apply: false, pipelines: DECL_BASE });
+  assert.deepEqual(p.steps, ['filter tags contains "a,b"', "limit 3"]);
+});
+
+test("S4 Given use= 基底带 steps 且命令行再给 step When resolvePipelineParams Then 命令行 step 覆盖基底 steps", () => {
+  const p = resolvePipelineParams(["use=decl", "step=lint"], {
+    apply: false,
+    pipelines: DECL_BASE,
+  });
+  assert.deepEqual(p.steps, ["lint"]);
+});
+
+test("S4 Given 命令行显式给 actions= 覆盖带 steps 的基底 When resolvePipelineParams Then 命令行形态生效、基底 steps 不沿用", () => {
+  // 链形态选择规则（D12 细化）：命令行显式给出的链（任一形态）整体覆盖基底链；
+  // 否则「steps 存在时优先」会让用户显式写的 actions= 被基底 steps 静默吞掉。
+  const p = resolvePipelineParams(["use=decl", "actions=index"], {
+    apply: false,
+    pipelines: DECL_BASE,
+  });
+  assert.equal(p.steps, undefined);
+  assert.deepEqual(p.actions, ["index"]);
+});
+
+test("S4 Given 既无 actions 也无 steps When resolvePipelineParams Then 报错并指路三种写法", () => {
+  assert.throws(() => resolvePipelineParams([], { apply: false }), /actions.*step.*use/s);
 });

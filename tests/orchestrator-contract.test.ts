@@ -5,13 +5,16 @@ import { join } from "node:path";
 import { test } from "node:test";
 import { VaultIndexer } from "../src/indexer/index.js";
 import { parseAction } from "../src/orchestrator/actions.js";
+import { Orchestrator } from "../src/orchestrator/engine.js";
 import { registerBuiltinOps } from "../src/orchestrator/ops.js";
+import { resolvePipelineParams } from "../src/orchestrator/params.js";
 import { resolve } from "../src/orchestrator/registry.js";
 import { runOpPipeline, runPipeline } from "../src/orchestrator/run.js";
 import type {
   ActionContext,
   ChangeEvent,
   OpContext,
+  PipelineConfig,
   Row,
   RunReport,
 } from "../src/orchestrator/types.js";
@@ -202,4 +205,54 @@ test("A3 ChangeEvent 类型仍可导出引用", () => {
   const row: Row = { path: "c.md", fields: {} };
   assert.equal(row.event, undefined);
   assert.deepEqual(row.fields, {});
+});
+
+// === S4 片四：actions 与 steps 两种写法对拍（D12 / §11-5）===
+// 验收：同一算子链分别用 actions= 与 step= 表达 → 两份 RunReport 既有字段逐字段相等；
+// 含逗号参数的算子在 steps 下正确、在 actions 下按既有行为报错——差异钉成契约而非暗坑。
+
+/** 经 Orchestrator.runBatch 跑一条管道（与 CLI run 同一入口），返回 RunReport。 */
+async function runViaOrchestrator(
+  dir: string,
+  vaultFiles: Record<string, string>,
+  pipeline: PipelineConfig,
+): Promise<RunReport> {
+  const orch = new Orchestrator({ vaultPath: dir, dbPath: join(dir, "i.db") });
+  try {
+    const events: ChangeEvent[] = Object.keys(vaultFiles).map((p) => ({ path: p, type: "change" }));
+    return await orch.runBatch(events, pipeline);
+  } finally {
+    orch.close();
+    rmSync(dir, { recursive: true, force: true });
+  }
+}
+
+test("S4 对拍: 同一算子链 actions= vs step= → 两份 RunReport 既有字段逐字段相等", async () => {
+  const files = {
+    "a.md": "---\ntags: [pkm]\n---\nA\n",
+    "b.md": "---\ntags: [dev]\n---\nB\n",
+  };
+  const chain = "set type=note";
+  const viaActions = resolvePipelineParams([`actions=${chain}`], { apply: false });
+  const viaSteps = resolvePipelineParams([`step=${chain}`], { apply: false });
+  const [dir1, dir2] = mkPair(files);
+  const reportA = await runViaOrchestrator(dir1, files, viaActions);
+  const reportB = await runViaOrchestrator(dir2, files, viaSteps);
+  compareReports(reportA, reportB, "S4-actions-vs-steps");
+});
+
+test("S4 契约: 含逗号 spec 在 step= 下整条保留可 resolve；在 actions= 下按既有行为劈碎报错", () => {
+  // filter 表达式子集是 <field> <op> <value>（==/!=/>/…，无 contains——TODO 举例与实现不符，
+  // 换用等值比较 + 含逗号字符串字面量，同样命中「引号内逗号被劈」的分隔符缺口）。
+  const spec = 'filter status == "a,b"';
+  // step=：一 flag 一算子，不切分——含逗号 spec 完整抵达 registry。
+  const viaSteps = resolvePipelineParams([`step=${spec}`], { apply: false });
+  assert.deepEqual(viaSteps.steps, [spec]);
+  resolve(spec); // 不抛即正确（filter 是片三已注册算子）
+
+  // actions=：splitTopLevel 只认括号不认引号（既有行为，D5 不变）→ 链被劈成两段，
+  // 后半段被当算子名 resolve → 报「未知操作」（是报错不是静默，能力缺口以此形态暴露）。
+  const viaActions = resolvePipelineParams([`actions=${spec}`], { apply: false });
+  assert.deepEqual(viaActions.actions, ['filter status == "a', 'b"']);
+  assert.throws(() => resolve('b"'), /未知操作/);
 });

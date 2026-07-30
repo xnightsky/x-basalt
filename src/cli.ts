@@ -271,7 +271,7 @@ program
   )
   .option(
     "--pipe <kv>",
-    "用管道处理 scan 出的变更（key=value 可重复：use/actions/where/paths/on/concurrency/debounce/if-exists/on-error/on-busy）",
+    "用管道处理 scan 出的变更（key=value 可重复：use/actions/step/where/paths/on/concurrency/debounce/if-exists/on-error/on-busy）",
     collectPipe,
     [] as string[],
   )
@@ -634,7 +634,7 @@ program
   )
   .option(
     "--pipe <kv>",
-    "管道参数 key=value（可重复）：use/actions/where/paths/on/concurrency/debounce/if-exists/on-error/on-busy",
+    "管道参数 key=value（可重复）：use/actions/step/where/paths/on/concurrency/debounce/if-exists/on-error/on-busy",
     collectPipe,
     [] as string[],
   )
@@ -701,7 +701,7 @@ program
   .option("--on-change <cmd>", "变更时执行的命令模板（{file} 占位；可由配置 onChange 提供）")
   .option(
     "--pipe <kv>",
-    "用管道维护（key=value 可重复：use/actions/where/paths/on/concurrency/debounce/if-exists/on-error/on-busy）；替代 --on-change 裸 shell",
+    "用管道维护（key=value 可重复：use/actions/step/where/paths/on/concurrency/debounce/if-exists/on-error/on-busy）；替代 --on-change 裸 shell",
     collectPipe,
     [] as string[],
   )
