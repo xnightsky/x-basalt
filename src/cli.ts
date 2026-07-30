@@ -23,8 +23,13 @@ import {
   setMeta,
   unsetMeta,
 } from "./meta/index.js";
-import { Orchestrator } from "./orchestrator/index.js";
-import type { EventType, PipelineConfig, RunReport } from "./orchestrator/index.js";
+import {
+  assertPipedStdin,
+  Orchestrator,
+  readPathList,
+  resolvePipelineParams,
+} from "./orchestrator/index.js";
+import type { PipelineConfig, RunReport } from "./orchestrator/index.js";
 import { runLinksCheck, runLinksSuggest } from "./links/index.js";
 import { renderHuman } from "./links/report.js";
 import { runLint } from "./lint/index.js";
@@ -188,63 +193,14 @@ function collectPipe(v: string, prev: string[]): string[] {
   return [...prev, v];
 }
 
-/** 逗号分隔串 → trim 去空的数组（管道值如 actions/on/paths）。 */
-function splitList(s: string): string[] {
-  return s
-    .split(",")
-    .map((x) => x.trim())
-    .filter(Boolean);
-}
-
 /**
  * 解析统一管道参数 `--pipe k=v`（可重复）+ `--apply`，产出 PipelineConfig。
- * 次级 key：`use`（从配置 pipelines.<name> 加载作基底）/ actions / where / paths / on / concurrency / if-exists。
- * 命令行是规范落地、配置段是命名快照——`use` 加载后其余 k=v 覆盖；纯命令行即可自包含、不依赖配置。
- * scan/run/watch 三命令共用本解析（命令只决定「源」）。
+ * 薄壳：只把本进程的配置 `pipelines` 段喂给 orchestrator/params 的共用解析器
+ * （解析/校验是管道语义，属 orchestrator；CLI 不留业务逻辑）。
+ * scan/run/watch 三命令共用本解析——命令只决定「源」。
  */
 function resolvePipeline(pipeFlags: string[], apply: boolean): PipelineConfig {
-  const kv: Record<string, string> = {};
-  for (const p of pipeFlags) {
-    const i = p.indexOf("=");
-    if (i <= 0) throw new Error(`--pipe 需 key=value 形式，得到 "${p}"`);
-    kv[p.slice(0, i).trim()] = p.slice(i + 1);
-  }
-  // use=<name>：从配置 pipelines 段加载作基底，其余 --pipe 覆盖它。
-  let base: PipelineConfig | undefined;
-  if (kv.use !== undefined) {
-    base = config.pipelines?.[kv.use];
-    if (!base) {
-      const known = Object.keys(config.pipelines ?? {}).join(", ") || "无";
-      throw new Error(`未知管道 "${kv.use}"（配置 pipelines 段；已知：${known}）`);
-    }
-  }
-  const actions = kv.actions !== undefined ? splitList(kv.actions) : base?.actions;
-  if (!actions || actions.length === 0) {
-    throw new Error(
-      "缺少管道动作：用 --pipe actions=index,normalize（内联）或 --pipe use=<配置管道>",
-    );
-  }
-  // if-exists：rename 冲突策略（命令行覆盖配置基底）；非法值报错。
-  const ifExistsRaw = kv["if-exists"] ?? base?.ifExists;
-  if (
-    ifExistsRaw !== undefined &&
-    ifExistsRaw !== "skip" &&
-    ifExistsRaw !== "overwrite" &&
-    ifExistsRaw !== "merge"
-  ) {
-    throw new Error(`--pipe if-exists 仅接受 skip|overwrite|merge，得到 "${ifExistsRaw}"`);
-  }
-  return {
-    actions,
-    where: kv.where ?? base?.where,
-    paths: kv.paths !== undefined ? splitList(kv.paths) : base?.paths,
-    on: kv.on !== undefined ? (splitList(kv.on) as EventType[]) : base?.on,
-    concurrency: kv.concurrency !== undefined ? Number(kv.concurrency) : base?.concurrency,
-    debounce: base?.debounce,
-    onError: base?.onError,
-    dryRun: apply ? false : (base?.dryRun ?? true), // --apply 覆盖；否则配置 dryRun 或默认 true
-    ifExists: ifExistsRaw as PipelineConfig["ifExists"],
-  };
+  return resolvePipelineParams(pipeFlags, { apply, pipelines: config.pipelines });
 }
 
 const program = new Command();
@@ -306,7 +262,7 @@ program
   )
   .option(
     "--pipe <kv>",
-    "用管道处理 scan 出的变更（key=value 可重复：actions/use/where/on/concurrency/if-exists）",
+    "用管道处理 scan 出的变更（key=value 可重复：use/actions/where/paths/on/concurrency/debounce/if-exists/on-error/on-busy）",
     collectPipe,
     [] as string[],
   )
@@ -595,15 +551,20 @@ meta
 program
   .command("run")
   .description(
-    "按管道处理变更：--pipe 内联(actions=…) 或引用配置(use=…)；默认 scan 源，--pipe where=/paths= 切手动源",
+    "按管道处理变更：--pipe 内联(actions=…) 或引用配置(use=…)；默认 scan 源，--pipe where= 切 DQL 手动源，--stdin 切文件列表源",
   )
   .option(
     "--pipe <kv>",
-    "管道参数 key=value（可重复）：use/actions/where/paths/on/concurrency/if-exists",
+    "管道参数 key=value（可重复）：use/actions/where/paths/on/concurrency/debounce/if-exists/on-error/on-busy",
     collectPipe,
     [] as string[],
   )
   .option("--apply", "写动作落盘（默认 dry-run 只预览）", false)
+  .option(
+    "--stdin",
+    "从 stdin 逐行读文件列表作手动源（原生管道；跳空行与 # 注释）——与 --pipe 正交",
+    false,
+  )
   .option(
     "--vault <path>",
     "Vault 目录（可多个，重复 --vault；可回退配置 vault）",
@@ -616,6 +577,7 @@ program
     async (opts: {
       pipe: string[];
       apply: boolean;
+      stdin: boolean;
       vault: string[];
       db?: string;
       json: boolean;
@@ -627,14 +589,23 @@ program
       );
       const dbPath = opts.db ?? config.db ?? DEFAULT_DB;
       const pipeline = resolvePipeline(opts.pipe, opts.apply);
+      // 原生管道（spec §8.3）：先把 stdin 读到 EOF 再建编排器，避免上游未就绪时占着索引连接。
+      let stdinPaths: string[] | undefined;
+      if (opts.stdin) {
+        assertPipedStdin(process.stdin.isTTY);
+        stdinPaths = await readPathList(process.stdin);
+      }
       const orch = new Orchestrator({ vaultPath, dbPath });
       try {
-        // 源：--pipe where= → DQL 手动源；否则默认 scan 源。
-        // 注：--pipe paths= 是 glob 路由过滤（在 runBatch 内 matchEvent 生效），不作源；显式文件列表源属正交的 stdin 设计（后续）。
+        // 源三选一（命令只决定「源」）：--stdin 文件列表 → --pipe where= 的 DQL → 默认 scan diff。
+        // --pipe paths= 始终只是 glob 路由过滤（runBatch 内 matchEvent 生效），不作源——显式文件列表源归 --stdin（§8.1/§8.3）。
+        // --stdin 与 where= 同给时：stdin 供源、where 退化为语义过滤（runBatch 内按索引筛）。
         const report =
-          pipeline.where !== undefined
-            ? await orch.runManual(pipeline, { dql: pipeline.where })
-            : await orch.runScan(pipeline);
+          stdinPaths !== undefined
+            ? await orch.runManual(pipeline, { paths: stdinPaths })
+            : pipeline.where !== undefined
+              ? await orch.runManual(pipeline, { dql: pipeline.where })
+              : await orch.runScan(pipeline);
         reportRun(report, "run", opts.json);
       } finally {
         orch.close();
@@ -650,7 +621,7 @@ program
   .option("--on-change <cmd>", "变更时执行的命令模板（{file} 占位；可由配置 onChange 提供）")
   .option(
     "--pipe <kv>",
-    "用管道维护（key=value 可重复：actions/use/where/on/concurrency/if-exists）；替代 --on-change 裸 shell",
+    "用管道维护（key=value 可重复：use/actions/where/paths/on/concurrency/debounce/if-exists/on-error/on-busy）；替代 --on-change 裸 shell",
     collectPipe,
     [] as string[],
   )

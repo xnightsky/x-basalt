@@ -7,7 +7,27 @@ export { Accumulator, type AccumulatorOptions } from "./accumulate.js";
 export { getAction, listActions } from "./actions.js";
 export { foldEvents } from "./dedup.js";
 export { isSelfWrite, Orchestrator, type OrchestratorOptions } from "./engine.js";
+export {
+  PIPE_KEYS,
+  parsePipeFlags,
+  resolvePipelineParams,
+  type ResolvePipelineOptions,
+  splitTopLevel,
+  toConcurrency,
+  toDebounce,
+  toEnum,
+  toEventTypes,
+  toOnBusy,
+} from "./params.js";
 export { matchEvent, type RouteFilter, selectByDql } from "./route.js";
 export { type RunOptions, runPipeline } from "./run.js";
-export { manualSourceFromDql, manualSourceFromPaths, scanSource, watchSource } from "./sources.js";
+export {
+  assertPipedStdin,
+  manualSourceFromDql,
+  manualSourceFromPaths,
+  parsePathList,
+  readPathList,
+  scanSource,
+  watchSource,
+} from "./sources.js";
 export type * from "./types.js";

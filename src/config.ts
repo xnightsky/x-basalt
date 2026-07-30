@@ -6,6 +6,15 @@ import { join } from "node:path";
 import { parse as parseYaml } from "yaml";
 import type { LintIgnoreConfig } from "./links/ignore.js";
 import type { ProfileConfig } from "./lint/profile.js";
+// 直接引 params（不走 orchestrator barrel）：配置加载在 CLI 启动路径上，不该顺带拉起引擎与 better-sqlite3。
+import {
+  toConcurrency,
+  toDebounce,
+  toEnum,
+  toEventTypes,
+  toOnBusy,
+  toPaths,
+} from "./orchestrator/params.js";
 import type { PipelineConfig } from "./orchestrator/types.js";
 
 // === 自建实现: 项目/全局配置加载，给 CLI 选项提供默认值（免去每次重复 --db/--vault 等）===
@@ -114,6 +123,10 @@ const GLOBAL_EXTS = ["yaml", "yml", "json5", "json"];
  * 解析配置的 pipelines 段为带缺省值的 PipelineConfig 映射（变更编排器，spec §8）。
  * 每个 pipeline 必须有 actions（字符串数组），否则报错（不静默忽略，防拼错）；
  * concurrency/onBusy/onError/dryRun 缺省填 4/queue/continue/true。
+ *
+ * 字段校验复用 `orchestrator/params`——与命令行 `--pipe k=v` 同一套校验器，
+ * 保证「配置段 ⟷ 命令行一一对应」：配置里写错的事件类型 / 并发数 / 堆积窗同样声明期报错，
+ * 不再裸转型成非法值带进执行层（错误信息带 `pipelines.<name>.<key>` 定位到具体来源）。
  */
 export function parsePipelines(raw: unknown): Record<string, PipelineConfig> {
   if (raw == null) return {};
@@ -124,17 +137,19 @@ export function parsePipelines(raw: unknown): Record<string, PipelineConfig> {
     if (!Array.isArray(p.actions) || p.actions.some((a) => typeof a !== "string")) {
       throw new Error(`pipeline "${name}" 缺少 actions（字符串数组）`);
     }
+    const at = (key: string): string => `pipelines.${name}.${key}`;
     out[name] = {
       actions: p.actions as string[],
-      on: p.on as PipelineConfig["on"],
-      paths: Array.isArray(p.paths) ? (p.paths as string[]) : undefined,
+      on: toEventTypes(p.on, at("on")),
+      paths: toPaths(p.paths, at("paths")),
       where: typeof p.where === "string" ? p.where : undefined,
-      debounce: p.debounce as PipelineConfig["debounce"],
-      concurrency: typeof p.concurrency === "number" ? p.concurrency : 4,
-      onBusy: (p.onBusy as PipelineConfig["onBusy"]) ?? "queue",
-      onError: (p.onError as PipelineConfig["onError"]) ?? "continue",
+      debounce: toDebounce(p.debounce, at("debounce")),
+      concurrency: toConcurrency(p.concurrency, at("concurrency")) ?? 4,
+      onBusy: toOnBusy(p.onBusy, at("onBusy")) ?? "queue",
+      onError: toEnum(p.onError, ["continue", "stop"] as const, at("onError")) ?? "continue",
       dryRun: typeof p.dryRun === "boolean" ? p.dryRun : true,
-      ifExists: (p.ifExists as PipelineConfig["ifExists"]) ?? "skip",
+      ifExists:
+        toEnum(p.ifExists, ["skip", "overwrite", "merge"] as const, at("ifExists")) ?? "skip",
     };
   }
   return out;

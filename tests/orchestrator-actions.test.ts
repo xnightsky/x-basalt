@@ -299,6 +299,69 @@ test("CO-D3 Given set 动作非 dryRun Then 落盘", async () => {
   }
 });
 
+// PC-3：管道 set 列表值（`[a, b]`）。计划：docs/plans/2026-07-30-pipe-closure.md。
+// 列表用方括号显式声明——裸逗号在 `--pipe actions=` 里是动作分隔符，靠 splitTopLevel 括号感知保住括号内的逗号。
+test("PC-3a Given set key=[a, b] When parseAction Then 值为列表（元素 trim、丢空尾项）", async () => {
+  const dir = mkVault({ "a.md": "---\n---\nbody\n" });
+  const indexer = new VaultIndexer({ vaultPath: dir, dbPath: join(dir, "i.db") });
+  try {
+    const a = parseAction("set tags=[pkm, note ,]");
+    assert.equal(a.name, "set");
+    assert.equal(a.write, true);
+    // M2：落盘验证列表值本身——元素 trim、空尾项丢弃，恰好两个元素（不是标量 "[pkm, note ,]"）
+    await a.run(
+      { path: "a.md", type: "change" },
+      { vaultPath: dir, indexer, dryRun: false, ifExists: "skip" },
+    );
+    const content = readFileSync(join(dir, "a.md"), "utf8");
+    // 恰好 pkm/note 两个元素（trim 生效）且其后即 frontmatter 收尾（空尾项已丢弃）
+    assert.match(content, /tags:\s*\n\s*- pkm\s*\n\s*- note\s*\n---/);
+  } finally {
+    indexer.close();
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test("PC-3a Given set key=[a, b] 非 dryRun Then 落盘为 YAML 列表", async () => {
+  const dir = mkVault({ "a.md": "---\n---\nbody\n" });
+  const indexer = new VaultIndexer({ vaultPath: dir, dbPath: join(dir, "i.db") });
+  try {
+    const r = await parseAction("set tags=[pkm, note]").run(
+      { path: "a.md", type: "change" },
+      { vaultPath: dir, indexer, dryRun: false, ifExists: "skip" },
+    );
+    assert.equal(r.changed, true);
+    const content = readFileSync(join(dir, "a.md"), "utf8");
+    assert.match(content, /tags:\s*\n\s*- pkm\s*\n\s*- note/);
+  } finally {
+    indexer.close();
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test("PC-3a Given set key=[] 非 dryRun Then 落盘为空列表", async () => {
+  const dir = mkVault({ "a.md": "---\ntags: [x]\n---\nbody\n" });
+  const indexer = new VaultIndexer({ vaultPath: dir, dbPath: join(dir, "i.db") });
+  try {
+    await parseAction("set tags=[]").run(
+      { path: "a.md", type: "change" },
+      { vaultPath: dir, indexer, dryRun: false, ifExists: "skip" },
+    );
+    const content = readFileSync(join(dir, "a.md"), "utf8");
+    assert.match(content, /tags:\s*\[\s*\]/); // 空列表，而非字符串 "[]"
+    assert.doesNotMatch(content, /"\[\]"|'\[\]'/);
+    assert.doesNotMatch(content, /\bx\b/);
+  } finally {
+    indexer.close();
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test("PC-3a Given set 标量值含空格或 key 含空格 When parseAction Then 抛错并指路列表写法", () => {
+  assert.throws(() => parseAction("set title=a b"), /\[/); // 标量不含空格；要多值请用 [a, b]
+  assert.throws(() => parseAction("set my key=v"), /set/);
+});
+
 test("CO-D3 Given unset 动作非 dryRun Then 删除键", async () => {
   const dir = mkVault({ "a.md": "---\ndraft: true\n---\nbody\n" });
   const indexer = new VaultIndexer({ vaultPath: dir, dbPath: join(dir, "i.db") });

@@ -16,10 +16,13 @@ const TSX = import.meta.resolve("tsx");
 function run(
   args: string[],
   env: Record<string, string>,
+  input?: string,
 ): { status: number; stdout: string; stderr: string } {
   const r = spawnSync(process.execPath, ["--import", TSX, CLI, ...args], {
     encoding: "utf8",
     env: { ...process.env, ...env },
+    // 给 input 即让子进程 stdin 成管道（isTTY=undefined），用于测 --stdin 原生管道源。
+    ...(input === undefined ? {} : { input }),
   });
   return { status: r.status ?? -1, stdout: r.stdout ?? "", stderr: r.stderr ?? "" };
 }
@@ -228,6 +231,175 @@ test("CLI Given --pipe if-exists=非法值 Then 报错退出码 1", () => {
     );
     assert.equal(r.status, 1);
     assert.match(r.stderr, /if-exists/);
+  } finally {
+    rmSync(vault, { recursive: true, force: true });
+  }
+});
+
+// === PC-1/PC-2/PC-3/PC-4：管道收尾（计划 docs/plans/2026-07-30-pipe-closure.md）===
+// 校验点：参数校验落到命令面（拼错/非法值不静默）、补全的内联参数生效、set 列表值、--stdin 原生管道源。
+
+test("PC-1c Given --pipe key 拼错 Then 报错退出码 1（不静默丢过滤条件）", () => {
+  const { vault, baseDir } = setup("{}\n", {});
+  try {
+    const r = run(["run", "--pipe", "actions=parse", "--pipe", "wehre=LIST", "--vault", vault], {
+      X_BASALT_DIR: baseDir,
+    });
+    assert.equal(r.status, 1);
+    assert.match(r.stderr, /未知 --pipe key/);
+  } finally {
+    rmSync(vault, { recursive: true, force: true });
+  }
+});
+
+test("PC-1b Given --pipe on=非法事件类型 Then 报错退出码 1", () => {
+  const { vault, baseDir } = setup("{}\n", {});
+  try {
+    const r = run(["run", "--pipe", "actions=parse", "--pipe", "on=modified", "--vault", vault], {
+      X_BASALT_DIR: baseDir,
+    });
+    assert.equal(r.status, 1);
+    assert.match(r.stderr, /on/);
+  } finally {
+    rmSync(vault, { recursive: true, force: true });
+  }
+});
+
+test("PC-1b Given --pipe concurrency=非数 Then 报错退出码 1", () => {
+  const { vault, baseDir } = setup("{}\n", {});
+  try {
+    const r = run(
+      ["run", "--pipe", "actions=parse", "--pipe", "concurrency=abc", "--vault", vault],
+      { X_BASALT_DIR: baseDir },
+    );
+    assert.equal(r.status, 1);
+    assert.match(r.stderr, /concurrency/);
+  } finally {
+    rmSync(vault, { recursive: true, force: true });
+  }
+});
+
+test("PC-2a Given --pipe debounce= 内联 Then 被接受（曾只能走配置段）", () => {
+  const { vault, baseDir, db } = setup("{}\n", { "a.md": "A\n" });
+  try {
+    const r = run(
+      [
+        "run",
+        "--pipe",
+        "actions=parse",
+        "--pipe",
+        "debounce=50,500",
+        "--vault",
+        vault,
+        "--db",
+        db,
+        "--json",
+      ],
+      { X_BASALT_DIR: baseDir },
+    );
+    assert.equal(r.status, 0, r.stderr);
+    assert.equal(JSON.parse(r.stdout).total, 1);
+  } finally {
+    rmSync(vault, { recursive: true, force: true });
+  }
+});
+
+test("PC-2a Given --pipe on-busy=restart Then 报「尚未实现」退出码 1（不静默按 queue 跑）", () => {
+  const { vault, baseDir } = setup("{}\n", {});
+  try {
+    const r = run(
+      ["run", "--pipe", "actions=parse", "--pipe", "on-busy=restart", "--vault", vault],
+      { X_BASALT_DIR: baseDir },
+    );
+    assert.equal(r.status, 1);
+    assert.match(r.stderr, /尚未实现/);
+  } finally {
+    rmSync(vault, { recursive: true, force: true });
+  }
+});
+
+test("PC-3a Given --pipe actions=\"set k=[a, b],index\" Then 列表值落盘且括号内逗号不切碎", () => {
+  const { vault, baseDir, db } = setup("{}\n", { "a.md": "---\n---\nbody\n" });
+  try {
+    const r = run(
+      [
+        "run",
+        "--pipe",
+        "actions=set tags=[pkm, note],index",
+        "--apply",
+        "--vault",
+        vault,
+        "--db",
+        db,
+        "--json",
+      ],
+      { X_BASALT_DIR: baseDir },
+    );
+    assert.equal(r.status, 0, r.stderr);
+    const content = readFileSync(join(vault, "a.md"), "utf8");
+    assert.match(content, /tags:\s*\n\s*- pkm\s*\n\s*- note/);
+  } finally {
+    rmSync(vault, { recursive: true, force: true });
+  }
+});
+
+test("PC-4b Given run --stdin 喂文件列表 Then 作手动源（跳空行与 # 注释）", () => {
+  const { vault, baseDir, db } = setup("{}\n", { "a.md": "A\n", "b.md": "B\n", "c.md": "C\n" });
+  try {
+    const r = run(
+      ["run", "--stdin", "--pipe", "actions=parse", "--vault", vault, "--db", db, "--json"],
+      { X_BASALT_DIR: baseDir },
+      "a.md\n\n# 注释：跳过\nb.md\n",
+    );
+    assert.equal(r.status, 0, r.stderr);
+    assert.equal(JSON.parse(r.stdout).total, 2); // c.md 未在列表里 → 不处理
+  } finally {
+    rmSync(vault, { recursive: true, force: true });
+  }
+});
+
+test("PC-4b Given run --stdin 空输入 Then total=0 且不挂起", () => {
+  const { vault, baseDir, db } = setup("{}\n", { "a.md": "A\n" });
+  try {
+    const r = run(
+      ["run", "--stdin", "--pipe", "actions=parse", "--vault", vault, "--db", db, "--json"],
+      { X_BASALT_DIR: baseDir },
+      "",
+    );
+    assert.equal(r.status, 0, r.stderr);
+    assert.equal(JSON.parse(r.stdout).total, 0);
+  } finally {
+    rmSync(vault, { recursive: true, force: true });
+  }
+});
+
+test("PC-4b Given run --stdin 同时给 where= Then stdin 供源、where 退化为语义过滤", () => {
+  const { vault, baseDir, db } = setup("{}\n", {
+    "a.md": "---\ntags: [pkm]\n---\nA\n",
+    "b.md": "B\n",
+  });
+  try {
+    const idx = run(["index", vault, "--db", db], { X_BASALT_DIR: baseDir });
+    assert.equal(idx.status, 0, idx.stderr);
+    const r = run(
+      [
+        "run",
+        "--stdin",
+        "--pipe",
+        "actions=parse",
+        "--pipe",
+        "where=LIST FROM #pkm",
+        "--vault",
+        vault,
+        "--db",
+        db,
+        "--json",
+      ],
+      { X_BASALT_DIR: baseDir },
+      "a.md\nb.md\n",
+    );
+    assert.equal(r.status, 0, r.stderr);
+    assert.equal(JSON.parse(r.stdout).total, 1); // stdin 给两个，where 只留 a.md
   } finally {
     rmSync(vault, { recursive: true, force: true });
   }

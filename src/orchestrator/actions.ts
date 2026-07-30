@@ -94,8 +94,8 @@ function applyActionOf(profile: string): Action {
   };
 }
 
-/** set <key>=<value>：对每个文件设属性（值按 auto 保守推断，守 Norway）。 */
-function setActionOf(key: string, rawValue: string): Action {
+/** set <key>=<value>：对每个文件设属性（值已在声明期 coerce，见 {@link parseSetValue}）。 */
+function setActionOf(key: string, value: unknown): Action {
   return {
     name: "set",
     write: true,
@@ -103,7 +103,7 @@ function setActionOf(key: string, rawValue: string): Action {
       if (ev.type === "unlink")
         return { action: "set", path: ev.path, changed: false, skipped: true };
       const abs = ctx.indexer.toAbsolute(ev.path);
-      const r = editMeta(abs, (d) => setMeta(d, key, coerceValue(rawValue, "auto")), {
+      const r = editMeta(abs, (d) => setMeta(d, key, value), {
         dryRun: ctx.dryRun,
       });
       const changed = r.changed && !r.dryRun;
@@ -211,6 +211,35 @@ export function applyRenamePolicy(
 }
 
 /**
+ * 解析管道 `set` 的值：`[a, b]` → 列表，其余 → 标量（auto 保守推断，守 Norway）。
+ *
+ * 为什么用方括号显式声明列表：在 `--pipe actions=a,b` 里裸逗号是**动作分隔符**，
+ * 不能同时兼任列表分隔符；方括号既自描述（同 YAML flow 序列）又能被
+ * `orchestrator/params` 的 `splitTopLevel` 括号感知切分保住括号内的逗号。
+ * 标量仍禁空格（token 之间靠空格分参数），要多值请用列表写法。
+ *
+ * @param raw - 动作 token 里 `key=` 之后的原文（已 trim）
+ * @returns 列表（元素 trim、丢空项）或标量值
+ *
+ * @behavior
+ * Given 值形如 `[a, b]`
+ * When parseSetValue
+ * Then 产出字符串列表，落盘为 YAML 列表（`[]` 即空列表）
+ *
+ * @behavior
+ * Given 标量值含空格（如 `set title=a b`）
+ * When parseSetValue
+ * Then 抛错并指路列表写法，而非把 `b` 当成下一个参数静默丢弃
+ */
+function parseSetValue(raw: string): unknown {
+  if (raw.startsWith("[") && raw.endsWith("]")) return coerceValue(raw.slice(1, -1), "list");
+  if (/\s/.test(raw)) {
+    throw new Error(`set 的标量值不含空格（多值请写 [a, b]），得到 "${raw}"`);
+  }
+  return coerceValue(raw, "auto");
+}
+
+/**
  * 解析一个动作 token（动词 + 空格分隔参数）成绑定参数的 Action。
  * 无参动作（index/normalize/parse）复用现有单例；带参写动作（apply/set/unset/rename）按工厂构造。
  * 未知动词 / 参数个数不符 / set 缺 `=` 均抛错（声明期失败，不静默）。
@@ -219,6 +248,7 @@ export function applyRenamePolicy(
  * @behavior Given 无参动作却带了参数 When parseAction Then 抛错
  * @behavior Given "apply <profile>" When parseAction Then 校验 profile 存在（getProfile）后返回 apply 动作
  * @behavior Given "set key=value" When parseAction Then 返回 set 动作；缺 `=` 或缺 key 抛错
+ * @behavior Given "set key=[a, b]" When parseAction Then 值解析为列表（见 parseSetValue）
  * @behavior Given "unset key" / "rename old new" 参数个数不符 When parseAction Then 抛错
  * @behavior Given 未知动词 When parseAction Then 抛错并列可用动词
  */
@@ -237,9 +267,13 @@ export function parseAction(token: string): Action {
       getProfile(args[0]!); // 校验存在，未知则抛错列可用名
       return applyActionOf(args[0]!);
     case "set": {
-      const eq = args.length === 1 ? args[0]!.indexOf("=") : -1;
-      if (eq <= 0) throw new Error(`set 需 key=value（值为标量、不含空格）：set <key>=<value>`);
-      return setActionOf(args[0]!.slice(0, eq), args[0]!.slice(eq + 1));
+      // 不按空格切参数：列表值 `[a, b]` 内允许空格，故取动词后的整段原文再切 `=`。
+      const rest = token.trim().slice(verb.length).trim();
+      const eq = rest.indexOf("=");
+      if (eq <= 0) throw new Error(`set 需 key=value：set <key>=<value>（列表值写 [a, b]）`);
+      const key = rest.slice(0, eq).trim();
+      if (key === "" || /\s/.test(key)) throw new Error(`set 的 key 不含空格，得到 "${key}"`);
+      return setActionOf(key, parseSetValue(rest.slice(eq + 1).trim()));
     }
     case "unset":
       if (args.length !== 1) throw new Error(`unset 需 1 个 key：unset <key>`);

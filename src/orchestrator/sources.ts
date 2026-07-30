@@ -28,6 +28,56 @@ export function manualSourceFromPaths(paths: string[]): ChangeEvent[] {
   return paths.map((path): ChangeEvent => ({ path, type: "change" }));
 }
 
+/**
+ * 原生管道（stdin）源的行解析（spec §8.3）：文本 → vault 相对路径列表。
+ *
+ * 边界：按行 trim、跳空行与 `#` 注释行；**不按空格切**（文件名可含空格）；
+ * **不猜 JSON**——结构化输入先用 `jq` 抽路径，保持单一职责（例见 guides/commands.md）。
+ * 路径合法性不在此校验：不存在的路径由动作层如实上报 failed，源层不预判。
+ *
+ * @param text - stdin 读到 EOF 的全部文本
+ * @returns 去空行与注释后的相对路径列表（可能为空）
+ */
+export function parsePathList(text: string): string[] {
+  return text
+    .split("\n")
+    .map((line) => line.trim())
+    .filter((line) => line !== "" && !line.startsWith("#"));
+}
+
+/**
+ * 读一个流到 EOF 再解析成路径列表。
+ *
+ * 为什么读完再解析：`--stdin` 的语义是「一批」——上游（如 `query --json | jq`）产出完整列表后
+ * 才作为一次手动源跑管道；边读边跑会让去重/堆积拿到残缺批。流经参数注入（不直接摸
+ * `process.stdin`）以便测试用 `Readable.from` 灌分片。
+ *
+ * @param stream - 字符串或 Buffer 分片流（CLI 传 `process.stdin`）
+ */
+export async function readPathList(stream: AsyncIterable<string | Buffer>): Promise<string[]> {
+  const chunks: string[] = [];
+  for await (const chunk of stream) {
+    chunks.push(typeof chunk === "string" ? chunk : chunk.toString("utf8"));
+  }
+  return parsePathList(chunks.join(""));
+}
+
+/**
+ * `--stdin` 前置闸：stdin 是交互终端（无管道输入）时立刻报错。
+ *
+ * 为什么必须报错：终端上 stdin 永不 EOF，静默等待会表现为「命令挂住」——最难排查的一类体验。
+ *
+ * @param isTTY - `process.stdin.isTTY`（管道输入时为 undefined）
+ * @throws 当 stdin 是交互终端时抛出带示例的错误
+ */
+export function assertPipedStdin(isTTY: boolean | undefined): void {
+  if (isTTY) {
+    throw new Error(
+      '--stdin 需要管道输入（例：x-basalt query "LIST FROM #pkm" --json | jq -r \'.rows[]["file.path"]\' | x-basalt run --stdin --pipe actions=normalize）；当前 stdin 是交互终端',
+    );
+  }
+}
+
 /** 手动源（DQL）：执行 DQL 取命中文件 → change 事件批（= 原 migrate 的"语义选一批"）。 */
 export function manualSourceFromDql(engine: DataviewEngine, dql: string): ChangeEvent[] {
   return [...selectByDql(engine, dql)].map((path): ChangeEvent => ({ path, type: "change" }));
