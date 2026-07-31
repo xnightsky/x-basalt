@@ -7,8 +7,8 @@ tags:
   - index
   - usage
   - x-basalt
-timestamp: 2026-07-31T04:39:21Z
-sha256: 11a425524bf8b28cde83fcdd66893752ddbddd2070ea8e9ce42713ce868f8653
+timestamp: 2026-07-31T07:44:42Z
+sha256: b0eae0a1a44da9fa8b0ff60c6ea86428a174a491591f47db478508b91c6ae4f7
 ---
 # 怎么用 x-basalt
 
@@ -43,6 +43,7 @@ x-basalt scan ./my-vault                        # 笔记改了之后增量重扫
 | --- | --- |
 | 按任务选命令（含常见走错的坑） | [玩法](playbooks.md) |
 | 让 AI 自己选（机读摘要，~1.8 KB） | `x-basalt skills get summary` |
+| **在自己的项目里接入、给 AI 写提示词** | [接入你的仓库](adopt.md) |
 
 ### 查笔记
 
