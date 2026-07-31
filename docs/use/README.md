@@ -7,8 +7,8 @@ tags:
   - index
   - usage
   - x-basalt
-timestamp: 2026-07-30T16:43:06Z
-sha256: 51be3b8c600662b3c5a5b4e987b178b25050a3e651770be202ebaf18f17624a6
+timestamp: 2026-07-31T04:39:21Z
+sha256: 11a425524bf8b28cde83fcdd66893752ddbddd2070ea8e9ce42713ce868f8653
 ---
 # 怎么用 x-basalt
 
@@ -36,6 +36,13 @@ x-basalt scan ./my-vault                        # 笔记改了之后增量重扫
 > 不想每次敲 `--db` / vault 路径？写个 `.x-basalt/config.yaml` → [配置](config.md)
 
 ## 我想……
+
+### 不确定该用哪个命令
+
+| | |
+| --- | --- |
+| 按任务选命令（含常见走错的坑） | [玩法](playbooks.md) |
+| 让 AI 自己选（机读摘要，~1.8 KB） | `x-basalt skills get summary` |
 
 ### 查笔记
 

@@ -4,6 +4,17 @@
 
 ## [Unreleased]
 
+### Changed
+
+- **运行时说明书拆成「摘要 + 三篇正文」，`core` 21.4KB → 17.0KB** —— 此前只有「20 行触发器 skill」和「~21KB 全量 `core`」两档，中间没有一格：想改个 frontmatter 也得吞全文；而 `recall` 的返回单位是**整篇**（`skills recall meta` 输出 30KB，比 `get core` 还多 40%，因为把 `core` 与 `obsidian-base-spec` 一起吐）。更要命的是**召回的前提是知道有什么可召回**——不知道 `run --pipe` 存在的 AI 永远不会去 `recall pipeline`，只会逐个文件调 `meta set`。
+  - 新增 **`summary`**（~1.8KB，英文）：三条 rule 一一对齐三篇正文，每条一屏内说清「这组能干什么」并以 `chat:` 一句标明该组在 chat 侧的三态（有同名工具 / 没有 / 明令禁止）。**只指路不重抄参数与文法**——它一旦超过 ~2KB 就是抄多了。用英文是因为读者主要是 AI，而命令名/算子名本就是英文，中英混排会为同一概念产生两个 token 形态。
+  - 新增 **`pipe`**（~5KB）：`run --pipe` 从 `core` 分出（原单条 2139B，是 `core` 里最大的一条，比第二名多 70%）。参数面与三种源、算子链、写与索引刷新各成一条；`scan --pipe` / `watch --pipe` 共用同一套语义也在此说明。`core` 只留一行指路。
+  - 新增 **`chat`**（~4KB）：自然语言路径从 `core` 分出——调用形态、15 个内部工具与 CLI 命令的对应关系、chat 侧**没有**（`index`/`base`）或**禁止**（`watch`，会挂死会话）的能力、`AI_GATEWAY` 配置与安全模型。CLI 直调场景这些一个字都用不上。
+  - **召回按 triggers 分层**：五篇 triggers 刻意不重叠（总览词→`summary`、管道词→`pipe`、AI 词→`chat`、说明书词→`core`、语法词→`obsidian-base-spec`），于是 `recall 批量` 只吐 ~5KB 的 `pipe` 而非 `core` 全文。召回粒度靠分流实现，**未改 Fuse、未做条目级切分**。
+  - **零代码改动**：`src/` 相对上一版逐字节不变。`loadDir` 本就加载目录下全部 `*.json5`，新增篇自动可用；摘要的排版靠 description 的写法适配既有渲染（首行作三级标题、清单落正文），没有为它加字段或改渲染器。
+  - 修掉 `core` 中 `run` 条内重复两遍的「源三选一」段落（搬入 `pipe` 时合并）。
+  - 消费侧入口 `skills-def/cli/x-basalt/SKILL.md` 指路改为「先 `skills get summary` 挑一组 → 再取那一篇」，并点明最易漏的批量场景。
+
 ## [0.9.0] - 2026-07-31
 
 > chat `pipeline_run` 接入 `steps` 声明式步骤链（与 CLI 同规则）、管道教程 pipelines.md、base 算子缺投影改显式报错。

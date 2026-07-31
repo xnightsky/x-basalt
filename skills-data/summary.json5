@@ -1,0 +1,53 @@
+{
+  // 全库唯一的「摘要」篇：三条 rule 一一对齐三篇正文（core / pipe / chat），此外不放任何内容。
+  //
+  // 定位：回答「能干什么、这件事该去哪篇看」，不回答「怎么用」。
+  // 硬约束——**不重抄参数、选项、文法**：任何具体用法一律 `skills get <core|pipe|chat>` 现取。
+  // 本篇一旦超过 ~2KB 就说明抄多了，砍回去，别演变成第二个 core。
+  //
+  // 为什么用英文：读者主要是 AI，而命令名/算子名/字段名本就是英文，中英混排会为同一概念
+  // 产生两个 token 形态；正文三篇仍是中文，人读的入口在 docs/use/。
+  //
+  // has-chat / no-chat 不拆两份清单：每条末尾一句 `chat:` 标明该组能力在 chat 侧的三态
+  // （有同名工具 / 没有 / 明令禁止），两类消费者读同一份各取所需。
+  //
+  // 排版靠数据而非代码：renderSkill 的既有形态是「description 作三级标题、pattern 作副行」，
+  // 故 description 首行写短标题、清单跟在其后（markdown 里只有首行进标题，其余落正文）。
+  // 摘要是数据，不该为它改渲染器。JSON5 无模板字符串、也不能用 + 拼接，多行一律写在一行里用 \n。
+  //
+  // triggers 只吃「总览类」词，与三篇正文刻意不重叠（core 吃说明书词、pipe 吃管道词、
+  // chat 吃 AI 词、obsidian-base-spec 吃语法词），故 recall 一个词只落到该去的那一篇。
+  name: "summary",
+  description: "What x-basalt can do, one screen. Three groups: core (query & edit), pipe (batch), chat (natural language). Pick one, then `skills get <core|pipe|chat>` for actual usage.",
+  triggers: [
+    "summary",
+    "overview",
+    "capabilities",
+    "摘要",
+    "总览",
+    "概览",
+    "能干什么",
+    "能做什么",
+    "有什么功能",
+    "该用哪个",
+    "从哪开始",
+  ],
+  rules: [
+    {
+      pattern: "x-basalt skills get core",
+      description: "core — query & edit one vault\n\n- `index` / `scan` — build & refresh the SQLite index\n- `query` — DQL over structured fields (frontmatter/tags/links); **cannot search body text**\n- `search` — FTS5 over body text; use when you don't know which note\n- `meta` — read/write frontmatter; the only write path for a single file\n- `base` — run a `.base` view headless\n- `parse` — single-file AST\n- `watch` — daemon, re-index on change\n\nchat: same tools, except `index` and `base` (not exposed) and `watch` (**forbidden** — never returns, hangs the session).",
+    },
+    {
+      pattern: "x-basalt skills get pipe",
+      description: "pipe — batch-edit many files in one run\n\n- `run --pipe` — the only way to edit >1 file; **never loop `meta set`**\n- source — scan diff (default) / `where=<full DQL>` / `--stdin`\n- ops — `actions=` seven classic actions, `step=` full operator set\n- writes — dry-run unless `--apply`; index auto-refreshed afterwards\n\nchat: yes — `pipeline_run{where, steps}`.",
+    },
+    {
+      pattern: "x-basalt skills get chat",
+      description: "chat — drive all of the above in natural language\n\n- needs `AI_GATEWAY_API_KEY`; without it only this command is off, the rest work\n- **add `--quiet` (or `--json`) whenever a script or another AI calls it** — otherwise the whole plan→act→observe trace lands in your context\n- one-shot with an argument; omit the argument for a REPL\n\nchat: this *is* the chat path — the skill lists all 15 tools and the CLI command each maps to.",
+    },
+  ],
+  metadata: {
+    doc: "docs/use/README.md",
+    self_recall: true,
+  },
+}

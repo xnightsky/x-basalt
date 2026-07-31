@@ -1,0 +1,78 @@
+{
+  // `run --pipe` 批量管道的独立说明书，从 core 分离而来。
+  //
+  // 为什么分离：这是 core 里最大的一块（原单条 2139B，比第二名多 70%），而「批量改一批文件」
+  // 是与「查」「改单篇」并列的独立玩法——消费者要么根本用不到，要么需要完整参数面，
+  // 没有中间态。留在 core 里的结果是：只想改一个字段的人被迫吞下整套算子文法。
+  //
+  // 与 core 的分工：core 保留一行指路，不重抄任何参数/算子；本篇是 `--pipe` 的唯一真相源。
+  // triggers 吃管道词（pipe/run/批量/编排/算子/step/actions），core 不再持有这些。
+  name: "pipe",
+  description: "x-basalt run --pipe 批量管道：参数面与三种源（scan/where/stdin）、算子链（actions 七动作 + step 全集 + {{row.x}} 插值）、写动作与索引自动刷新。改动对象超过一个文件时用它，别循环调 meta set。",
+  triggers: [
+    "pipe",
+    "pipeline",
+    "run",
+    "管道",
+    "批量",
+    "批处理",
+    "编排",
+    "orchestration",
+    "migrate",
+    "step",
+    "actions",
+    "算子",
+    "apply",
+    "dry-run",
+    // 英文任务词：缺了这几个时 `recall batch` 会被 Fuse 模糊匹到 core，正好指错方向。
+    "batch",
+    "bulk",
+    "batch-edit",
+    "bulk-edit",
+    "一批",
+    "改一批",
+  ],
+  patterns: [
+    "x-basalt run --pipe actions=... [--apply]",
+    "x-basalt run --pipe where=<DQL> --pipe step=<算子> --apply",
+  ],
+  rules: [
+    {
+      pattern: "run [--pipe k=v]... [--apply] [--stdin] [--vault <path>] [--db <path>] [--json]",
+      description: "按管道处理一批变更。--pipe k=v（可重复）定义管道：use=<name> 引用配置段、actions=a,b 动作链(逗号分隔，与 step 至少其一)、step=<spec> 声明式步骤(可重复，一 flag 一算子、不切分，算子参数含顶层逗号时用它，如 step=filter status == \"a,b\"；存在时优先于 actions，配置段对应 steps 数组)、where=DQL 选文件（**须是完整 DQL，以 LIST/TABLE/TASK 开头，不能只写 FROM…/WHERE… 裸子句**）、on=类型(add/change/unlink)、paths=glob(只过滤不作源)、concurrency=N、debounce=wait,maxWait、if-exists=skip|overwrite|merge、on-error=continue|stop、on-busy=queue、refresh-index=true|false；命令行 --pipe 是规范、配置段 pipelines.<name> 是命名快照（一一对应，多词 key 命令行用 kebab-case）。逗号切分**括号感知**：actions=\"set tags=[a, b],index\"、paths=\"**/*.{md,txt}\" 都不会被切碎。未知 key 与非法值一律报错退出码 1（不静默忽略）。源三选一：默认 scan 全库 diff、--pipe where= 切 DQL 手动源、--stdin 逐行读文件列表作源（跳空行与 # 注释，不猜 JSON——用 jq 抽路径；空输入=空批；stdin 非管道则报错不挂起；与 where= 同给时 stdin 供源、where 退化为过滤）。原 migrate = run --pipe actions=… --pipe where=…。",
+      examples: [
+        'x-basalt run --pipe actions=index,normalize --pipe where="LIST FROM #pkm" --apply --vault ./vault',
+        "x-basalt run --pipe use=maintain --apply --vault ./vault",
+        "x-basalt query \"LIST FROM #pkm\" --json --vault ./vault | jq -r '.rows[][\"file.path\"]' | x-basalt run --stdin --pipe actions=normalize --apply --vault ./vault",
+      ],
+    },
+    {
+      pattern: "算子链（actions 七动作 / step 全集）",
+      description: "流程 源→去重(同文件折叠)→路由→动作链。actions 的七个经典动作：index/normalize/parse/apply/set/unset/rename。step 另支持查询/诊断/纯函数算子：query <DQL> / search <text> / base <file>#<view>（三者在链首作源、在中段作过滤+列合并；query 的 TABLE 须显式含 file.path 列，base 的 view 须在 order 投影 file.path，缺了该步显式报错）/ lint / links.check / links.suggest <file>（诊断挂 fields.diagnostics、不算失败）/ filter <field> <op> [值]（==,!=,>,>=,<,<=,exists,missing）/ limit <n> / dedup [key] / map <k>=<模板>；算子间经 Row.fields 传数据，写算子可用 {{row.x}} 插值（如 set priority={{row.formula.urgency}}，base 的 formula 计算列可经此写回 frontmatter）。**注意：上游行被滤成 0 时下游查询类算子会退化为全库源（源=忽略入参）。**完整教程见 docs/use/pipelines.md。",
+      examples: [
+        'x-basalt run --pipe step="base reports/a.base#v" --pipe step="filter formula.urgency > 4" --pipe step="set priority={{row.formula.urgency}}" --apply',
+        'x-basalt run --pipe step="query TABLE file.path FROM #draft" --pipe step="limit 10" --pipe step=normalize --apply',
+      ],
+    },
+    {
+      pattern: "写动作与索引刷新（dry-run / --apply / reindexed）",
+      description: "写动作默认 dry-run，**--apply 才落盘**；set 列表值写 [a, b]。**写动作落盘后自动把改动文件刷进索引（报告 reindexed=刷新篇数），写完可直接 query 查到新值，不必再补 index/scan 复核**；动作链自带 index 时不重复刷；只有确定稍后统一 index 才用 refresh-index=false 关掉。报告 total/changed/skipped 以文件为单位（同文件多动作只计一次），分动作明细见 byAction，steps[] 给逐步行数流水（定位行在哪一步被滤掉）。--json 报告；失败退出码 1。",
+      examples: [
+        'x-basalt run --pipe actions="set tags=[pkm, note]" --apply --vault ./vault',
+        "x-basalt run --pipe actions=normalize --json   # 不加 --apply：只预览，不落盘",
+      ],
+    },
+    {
+      pattern: "scan --pipe / watch --pipe（同一套管道，换个源）",
+      description: "三种源共享同一套 `--pipe` 语义，只是喂进来的行不同：`run` 默认 scan 全库 diff（或 where=/--stdin 切手动源）、`scan --pipe` 一次性处理本次 diff 出的变更、`watch --pipe` 常驻监听、变更即触发。写动作同样默认 dry-run、需 --apply。",
+      examples: [
+        "x-basalt scan --pipe actions=index,normalize --apply",
+        "x-basalt watch ./vault --pipe use=maintain --apply",
+      ],
+    },
+  ],
+  metadata: {
+    doc: "docs/use/pipelines.md",
+    self_recall: true,
+  },
+}

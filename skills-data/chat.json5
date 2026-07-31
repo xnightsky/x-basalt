@@ -1,0 +1,89 @@
+{
+  // chat（自然语言路径）的独立说明书，从 core 分离而来。
+  //
+  // 为什么分离：chat 讲的是**另一条路径**——工具名（meta_set/pipeline_run）、JSON 参数、
+  // AI_GATEWAY 配置、REPL——这些在「CLI 直调」场景一个字都用不上，混在 core 里是纯负担。
+  // 分离依据不是体量（chat 仅占 core 约 9%），而是语义纯度：一篇说明书不该同时讲两条路径。
+  //
+  // 与 core / pipe 的分工：本篇只写「chat 特有」的部分——工具名与参数形态、chat 侧的三态、配 key。
+  // 每个工具背后的语义一律去对应正文取（读写命令 → core，pipeline_run → pipe），不在此重抄。
+  //
+  // triggers 只吃 AI 词（chat/ai/自然语言/key/model/离线…），与 core 的说明书词、pipe 的管道词、
+  // summary 的总览词刻意不重叠——于是 `recall 配 key` 只召回本篇而非 core 全文。
+  name: "chat",
+  description: "x-basalt chat 自然语言路径：调用形态（单发/REPL/--quiet/--json）、15 个内部工具与 CLI 命令的对应关系、chat 侧没有或禁止的能力、AI_GATEWAY 配置与安全模型。CLI 直调不需要本篇。",
+  triggers: [
+    "chat",
+    "ai",
+    "AI",
+    "自然语言",
+    "聊天",
+    "对话",
+    "llm",
+    "agent",
+    "gateway",
+    "AI_GATEWAY",
+    "AI_GATEWAY_API_KEY",
+    "ollama",
+    "model",
+    "模型",
+    "离线",
+    "offline",
+    "api key",
+    "配 key",
+    "怎么配",
+    "配置 ai",
+    "repl",
+    "quiet",
+    "工具",
+    "tool",
+    "apikey",
+    "api-key",
+    "token",
+    "credential",
+  ],
+  patterns: [
+    'x-basalt chat "<自然语言>" [--quiet] [--json]  (需 AI_GATEWAY_API_KEY)',
+    "x-basalt chat   # 省略参数进 REPL",
+  ],
+  rules: [
+    {
+      pattern: 'chat ["<自然语言>"] [--model <name>] [--max-steps <n>] [--db <path>] [--vault <path>] [--quiet] [--json]',
+      description: "可选 AI 子命令：用自然语言驱动既有原语，跑 plan→act→observe 循环。带参=单发翻译执行即退；省略参数=进 REPL（quit/exit/q 退出）。**被其它 AI/脚本程序化调用时加 `--quiet`（纯答案，推荐）或 `--json`（结构化），完全隐藏 plan→act→observe 过程**；因为调用方通常会把 stdout+stderr 合并进模型上下文，过程轨迹只会白占 token。人交互/REPL 才用默认完整轨迹。**免配直调**：X_BASALT_DIR 或项目配置已设 vault 时，站 repo 根直接跑即自动解析 db/vault，无需定位/读 config，也无需手传 --vault/--db（要覆盖默认才显式传）。",
+      examples: [
+        'x-basalt chat "把 projects 下 status 为空的笔记列出来"',
+        'x-basalt chat "总结 vault 里的前端测试约定" --quiet   # 供 AI/脚本调用，只回结果',
+        'x-basalt chat "给 2024 年的周报都补上 tag weekly"',
+        "x-basalt chat   # 省略参数进 REPL，连续提问，quit/exit/q 退出",
+      ],
+    },
+    {
+      pattern: "chat 内部工具 ⟷ CLI 命令对应表",
+      description: "chat 把 CLI 能力包成 15 个工具（名字与参数形态和 CLI 不同，语义一致）：读 query{dql,offset,size} / parse{file} / read_note{file,offset,size} / scan{rehash,offset,size} / list{folder,tag,name} / search{query,offset,size} / meta_get{file,key} / skills_recall{keyword} / skills_get{name}；写 meta_set / meta_unset / meta_rename / meta_normalize / meta_apply / pipeline_run。**分页参数名与 CLI 不同**：CLI 用 `--offset/--size`，工具用 `offset/size`（默认 50、上限 500，size=0 只回 total）；计数口径本身与 CLI 一致（读 total，别全量再数），见 core 的「计数与分页」条。各工具的语义、边界、DQL 文法一律去 core 对应命令条取。",
+      examples: [
+        "// CLI: x-basalt meta set note.md status done",
+        '// chat 工具: meta_set{file:"note.md", key:"status", value:"done"}',
+      ],
+    },
+    {
+      pattern: "chat 侧没有 / 禁止的能力",
+      description: "**index —— 没有**：chat 不做全量建库，只有 scan（增量）。**base —— 没有**：`.base` view 无头查询在 chat 里没有独立工具，只能经 pipeline_run 的 `base` 算子间接用。**watch / index --watch —— 禁止**：绝不让 chat 跑常驻命令，会永不返回、把会话挂死；持续维护 vault 用独立终端的 watch，或 cron 跑 scan --pipe。**批量走 pipeline_run**：steps=['完整算子 spec', …] 一元素一步不切分，actions=[…] 是七个经典动作的简写；**changed>0 即写成功且索引已刷新**，不要再 query/scan 复核，那只是白烧步数。",
+      examples: [
+        "// 批量：pipeline_run{where:'LIST FROM \"inbox\" WHERE !type', steps:['set type=note']}",
+        "// 常驻维护不要进 chat：另开终端 x-basalt watch ./vault --pipe actions=normalize --apply",
+      ],
+    },
+    {
+      pattern: "AI_GATEWAY 配置与安全模型",
+      description: "最小可选 AI：**内核零 AI**、chat 隔离懒加载 SDK；没配 key = 本命令禁用，其余命令全功能照常（需 AI_GATEWAY_API_KEY，--model 覆盖模型）。**三个环境变量、Linux/macOS 与 Windows 各平台设法与持久化、离线本地端点（ollama 等）见 docs/use/ai-and-skills.md 第四节**，不在此重抄。安全：写动作直接落盘、无逐个确认弹窗——靠流式可观测 + Ctrl+C 中断在途 + 既有原子写（kill 不损坏文件）+ git 兜底。能力边界：当前做结构化任务（DQL/元数据/规范）与 FTS5 正文全文检索；语义向量检索未落地。",
+      examples: [
+        "export AI_GATEWAY_API_KEY=...   # Linux/macOS，持久化见 docs/use/ai-and-skills.md",
+        "x-basalt chat --model anthropic/claude-opus-4.8 \"...\"",
+      ],
+    },
+  ],
+  metadata: {
+    doc: "docs/use/ai-and-skills.md",
+    self_recall: true,
+  },
+}

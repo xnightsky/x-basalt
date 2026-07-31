@@ -158,10 +158,11 @@ test("get 不存在的名返回 undefined", () => {
   assert.equal(new SkillRecall().get("zzz-no-such-skill"), undefined);
 });
 
-test("all 含两个内置 skill", () => {
+test("all 含内置五篇（摘要 + 说明书三篇 + 基础规范）", () => {
   const names = new SkillRecall().all().map((s) => s.name);
-  assert.ok(names.includes("obsidian-base-spec"), "应含基础规范");
-  assert.ok(names.includes("core"), "应含自我说明书");
+  for (const n of ["summary", "core", "pipe", "chat", "obsidian-base-spec"]) {
+    assert.ok(names.includes(n), `内置目录应含 ${n}`);
+  }
 });
 
 test("resolvedDir 显式 skillPath 时返回该目录", () => {
@@ -194,6 +195,63 @@ test("renderSkill 把 name/description/pattern/examples 渲染为可读文本", 
   assert.match(md, /P1/, "含 rule pattern");
   assert.match(md, /规则一说明/, "含 rule description");
   assert.match(md, /ex-uno/, "含 example");
+});
+
+// 「摘要 + 三篇正文」拆分的核心契约：召回粒度靠 triggers 分层实现（总览词→summary、
+// 管道词→pipe、AI 词→chat、说明书词→core、语法词→obsidian-base-spec），
+// 而非条目级切分或改 Fuse——recall 的返回单位仍是「整篇」，只是那一篇足够小。
+// 分层一旦被破坏（如把管道词塞回 core），单次召回会重新退化成吐全文。
+test("triggers 分层：总览词只召回 summary（便宜入口，不带出任何全文）", () => {
+  const recall = new SkillRecall();
+  for (const kw of ["摘要", "总览", "能干什么"]) {
+    const names = recall.recall(kw).map((s) => s.name);
+    assert.deepEqual(names, ["summary"], `「${kw}」应只召回 summary，实际：${names.join(",")}`);
+  }
+});
+
+test("summary 显著小于它指向的任一正文篇（长到接近正文，分层就白做了）", () => {
+  const recall = new SkillRecall();
+  const size = (name: string) => renderSkill(recall.get(name)!).length;
+  const summary = size("summary");
+  for (const n of ["core", "pipe", "chat"]) {
+    assert.ok(summary < size(n), `summary(${summary}) 应小于 ${n}(${size(n)})`);
+  }
+  assert.ok(summary < size("core") / 4, "summary 相对 core 应是数量级更便宜的入口");
+});
+
+test("summary 只指路不重抄用法（抄进参数/文法就会变成第二个 core）", () => {
+  const md = renderSkill(new SkillRecall().get("summary")!);
+  for (const leak of ["--refresh-derived", "GROUP BY", "if-exists", "concurrency", "debounce"]) {
+    assert.ok(!md.includes(leak), `summary 不应重抄具体用法，但出现了「${leak}」`);
+  }
+  for (const n of ["core", "pipe", "chat"]) {
+    assert.ok(md.includes(`skills get ${n}`), `summary 应指向 ${n}`);
+  }
+});
+
+test("triggers 分层：管道词→pipe、AI 词→chat、说明书词→core，互不串台", () => {
+  const recall = new SkillRecall();
+  for (const kw of ["批量", "管道", "算子"]) {
+    assert.deepEqual(
+      recall.recall(kw).map((s) => s.name),
+      ["pipe"],
+      `「${kw}」应只召回 pipe`,
+    );
+  }
+  for (const kw of ["配 key", "ollama", "自然语言"]) {
+    assert.deepEqual(
+      recall.recall(kw).map((s) => s.name),
+      ["chat"],
+      `「${kw}」应只召回 chat`,
+    );
+  }
+  for (const kw of ["用法", "说明书", "manual"]) {
+    assert.deepEqual(
+      recall.recall(kw).map((s) => s.name),
+      ["core"],
+      `「${kw}」应只召回 core`,
+    );
+  }
 });
 
 test("renderSkillList 渲染 name 与 description 列表", () => {

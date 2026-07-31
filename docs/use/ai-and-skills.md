@@ -1,6 +1,6 @@
 ---
-timestamp: 2026-07-29T16:51:03Z
-sha256: d494ac5b994c114f07528712f92a99d0ab5eec41181998c0bc7bf9d7d44f356e
+timestamp: 2026-07-31T04:18:48Z
+sha256: 9b2d245a3ddfd9965578c572a5273e5efeee288b1826d419f74fdd0185ad569d
 type: guide
 title: 与 AI 协作：技能召回与全局使用技能
 description: x-basalt 技能召回两条路径（CLI 自助 recall 与全局 SKILL.md）及可选 chat 命令说明
@@ -24,8 +24,8 @@ x-basalt 里有三类带"skill"字样的东西，服务不同消费者：
 | 类别                           | 文件位置                       | 格式                                    | 消费者                                               | 安装方式                                           |
 | ------------------------------ | ------------------------------ | --------------------------------------- | ---------------------------------------------------- | -------------------------------------------------- |
 | **CLI 自助召回数据**           | `skills-data/*.json5`           | JSON5（随包发布）                       | `x-basalt skills` 命令（get / recall / list / path） | 无需安装，随 CLI 带入                              |
-| **项目开发技能**（`biz-*`）    | `skills-def/biz-*/SKILL.md`    | SKILL.md + frontmatter                  | 在本仓库改代码的 AI 会话                             | `pnpm skills:install` → `.claude/skills/`          |
-| **全局使用技能**（`x-basalt`） | `skills-def/x-basalt/SKILL.md` | SKILL.md + frontmatter，`scope: global` | 任意 AI 会话驱动 x-basalt CLI                        | `pnpm skills:install:global` → `~/.claude/skills/` |
+| **项目开发技能**（`biz-*`）    | `skills-def/dev/biz-*/SKILL.md`    | SKILL.md + frontmatter                  | 在本仓库改代码的 AI 会话                             | `pnpm skills:install` → `.claude/skills/`          |
+| **全局使用技能**（`x-basalt`） | `skills-def/cli/x-basalt/SKILL.md` | SKILL.md + frontmatter，`scope: global` | 任意 AI 会话驱动 x-basalt CLI                        | `pnpm skills:install:global` → `~/.claude/skills/` |
 
 **关键区别**：`skills-data/*.json5` 是 CLI **运行时读取的规范知识库**，不是 Claude 技能文件；后两者是 Claude Code 技能（SKILL.md），与 CLI 运行无关。CLI 自助（路径①）与全局技能（路径③）功能互补：前者让 CLI **自己能回答规范问题**，后者让 **AI 学会驱动这个 CLI**。
 
@@ -38,13 +38,18 @@ x-basalt 里有三类带"skill"字样的东西，服务不同消费者：
 x-basalt 随包内置一个 JSON5 规范知识库（`skills-data/*.json5`），通过 `skills get <name>`（按名取整篇）或 `skills recall <关键字>`（模糊召回）子命令查询。AI 或使用者在不打开任何文档的情况下，直接向 CLI 询问 Obsidian 语法或 DQL 规范的精确细节。
 
 ```bash
-x-basalt skills get obsidian-base-spec   # 按名取整篇 Obsidian/DQL 规范（最常用）
-x-basalt skills get core            # 取本 CLI 完整用法（自我说明书）
-x-basalt skills recall wikilink           # 模糊召回（不确定 skill 名时按关键字找）
-x-basalt skills recall dataview           # 召回 DQL 子集说明
-x-basalt skills list                      # 列出全部 skill（name — description）
-x-basalt skills path                      # 打印数据目录
+x-basalt skills get summary              # 第一步：能干什么、该看哪篇（~1.8KB，英文）
+x-basalt skills get core                 # 查与改：命令全集、DQL、meta 写侧、配置
+x-basalt skills get pipe                 # 批量：--pipe 参数面、三种源、算子链
+x-basalt skills get chat                 # 自然语言路径：工具清单、配 key、chat 侧禁止项
+x-basalt skills get obsidian-base-spec   # 按名取整篇 Obsidian/DQL 规范
+x-basalt skills recall wikilink          # 模糊召回（不确定 skill 名时按关键字找）
+x-basalt skills recall 批量              # 管道词只召回 pipe，不带出 core 全文
+x-basalt skills list                     # 列出全部 skill（name — description）
+x-basalt skills path                     # 打印数据目录
 ```
+
+**先 `get summary` 再按需深入**：摘要回答「能干什么、这件事去哪篇看」（约 1.8KB），正文回答「怎么用」。一上来取 `core` 等于为选一个方向付十倍代价——最典型的漏项是批量：改动超过一个文件应走 `run --pipe`（`skills get pipe`），而不是循环调 `meta set`。
 
 完整命令签名见 [commands.md](commands.md)。
 
@@ -84,16 +89,21 @@ OBSIDIAN_SKILL_PATH=./team-skills x-basalt skills recall wikilink
 
 也可写进配置文件（`skillPath` 键），免去每次传参，见 [configuration.md](config.md)。
 
-### 内置兜底：始终可召回的两条规范
+### 内置五篇与 triggers 分层
 
-无论外部目录是否存在或为空，以下两条规范**始终可召回**：
+内置目录随包发布五篇，触发关键字**刻意不重叠**——一个关键字只召回对应那一篇，不会一次吐出多篇全文：
 
-| 内置 skill           | 触发关键字（示例）                                                   | 内容                                       |
-| -------------------- | -------------------------------------------------------------------- | ------------------------------------------ |
-| `obsidian-base-spec` | `wikilink` · `tag` · `callout` · `task` · `frontmatter`              | Obsidian Markdown 专有语法精确规范         |
-| `x-basalt`           | `usage` · `help` · `manual` · `说明书` · `parse` · `index` · `query` | 本 CLI 自我说明书（五命令速查 + DQL 要点） |
+| 内置 skill           | 回答什么               | 触发关键字（示例）                                                  | 体量    |
+| -------------------- | ---------------------- | ------------------------------------------------------------------- | ------- |
+| `summary`            | **能干什么、该看哪篇** | `摘要` · `总览` · `能干什么` · `overview` · `capabilities`          | ~1.8 KB |
+| `core`               | 查与改**怎么用**       | `usage` · `help` · `manual` · `说明书` · `用法` · `parse` · `query` | ~17 KB  |
+| `pipe`               | 批量**怎么用**         | `批量` · `管道` · `算子` · `run` · `pipeline` · `step`              | ~5 KB   |
+| `chat`               | 自然语言路径           | `chat` · `ai` · `自然语言` · `配 key` · `ollama` · `model`          | ~4 KB   |
+| `obsidian-base-spec` | Obsidian/DQL 语法      | `wikilink` · `tag` · `callout` · `task` · `frontmatter`             | ~9 KB   |
 
-外部目录若自带同名 skill，优先使用外部版本（允许 shadow 覆盖内置）；外部目录为空/无效时，这两条从内置补回。
+这套分层是**召回粒度的实现方式**：`recall` 的返回单位是「整篇」而非「命中的段落」，所以让每篇足够小、且 triggers 各管一路，比切碎条目或改召回引擎都简单。总览词一律归 `summary`——1.8 KB 的入口，比一上来吞 `core` 便宜一个数量级。
+
+**兜底**：外部目录若自带同名 skill，优先使用外部版本（允许 shadow 覆盖内置）；外部目录为空/无效时，`obsidian-base-spec` 与 `core` 这两篇从内置补回，保证基础召回与「CLI 会讲自己的用法」永远可用。其余三篇在内置目录下自动加载，但不进兜底名单——用外部目录 shadow 时需自行提供。
 
 ### JSON5 文件结构（供自定义扩展参考）
 
@@ -124,7 +134,9 @@ OBSIDIAN_SKILL_PATH=./team-skills x-basalt skills recall wikilink
 
 ### 它是什么
 
-`skills-def/x-basalt/SKILL.md` 是一个**标准 Claude Code 技能文件**（frontmatter `scope: global`），内容是"如何用 x-basalt CLI"——命令速查、DQL 子集要点、配置方式、技能召回入口。安装后，任意 AI 会话无需预先了解这个工具，即可正确驱动它。
+`skills-def/cli/x-basalt/SKILL.md` 是一个**标准 Claude Code 技能文件**（frontmatter `scope: global`）。它**只做「触发 + 指路」**（约 20 行）——不含命令表、DQL 细节或选项说明，一律指向 `x-basalt skills` 系列现打印的内容。安装后，任意 AI 会话无需预先了解这个工具，即可知道「有这么个 CLI、该去哪问用法」。
+
+> **为什么这么薄**：命令表若在 SKILL.md 里抄一份，CLI 升级后它不会跟着变，迟早与运行时说明书不一致（二次漂移）。决策见 [`docs/design/skills-router.md`](../design/skills-router.md)。
 
 这与上面的 CLI 自助召回是**互补**关系：
 
@@ -134,16 +146,16 @@ OBSIDIAN_SKILL_PATH=./team-skills x-basalt skills recall wikilink
 ### 安装
 
 ```bash
-# 把 skills-def/x-basalt/ 安装到 ~/.claude/skills/x-basalt/ 和 ~/.agents/skills/x-basalt/（全局，影响所有 AI 会话）
+# 把 skills-def/cli/x-basalt/ 安装到 ~/.claude/skills/x-basalt/ 和 ~/.agents/skills/x-basalt/（全局，影响所有 AI 会话）
 pnpm skills:install:global
 ```
 
-安装脚本（`scripts/install-skills.mjs`）读取每个 `skills-def/<name>/SKILL.md` 的 frontmatter `scope` 字段分流，并同时装到 `.claude` 与 `.agents` 两个根（兼容不同 AI 运行时的 skill 发现路径）：
+安装脚本（`scripts/install-skills.mjs`）**按 `skills-def/` 下的目录分组分流**（`cli/` 与 `dev/`，目录即分流依据），并同时装到 `.claude` 与 `.agents` 两个根（兼容不同 AI 运行时的 skill 发现路径）：
 
-| 命令                         | 筛选条件                                   | 安装目标                                                |
-| ---------------------------- | ------------------------------------------ | ------------------------------------------------------- |
-| `pnpm skills:install`        | `scope != global`（项目开发技能，`biz-*`） | `<仓库根>/.claude/skills/` + `<仓库根>/.agents/skills/` |
-| `pnpm skills:install:global` | `scope: global`（全局使用技能）            | `~/.claude/skills/` + `~/.agents/skills/`               |
+| 命令                         | 装哪一组                                    | 安装目标                                                |
+| ---------------------------- | ------------------------------------------- | ------------------------------------------------------- |
+| `pnpm skills:install`        | `skills-def/dev/`（项目开发技能，`biz-*`）  | `<仓库根>/.claude/skills/` + `<仓库根>/.agents/skills/` |
+| `pnpm skills:install:global` | `skills-def/cli/`（消费侧入口，`x-basalt`） | `~/.claude/skills/` + `~/.agents/skills/`               |
 
 这样 `biz-*` 开发技能（改 x-basalt 源码专用）不会污染用户全局 AI 会话；全局使用技能也不会因本仓库开发活动频繁更新而干扰。
 
@@ -158,14 +170,14 @@ ls ~/.claude/skills/x-basalt/   # 应包含 SKILL.md
 
 ### 技能内容概览
 
-全局使用技能涵盖：
+薄入口只有四件事，**没有命令表**：
 
-- **何时用**：从终端 / 脚本 / AI 流程查询 Obsidian vault，不打开 App
-- **典型流程**：`index` → `query` → `scan`（按需增量）
-- **命令速查表**：`parse` / `index` / `scan` / `query` / `skills recall` / `watch`
-- **配置与基目录**：`X_BASALT_DIR`、`skillPath`、配置文件层级
-- **DQL 子集要点**：`LIST/TABLE/TASK · FROM · WHERE · SORT · LIMIT` + 隐式字段
-- **自引导**：AI 拿到概览后，遇到精确语法/边界问题被指引运行 `x-basalt skills recall <关键字>`，从 CLI 实时获取权威细节，而非依赖可能漂移的静态文档
+- **何时用**：从终端 / 脚本 / AI 流程操作 Obsidian vault，不打开 App
+- **先探测再用**：`x-basalt --version`，装不上就按常规方式干活，别强用
+- **指路顺序**：`skills get summary` 挑一组（~1.8KB）→ `skills get core|pipe|chat` 取那一篇正文 → `skills get obsidian-base-spec` 要精确文法
+- **免配直调**：`X_BASALT_DIR` 或就近配置已设 `vault` 时，站 repo 根直接跑即可，**不要去定位或 `cat` 配置文件，也不要手传 `--vault`/`--db`**
+
+**自引导**才是重点：AI 拿到的不是一份静态速查表，而是「去问 CLI 本身」的指令——用法随 CLI 版本走，静态文档不会漂移，因为它压根不承载用法。
 
 ---
 
@@ -326,13 +338,13 @@ skills-data/*.json5          ← CLI 自助召回数据（随包，运行时读�
   x-basalt skills recall <kw>   ← 使用者 / AI 在终端询问
   x-basalt skills list
 
-skills-def/x-basalt/    ← 全局 Claude 技能（教 AI 用这个 CLI）
+skills-def/cli/x-basalt/  ← 全局 Claude 技能（教 AI 用这个 CLI）
         ↓
   pnpm skills:install:global → ~/.claude/skills/x-basalt/ + ~/.agents/skills/x-basalt/
         ↓
   AI 会话自动加载 → 知道跑什么命令，遇细节再 skills recall
 
-skills-def/biz-*/       ← 项目开发技能（改 x-basalt 源码专用）
+skills-def/dev/biz-*/     ← 项目开发技能（改 x-basalt 源码专用）
         ↓
   pnpm skills:install → .claude/skills/ + .agents/skills/（仅仓库内会话）
 ```

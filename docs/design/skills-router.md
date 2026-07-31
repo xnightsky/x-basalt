@@ -7,8 +7,8 @@ tags:
   - refactor
   - architecture
   - skill-recall
-timestamp: 2026-07-15T03:33:06Z
-sha256: ca07114d899b76d9bbd5be739d19abeb27257ba2414187960b05c8ac2329e701
+timestamp: 2026-07-31T04:47:02Z
+sha256: 5d638821e6b10f84ca851ee5be216e01c36e236a954ebef163a8b456a81e10d0
 ---
 # skills-def 薄入口 + cli/dev 目录分组（对齐 x-kb 思路）· 设计
 
@@ -116,3 +116,84 @@ scope: global
 - `pnpm run test`（547 通过）、`pnpm run lint`、`pnpm run typecheck` 全绿（无测试引用 skills-def，符合预期）。`format:check` 有**预存的仓库级漂移**（16 .ts + 52 .md，与本次无关；pre-push 门禁不含 format:check）——本次所改的 `install-skills.mjs` 已确认 oxfmt-clean。
 - 仓库全局 grep 无残留 `skills get x-basalt`（历史 spec 与本设计文档的元引用除外）。
 ```
+
+
+---
+
+# 第二轮（2026-07-31）：运行时拆「摘要 + 三篇正文」
+
+> 状态：已实现 · 上一轮解决 **skills-def 侧**（外层入口 skill 的胖复制）；这一轮解决 **skills-data 侧**（运行时说明书只有「全有或全无」两档）。**本轮零代码改动**——`src/` 逐字节不变。
+
+## 问题
+
+上一轮把外层入口改薄成「触发 + 指路 → `skills get core`」后，消费链变成：
+
+```text
+20 行触发器  →  ???  →  ~21KB core 全文
+```
+
+中间那一格是空的。实测三处症状：
+
+1. **入口即全量**：想改个 frontmatter（真正需要的约 3KB）也得吞 21KB。
+2. **`recall` 的返回单位是「整篇」不是「命中段落」**：`skills recall meta` 输出 **30KB**，比 `skills get core` 的 21KB 还多 40%——它把 `core` 与 `obsidian-base-spec` 两篇一起吐了。名字听着精准，实际比直接取全文更贵。
+3. **召回的前提是「知道有什么可召回」**（最致命）：不知道 `run --pipe` 存在的 AI 永远不会去 `recall pipeline`，只会逐个文件调 `meta set`。这一条 `recall` 再怎么改都治不好。
+
+对照发现的**可见度不对称**：走 chat 的模型知道有批量能力（`pipeline_run` 的 schema 直接在上下文里，`src/chat/tools.ts`），CLI 直调的 AI 不知道（`run` 排在 core 第 12 条、埋在中间）。同一能力，两条路径可见度差一个数量级——缺的从来不是功能，是**让 CLI 那边也看得见**。
+
+## 决策
+
+### D1 · 摘要独立成篇，且**只有三条 rule**
+
+`summary`（~1.8KB，英文）三条 rule 一一对齐三篇正文：`core` / `pipe` / `chat`。**硬约束是不重抄参数、选项、文法**——任何具体用法一律 `skills get <name>` 现取；一旦超过 ~2KB 就是抄多了，砍回去。
+
+> **失败的第一版留档**：先做过一个 5.5KB 的 `playbook`——按任务组织的路由表，11 条玩法、每条带 examples。它把「常见走错提示」「参数要点」都抄了进去，实质是个**小 core**，而不是摘要。判据很简单：摘要该跟 `AGENTS.local.md` 里手写那段一个量级（十几行），5.5KB 差了三倍以上。已删除。
+
+### D2 · 英文
+
+摘要读者主要是 AI，而命令名 / 算子名 / 字段名本就是英文，中英混排会为同一概念产生两个 token 形态。**正文三篇仍是中文**，人读入口在 `docs/use/`。
+
+### D3 · has-chat / no-chat 不拆两份清单
+
+每条 rule 末尾一句 `chat:` 标明该组在 chat 侧的三态（有同名工具 / 没有 / 明令禁止），两类消费者读同一份各取所需。拆两份 = 同一份能力清单抄两遍，正是这两轮一直在消除的东西。
+
+### D4 · `pipe` 分出，`chat` 分出，`core` 只留指路
+
+- **`pipe` 分**：`run --pipe` 原为单条 2139B，是 `core` 里最大的一条（比第二名多 70%）。「批量改一批文件」与「查」「改单篇」是并列的独立玩法，消费者要么用不到、要么需要完整参数面，没有中间态。
+- **`chat` 分**：它讲的是**另一条路径**（工具名、JSON 参数、`AI_GATEWAY`、REPL），CLI 直调场景一个字用不上。
+- 两处在 `core` 各留一行指路，不重抄。`core` 由此 21.4KB → **17.0KB**。
+
+### D5 · 召回粒度靠 triggers 分层，不改 Fuse、不切条目
+
+五篇 triggers **刻意不重叠**：总览词→`summary`、管道词→`pipe`、AI 词→`chat`、说明书词→`core`、语法词→`obsidian-base-spec`。`recall` 的返回单位仍是「整篇」，但**那一篇足够小**。为此从 `core` 摘走了 AI 词与管道词。
+
+（`frontmatter` 仍会同时命中 `core` 与 `obsidian-base-spec`——它确实既是 meta 命令话题也是语法话题，两篇都相关，不视为串台。）
+
+### D6 · 摘要是**数据**，不得为它改代码
+
+本轮最重要的自我修正。第一版为了让 `playbook` 好看，加了 `SkillRule.task` 字段、`render.ts` 紧凑渲染分支、`ALWAYS_AVAILABLE` 登记、无参 `skills` 改门面（还是个 breaking）——**全部回滚**。
+
+- `loadDir` 本就读目录下全部 `*.json5`，**新增篇不需要任何登记即可 `get` / `recall`**；`ALWAYS_AVAILABLE` 只管「外部 skillPath shadow 内置」这一个边缘场景，仍保持 `["obsidian-base-spec", "core"]` 两篇。
+- 排版靠**数据写法**适配既有渲染：`renderSkill` 的形态是「description 作三级标题、pattern 作副行」，故摘要的 description **首行写短标题、清单跟在其后**（markdown 里只有首行进标题，其余落正文）。
+- 无参 `x-basalt skills` 保持 `list` 不变，不引入 breaking。摘要的发现入口就是 `list`（它的 description 自述用途）。
+
+> JSON5 是数据格式：无模板字符串、也不能用 `+` 拼接，多行一律写成单行加 `\n`。第一版两次踩到，`loadDir` 的降级机制（warn + 跳过该文件）正常生效。
+
+## 实测数据
+
+| | 改前 | 改后 |
+| --- | --- | --- |
+| 入口 | `get core` 21.4KB | `get summary` **1.8KB** |
+| `recall 批量` | 落 `core` 全文 | **4.9KB**（只 `pipe`） |
+| `recall 配 key` | 落 `core` 全文 | **4.4KB**（只 `chat`） |
+| `recall 摘要` | 无此概念 | **1.8KB**（只 `summary`） |
+| `skills get core` | 21.4KB | **17.0KB** |
+| `src/` 改动 | — | **零** |
+
+## 验收
+
+- `pnpm run typecheck` / `pnpm run lint` 绿；全量 `pnpm test` **1114 通过 / 0 失败**。
+- `git diff src/` 相对本轮开始时**无输出**——契约由测试而非代码承载。
+- 新增用例 4 条（`tests/skill.test.ts`）：内置五篇齐备、总览词只召回 `summary`、管道/AI/说明书词各归其篇互不串台、`summary` 显著小于任一正文篇（且 < `core`/4）、`summary` 不含具体选项文法（`--refresh-derived` / `GROUP BY` / `if-exists` / `concurrency` / `debounce`）且指向三篇。最后一条是「摘要不许变成第二个 core」的可执行判据。
+- 消费侧文档同批更新：`skills-def/cli/x-basalt/SKILL.md`、`docs/use/commands.md`、`docs/use/ai-and-skills.md`、`AGENTS.md`、`CHANGELOG.md`。
+
+## 补充决策（同轮，第二批）

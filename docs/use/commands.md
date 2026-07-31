@@ -1,6 +1,6 @@
 ---
-timestamp: 2026-07-30T16:42:53Z
-sha256: ce28583bb1e27a6f924517994f567069b7f05c89aa0e172c5148accf058124fd
+timestamp: 2026-07-31T04:43:38Z
+sha256: f1073545c51f2b2027d086f75dc9fe774d0c9056be42a35dcff5e091c774d25a
 type: guide
 title: 命令参考 · x-basalt
 description: x-basalt CLI 全部子命令的参数、输出形态与示例
@@ -221,6 +221,7 @@ DQL 完整语法（`FROM` / `WHERE` / `SORT` / `LIMIT` / 操作符 / 隐式字�
 
 ---
 
+
 ## `search` — 全文检索正文
 
 ```
@@ -332,11 +333,21 @@ x-basalt base views/projects.base --conformance bases-all-files-2026-07 --vault 
 x-basalt skills [list]            # 列出全部 skill（name — description）
 x-basalt skills get <name>        # 按名输出该 skill 完整内容
 x-basalt skills get --all         # 输出全部 skill
-x-basalt skills recall <keyword>  # 按关键字模糊召回
+x-basalt skills recall <keyword>  # 按关键字模糊召回（多词=并集）
 x-basalt skills path [name]       # 打印数据目录（带 name 打印该文件路径）
 ```
 
-加载 JSON5 规范文件（内置 `obsidian-base-spec` + 自我说明书 `x-basalt`），按名精确取或按关键字模糊召回。
+加载 JSON5 规范文件，按名精确取或按关键字模糊召回。内置五篇，**分工不互抄**：
+
+| 内置 skill           | 回答什么               | 体量    | 什么时候取                              |
+| -------------------- | ---------------------- | ------- | --------------------------------------- |
+| `summary`            | **能干什么、该看哪篇** | ~1.8 KB | 第一步。三组各一屏，英文                |
+| `core`               | 查与改**怎么用**       | ~17 KB  | 命令全集、DQL 子集、meta 写侧、项目配置 |
+| `pipe`               | 批量**怎么用**         | ~5 KB   | 改动对象超过一个文件时                  |
+| `chat`               | 自然语言路径怎么走     | ~4 KB   | 走 `chat` 时；CLI 直调用不上            |
+| `obsidian-base-spec` | Obsidian/DQL 语法      | ~9 KB   | 要精确文法与边界时                      |
+
+**先 `skills get summary` 再按需深入**：摘要回答「能干什么、这件事去哪篇看」，约 1.8 KB；正文回答「怎么用」。一上来取 `core` 等于为选一个方向付十倍代价。摘要**只指路不重抄参数**——它超过 2 KB 就说明抄多了。
 
 | 子命令             | 说明                                                                 |
 | ------------------ | -------------------------------------------------------------------- |
@@ -345,17 +356,21 @@ x-basalt skills path [name]       # 打印数据目录（带 name 打印该文�
 | `recall <keyword>` | Fuse.js 模糊召回（容拼写错、按相关性排序）；命中 `name` / `triggers` |
 | `path [name]`      | 打印解析出的数据目录；带 `name` 打印 `<dir>/<name>.json5`            |
 
+**召回按 triggers 分层，一个关键字只召回对应那一篇**——总览词（`摘要` / `总览` / `能干什么`）→ `summary`；管道词（`批量` / `管道` / `算子`）→ `pipe`；AI 词（`配 key` / `ollama` / `自然语言`）→ `chat`；说明书词（`用法` / `manual`）→ `core`；语法词（`wikilink` / `callout`）→ `obsidian-base-spec`。五篇的 triggers 刻意不重叠，故 `recall` 拿到的就是该看的那篇，不会一次吐出多篇全文。
+
 所有读子命令默认输出人类 / AI 可读 Markdown，加 `--json` 切换结构化 JSON。
 
 **`get <name>` 未命中**打印 `✗ 未找到名为 "<name>" 的 skill` 退出码 1；**`recall` 命中 0 条**打印 `✗ 未召回到与 "<keyword>" 相关的 skill` 退出码 1。
 
-skill 目录通过配置 `skillPath` 或环境变量 `OBSIDIAN_SKILL_PATH` 指定（命令行无单独 flag）；优先级、兜底内置 skill（`obsidian-base-spec` / `x-basalt`）详见 [ai-and-skills.md](ai-and-skills.md)，或用 `x-basalt skills path` 查看当前目录。
+skill 目录通过配置 `skillPath` 或环境变量 `OBSIDIAN_SKILL_PATH` 指定（命令行无单独 flag）；优先级、兜底内置 skill（`obsidian-base-spec` / `core`）详见 [ai-and-skills.md](ai-and-skills.md)，或用 `x-basalt skills path` 查看当前目录。
 
 **示例**
 
 ```bash
+x-basalt skills get summary              # 第一步：能干什么、去哪篇看
+x-basalt skills get pipe                 # 要批量改一批文件
+x-basalt skills recall 批量              # 只召回 pipe，不带出 core 全文
 x-basalt skills get obsidian-base-spec   # 取整篇 Obsidian/DQL 规范
-x-basalt skills recall wikilink          # 模糊召回 wikilink 规范
 x-basalt skills list --json              # 结构化列出全部 skill
 x-basalt skills path                     # 打印数据目录
 ```
