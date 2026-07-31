@@ -18,7 +18,7 @@
   // triggers 只吃「总览类」词，与三篇正文刻意不重叠（core 吃说明书词、pipe 吃管道词、
   // chat 吃 AI 词、obsidian-base-spec 吃语法词），故 recall 一个词只落到该去的那一篇。
   name: "summary",
-  description: "What x-basalt can do, one screen. Three groups: core (query & edit), pipe (batch), chat (natural language). Pick one, then `skills get <core|pipe|chat>` for actual usage.",
+  description: "What x-basalt can do, one screen. Three groups: core (query & edit), pipe (batch), chat (natural language). Pick one, then `skills get <core|pipe|chat>` for the whole page — or `skills list <name>` then `skills get <name> <id>...` to pull just the entries you need (a single entry is often <1/6 of the page).",
   triggers: [
     "summary",
     "overview",

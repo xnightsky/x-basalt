@@ -372,6 +372,17 @@ x-basalt skills get summary pipe     # 摘要里只要 pipe 那组
 
 条目按**传入顺序**输出。给了未知 id 会报错并列出该 skill 的全部可用 id，**不会静默少给**——静默少给会让调用方以为已经取全。
 
+**想看省多少就自己量**（体量随版本变，别信写死的数字）：
+
+```bash
+for a in "" "core" "core pipe"; do
+  printf "%-10s %6s B\n" "${a:-整篇}" "$(x-basalt skills get summary $a | wc -c)"
+done
+```
+
+体量阶梯（整篇 > 多条 > 单条，且单条 < 整篇 60%）由 `tests/cli.test.ts` 的用例守着，
+`pnpm test` 即回归——比例失守说明「按条取更省」这个前提已经不成立。
+
 多篇组合则用 `recall` 的多词并集：`x-basalt skills recall "批量 自然语言"` 一次拿到 `pipe` + `chat`。注意并集只累加不设上限，多词里混进说明书词会把 `core` 全文一起拽出来。
 
 **召回按 triggers 分层，一个关键字只召回对应那一篇**——总览词（`摘要` / `总览` / `能干什么`）→ `summary`；管道词（`批量` / `管道` / `算子`）→ `pipe`；AI 词（`配 key` / `ollama` / `自然语言`）→ `chat`；说明书词（`用法` / `manual`）→ `core`；语法词（`wikilink` / `callout`）→ `obsidian-base-spec`。五篇的 triggers 刻意不重叠，故 `recall` 拿到的就是该看的那篇，不会一次吐出多篇全文。

@@ -205,6 +205,19 @@ test("skills get <name> <ids...> 条级召回：只出指定条，且远小于�
   assert.doesNotMatch(one.stdout, /AI_GATEWAY_API_KEY/, "不应带出 chat 那条");
   const whole = run(["skills", "get", "summary"]);
   assert.ok(one.stdout.length < whole.stdout.length, "取一条应小于整篇");
+});
+
+// 条级召回的**收益**本身要可回归：三档体量必须单调，且单条显著小于整篇。
+// 只断言「小于」太松（差 1 字节也算过），比例阈值才守得住「按条取真的省」这个卖点。
+// 用比例而非硬编码字节数：内容随版本增删，字节数会漂，比例关系不会。
+test("条级召回体量阶梯：整篇 > 多条 > 单条，且单条 < 整篇的 60%", () => {
+  const size = (...ids: string[]) => run(["skills", "get", "summary", ...ids]).stdout.length;
+  const whole = size();
+  const two = size("core", "pipe");
+  const one = size("core");
+  assert.ok(one < two, `单条(${one}) 应小于多条(${two})`);
+  assert.ok(two < whole, `多条(${two}) 应小于整篇(${whole})`);
+  assert.ok(one < whole * 0.6, `单条(${one}) 应小于整篇(${whole}) 的 60%`);
 
   // 未知 id 报错并列可用 id，退出码 1——静默少给会让调用方以为已取全。
   const bad = run(["skills", "get", "summary", "nope"]);

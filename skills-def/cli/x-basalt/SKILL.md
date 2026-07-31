@@ -14,6 +14,7 @@ scope: global
 2. **先跑 `x-basalt skills get summary`**——约 1.8KB 的能力摘要，三组各一屏：`core`（查与改）/ `pipe`（批量）/ `chat`（自然语言），并标明每组在 chat 侧有没有对应工具。**先看它挑一组，再取那一篇**，别一上来取全文。
    最容易漏的是**批量**：改动对象超过一个文件走 `run --pipe`（见 `skills get pipe`），不要循环调 `meta set`。
 3. 挑定后取正文：`skills get core`（命令全集、DQL 子集、meta 写侧、项目配置）/ `skills get pipe`（`--pipe` 参数面、三种源、算子链、写与索引刷新）/ `skills get chat`（调用形态、15 个内部工具与 CLI 的对应、chat 侧没有或禁止的能力、配 key）。
+   **只需要其中一块时按条取**：`skills list <name>` 看条目 id → `skills get <name> <id>...` 只取那几条（如 `skills get core meta`，约为整篇的 1/6）。整篇 5–17KB，单条通常 1–3KB。
    其它 AI/脚本通过 bash 程序化调用 `chat` 时默认加 `--quiet`（纯答案）或 `--json`（结构化），完全隐藏过程；调用方通常会合并 stdout+stderr 进模型上下文，过程轨迹只会白占 token。人交互/REPL 才用默认完整轨迹。
 4. 要精确 Obsidian/DQL 语法与边界：`x-basalt skills get obsidian-base-spec`（取整篇）或 `x-basalt skills recall <关键字>`（如 wikilink/dataview/callout，模糊召回）。
 
