@@ -450,20 +450,46 @@ const skills = program
   });
 skills
   .command("list")
-  .description("列出全部可用 skill（name — description）")
+  .description("列出全部可用 skill；带 name 则列出该 skill 的条目 id（供 get 按条取）")
+  .argument("[name]", "skill 名：列出其条目 id 与首行摘要")
   .option("--json", "结构化 JSON 输出")
-  .action((opts: { json?: boolean }) => {
-    const metas = new SkillRecall({ skillPath: config.skillPath }).list();
-    if (opts.json) emit(metas);
-    else console.log(renderSkillList(metas));
+  .action((name: string | undefined, opts: { json?: boolean }) => {
+    const recall = new SkillRecall({ skillPath: config.skillPath });
+    if (!name) {
+      const metas = recall.list();
+      if (opts.json) emit(metas);
+      else console.log(renderSkillList(metas));
+      return;
+    }
+    const def = recall.get(name);
+    if (!def) {
+      console.error(`✗ 未找到名为 "${name}" 的 skill（用 \`skills list\` 查看可用名）`);
+      process.exitCode = 1;
+      return;
+    }
+    // 条目清单：只给 id + 首行，供消费者挑完再 `get <skill> <id>...` 取正文（省掉整篇）。
+    const items = def.rules.map((r) => ({
+      id: r.id,
+      pattern: r.pattern,
+      summary: r.description.split("\n")[0] ?? r.pattern,
+    }));
+    if (opts.json) {
+      emit(items);
+      return;
+    }
+    const width = Math.max(...items.map((i) => (i.id ?? "—").length));
+    console.log(
+      items.map((i) => `${(i.id ?? "—").padEnd(width)}  ${i.summary.slice(0, 90)}`).join("\n"),
+    );
   });
 skills
   .command("get")
-  .description("按名输出 skill 完整内容；--all 输出全部")
+  .description("按名输出 skill；追加条目 id 只取那几条（条级召回）；--all 输出全部")
   .argument("[name]", "skill 名（省略时须配 --all）")
+  .argument("[ids...]", "条目 id，可多个（省略=整篇）；用 `skills list <name>` 查看可用 id")
   .option("--all", "输出全部 skill")
   .option("--json", "结构化 JSON 输出（原始 SkillDefinition）")
-  .action((name: string | undefined, opts: { all?: boolean; json?: boolean }) => {
+  .action((name: string | undefined, ids: string[], opts: { all?: boolean; json?: boolean }) => {
     const recall = new SkillRecall({ skillPath: config.skillPath });
     if (opts.all) {
       const defs = recall.all();
@@ -472,11 +498,19 @@ skills
       return;
     }
     if (!name) {
-      console.error("✗ 用法：x-basalt skills get <name> | x-basalt skills get --all");
+      console.error("✗ 用法：x-basalt skills get <name> [ids...] | x-basalt skills get --all");
       process.exitCode = 1;
       return;
     }
-    const def = recall.get(name);
+    // pick 在 ids 为空时等价 get；未知 id 抛错（附可用 id），不静默少给。
+    let def: ReturnType<typeof recall.get>;
+    try {
+      def = recall.pick(name, ids);
+    } catch (err) {
+      console.error(`✗ ${(err as Error).message}`);
+      process.exitCode = 1;
+      return;
+    }
     if (!def) {
       console.error(`✗ 未找到名为 "${name}" 的 skill（用 \`skills list\` 查看可用名）`);
       process.exitCode = 1;

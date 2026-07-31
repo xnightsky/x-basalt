@@ -197,3 +197,18 @@ scope: global
 - 消费侧文档同批更新：`skills-def/cli/x-basalt/SKILL.md`、`docs/use/commands.md`、`docs/use/ai-and-skills.md`、`AGENTS.md`、`CHANGELOG.md`。
 
 ## 补充决策（同轮，第二批）
+
+### D7 · 条级召回：`skills get <name> <id>...`
+
+D1–D6 只解决了「篇」的粒度，没解决「篇内」。想要 `core` 里 meta 那一条，仍得吞 17KB 全篇。
+
+给 `SkillRule` 加可选 `id`（kebab-case），`get` 追加变长位置参按 id 取；`skills list <name>` 列出条目 id 供挑选。实测 `get core meta` **2.6KB vs 整篇 17KB**。
+
+**这比拆篇更根本**——有了条级寻址，大篇不必再为了「便宜」而被切碎；`pipe`/`chat` 的分离理由回归到它们本来的样子（语义纯度、另一条路径），而不是「太大」。
+
+两处刻意的设计：
+
+- **未知 id 报错并列出全部可用 id，不静默少给**。静默少给会让调用方以为已经取全——这类错误只会在下游表现为「按不存在的用法行事」，追起来极贵。
+- **条目按传入顺序输出**，不按定义顺序重排。调用方写 `get summary chat core` 就是想先看 chat。
+
+这与 D6「摘要是数据不该改代码」不冲突：D6 反对的是**为排版**改渲染器，D7 是**新增一种召回能力**——功能归代码，内容归数据，边界没动。

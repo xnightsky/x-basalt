@@ -197,6 +197,28 @@ test("退出码：search 查询过短（< 2 字符）→ 退出 1 且 stderr 提
   assert.match(r.stderr, /不合法/);
 });
 
+test("skills get <name> <ids...> 条级召回：只出指定条，且远小于整篇", () => {
+  const one = run(["skills", "get", "summary", "pipe"]);
+  assert.equal(one.status, 0);
+  assert.match(one.stdout, /batch-edit many files/, "应含 pipe 那条");
+  // 用 chat 条独有的串判定：顶层 description 里本就有 "natural language" 字样，拿它做反向断言会误伤。
+  assert.doesNotMatch(one.stdout, /AI_GATEWAY_API_KEY/, "不应带出 chat 那条");
+  const whole = run(["skills", "get", "summary"]);
+  assert.ok(one.stdout.length < whole.stdout.length, "取一条应小于整篇");
+
+  // 未知 id 报错并列可用 id，退出码 1——静默少给会让调用方以为已取全。
+  const bad = run(["skills", "get", "summary", "nope"]);
+  assert.equal(bad.status, 1);
+  assert.match(bad.stderr, /nope/);
+  assert.match(bad.stderr, /core/, "错误信息应列出可用 id");
+});
+
+test("skills list <name> 列出该 skill 的条目 id（供 get 按条取）", () => {
+  const r = run(["skills", "list", "summary"]);
+  assert.equal(r.status, 0);
+  for (const id of ["core", "pipe", "chat"]) assert.match(r.stdout, new RegExp(`^${id}\\b`, "m"));
+});
+
 test("skills get / recall / list 主路径：召回内置规范", () => {
   // get 按名取完整（默认 Markdown，含标题）
   const got = run(["skills", "get", "obsidian-base-spec"]);

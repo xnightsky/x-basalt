@@ -131,6 +131,7 @@ docs/         research / specs / plans / guides / architecture / testing（见 d
   - **改了命令签名/选项/输出契约，同步对应那篇**；`x-basalt skills list <name>` 看该篇有哪些条目、落到哪条。
   - **各篇分工不互抄**：一处内容只在一篇里有正文，其余篇最多留一行指路。触发词也**刻意不重叠**——这是召回粒度的实现方式，往某篇塞别篇的词会让单次召回退化回吐全文。
   - **摘要篇只指路，不抄参数与文法**；它长到接近正文就失去意义。
+  - **每条 rule 登记 `id`**（kebab-case），否则该条无法被 `skills get <name> <id>...` 单独取到。
   - **摘要是数据不是功能**：新增/调整**不得改 `src/skill/`**（`loadDir` 自动加载目录下全部 `*.json5`）；排版靠 description 的写法适配既有渲染，不为它加字段或改渲染器。
   - 上述约束由 `tests/skill.test.ts` 的用例锁定；为什么这么分见 [`docs/design/skills-router.md`](./docs/design/skills-router.md) 第二轮。
 - **玩法（按任务选命令）维护在 [`docs/use/playbooks.md`](./docs/use/playbooks.md)**，不进 `skills-data/`——那是人读教学，机读的对应物是摘要篇。两边都只指路、不抄参数表。

@@ -34,14 +34,17 @@
   ],
   rules: [
     {
+      id: "core",
       pattern: "x-basalt skills get core",
       description: "core — query & edit one vault\n\n- `index` / `scan` — build & refresh the SQLite index\n- `query` — DQL over structured fields (frontmatter/tags/links); **cannot search body text**\n- `search` — FTS5 over body text; use when you don't know which note\n- `meta` — read/write frontmatter; the only write path for a single file\n- `base` — run a `.base` view headless\n- `parse` — single-file AST\n- `watch` — daemon, re-index on change\n\nchat: same tools, except `index` and `base` (not exposed) and `watch` (**forbidden** — never returns, hangs the session).",
     },
     {
+      id: "pipe",
       pattern: "x-basalt skills get pipe",
       description: "pipe — batch-edit many files in one run\n\n- `run --pipe` — the only way to edit >1 file; **never loop `meta set`**\n- source — scan diff (default) / `where=<full DQL>` / `--stdin`\n- ops — `actions=` seven classic actions, `step=` full operator set\n- writes — dry-run unless `--apply`; index auto-refreshed afterwards\n\nchat: yes — `pipeline_run{where, steps}`.",
     },
     {
+      id: "chat",
       pattern: "x-basalt skills get chat",
       description: "chat — drive all of the above in natural language\n\n- needs `AI_GATEWAY_API_KEY`; without it only this command is off, the rest work\n- **add `--quiet` (or `--json`) whenever a script or another AI calls it** — otherwise the whole plan→act→observe trace lands in your context\n- one-shot with an argument; omit the argument for a REPL\n\nchat: this *is* the chat path — the skill lists all 15 tools and the CLI command each maps to.",
     },

@@ -330,11 +330,13 @@ x-basalt base views/projects.base --conformance bases-all-files-2026-07 --vault 
 ## `skills` — 规范召回
 
 ```
-x-basalt skills [list]            # 列出全部 skill（name — description）
-x-basalt skills get <name>        # 按名输出该 skill 完整内容
-x-basalt skills get --all         # 输出全部 skill
-x-basalt skills recall <keyword>  # 按关键字模糊召回（多词=并集）
-x-basalt skills path [name]       # 打印数据目录（带 name 打印该文件路径）
+x-basalt skills [list]              # 列出全部 skill（name — description）
+x-basalt skills list <name>         # 列出该 skill 的条目 id（供按条取）
+x-basalt skills get <name>          # 按名输出该 skill 完整内容
+x-basalt skills get <name> <id>...  # 只取这几条（条级召回）
+x-basalt skills get --all           # 输出全部 skill
+x-basalt skills recall <keyword>    # 按关键字模糊召回（多词=并集）
+x-basalt skills path [name]         # 打印数据目录（带 name 打印该文件路径）
 ```
 
 加载 JSON5 规范文件，按名精确取或按关键字模糊召回。内置五篇，**分工不互抄**：
@@ -355,6 +357,21 @@ x-basalt skills path [name]       # 打印数据目录（带 name 打印该文�
 | `get <name>`       | 按名输出该 skill 完整内容；`--all` 输出全部                          |
 | `recall <keyword>` | Fuse.js 模糊召回（容拼写错、按相关性排序）；命中 `name` / `triggers` |
 | `path [name]`      | 打印解析出的数据目录；带 `name` 打印 `<dir>/<name>.json5`            |
+
+### 条级召回：只取需要的那几条
+
+`get` 的返回单位默认是「整篇」。追加条目 id 就只取那几条——大篇不必被整篇吞下：
+
+```bash
+x-basalt skills list core            # 先看有哪些条目 id
+x-basalt skills get core meta        # 只要 meta 那条：~2.6 KB（整篇 ~17 KB）
+x-basalt skills get core meta profile
+x-basalt skills get summary pipe     # 摘要里只要 pipe 那组
+```
+
+条目按**传入顺序**输出。给了未知 id 会报错并列出该 skill 的全部可用 id，**不会静默少给**——静默少给会让调用方以为已经取全。
+
+多篇组合则用 `recall` 的多词并集：`x-basalt skills recall "批量 自然语言"` 一次拿到 `pipe` + `chat`。注意并集只累加不设上限，多词里混进说明书词会把 `core` 全文一起拽出来。
 
 **召回按 triggers 分层，一个关键字只召回对应那一篇**——总览词（`摘要` / `总览` / `能干什么`）→ `summary`；管道词（`批量` / `管道` / `算子`）→ `pipe`；AI 词（`配 key` / `ollama` / `自然语言`）→ `chat`；说明书词（`用法` / `manual`）→ `core`；语法词（`wikilink` / `callout`）→ `obsidian-base-spec`。五篇的 triggers 刻意不重叠，故 `recall` 拿到的就是该看的那篇，不会一次吐出多篇全文。
 

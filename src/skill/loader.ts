@@ -11,6 +11,12 @@ import { fileURLToPath } from "node:url";
 
 /** 单条规范规则。 */
 export interface SkillRule {
+  /**
+   * 条目标识（可选，kebab-case）。给出后可被 `skills get <skill> <id>...` 按名单取，
+   * 使召回粒度从「整篇」降到「条」——这是让大篇（如 ~17KB 的 core）不必被整篇吞下的关键。
+   * 不给的条目仍可正常渲染，只是无法被单独寻址。
+   */
+  id?: string;
   pattern: string;
   description: string;
   examples?: string[];

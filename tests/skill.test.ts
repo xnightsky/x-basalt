@@ -219,6 +219,45 @@ test("summary 显著小于它指向的任一正文篇（长到接近正文，分
   assert.ok(summary < size("core") / 4, "summary 相对 core 应是数量级更便宜的入口");
 });
 
+// 条级召回：get/recall 的返回单位天然是「整篇」，pick 让大篇不必被整篇吞下
+// （`get core meta` ~2.6KB vs 整篇 ~17KB）。这是比拆篇更根本的省法。
+test("pick 按 id 取条，顺序随传入，其余字段不变", () => {
+  const recall = new SkillRecall();
+  const picked = recall.pick("summary", ["chat", "core"]);
+  assert.ok(picked, "应取到 summary");
+  assert.deepEqual(
+    picked.rules.map((r) => r.id),
+    ["chat", "core"],
+    "顺序应与传入一致",
+  );
+  assert.equal(picked.name, "summary");
+  assert.equal(picked.description, recall.get("summary")?.description, "顶层 description 不变");
+});
+
+test("pick 空 ids 等价整篇；skill 不存在返回 undefined", () => {
+  const recall = new SkillRecall();
+  assert.equal(recall.pick("summary", [])?.rules.length, recall.get("summary")?.rules.length);
+  assert.equal(recall.pick("zzz-no-such", ["x"]), undefined);
+});
+
+test("pick 未知 id 抛错并列出可用 id（不静默少给）", () => {
+  assert.throws(
+    () => new SkillRecall().pick("summary", ["core", "nope"]),
+    (err: Error) => {
+      assert.match(err.message, /nope/, "应点名未知 id");
+      assert.match(err.message, /core/, "应列出可用 id 供纠正");
+      return true;
+    },
+  );
+});
+
+test("条级召回显著省于整篇（core 单条 vs 全篇）", () => {
+  const recall = new SkillRecall();
+  const whole = renderSkill(recall.get("core")!).length;
+  const one = renderSkill(recall.pick("core", ["meta"])!).length;
+  assert.ok(one < whole / 4, `单条(${one}B) 应远小于整篇(${whole}B)`);
+});
+
 test("summary 只指路不重抄用法（抄进参数/文法就会变成第二个 core）", () => {
   const md = renderSkill(new SkillRecall().get("summary")!);
   for (const leak of ["--refresh-derived", "GROUP BY", "if-exists", "concurrency", "debounce"]) {

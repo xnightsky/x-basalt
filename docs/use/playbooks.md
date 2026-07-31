@@ -173,6 +173,8 @@ x-basalt chat "把 docs 下没有 type 的文档都补上" --quiet
 ```bash
 x-basalt skills get summary        # ~1.8 KB：能干什么、该看哪篇
 x-basalt skills get pipe           # 批量的完整用法
+x-basalt skills get core meta      # 只取 core 里 meta 那一条（~2.6 KB，整篇是 ~17 KB）
+x-basalt skills list core          # 先看 core 有哪些条目 id
 ```
 
 在别的仓库里给 AI 写提示词时，**别把命令表抄过去**——抄一份就多一处会漂移的副本。写一句「本仓 docs 用 x-basalt 管，用法跑 `x-basalt skills get summary`」就够，剩下的让它自己问。

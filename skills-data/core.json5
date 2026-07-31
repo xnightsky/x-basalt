@@ -88,6 +88,7 @@
   ],
   rules: [
     {
+      id: "overview",
       pattern: "x-basalt <parse|index|scan|query|base|skills|meta|watch|run>",
       description: "零依赖 Obsidian 运行时的 Vault 工具。典型流程：index 建库 → query 查询；parse 看单文件 AST；scan 增量重扫；search 按正文全文检索；base 跑 .base view 无头查询；skills 召回规范；meta 读改 frontmatter（唯一写侧）；watch 监听增量；run 按声明式管道处理一批变更（**批量的完整用法见 `skills get pipe`**）。**不确定该用哪个，先看 `x-basalt skills get summary`（约 1.8KB 摘要）**；自然语言路径见 `skills get chat`。开发态 `pnpm run cli -- <command>`，构建后 `node dist/cli.js <command>`。出错统一打印 ✗ 并退出码 1。",
       examples: [
@@ -97,16 +98,19 @@
       ],
     },
     {
+      id: "parse",
       pattern: "parse <file> [--format json|yaml]",
       description: "解析单个 .md → { frontmatter, nodes }；nodes 含 wikilink/Markdown link/tag/callout/task/highlight/blockRef/inlineField。wikilink/embed/markdownLink 节点含完整文件 line/column/raw，可用于后续 links/lint 定位；parser 保留重复链接诊断节点，indexer 写 links 表前再去重。--format 默认 json，可选 yaml。纯函数，不碰 DB。",
       examples: ["x-basalt parse note.md", "x-basalt parse note.md --format yaml"],
     },
     {
+      id: "index",
       pattern: "index <vault> [--db ./index.db] [--watch]",
       description: "全量扫描 Vault 下所有 .md 写入 SQLite，跳过 .obsidian/ 与隐藏文件；事务内先清空再写、失败回滚。--watch 建库后继续监听增量。",
       examples: ["x-basalt index ./vault --db ./index.db"],
     },
     {
+      id: "scan",
       pattern: "scan <vault> [--db ./index.db] [--rehash] [--dry-run] [--json] [--pipe k=v]... [--apply]",
       description: "按需增量重索引（无需常驻 watch）：diff 文件系统 vs 库，只重扫新增/改动/删除文件，断点续扫，适合 cron/CI 触发。默认 mtime+size 判变化、--rehash 内容兜底、--dry-run 只报告不写库、--json 结构化差异。--pipe 用管道处理 scan 出的变更（替代默认仅 index）：--pipe actions=… 内联 或 --pipe use=<name> 引用配置；--apply 才落盘。管道语义同 run。",
       examples: [
@@ -116,6 +120,7 @@
       ],
     },
     {
+      id: "query",
       pattern: "query <dql> [--db <path>] [--offset <n>] [--size <n>] [--vault <path>]",
       description: '执行 DQL 子集 → 参数化 SQL → JSON { type, columns, total, offset, size, returned, hasMore, rows }；聚合字段已解析为数组。total=命中总数（独立 COUNT，不随分页变）——**数总量直接读 total，别 LIST 全量再数**。--offset/--size 在引擎层分页（不改 DQL 文法，外层包 LIMIT/OFFSET）：不传 size=全量返回（向后兼容），翻页 offset+=size，hasMore 标示还有更多。--db 只读打开；--vault 接受但不使用。文法：LIST|TABLE <fields> FROM (#tag|[[link]]|"folder") WHERE <cond> GROUP BY <field> SORT <field> ASC|DESC LIMIT <n>。',
       examples: [
@@ -125,6 +130,7 @@
       ],
     },
     {
+      id: "search",
       pattern: "search <query> [--db <path>] [--offset <n>] [--size <n>] [--vault <path>]",
       description:
         "按**正文内容**全文检索（FTS5 + trigram 子串匹配，覆盖中英文）→ JSON { total, offset, size, returned, hasMore, rows:[{path,name,snippet}] }。用于「哪篇笔记提到 X」这类不知道是哪篇、只能按内容找的问题——query 查结构化字段（frontmatter/tag/link/task），**查不了正文**。查询至少 2 个字符；不支持 FTS5 查询语法（AND/*/- 都不是操作符）。**匹配口径分两档，别把 total 当成「含该短语的篇数」**：纯 ASCII 是字面短语、多词 AND；含 CJK 汉字走 trigram 并集 **OR 宽松召回**——只命中部分片段的笔记也计入 total（搜「回归网-不存在」与搜「回归网」返回一样多）。完整连续子串命中者由 bm25 **排最前**，判断「到底有没有这一串」看靠前结果或改用 query 的 contains() 精确判定。基于索引快照：新写入要先 scan/index 才搜得到（run 管道写完会自动刷索引）。是子串匹配、**非语义/向量检索**。",
@@ -134,6 +140,7 @@
       ],
     },
     {
+      id: "count",
       pattern: "计数 / 分页（数总量别全量 LIST）",
       description: '要"有多少"绝不全量 LIST 再数：① 任何 query 结果都带 total（命中总数）——读它即可；② 全库/分组计数用 `TABLE count() FROM "" GROUP BY <字段>`（count()/length(rows) 是 GROUP BY 聚合列，单独 `TABLE count()` 不带 GROUP BY 无效）。分页：CLI 用 `--offset/--size`，chat 的 query/scan 工具用 `offset/size`（默认 size=50，上限 500，size=0 只回 total/counts）。chat 的 scan 工具还返回 counts{added,modified,deleted,unchanged}（标量、永不截断）——"多少新增/未索引"直接读 counts。DQL 自身只有 LIMIT、无 OFFSET，分页一律在 CLI/工具层。',
       examples: [
@@ -142,6 +149,7 @@
       ],
     },
     {
+      id: "base",
       pattern: "base <file.base> [--view <name>] [--vault <path...>] [--db <path>] [--format json|yaml] [--conformance <id>]",
       description: "Bases 无头查询（默认 conformance bases-markdown-2026-07，可切 bases-all-files-2026-07）：对索引执行 .base view，输出稳定 JSON { conformance, base, view, columns, total, rows, diagnostics }；total=filter 后 limit 前行数，未显式 sort 按 file.path 稳定序（附 info 诊断）。数据集两口径：默认 md-only（仅 Markdown 笔记为行，恒发 base/markdown-only-dataset warning）；--conformance bases-all-files-2026-07 把附件并入为行（附件行 file.* stat 字段可用、note 属性缺失投影 null 且列保留、file.tags/file.links 恒 []、不发该 warning），旧库无 vault_entries 表自动降级回 md-only（compat warning），conformance 字段回传实际生效口径；未知 id 报 base/invalid-schema。退出码：diagnostics 含任一 error → 1（仍输出完整 JSON、rows 为空），仅 warning/info → 0。子集：table view 的 filters/order/sort/limit、递归 and/or/not、表达式 ==/&&/||/! 与白名单函数（if/list/number、string/list/object/file 方法）；Bases 表达式不是 DQL。inline fields 不进 Bases 属性。详见 docs/use/bases.md（语法快照）与 docs/use/bases.md（命令与契约）。",
       examples: [
@@ -150,6 +158,7 @@
       ],
     },
     {
+      id: "skills",
       pattern: "skills (list | get <name> [--all] | recall <keyword> | path [name]) [--json]",
       description: "召回规范知识库（内置 obsidian-base-spec + 本说明书 core）。list 列出 name—description；get <name> 按名输出该 skill 完整内容（--all 输出全部）；recall <kw> 模糊召回（Fuse，容拼写错、按相关性排序）；path 打印数据目录（带 name 打印该文件路径）。默认输出人类/AI 可读 Markdown，加 --json 切换结构化。本说明书自身即一个可召回 skill —— `skills get core` 直接读到本 CLI 完整用法。",
       examples: [
@@ -161,6 +170,7 @@
       ],
     },
     {
+      id: "meta",
       pattern: "meta (get|set|unset|rename|normalize) <file> ...",
       description: "读/改单文件 frontmatter（元数据头），唯一写侧命令。get [key] 读（缺省读全部，缺失键输出 null）；set <key> <value> 增改（存在则原位更新、否则追加）；unset <key> 删；rename <old> <new> 改键名（保位置/值，源缺失或目标已存在则报错）；normalize 归一。写只动 frontmatter、正文逐字节不动；YAML 往返保留键序与注释、需引号的值（如 [[链接]]）自动加引号；原子写；--dry-run 只打印将写入内容不落盘。set --type string|number|boolean|null|list|auto（默认 auto 保守推断，不识别 yes/no/on/off 避免 Norway 陷阱）。normalize 默认 ON：tags/aliases/cssclasses 列表化（tags/cssclasses 标量按空白/逗号拆、aliases 不拆）、tags 去 #、去重、单数键 tag/alias/cssclass→复数键迁移；opt-in --sort-keys 排序顶层键。非法 YAML 的写操作拒绝执行、文件不变。幂等。仅顶层扁平键。",
       examples: [
@@ -174,6 +184,7 @@
       ],
     },
     {
+      id: "profile",
       pattern: "meta profile (list|show <name>) / meta apply <profile> <file> [--set k=v]...",
       description: "元数据策略（profile）= 一套现成约定（模板+规范）。x-basalt 只「告知」、不调 LLM——你（AI）读规范后自己决定补什么。内置 3 套：pkm-note(Obsidian,第一推荐)、llm-wiki(OKF)、ssg-blog(SSG)。用法：先 `meta profile show <name>` 读该约定的字段/必填/语义/可额外补什么；再 `meta apply <profile> <file>` —— 机械补 created/modified/pubDate/timestamp/sha256（按文件时间/正文）+ 你用 `--set key=value`(可重复) 补语义字段（type/title/description/tags…）和额外字段。--set 按 profile 字段类型转值（list 自动按逗号拆）、且**显式覆盖**已有值；apply 收尾自动 normalize（产出既合规又齐全）。报告 filled/overridden/仍缺。典型流程：apply 看“仍缺”→ profile show 读规范 → 读文档内容 → apply --set 补齐。",
       examples: [
@@ -185,6 +196,7 @@
       ],
     },
     {
+      id: "watch",
       pattern: "watch <vault> [--db ./index.db] [--on-change <cmd>] [--pipe k=v]... [--apply]",
       description: "先全量 rebuild 再监听；add/change 先增量更新索引再触发回调，unlink 删记录。--on-change 命令模板用 {file} 占位替换变更文件路径。--pipe 用管道维护（替代裸 shell）：--pipe actions=… 或 --pipe use=<name>；常驻自动改文件需 --apply，Ctrl+C 优雅退出。管道语义同 run。前台运行。",
       examples: [
@@ -193,16 +205,19 @@
       ],
     },
     {
+      id: "run",
       pattern: "run [--pipe k=v]... [--apply]（批量管道；完整用法见 skills get pipe）",
       description: "按管道处理一批变更——**改动对象超过一个文件就用它，别循环调 meta set**。**完整用法不在本篇**：参数面与三种源（scan / where=DQL / --stdin）、算子链（actions 七动作 + step 全集 + {{row.x}} 插值）、写动作与索引自动刷新，一律见 `x-basalt skills get pipe`。本篇只留这一行指路，不重抄。scan --pipe / watch --pipe 共用同一套语义。",
       examples: ["x-basalt skills get pipe"],
     },
     {
+      id: "chat",
       pattern: 'chat ["<自然语言>"] [--quiet] [--json]',
       description: "自然语言路径（需 AI_GATEWAY_API_KEY；没配 key 只禁用本命令，其余命令全功能照常）。**完整用法不在本篇** —— 调用形态（单发/REPL/--quiet）、15 个内部工具与 CLI 命令的对应关系、chat 侧没有或禁止的能力（index 没有、base 没有、**watch 禁止——会挂死会话**）、AI_GATEWAY 配置与安全模型，一律见 `x-basalt skills get chat`。本篇只留这一行指路，不重抄。",
       examples: ["x-basalt skills get chat"],
     },
     {
+      id: "dql",
       pattern: "DQL 操作符与隐式字段",
       description: '操作符：= != < > <= >= / contains icontains startswith endswith / AND OR NOT / regexmatch(field,"pattern")。判有无：裸字段真值 `WHERE field`（对标官方 isTruthy：缺失/null/0/空串/空数组 皆 falsy）、`!field`（无或 falsy）；显式 null 判断 `field = null`/`!= null`（测键是否存在，把 0/空串视为「有」，与 !field 在 falsy 值上相反——问「多少篇没有 X」默认用 `!field`）。隐式字段：file.name/path/folder/extension/size/mtime/ctime/tags/inlinks/outlinks/tasks/frontmatter 与任意 frontmatter 标量。**字段值可来自 frontmatter 或正文 inline fields（`key:: value` 整行/[方括号]/(圆括号) 三形态，同一命名空间）**：同名 frontmatter 胜、inline 兜底；inline 值恒 TEXT 字典序比较（10 vs 9 会错）、同名 last-wins、key 仅 [A-Za-z0-9_]+；真值/存在性同样计入 inline；旧库要查 inline 需重跑 index 回填。判「完全没有 frontmatter」用 `!file.frontmatter`（别跟「未被索引」混淆，后者用 scan 工具的 counts/byDir；inline 字段也不进 file.frontmatter 对象）。FROM #a 前缀命中 #a/b；FROM "F" 含子文件夹；FROM [[N]] 取指向 N 的反向链接。',
       examples: [
@@ -215,6 +230,7 @@
       ],
     },
     {
+      id: "config",
       pattern: "项目配置 .x-basalt/config.yaml",
       description: "项目本地配置默认放隐藏目录 .x-basalt/（不入 git，类比 .obsidian/），免去重复传参。默认 YAML，也支持 JSON5/JSON；扁平 .x-basalt.yaml 亦可。键：db / vault / skillPath / format / onChange。索引默认落 .x-basalt/index.db（目录自动建）。CLI 从 cwd 向上查找，全局回退 ~/.x-basalt/config.yaml。配置值优先级：flag > 项目配置 > 全局配置 > 内置默认。环境变量 X_BASALT_DIR 指定 .x-basalt 基目录（config 与 index.db 都落其下），把状态搬到任意位置；基目录优先级：命令行 flag > X_BASALT_DIR > 就近 .x-basalt/ > 默认。 **上游 AI/脚本无需感知 X_BASALT_DIR 或 config 的位置**：只要 X_BASALT_DIR（或就近 .x-basalt/config）已配好 vault，就在 repo 根**直接**跑 x-basalt（如 chat/query/index）——CLI 自读 env+配置解析 db/vault；**别去定位或 cat .x-basalt/config.*，别手动补 --vault/--db**（要覆盖默认才显式传）。X_BASALT_DIR 常用相对值（如 .tmp/.x-basalt）以一套 env 适配多 repo：站在各 repo 根执行即自动对应该 repo 的状态目录与其 vault，故解析靠「站对 repo 根」而非把路径写死成绝对。",
       examples: [
@@ -225,6 +241,7 @@
       ],
     },
     {
+      id: "limits",
       pattern: "限制与非目标",
       description: "frontmatter 日期以 ISO 存储（精确等值不命中，用范围/前缀）；代码块内 task 仍会被提取；Markdown reference link / 复杂 inline link 暂不产出 markdownLink 节点；链接查询按路径感知规则解析，bare basename 同名时全列（近似）；file.tasks 仅显示不可过滤；file.day 等、length() 数值比较为非目标，遇到明确报错。完整说明见 docs/use/README.md。",
       examples: ["x-basalt query \"LIST WHERE due >= '2026-06-01'\" --db ./index.db"],

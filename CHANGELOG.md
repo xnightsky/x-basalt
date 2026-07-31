@@ -4,6 +4,10 @@
 
 ## [Unreleased]
 
+### Added
+
+- **条级召回：`skills get <name> <id>...` 只取指定条目** —— `get`/`recall` 的返回单位一直是「整篇」，想要 `core` 里 meta 那一条就得吞下全篇。现在每条 rule 可带 `id`（`SkillRule.id`，可选），按 id 取即可：`skills get core meta` 约 2.6 KB，整篇是约 17 KB。条目按**传入顺序**输出；给了未知 id 报错并列出该 skill 全部可用 id，**不静默少给**（静默少给会让调用方以为已取全）。配套 `skills list <name>` 列出条目 id 与首行摘要，供挑完再取。这比拆篇更根本——大篇不必再为了「便宜」而被切碎。
+
 ### Changed
 
 - **运行时说明书拆成「摘要 + 三篇正文」，`core` 21.4KB → 17.0KB** —— 此前只有「20 行触发器 skill」和「~21KB 全量 `core`」两档，中间没有一格：想改个 frontmatter 也得吞全文；而 `recall` 的返回单位是**整篇**（`skills recall meta` 输出 30KB，比 `get core` 还多 40%，因为把 `core` 与 `obsidian-base-spec` 一起吐）。更要命的是**召回的前提是知道有什么可召回**——不知道 `run --pipe` 存在的 AI 永远不会去 `recall pipeline`，只会逐个文件调 `meta set`。

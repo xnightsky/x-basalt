@@ -66,6 +66,43 @@ export class SkillRecall {
     return [...this.skills];
   }
 
+  /**
+   * 取某 skill 的**指定条目**，返回只含这些条的浅拷贝定义（条级召回）。
+   *
+   * 存在意义：`get` / `recall` 的返回单位天然是「整篇」，想要 core 里 meta 那一条就得吞下全篇。
+   * 有了条级寻址，大篇不必再为了「便宜」而被拆碎——按需取条即可。
+   *
+   * @param name - skill 名
+   * @param ids - 条目 id 列表（顺序即输出顺序，重复项按给定次数重复输出）
+   * @returns 命中的定义；skill 不存在返回 `undefined`
+   * @throws 任一 id 在该 skill 中不存在时抛出，错误信息附可用 id 列表（不静默丢弃）
+   *
+   * @behavior
+   * Given 一组存在的条目 id
+   * When pick
+   * Then 返回的 rules 按**传入顺序**排列，其余字段（name/description/triggers）保持原样
+   *
+   * @behavior
+   * Given 含未知 id（拼错或该条没登记 id）
+   * When pick
+   * Then 抛错并列出该 skill 全部可用 id，而不是返回少一条的结果——静默少给会让调用方以为已取全
+   */
+  pick(name: string, ids: string[]): SkillDefinition | undefined {
+    const def = this.get(name);
+    if (!def || ids.length === 0) return def;
+    const byId = new Map(def.rules.filter((r) => r.id).map((r) => [r.id as string, r]));
+    const missing = ids.filter((id) => !byId.has(id));
+    if (missing.length > 0) {
+      const available = [...byId.keys()];
+      throw new Error(
+        `未知条目 ${missing.map((m) => `"${m}"`).join("、")}；${name} 可用条目：${
+          available.length > 0 ? available.join(" ") : "（该 skill 未登记条目 id）"
+        }`,
+      );
+    }
+    return { ...def, rules: ids.map((id) => byId.get(id) as SkillDefinition["rules"][number]) };
+  }
+
   /** 最终解析使用的 skill 数据目录（优先级见 {@link resolveSkillDir}）。 */
   resolvedDir(): string {
     return this.dir;
