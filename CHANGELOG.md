@@ -7,6 +7,7 @@
 ### Added
 
 - **条级召回：`skills get <name> <id>...` 只取指定条目** —— `get`/`recall` 的返回单位一直是「整篇」，想要 `core` 里 meta 那一条就得吞下全篇。现在每条 rule 可带 `id`（`SkillRule.id`，可选），按 id 取即可：`skills get core meta` 约 2.6 KB，整篇是约 17 KB。条目按**传入顺序**输出；给了未知 id 报错并列出该 skill 全部可用 id，**不静默少给**（静默少给会让调用方以为已取全）。配套 `skills list <name>` 列出条目 id 与首行摘要，供挑完再取。这比拆篇更根本——大篇不必再为了「便宜」而被切碎。
+- **`query --json`** —— `scan`/`run`/`base`/`lint` 都有这个开关，唯独 `query` 不接受，调用方按类推写上就撞 `unknown option` 再退回裸调。`query` 的输出本就恒为 JSON，补这个 flag 纯为接口一致，不改变任何输出。
 
 ### Changed
 

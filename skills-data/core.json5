@@ -121,8 +121,8 @@
     },
     {
       id: "query",
-      pattern: "query <dql> [--db <path>] [--offset <n>] [--size <n>] [--vault <path>]",
-      description: '执行 DQL 子集 → 参数化 SQL → JSON { type, columns, total, offset, size, returned, hasMore, rows }；聚合字段已解析为数组。total=命中总数（独立 COUNT，不随分页变）——**数总量直接读 total，别 LIST 全量再数**。--offset/--size 在引擎层分页（不改 DQL 文法，外层包 LIMIT/OFFSET）：不传 size=全量返回（向后兼容），翻页 offset+=size，hasMore 标示还有更多。--db 只读打开；--vault 接受但不使用。文法：LIST|TABLE <fields> FROM (#tag|[[link]]|"folder") WHERE <cond> GROUP BY <field> SORT <field> ASC|DESC LIMIT <n>。',
+      pattern: "query <dql> [--db <path>] [--offset <n>] [--size <n>] [--json] [--vault <path>]",
+      description: '执行 DQL 子集 → 参数化 SQL → JSON { type, columns, total, offset, size, returned, hasMore, rows }；聚合字段已解析为数组。total=命中总数（独立 COUNT，不随分页变）——**数总量直接读 total，别 LIST 全量再数**。--offset/--size 在引擎层分页（不改 DQL 文法，外层包 LIMIT/OFFSET）：不传 size=全量返回（向后兼容），翻页 offset+=size，hasMore 标示还有更多。--db 只读打开；--vault 接受但不使用。文法：LIST|TABLE <fields> FROM (#tag|[[link]]|"folder") WHERE <cond> GROUP BY <field> SORT <field> ASC|DESC LIMIT <n>。输出恒为 JSON；`--json` 可显式写（与 scan/run/base/lint 的开关对齐），不改变结果。',
       examples: [
         "x-basalt query \"LIST FROM #project WHERE status = 'active' SORT file.mtime DESC LIMIT 10\" --db ./index.db",
         "x-basalt query 'LIST FROM \"\"' --size 50 --offset 0 --db ./index.db   # 分页：每页 50，读 total 知总量",

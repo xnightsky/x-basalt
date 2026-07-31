@@ -173,7 +173,7 @@ x-basalt scan ./my-vault --pipe actions=index,normalize --apply # 内联，免�
 ## `query` — 执行 DQL 查询
 
 ```
-x-basalt query "<dql>" [--db <path>] [--offset <n>] [--size <n>] [--vault <path>]
+x-basalt query "<dql>" [--db <path>] [--offset <n>] [--size <n>] [--json] [--vault <path>]
 ```
 
 执行自建 Dataview（DQL）子集查询，只读打开索引库，不回读 `.md` 文件。
@@ -221,6 +221,7 @@ DQL 完整语法（`FROM` / `WHERE` / `SORT` / `LIMIT` / 操作符 / 隐式字�
 
 ---
 
+> 输出**恒为 JSON**；`--json` 只是与 `scan`/`run`/`base`/`lint` 对齐的显式开关，写不写结果一样。此前不接受该 flag，显式写会撞 `unknown option`。
 
 ## `search` — 全文检索正文
 

@@ -340,13 +340,18 @@ program
   .option("--db <path>", "SQLite 索引文件路径（默认 .x-basalt/index.db，可由配置 db 覆盖）")
   .option("--offset <n>", "结果起始偏移（默认 0）")
   .option("--size <n>", "本页最大行数（默认不分页/全部；给定则分页，结果含 total/hasMore）")
-  .action((dql: string, opts: { db?: string; offset?: string; size?: string }) => {
+  // --json：纯粹的**接口一致性**补丁，不改变输出——query 的 emit 一直是 JSON。
+  // 问题在于此前它连这个 flag 都不接受，而 scan/run/base/lint 都有：调用方（人与 AI）按
+  // 「其它命令都有它」类推着写 `--json`，就会撞 `unknown option` 再退回裸调。
+  // 接受这个 flag 比让每个调用方各撞一次便宜。
+  .option("--json", "结构化 JSON 输出（query 恒为 JSON，本 flag 仅为与其它命令对齐）")
+  .action((dql: string, opts: { db?: string; offset?: string; size?: string; json?: boolean }) => {
     const dbPath = opts.db ?? config.db ?? DEFAULT_DB;
     const engine = new DataviewEngine(dbPath);
     try {
       const offset = opts.offset !== undefined ? Number(opts.offset) : 0;
       const size = opts.size !== undefined ? Number(opts.size) : undefined;
-      emit(engine.query(dql, { offset, size }));
+      emit(engine.query(dql, { offset, size }), opts.json ? "json" : undefined);
     } finally {
       engine.close();
     }

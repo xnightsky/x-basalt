@@ -238,6 +238,19 @@ test("skills get / recall / list 主路径：召回内置规范", () => {
   assert.ok(JSON.parse(list.stdout).some((s: { name: string }) => s.name === "obsidian-base-spec"));
 });
 
+// 接口一致性：scan/run/base/lint 都有 --json，query 此前没有，显式写就撞 unknown option。
+// 输出本就是 JSON，补 flag 只为「按其它命令类推」的写法能被接受。
+test("query --json 被接受且输出仍是合法 JSON（与其它命令的开关对齐）", () => {
+  const withFlag = run(["query", 'LIST FROM ""', "--json"]);
+  assert.equal(withFlag.status, 0, `--json 不应报 unknown option：${withFlag.stderr}`);
+  const bare = run(["query", 'LIST FROM ""']);
+  assert.deepEqual(
+    JSON.parse(withFlag.stdout),
+    JSON.parse(bare.stdout),
+    "--json 只为对齐接口，不改变输出",
+  );
+});
+
 test("退出码：非法 DQL 经真实库 → 退出 1 且 stderr 打印 ✗", () => {
   const r = run(["query", "LISTE FROM x", "--db", sharedDb]);
   assert.equal(r.status, 1);
