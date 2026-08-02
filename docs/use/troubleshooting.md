@@ -1,6 +1,6 @@
 ---
-timestamp: 2026-08-02T03:36:02Z
-sha256: c7f2456a3eecc0aa2df4bc3fc06c599d1840d56bd4e0694d9405e51ef6833086
+timestamp: 2026-08-02T06:07:37Z
+sha256: cb15149dd1466fd672e45292ff53e4c6c9203a3e8c7f568e831ec7a9e9637a93
 type: guide
 title: 故障排查与已知限制 · x-basalt
 description: 常见错误、环境限制与排查步骤
@@ -43,7 +43,7 @@ tags:
 
 | 现象                                                                   | 原因                                                                                               | 处理                                                                                                                                                                       |
 | ---------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `pnpm install` 卡住或报 better-sqlite3 构建失败                        | pnpm v10 默认拦截所有原生模块的构建脚本（安全策略）                                                | 本仓库已在 `pnpm-workspace.yaml` 的 `onlyBuiltDependencies` 中放行 `better-sqlite3`，**务必用 `pnpm install`**（不要用 `npm install` 或 `yarn`，会绕过放行配置导致重复问题） |
+| `pnpm install` 卡住或报 better-sqlite3 构建失败 | pnpm 默认拦截所有原生模块的构建脚本（安全策略；pnpm 11 起配置项为 `allowBuilds`） | 本仓库已在 `pnpm-workspace.yaml` 的 `allowBuilds` 中放行 `better-sqlite3`，**务必用 `pnpm install`**（不要用 `npm install` 或 `yarn`，会绕过放行配置导致重复问题） |
 | 终端找不到 `x-basalt` 全局命令                                         | 未挂载到全局 PATH，或使用了不建 shim 的链接方式                                                    | 在仓库根运行 **`npm link`**（不要用 `pnpm link --global`，pnpm v10 对 bin-only 包不生成 shim）；链接后 `x-basalt --version` 验证                                           |
 | 改了源码后全局 `x-basalt` 仍跑旧版本                                   | 全局命令执行的是 `dist/cli.js`（`package.json bin` 指向 `dist/`），TypeScript 源码修改不会自动生效 | 每次改完源码后跑 **`pnpm build`**，再调用全局命令；开发调试建议改用 `pnpm cli -- <args>` 直接跑 TS 源，免去构建步骤                                                        |
 | `Error: The module … was compiled against a different Node.js version` | better-sqlite3 预编译二进制与当前 Node.js 版本不匹配                                               | 确认 Node.js ≥ 22（`node -v`）；切换版本后重跑 `pnpm install` 让 better-sqlite3 重新编译                                                                                   |

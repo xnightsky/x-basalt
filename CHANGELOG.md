@@ -26,6 +26,8 @@
 
 - **pnpm 10 不再读取 `package.json` 的 `pnpm` 字段，原生构建放行配置迁移到 `pnpm-workspace.yaml`** —— pnpm 10 对 `package.json` 中 `pnpm.onlyBuiltDependencies` 的读取已移除，每次 `pnpm` 命令都会打 WARN。现把 `onlyBuiltDependencies: [better-sqlite3]` 迁至 `pnpm-workspace.yaml`（pnpm 10 设置的唯一新位置）并从 `package.json` 删除该字段，告警消失、放行语义不变；`AGENTS.md` 与 `docs/use/` 相关说明同步更新。
 
+- **pnpm 11 兼容：构建放行配置从 `onlyBuiltDependencies` 迁移到 `allowBuilds`** —— pnpm 11 已移除旧设置（未显式放行/拒绝的依赖构建脚本会触发 `ERR_PNPM_IGNORED_BUILDS` 并自动改写 `pnpm-workspace.yaml`），现改为 `allowBuilds: { better-sqlite3: true, esbuild: false }`：原生模块照常编译，esbuild 保持 pnpm 10 时期「跳过 postinstall」的策略。pnpm ≥10.26 与 11 均按此配置工作；`AGENTS.md` 与 `docs/use/` 相关说明同步更新。
+
 ## [0.9.0] - 2026-07-31
 
 > chat `pipeline_run` 接入 `steps` 声明式步骤链（与 CLI 同规则）、管道教程 pipelines.md、base 算子缺投影改显式报错。

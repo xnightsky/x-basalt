@@ -1,6 +1,6 @@
 ---
-timestamp: 2026-08-02T03:59:45Z
-sha256: f4d3c5ac3316de5bab5d8f934b9527c32b2f76c32d28ad2a5cd95ca45427b9b2
+timestamp: 2026-08-02T06:07:37Z
+sha256: 0536e8e8e4fb2fd9651888548dacca07722d943f59d6f920450ee8e402d04d53
 type: guide
 title: 安装与运行 · x-basalt
 description: Node/pnpm 安装、编译、全局 link 与开发态 cli 运行
@@ -46,7 +46,7 @@ pnpm run build
 
 | 步骤             | 说明                                                                                                                                                                         |
 | ---------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `pnpm install`   | 安装所有依赖，同时本地编译 `better-sqlite3`（C++ 原生模块）。已在 `pnpm-workspace.yaml` 的 `onlyBuiltDependencies` 放行——pnpm v10 默认拦截原生构建脚本，不放行会报错无法装上。 |
+| `pnpm install`   | 安装所有依赖，同时本地编译 `better-sqlite3`（C++ 原生模块）。已在 `pnpm-workspace.yaml` 的 `allowBuilds` 放行——pnpm 默认拦截依赖构建脚本（pnpm 11 起 `onlyBuiltDependencies` 已由 `allowBuilds` 取代），不放行会报错无法装上。 |
 | `pnpm run build` | 调用 `tsc`，将 `src/` 编译输出到 `dist/`；产出 `dist/cli.js`（顶部含 `#!/usr/bin/env node` shebang，可直接执行）。                                                           |
 
 ---
