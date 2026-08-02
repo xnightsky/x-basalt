@@ -72,7 +72,7 @@ docs/         research / specs / plans / guides / architecture / testing（见 d
 
 ## 常用命令
 
-> 包管理器用 `pnpm`（`pnpm@10.33.0`）。`better-sqlite3` 的原生构建脚本已在 `package.json` 的 `pnpm.onlyBuiltDependencies` 放行，否则 pnpm v10 默认拦截、装不上预编译二进制。质量门按改动风险选跑，详见「完成定义」。
+> 包管理器用 `pnpm`（`pnpm@10.33.0`）。`better-sqlite3` 的原生构建脚本已在 `pnpm-workspace.yaml` 的 `onlyBuiltDependencies` 放行，否则 pnpm v10 默认拦截、装不上预编译二进制。质量门按改动风险选跑，详见「完成定义」。
 
 - `pnpm install`：安装依赖（会构建 better-sqlite3）。
 - `pnpm run build`：`tsc` 编译到 `dist/`。

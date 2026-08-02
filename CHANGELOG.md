@@ -20,6 +20,10 @@
   - 修掉 `core` 中 `run` 条内重复两遍的「源三选一」段落（搬入 `pipe` 时合并）。
   - 消费侧入口 `skills-def/cli/x-basalt/SKILL.md` 指路改为「先 `skills get summary` 挑一组 → 再取那一篇」，并点明最易漏的批量场景。
 
+### Fixed
+
+- **pnpm 10 不再读取 `package.json` 的 `pnpm` 字段，原生构建放行配置迁移到 `pnpm-workspace.yaml`** —— pnpm 10 对 `package.json` 中 `pnpm.onlyBuiltDependencies` 的读取已移除，每次 `pnpm` 命令都会打 WARN。现把 `onlyBuiltDependencies: [better-sqlite3]` 迁至 `pnpm-workspace.yaml`（pnpm 10 设置的唯一新位置）并从 `package.json` 删除该字段，告警消失、放行语义不变；`AGENTS.md` 与 `docs/use/` 相关说明同步更新。
+
 ## [0.9.0] - 2026-07-31
 
 > chat `pipeline_run` 接入 `steps` 声明式步骤链（与 CLI 同规则）、管道教程 pipelines.md、base 算子缺投影改显式报错。
