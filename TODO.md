@@ -1,6 +1,6 @@
 ---
-timestamp: 2026-07-30T15:58:11Z
-sha256: c7f384c1150ebf326ac4ee51dbd287ce1692cb6a140a669cfd1f7b4884c8b737
+timestamp: 2026-08-01T19:57:07Z
+sha256: 8b0a0b3f2c13f83428d06cb00dc5921a7ad8ba8e4a35dc6d7d47fe925cfb494a
 ---
 # TODO · x-basalt
 
@@ -103,7 +103,7 @@ sha256: c7f384c1150ebf326ac4ee51dbd287ce1692cb6a140a669cfd1f7b4884c8b737
 
 **技术细节**：入参 base 无文件路径 → 诊断的 `file` 字段给虚拟名（如 `<stdin>`）；路径越界检查（BASE-SEC-008）对入参不适用也不需要，因为根本不读文件；`.base` 内的 `file.inFolder()` 等仍作用于 vault，不受影响。改动点在 `src/base/document.ts` 的 `loadBaseDocument`——现为 `readFileSync(abs)` 取 source 后解析，把「取 source」与「解析 source」拆开即可。
 
-## 🔧 2026-07-30 统一算子模型（pipeline 改造）——片一/二/三已落地，剩片四
+## 🔧 2026-07-30 统一算子模型（pipeline 改造）——四片全部落地，剩 flaky 观察
 
 设计真相源：[`pipeline-op-model.md`](./docs/design/pipeline-op-model.md)（四片切口见 §9，Decision Log 已到 D11）。
 
@@ -121,7 +121,7 @@ sha256: c7f384c1150ebf326ac4ee51dbd287ce1692cb6a140a669cfd1f7b4884c8b737
 
 - [x] **片四 · 配置面：`--pipe` 声明式步骤列表 + kv 兼容（2026-07-30 落地）**：`--pipe step=<spec>`（可重复，一 flag 一算子、不切分）⟷ 配置段 `pipelines.<name>.steps: string[]`；`steps` 存在时优先于 `actions`，命令行显式给链（任一形态）整体覆盖基底链（D12 细化）；`actions` 括号感知切分逐字不变。验收对拍：同一算子链 `actions=` vs `step=` 产出 `RunReport` 既有字段逐字段相等；含逗号 spec（`filter status == "a,b"`）在 `step=` 下整条保留、在 `actions=` 下按既有行为劈碎报「未知操作」（差异钉成契约）。计划：[`docs/plans/2026-07-30-pipeline-slice4-steps.md`](docs/plans/2026-07-30-pipeline-slice4-steps.md)。**「多平台 shell 管道」的前置阻塞就此解除。**
   - ~~⚠️ 核心问题是分隔符~~（已解决）：原 `actions=` 逗号分隔把含逗号算子 spec 劈碎（`splitTopLevel` 只认括号不认引号），片二/三算子在 CLI 上表达不出来——`step`/`steps` 一元素一算子，无分隔符问题。注意 TODO 原举例 `filter tags contains "a,b"` 与实现不符（filter 表达式子集无 `contains`，只有 ==/!=/>/…），契约用例改用等值比较 + 含逗号字符串字面量。
-- [ ] **§12 两条未决问题需回写定案**：①`links.check`/`lint` 的诊断挂在 `Row.fields` 哪个键（片二实现时已实际选定，需回写设计文档从「倾向」改为「已定」）；②多根 vault 下 `base`/`search` 产出行的 `path` 归一是否与索引主键零冲突（片二已跑通，需补一条显式断言而非依赖巧合）。
+- [x] **§12 两条未决问题需回写定案（2026-08-02 落地）**：①`links.check`/`lint` 诊断挂 `Row.fields.diagnostics`（D13，设计文档从「倾向」改「已定」）；②多根 vault 下 `base`/`search` 行 `path` 与索引主键同源（D14，`layout.toKey`；`query`/`search` 透传 DB 键、`base` 透传 `file.path`），新增 Op-S3/Op-B9 显式断言而非依赖巧合。
 - [ ] **🐞 间歇性测试失败（未定位）**：片三提交前观察到一次 `1028 pass / 1 fail`，同一工作区状态随后连跑三次全绿，**未捕获失败用例名**。疑似时序相关（watch/debounce 类）。下次复现时立刻记下用例名；若持续不复现也不要当作已解决——flaky 测试会掩盖真实回归。
 
 **编排过程中补的两条设计决策**（写代码才暴露的原文歧义，非实现错误）：`D9` `OpOutcome` 漏 `changed`/`skipped` 信号（不补则 `RunReport` 四字段静默归零、连带打回 `d04d47d` 的写后刷索引）；`D10` `rowwise` 并发是逐行领取而非切片（切片与 §9.1-B 判据互斥）。另 `D11` 执行器不得对空批短路（否则「源」角色被静默取消，表现为 0 行 / 退出码 0 / 无诊断）。

@@ -7,8 +7,8 @@ tags:
   - orchestration
   - pipeline
   - x-basalt
-timestamp: 2026-07-30T15:56:28Z
-sha256: fe531b0bb44cadd194e8fd686295f636e30260781cbcfbee73fd6c992dd2098c
+timestamp: 2026-08-01T19:56:48Z
+sha256: 855673b002670b430b4b1db9b7bdf3d6568fa7b18556eb189200a5c40ef2af3b
 ---
 # 内置 pipeline 改造：统一算子模型
 
@@ -31,6 +31,10 @@ sha256: fe531b0bb44cadd194e8fd686295f636e30260781cbcfbee73fd6c992dd2098c
 > 信号，不补则 `RunReport` 四个字段静默归零并连带打回 `d04d47d` 的写后刷索引；D10——§3.2.1 的
 > 「切成片」与 §9.1-B 的「同时在跑的行数 ≤ concurrency」互斥，钉死为逐行领取。
 > 两条都是**写代码时才暴露的设计歧义**，不是实现错误。
+>
+> **2026-08-02 回写（§12 收尾）**：片二遗留的两个必决项已定并落断言——D13 诊断统一挂
+> `Row.fields.diagnostics`（实现早已选定，本文从「倾向」改「已定」）；D14 读源算子行 `path`
+> 与索引主键同源（`layout.toKey`），新增 Op-S3 / Op-B9 显式断言，不再依赖巧合。
 
 ## 1. 要解决的问题
 
@@ -341,6 +345,8 @@ base tasks.base#overdue → meta.set status={{row.next_status}}
 | D10 | `rowwise` 并发是「逐行领取」而非「切成 N 片」 | §3.2.1 原措辞「切成片」与 §9.1-B 判据「同时在跑的**行**数 ≤ concurrency」互斥，且真正值得批量优化的算子都是 `rowwise: false` 走整批分支、收不到切片好处；逐行才是「与今天逐字等价」 | 切成 N 片——判据要改写成限制片数，失去与旧语义的等价锚点，而这是片一唯一的兼容判据 |
 | D11 | 执行器**不得**对空批短路；`ctx` 资源也不得按「有行才准备」条件供给 | 「源」的定义就是 `0 → N` 忽略入参，空批跳过等于静默取消源角色，且表现为「0 行 / 退出码 0 / 无诊断」。片一未暴露是因为那 7 个动作全是 `N → N` 透传型；片二接 `query` 作源时当场撞上 | ①保留短路 + 给 `Op` 加 `source: boolean` 标志——违反 D2（不分算子类型），且分类边界的争议会回来；②保留短路 + 例外名单——每加一个源算子都要改执行器，接缝失效 |
 | D12 | 片四配置面：配置段 `steps: string[]`（一元素一算子 spec，**不切分**）+ CLI 可重复 `--pipe step=<spec>`（按出现顺序成链）；存在时优先于 `actions`，`actions` 切分行为逐字不变。细化：命令行显式给出链（`step` 或 `actions` 任一形态）时**整体覆盖基底链**，基底的另一形态不沿用——否则用户显式写的 `actions=` 会被基底 `steps` 静默吞掉。**`actions` 不下线**：它是简单链的紧凑写法（dogfood 在用），与 `steps` 长期并存，执行层同一行消费；若未来退役须证明「存量可无损改写 + 双口径持续误用」并走 breaking 流程 | 片二/三算子参数天然含逗号（DQL、`contains "a,b"`、`.base#view`），逗号分隔面把单条 spec 劈碎、后半段被当算子名报错——能力已落地但 CLI 表达不出来，这是片四的真实动机 | ①给 `splitTopLevel` 加引号感知——shell 已先剥过一层引号，CLI 拿到的串里引号语义不可靠，且改动 `actions` 既有切分行为违反 D5；②算子参数禁逗号——削已落地的能力；③退役 `actions` 只留 `steps`——破坏 dogfood 存量（违反 D5），且简单链失去紧凑写法 |
+| D13 | `links.check` / `lint` 的诊断统一挂 `Row.fields.diagnostics`，类型复用 `src/lint/report.ts` 的 `BasaltDiagnostic[]`，不另造形状；源模式一行一文件、转换模式按行路径合并 | §12 片二必决项：写第一个诊断类算子前必须拍死。实现已按此落地（`src/orchestrator/ops.ts` `diagnosticsToRows`，lint/links.check 共用），本文回写从「倾向」改「已定」 | ①键名用单数 `diagnostic`——数组语义被键名否定；②再包一层 `{ items }`——与既有诊断结构两套形状；③塞 `Row.failed`——那是执行失败语义，会污染 `onError=continue` 的行剔除 |
+| D14 | 读源算子（`query`/`search`/`base`）行 `path` = 索引主键（`layout.toKey`：单根 POSIX 相对，多根 `<根目录名>/<相对>`），与写侧 `toAbs` 互逆 | §12 片二必决项：多根下不归一，读侧行 path 与写动作 / 索引键对不上，路由与防回环会静默失配。`query`/`search` 本就透传 DB 键、`base` 的 `file.path` 也来自索引键（`src/base/source.ts`），零换算天然一致；显式断言 Op-S3 / Op-B9，不再依赖「片二跑通」的巧合 | ①读侧自行 `relative(root, abs)` 重算——单根与旧键一致、多根丢命名空间前缀，两套键并存；②行 path 返回绝对路径——泄露物理位置且与索引键不可比；③给 `Row` 加第二套键字段——污染行模型，路由 / 防回环 / 写动作全部要跟着改 |
 
 ## 11. 验收口径
 
@@ -355,20 +361,16 @@ base tasks.base#overdue → meta.set status={{row.next_status}}
 
 ## 12. 未决问题
 
-**片二前必须定**（否则算子写出来就要返工）：
-
-- `links.check` / `lint` 产出的是诊断而非行，映射成 `Row` 时诊断放 `fields` 的哪个键，需要统一命名。
-  倾向 `fields.diagnostics: Diagnostic[]`（复用 `src/lint/report.ts` 既有结构，不另造形状），
-  一行一文件、诊断成数组挂在该行上——但需在写第一个诊断类算子前拍死。
-- 多根 vault 下 `base`/`search` 产出的行 `path` 归一到哪个命名空间——沿用 `resolveVaultLayout`，
-  但需在片二确认没有与索引主键冲突。
-
 **片三前必须定**：
 
 - `filter <expr>` 的表达式用什么？复用 DQL 的 WHERE 子集，还是只做字段比较？倾向后者（守 D4）。
 
 **已定，不再是未决**：
 
+- ~~`links.check` / `lint` 诊断挂 `fields` 哪个键~~ → D13（`Row.fields.diagnostics: BasaltDiagnostic[]`，
+  源模式一行一文件、转换模式按行路径合并）。
+- ~~多根 vault 下 `base`/`search` 行 `path` 归一到哪个命名空间~~ → D14（与索引主键同源
+  `layout.toKey`，写侧 `toAbs` 是其逆；显式断言 Op-S3 / Op-B9）。
 - ~~并发在批算子模型下落在哪一层~~ → D6（调度层按 `rowwise` 切批）。
 - ~~逐行失败怎么传给调度层~~ → D7（`OpOutcome.failed`）。
 - ~~片一拿什么当验收判据~~ → D8 / §9.1。
