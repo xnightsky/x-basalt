@@ -1,13 +1,14 @@
 import assert from "node:assert/strict";
 import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { basename, join } from "node:path";
 import { test } from "node:test";
 import { VaultIndexer } from "../src/indexer/index.js";
 import { DataviewEngine } from "../src/query/index.js";
 import { registerBuiltinOps } from "../src/orchestrator/ops.js";
 import { resolve } from "../src/orchestrator/registry.js";
 import { Orchestrator } from "../src/orchestrator/engine.js";
+import { resolveVaultLayout } from "../src/utils/path.js";
 import type { Op, OpContext, Row } from "../src/orchestrator/types.js";
 
 // === 模块级初始化 ===
@@ -518,6 +519,46 @@ test("Op-Meta Given query/search 算子 When 检查元数据 Then rowwise=false,
   const searchOp = resolve("search test") as Op;
   assert.equal(searchOp.rowwise, false, "search 应为 rowwise: false");
   assert.equal(searchOp.write, false, "search 应为 write: false");
+});
+
+// ---------------------------------------------------------------------------
+// Op-S3 多根 vault：search 产出行 path = 索引主键（D14 显式断言）
+// ---------------------------------------------------------------------------
+test("Op-S3 Given 多根 vault When search 作源 Then 行 path 与索引主键零冲突（根名命名空间）", async () => {
+  const a = mkdtempSync(join(tmpdir(), "xb-oq-a-"));
+  const b = mkdtempSync(join(tmpdir(), "xb-oq-b-"));
+  writeFileSync(join(a, "a.md"), "# A\napple pie content here\n");
+  writeFileSync(join(b, "b.md"), "# B\napple smoothie blend\n");
+  const dbPath = join(a, "i.db");
+  const indexer = new VaultIndexer({ vaultPath: [a, b], dbPath });
+  try {
+    for (const f of [join(a, "a.md"), join(b, "b.md")]) await indexer.update(f);
+
+    const engine = new DataviewEngine(dbPath);
+    try {
+      const searchOp = resolve("search apple") as Op;
+      const ctx: OpContext = { indexer, engine, dryRun: true, vaultRoots: [a, b], dbPath };
+      const result = await searchOp.run([], ctx);
+
+      assert.equal(result.failed.length, 0);
+      // 两篇都含 "apple"，各自落在不同根 → 行 path 必须是 `<根目录名>/<相对>` 命名空间键
+      const expected = [`${basename(a)}/a.md`, `${basename(b)}/b.md`].toSorted();
+      const actual = result.rows.map((r) => r.path).toSorted();
+      assert.deepEqual(actual, expected);
+      // 与 layout.toKey 同一键函数，写侧 toAbs 是其逆（零冲突不变量）
+      const layout = resolveVaultLayout([a, b]);
+      assert.deepEqual(
+        actual,
+        [layout.toKey(join(a, "a.md")), layout.toKey(join(b, "b.md"))].toSorted(),
+      );
+    } finally {
+      engine.close();
+    }
+  } finally {
+    indexer.close();
+    rmSync(a, { recursive: true, force: true });
+    rmSync(b, { recursive: true, force: true });
+  }
 });
 
 // ---------------------------------------------------------------------------

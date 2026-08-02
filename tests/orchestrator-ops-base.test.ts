@@ -12,12 +12,13 @@
 import assert from "node:assert/strict";
 import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { basename, join } from "node:path";
 import { test } from "node:test";
 import { VaultIndexer } from "../src/indexer/index.js";
 import { registerBuiltinOps } from "../src/orchestrator/ops.js";
 import { resolve } from "../src/orchestrator/registry.js";
 import { Orchestrator } from "../src/orchestrator/engine.js";
+import { resolveVaultLayout } from "../src/utils/path.js";
 import type { Op, OpContext, Row } from "../src/orchestrator/types.js";
 
 // === 模块级初始化 ===
@@ -493,5 +494,57 @@ test("Op-B7 Given base 不传 #viewName When run Then 缺省取 views[0]", async
   } finally {
     indexer.close();
     rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+// ---------------------------------------------------------------------------
+// Op-B9 多根 vault：base 产出行 path = 索引主键（D14 显式断言）
+// ---------------------------------------------------------------------------
+test("Op-B9 Given 多根 vault When base 作源 Then 行 path 与索引主键零冲突（根名命名空间）", async () => {
+  const a = mkdtempSync(join(tmpdir(), "xb-ob-a-"));
+  const b = mkdtempSync(join(tmpdir(), "xb-ob-b-"));
+  writeFileSync(
+    join(a, "tasks.base"),
+    `views:
+  - type: table
+    name: overdue
+    filters: 'status == "pending"'
+    order:
+      - file.path
+      - file.name
+      - status
+`,
+  );
+  writeFileSync(join(a, "a.md"), "---\nstatus: pending\n---\n# A\n");
+  writeFileSync(join(b, "b.md"), "---\nstatus: pending\n---\n# B\n");
+  writeFileSync(join(b, "c.md"), "---\nstatus: done\n---\n# C\n");
+  const vaultRoots = [a, b];
+  const dbPath = join(a, "i.db");
+  const indexer = new VaultIndexer({ vaultPath: [a, b], dbPath });
+  try {
+    for (const f of [join(a, "a.md"), join(b, "b.md"), join(b, "c.md")]) {
+      await indexer.update(f);
+    }
+
+    // .base 在根 a 内：算子参数用 `<根目录名>/tasks.base#view` 命名空间写法
+    const baseOp = resolve(`base ${basename(a)}/tasks.base#overdue`) as Op;
+    const ctx: OpContext = { indexer, dryRun: true, vaultRoots, dbPath };
+    const result = await baseOp.run([], ctx);
+
+    assert.equal(result.failed.length, 0, `不应有 failed：${JSON.stringify(result.failed)}`);
+    // 跨根命中的两篇：行 path 必须是 `<根目录名>/<相对>` 命名空间键
+    const expected = [`${basename(a)}/a.md`, `${basename(b)}/b.md`].toSorted();
+    const actual = result.rows.map((r) => r.path).toSorted();
+    assert.deepEqual(actual, expected);
+    // 与 layout.toKey 同一键函数，写侧 toAbs 是其逆（零冲突不变量）
+    const layout = resolveVaultLayout(vaultRoots);
+    assert.deepEqual(
+      actual,
+      [layout.toKey(join(a, "a.md")), layout.toKey(join(b, "b.md"))].toSorted(),
+    );
+  } finally {
+    indexer.close();
+    rmSync(a, { recursive: true, force: true });
+    rmSync(b, { recursive: true, force: true });
   }
 });
