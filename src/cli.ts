@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 import { exec } from "node:child_process";
 import { readFileSync } from "node:fs";
+import { createRequire } from "node:module";
 import { homedir } from "node:os";
 import { join } from "node:path";
 import { Command } from "commander";
@@ -214,10 +215,16 @@ function resolvePipeline(pipeFlags: string[], apply: boolean): PipelineConfig {
 
 const program = new Command();
 
+// === 自建实现: 版本号单一真相源 ===
+// --version 与 chat trace 里的 version 都来自 package.json，避免发布升版时
+// 只改 package.json 而 cli.ts 硬编码值滞留（0.1.0 → 0.9.0 曾发生此类漂移）。
+const require = createRequire(import.meta.url);
+const { version: cliVersion } = require("../package.json") as { version: string };
+
 program
   .name("x-basalt")
   .description("零依赖 Obsidian 运行时的 Vault 解析 / 索引 / 查询 / Skill 召回 CLI")
-  .version("0.1.0")
+  .version(cliVersion)
   .showHelpAfterError();
 
 program
