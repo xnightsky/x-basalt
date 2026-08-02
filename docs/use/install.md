@@ -1,6 +1,6 @@
 ---
-timestamp: 2026-08-02T03:36:02Z
-sha256: e737be3d9f5da990115c5037f001b2a555f24977f4a832ca05a2507b5e637e23
+timestamp: 2026-08-02T03:59:45Z
+sha256: f4d3c5ac3316de5bab5d8f934b9527c32b2f76c32d28ad2a5cd95ca45427b9b2
 type: guide
 title: 安装与运行 · x-basalt
 description: Node/pnpm 安装、编译、全局 link 与开发态 cli 运行
@@ -21,13 +21,13 @@ tags:
 | 项目     | 要求                                                             |
 | -------- | ---------------------------------------------------------------- |
 | Node.js  | **≥ 22**（开发用 24.x；`package.json` `engines` 字段强制声明）   |
-| 包管理器 | **pnpm**（项目锁版本 `pnpm@10.33.0`，`packageManager` 字段声明） |
+| 包管理器 | **pnpm ≥ 10.33.0**（`engines.pnpm` 最小版本约束，不锁精确版本） |
 
 检查版本：
 
 ```bash
 node --version    # 须 v22.x 以上
-pnpm --version    # 须已安装
+pnpm --version    # 须 ≥ 10.33.0（低于下限时 pnpm 会拒绝运行）
 ```
 
 pnpm 未安装时：`npm install -g pnpm`。

@@ -22,6 +22,8 @@
 
 ### Fixed
 
+- **pnpm 版本从「固定精确版」改为「最小版本约束」** —— `packageManager: pnpm@10.33.0` 是精确锁定（corepack 设计如此、不支持范围）；现删除该字段，改用 `engines.pnpm: ">=10.33.0"` 声明最小版本。本地开发时 pnpm 版本低于下限会直接报 `ERR_PNPM_UNSUPPORTED_ENGINE`，等于或高于下限的 pnpm 10/11 均可正常使用；`AGENTS.md` 与 `docs/use/install.md` 同步更新。
+
 - **pnpm 10 不再读取 `package.json` 的 `pnpm` 字段，原生构建放行配置迁移到 `pnpm-workspace.yaml`** —— pnpm 10 对 `package.json` 中 `pnpm.onlyBuiltDependencies` 的读取已移除，每次 `pnpm` 命令都会打 WARN。现把 `onlyBuiltDependencies: [better-sqlite3]` 迁至 `pnpm-workspace.yaml`（pnpm 10 设置的唯一新位置）并从 `package.json` 删除该字段，告警消失、放行语义不变；`AGENTS.md` 与 `docs/use/` 相关说明同步更新。
 
 ## [0.9.0] - 2026-07-31
