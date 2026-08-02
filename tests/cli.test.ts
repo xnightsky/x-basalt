@@ -254,9 +254,10 @@ test("skills get / recall / list 主路径：召回内置规范", () => {
 // 接口一致性：scan/run/base/lint 都有 --json，query 此前没有，显式写就撞 unknown option。
 // 输出本就是 JSON，补 flag 只为「按其它命令类推」的写法能被接受。
 test("query --json 被接受且输出仍是合法 JSON（与其它命令的开关对齐）", () => {
-  const withFlag = run(["query", 'LIST FROM ""', "--json"]);
+  // 显式走共享索引：默认库路径会被 X_BASALT_DIR 等环境变量改向，用例必须自足（与其它 query 用例一致）。
+  const withFlag = run(["query", 'LIST FROM ""', "--db", sharedDb, "--json"]);
   assert.equal(withFlag.status, 0, `--json 不应报 unknown option：${withFlag.stderr}`);
-  const bare = run(["query", 'LIST FROM ""']);
+  const bare = run(["query", 'LIST FROM ""', "--db", sharedDb]);
   assert.deepEqual(
     JSON.parse(withFlag.stdout),
     JSON.parse(bare.stdout),
