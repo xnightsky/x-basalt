@@ -1,6 +1,6 @@
 ---
-timestamp: 2026-06-30T00:01:23Z
-sha256: e7ce76770201c552195e5c24113771fe7324b06cb3490d9f6683742252d337ab
+timestamp: 2026-08-01T19:57:15Z
+sha256: 916f9e925959f9b01ea5bb1ec11704c7c131d0c7d18f374c6fc80185163fa657
 type: guide
 title: 安装与运行 · x-basalt
 description: Node/pnpm 安装、编译、全局 link 与开发态 cli 运行
@@ -105,8 +105,8 @@ pnpm run build   # 重编译；npm link shim 立即指向新产物，无需重�
 ## 验证安装
 
 ```bash
-x-basalt --version   # 输出: 0.1.0
-x-basalt --help      # 列出全部 6 条命令：parse / index / scan / query / skills / watch
+x-basalt --version   # 输出: 0.9.0（随发布版本变化）
+x-basalt --help      # 列出全部 13 条命令：parse / index / scan / query / search / base / skills / meta / run / watch / chat / links / lint
 ```
 
 若提示命令未找到，检查全局 `bin` 目录是否在 PATH（`npm bin -g` 查看路径）。
@@ -119,7 +119,7 @@ x-basalt --help      # 列出全部 6 条命令：parse / index / scan / query /
 
 | 目标                   | 章节                                         |
 | ---------------------- | -------------------------------------------- |
-| 6 条命令的参数详解     | [commands.md](commands.md)                   |
+| 全部命令的参数详解     | [commands.md](commands.md)                   |
 | DQL 查询文法与隐式字段 | [querying-dql.md](dql.md)           |
 | 索引构建与增量同步     | [indexing-and-sync.md](indexing.md) |
 | 免去重复传参的配置文件 | [configuration.md](config.md)         |
