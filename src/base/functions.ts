@@ -205,6 +205,16 @@ function rejectRenderFunction(entry: BaseFunctionEntry): never {
  * `containsAll` 那种「单 list 也收」的糖是成员语义的历史包袱，不外扩）。
  * 非 number 参 → 行级类型错误，不静默跳过。非有限值（YAML `.inf`）原样参与，
  * 与既有 `round`/`mean` 的口径一致（不额外做有限性收窄）。
+ *
+ * @behavior
+ * Given 任一实参非 number
+ * When extremumOf
+ * Then 抛行级类型错误，不静默跳过该参
+ *
+ * @behavior
+ * Given 全部实参为 number
+ * When extremumOf
+ * Then 返回最大/最小值（非有限值如 .inf 原样参与，不做有限性收窄）
  */
 function extremumOf(entry: BaseFunctionEntry, args: BaseValue[], kind: "max" | "min"): number {
   let best: number | undefined;
@@ -270,6 +280,16 @@ const DATE_FORMAT_TOKEN_NAMES: readonly string[] = Object.keys(dateFormatTokens(
  * `MM`+`MM` 静默输出 `0808`，而用户写 `MMMM` 要的是月名——静默给错数字比报错糟得多。
  * 游程整体查表：查不到（`MMMM`/`dddd`/`A`/`Z` 等本地化或未实现 token）即报错。
  * 非字母字符原样透出；`[文本]` 转义字面量（同 moment）。
+ *
+ * @behavior
+ * Given 格式串含未闭合 `[`
+ * When formatDateValue
+ * Then 报参数类型错误（字面文本须写作 [文本]），不静默当普通字符透出
+ *
+ * @behavior
+ * Given 格式串含本地化/未实现 token（MMMM/dddd/A/Z 等）
+ * When formatDateValue
+ * Then 报参数类型错误并列支持 token，不静默输出英文、不按最长已知 token 贪婪切分
  */
 function formatDateValue(entry: BaseFunctionEntry, epochMs: number, fmt: string): string {
   const table = dateFormatTokens(new Date(epochMs));
@@ -325,6 +345,21 @@ const RELATIVE_STEPS: readonly (readonly [string, number])[] = [
  * 1 秒内为 `just now`。不本地化：官方该函数的输出随 Obsidian 界面语言变化，
  * 本就不是稳定 schema（设计 §14），复刻不了也不该复刻；固定串至少保证字节稳定。
  * 时间源恒为注入 clock（`ctx.clock()`），故同 clock 重跑结果一致。
+ *
+ * @behavior
+ * Given 与注入 clock 的差值绝对值 < 1 秒
+ * When relativeFromNow
+ * Then 返回 "just now"
+ *
+ * @behavior
+ * Given 过去时刻（now - epochMs > 0）
+ * When relativeFromNow
+ * Then 返回 "N unit ago"（N=1 时单位不加 s）
+ *
+ * @behavior
+ * Given 未来时刻（now - epochMs < 0）
+ * When relativeFromNow
+ * Then 返回 "in N units"
  */
 function relativeFromNow(epochMs: number, now: number): string {
   const diff = now - epochMs; // >0 表示过去
@@ -357,6 +392,16 @@ function expectFileReceiver(entry: BaseFunctionEntry, r: BaseValue | null): Base
  * 取「链接目标字符串」：接受 string / link / file 三种形态（片三 `linksTo`/`file()`/`link()` 共用）。
  * 这是 `linksTo` 相对既有 `hasLink(string)` 的增量——后者只收字符串，前者收**类型化的**目标，
  * 于是 `file.linksTo(link(...))` / `file.linksTo(file(...))` 可写。
+ *
+ * @behavior
+ * Given 实参为 string/link/file 之一
+ * When linkTargetOf
+ * Then 分别取原串 / link.target / file.path 作目标字符串
+ *
+ * @behavior
+ * Given 实参为其他类型（number/boolean/list/object）
+ * When linkTargetOf
+ * Then 抛参数类型错误
  */
 function linkTargetOf(entry: BaseFunctionEntry, v: BaseValue, what: string): string {
   if (typeof v === "string") return v;
@@ -368,6 +413,11 @@ function linkTargetOf(entry: BaseFunctionEntry, v: BaseValue, what: string): str
 /**
  * 取行集 file 解析器；未注入即「本上下文不提供数据集解析」→ unsupported，而非静默 MISSING。
  * 触发点只有一个：自定义汇总求值（禁止访问行外状态，见 evaluator 的 EvalContext.resolveFile）。
+ *
+ * @behavior
+ * Given 求值上下文未注入 resolveFile（自定义汇总等行外受限语境）
+ * When requireResolver
+ * Then 抛 BaseUnsupportedError，不静默 MISSING
  */
 function requireResolver(
   entry: BaseFunctionEntry,
@@ -384,6 +434,16 @@ function requireResolver(
 /**
  * `slice` 共用的索引校验（string/list 两组同款）：start 必传、end 可选，均须为整数。
  * 负索引与越界钳制**沿用 JS `slice` 语义**（自建口径，官方未定义；标注待 oracle）。
+ *
+ * @behavior
+ * Given start/end 非整数
+ * When sliceArgs
+ * Then 抛参数类型错误，不静默取整
+ *
+ * @behavior
+ * Given 仅传 start
+ * When sliceArgs
+ * Then 返回 [start, undefined]（end 缺省 = 串/列表尾）
  */
 function sliceArgs(entry: BaseFunctionEntry, args: BaseValue[]): [number, number | undefined] {
   const start = expectInteger(entry, args[0] as BaseValue, "start");
@@ -399,6 +459,16 @@ function sliceArgs(entry: BaseFunctionEntry, args: BaseValue[]): [number, number
  * （空集无任一），与主流集合语义一致；官方 oracle 未覆盖，注释存证。
  *
  * @param requireString - string 版要求元素全为 string；list 版不限制元素类型（typedEqual 比较）
+ *
+ * @behavior
+ * Given 调用为单 list 实参（containsAll(["a","b"])）
+ * When collectNeedles
+ * Then 解包为该 list 作 needle 集合；否则按变长实参处理
+ *
+ * @behavior
+ * Given requireString=true 且元素含非 string
+ * When collectNeedles
+ * Then 抛参数类型错误，不静默跳过
  */
 function collectNeedles(
   entry: BaseFunctionEntry,
@@ -455,6 +525,8 @@ const ENTRIES: readonly BaseFunctionEntry[] = [
       if (typeof v === "string") {
         // trim 后整体可解析为有限 number 才转换（" 1 "→1、"1px"→错误）；
         // 转换失败行为 P1 冻结为「行级类型错误」（BASE-EXPR-005 可观察）。
+        // Given 已是 number → 原样返回；Given 字符串 trim 后可整体解析为有限 number → 转换；
+        // Given 其余形态（null/MISSING/boolean/list/object/不可解析串）→ 行级类型错误，不静默塌 0。
         const t = v.trim();
         if (t !== "") {
           const n = Number(t);
@@ -579,6 +651,8 @@ const ENTRIES: readonly BaseFunctionEntry[] = [
     impl: (_r, args, _ctx, entry) => {
       const v = args[0] as BaseValue;
       // 幂等：已是 date/datetime 原样返回（`date(date(x)) == date(x)`）。
+      // Given 字符串为严格 ISO → 构造 date/datetime；Given 数字 → 按 epoch 毫秒构造 datetime
+      // （与 frontmatter 推断同一函数、同一口径）；Given 非法 ISO/非有限数/其他类型 → 行级类型错误。
       if (isDateValue(v)) return v;
       if (typeof v === "string") {
         // 严格 ISO（与 frontmatter 推断同一函数，保证「属性里能识别的」与「date() 能构造的」
@@ -610,6 +684,8 @@ const ENTRIES: readonly BaseFunctionEntry[] = [
     impl: (_r, args, _ctx, entry) => {
       const v = args[0] as BaseValue;
       if (isDurationValue(v)) return v; // 幂等
+      // Given 合法 duration 串 → 解析；Given 数字 → 按毫秒构造（与输出口径互为逆、可往返）；
+      // Given 非法串/非有限数/其他类型 → 行级类型错误。
       if (typeof v === "string") {
         const d = parseDurationLike(v);
         if (d !== undefined) return d;
@@ -645,6 +721,7 @@ const ENTRIES: readonly BaseFunctionEntry[] = [
       // 解析范围 = **当前查询的行集**（不查库、不碰文件系统）：markdown 模式解析不到附件，
       // all-files 模式才能——`file()` 看得见的东西与查询数据集口径一致。
       // 解析不到 → MISSING（读侧不塌缩；投影时才成 null），不伪造空 file 值。
+      // Given 目标在行集内 → 返回对应 file 值；Given 悬空/不在行集 → MISSING。
       return requireResolver(entry, ctx)(target) ?? MISSING;
     },
   },
@@ -664,6 +741,7 @@ const ENTRIES: readonly BaseFunctionEntry[] = [
       const target = linkTargetOf(entry, v, "链接目标");
       // link 是**纯值构造**，不解析行集：指向不存在的文件也合法（wikilink 本就允许悬空），
       // 与 file() 的「解析不到 → MISSING」是有意的两种口径。
+      // Given 已是 link 且未给 display → 原样返回；Given 给 display → 换显示文本的新 link。
       return createLinkValue({ target, ...(display !== undefined ? { display } : {}) });
     },
   },
@@ -680,6 +758,7 @@ const ENTRIES: readonly BaseFunctionEntry[] = [
       const link = expectLinkReceiver(entry, r);
       // 用原始 target（未归一）走解析器三级匹配：bare `[[A]]` 也能命中 `Projects/A.md`。
       // 悬空链接 → MISSING（与 file() 同口径）。
+      // Given target 可解析到行集内文件 → 返回 file 值；Given 悬空 → MISSING。
       return requireResolver(entry, ctx)(link.target) ?? MISSING;
     },
   },
@@ -710,6 +789,7 @@ const ENTRIES: readonly BaseFunctionEntry[] = [
     // 原「当日 UTC 零点起的 duration」口径已翻；要 duration 用 date 差或 format 后解析。
     // precision="date" 的值恒为 "00:00:00"（其 epoch 就是当日 UTC 00:00）。
     // 取模两次是为负 epoch（1970 前的日期）也落在 [0, DAY_MS)。
+    // Given 任意 date/datetime → 返回 UTC "HH:mm:ss" 字符串；Given precision="date" → 恒 "00:00:00"。
     impl: (r, _args, _ctx, entry) => {
       const d = expectDateReceiver(entry, r);
       const ms = ((d.epochMs % DAY_MS) + DAY_MS) % DAY_MS;
@@ -729,6 +809,7 @@ const ENTRIES: readonly BaseFunctionEntry[] = [
     impl: (r, _args, ctx, entry) => {
       const d = expectDateReceiver(entry, r);
       // 时间源恒为注入 clock（与 today/now 同源）——否则本函数会破坏字节稳定。
+      // Given 同 clock 重跑 → 结果字节一致（relative 不取宿主本地时间）。
       return relativeFromNow(d.epochMs, ctx.clock().getTime());
     },
   },
@@ -764,6 +845,8 @@ const ENTRIES: readonly BaseFunctionEntry[] = [
     impl: (r, args, _ctx, entry) => {
       const name = expectString(entry, args[0] as BaseValue, "类型名");
       // 合法类型名集合（设计 §9）；未知名 → 类型错误（不静默 false，防拼写漂移）。
+      // Given 六名之一（string/number/boolean/list/object/null）→ 按值判定；
+      // Given 未知名 → 类型错误；Given MISSING/file → 六名全 false。
       switch (name) {
         case "string":
           return typeof r === "string";
@@ -797,6 +880,7 @@ const ENTRIES: readonly BaseFunctionEntry[] = [
     impl: (r, _args, _ctx, entry) => {
       // P1 冻结口径：string 原样；number/boolean 经 String()；null/MISSING → ""；
       // list/object/file → 类型错误（不定义其字符串化，避免 "[object Object]" 式泄漏）。
+      // Given string/number/boolean/null/MISSING → 各自既定字符串；Given 其余 → 类型错误。
       if (typeof r === "string") return r;
       if (typeof r === "number" || typeof r === "boolean") return String(r);
       if (r === null || r === MISSING) return "";
@@ -884,6 +968,8 @@ const ENTRIES: readonly BaseFunctionEntry[] = [
       // BASE-SEC-004）。用 split/join 而非 String.replaceAll，是为了让替换文本里的
       // `$&`/`$1` 保持字面量——replaceAll 会把它们当替换模式展开。
       // 空 needle → 类型错误：JS 语义是「每个字符间插入」，属反直觉行为，不静默提供。
+      // Given 非空 needle → 字面子串全局替换（非 regex，$&/$1 保持字面量）；
+      // Given 空 needle → 行级类型错误。
       if (needle === "") throw argTypeError(entry, "被替换子串不可为空串");
       const out = s.split(needle).join(replacement);
       // 替换可放大长度（`"aaa".replace("a", <长串>)`），产物规模受硬上限约束。
@@ -988,6 +1074,7 @@ const ENTRIES: readonly BaseFunctionEntry[] = [
       // ReDoS 三层防护（静态拒绝灾难性构造 / 限长 / 有界编译缓存）见 regexp.ts；
       // 不合法或不安全 → BaseInvalidRegexError → 行级 base/invalid-regex，**不静默不匹配**
       // （与 DQL 侧 regexmatch 降级为 0 的策略有意不同，理由见 regexp.ts 文件头）。
+      // Given 合法且安全的正则 → 返回匹配布尔；Given 非法/灾难性构造/超限 → 行级 invalid-regex。
       return baseRegexTest(pattern, s);
     },
   },
@@ -1043,6 +1130,8 @@ const ENTRIES: readonly BaseFunctionEntry[] = [
         args.length === 1 ? expectNonNegativeInteger(entry, args[0] as BaseValue, "digits") : 0;
       // JS toFixed 定义域为 0..100，越界抛 RangeError（非 BaseTypeError，会穿透行级通道
       // 变成引擎级异常）——前置拦成行级类型错误。
+      // Given digits 缺省 → 0 位小数；Given digits 非负整数且 ≤100 → 按指定位数；
+      // Given 越界/负数/非整数 → 行级类型错误（不静默取整）。
       if (digits > 100) throw argTypeError(entry, "digits 须在 0..100（JS toFixed 定义域）");
       return n.toFixed(digits);
     },
@@ -1213,6 +1302,7 @@ const ENTRIES: readonly BaseFunctionEntry[] = [
       // BaseTypeError → evaluator 转行级类型错误。
       // 暂定口径（待 oracle）：null/MISSING 元素恒排最后（沿用 sortKeyCompare 的「空值最后」
       // 口径，但不引入其跨类型分组的确定性行为——本片混合类型直接报错）。
+      // Given 可比值 → 按 compareValues 升序；Given 空值 → 恒排最后；Given 混合类型 → 行级类型错误。
       out.sort((a, b) => {
         const aEmpty = a === null || a === MISSING;
         const bEmpty = b === null || b === MISSING;
@@ -1315,6 +1405,8 @@ const ENTRIES: readonly BaseFunctionEntry[] = [
     // （`values.mean()`=0.25=(1+2)/12、entries=12），故「非 number 不计分子、计分母」；
     // 全非 number（如 [null]）→ null（官方 summary-custom-limited 读数 null，非类型错误）。
     // 空列表仍报错（均值无定义，不静默塌 0）。
+    // Given 全 number 列表 → 算术均值；Given 含非 number（含 null/MISSING）→ 不计分子、计分母；
+    // Given 全非 number → null；Given 空列表 → 行级类型错误。
     impl: (r, _args, _ctx, entry) => {
       const list = expectListReceiver(entry, r);
       if (list.length === 0) {
@@ -1481,6 +1573,8 @@ const ENTRIES: readonly BaseFunctionEntry[] = [
       // 反例：Alpha 里写的是 bare `[[Beta]]`，而 `file("Beta").path` 是 `Projects/Beta.md`；
       // 文本匹配时目标含 `/` 会进 qualified 分支，pathKey("Beta")="beta" ≠ "projects/beta"
       // → 明明链上了却判 false。改为「把每条出链解析一遍，比解析后的 path」才正确。
+      // Given file 入参 → 逐条出链解析后比路径（bare `[[Beta]]` 也能命中 `Projects/Beta.md`）；
+      // Given string/link 入参 → 文本目标匹配（与 hasLink 同口径，两处必给同一答案）。
       if (isFileValue(arg)) {
         const resolve = requireResolver(entry, ctx);
         return f.links.some((t) => resolve(t)?.path === arg.path);
@@ -1545,6 +1639,21 @@ for (const entry of ENTRIES) {
  * 均查不到返回 undefined（由 evaluator 转行级类型错误，如 `number.contains`）。
  *
  * @param receiver - "global" 表示全局调用；其余为方法 receiver 的运行时类型
+ *
+ * @behavior
+ * Given receiver="global"
+ * When lookupBaseFunction
+ * Then 仅按名字命中全局组条目
+ *
+ * @behavior
+ * Given receiver 为有独立分派组的类型（string/number/date/link/list/object/file）
+ * When lookupBaseFunction
+ * Then 优先命中该组条目
+ *
+ * @behavior
+ * Given 该组无此名或 receiver 无独立分派组（duration 等）
+ * When lookupBaseFunction
+ * Then 回退 "any" 组；仍查不到返回 undefined（由 evaluator 转行级类型错误）
  */
 export function lookupBaseFunction(
   name: string,

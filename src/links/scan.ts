@@ -17,7 +17,14 @@ function pushValue(m: Map<string, string[]>, k: string, v: string): void {
   else m.set(k, [v]);
 }
 
-/** 由已收集文件构建白名单目标索引（key 全小写，Obsidian 链接大小写不敏感；值保留原始大小写）。 */
+/**
+ * 由已收集文件构建白名单目标索引（key 全小写，Obsidian 链接大小写不敏感；值保留原始大小写）。
+ *
+ * @behavior
+ * Given 全部收集文件（含非 .md 资源）
+ * When buildTargetIndex
+ * Then 产出 pathSet/notesByStem/notesByPathKey/filesByBasename 四结构（资源 embed 目标可判）
+ */
 export function buildTargetIndex(all: CollectedFile[]): TargetIndex {
   const pathSet = new Set<string>();
   const notesByStem = new Map<string, string[]>();

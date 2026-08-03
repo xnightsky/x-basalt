@@ -25,7 +25,24 @@ export interface MetadataCheckOptions {
 const REQUIRED_RULE = "metadata/required-missing";
 const ENUM_RULE = "metadata/enum-invalid";
 
-/** 校验 vault 内文档的 required（缺字段）与 enum（值不在允许集），产 BasaltDiagnostic。 */
+/**
+ * 校验 vault 内文档的 required（缺字段）与 enum（值不在允许集），产 BasaltDiagnostic。
+ *
+ * @behavior
+ * Given 未知 profile / extends 环 / 未知父
+ * When checkMetadata
+ * Then 立即定向报错（即使 vault 为空也触发，不在运行期才暴露）
+ *
+ * @behavior
+ * Given profile 含 include glob
+ * When checkMetadata
+ * Then 只校验匹配文件；缺省 = 全 vault
+ *
+ * @behavior
+ * Given 文档缺 required 字段 / enum 值不在允许集
+ * When checkMetadata
+ * Then 产出对应规则诊断（required-missing / enum-invalid）
+ */
 export async function checkMetadata(opts: MetadataCheckOptions): Promise<BasaltDiagnostic[]> {
   // 前置解析（未知 profile / extends 环 / 未知父 立即定向报错，即使 vault 为空、无文件可触发）。
   const profile = resolveLintProfile(opts.profile, opts.profiles ?? {});

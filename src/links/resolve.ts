@@ -25,7 +25,19 @@ function suggestFrom(fromFileRel: string, candidates: string[] | undefined): str
   return candidates.map((c) => toRelative(fromFileRel, c)).toSorted();
 }
 
-/** 判定 wikilink / embed 目标（笔记按 stem/pathKey，资源按含扩展名 basename/path）。 */
+/**
+ * 判定 wikilink / embed 目标（笔记按 stem/pathKey，资源按含扩展名 basename/path）。
+ *
+ * @behavior
+ * Given qualified 目标（含 /）
+ * When resolveWikilink
+ * Then 按 pathKey 精确判定；不在索引 → not_found
+ *
+ * @behavior
+ * Given bare 目标（无 /）
+ * When resolveWikilink
+ * Then 按 stem/basename 判定；命中多处 → ambiguous_target + 建议；不命中 → not_found
+ */
 export function resolveWikilink(
   node: WikilinkNode,
   index: TargetIndex,
@@ -66,7 +78,24 @@ function decodeURITarget(s: string): string {
   }
 }
 
-/** 判定 Markdown inline link / 图片的本地目标。外部/锚点跳过；相对路径按当前文件目录解析。 */
+/**
+ * 判定 Markdown inline link / 图片的本地目标。外部/锚点跳过；相对路径按当前文件目录解析。
+ *
+ * @behavior
+ * Given 外部协议（http/mailto 等）或纯锚点目标
+ * When resolveMarkdownLink
+ * Then 跳过（external_skipped，不产出诊断）
+ *
+ * @behavior
+ * Given 相对路径含反斜杠
+ * When resolveMarkdownLink
+ * Then 恒报 backslash_path（跨平台会断，优先级最高）
+ *
+ * @behavior
+ * Given 相对路径解析后逃出 vault 根
+ * When resolveMarkdownLink
+ * Then 报 outside_vault；否则按索引判存在性，不存在 → not_found + 建议
+ */
 export function resolveMarkdownLink(
   node: MarkdownLinkNode,
   index?: TargetIndex,

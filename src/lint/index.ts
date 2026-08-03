@@ -42,6 +42,26 @@ export const LINT_RULES = Object.keys(RULE_RUNNERS);
 /**
  * 按 rules 分发跑规则，汇总诊断并按 file/line/column 稳定排序；有 error 级 → 退出码 1。
  * rules 省略时：给了 `--profile` 默认跑 metadata，否则默认 links（保持 P2 行为）。metadata 规则需 profile。
+ *
+ * @behavior
+ * Given rules 省略且未给 --profile
+ * When runLint
+ * Then 默认跑 links 规则（保持 P2 行为）
+ *
+ * @behavior
+ * Given rules 含未知/未实现规则名
+ * When runLint
+ * Then 抛错并列支持列表，不静默忽略
+ *
+ * @behavior
+ * Given metadata 规则但未指定 profile
+ * When runLint
+ * Then 抛错（metadata 需 --profile），不静默降级
+ *
+ * @behavior
+ * Given 汇总含 error 级诊断
+ * When runLint
+ * Then 返回 exitCode 1，否则 0
  */
 export async function runLint(opts: LintRunOptions): Promise<LintRunResult> {
   const rules = opts.rules?.length ? opts.rules : opts.profile ? ["metadata"] : ["links"];

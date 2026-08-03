@@ -15,7 +15,19 @@ export interface IgnoreMatcher {
   ignored(diagnostic: BasaltDiagnostic): boolean;
 }
 
-/** 极简 glob → RegExp：`**`=跨段任意、`*`=单段任意、`?`=单字符；其余字面转义，整体锚定。 */
+/**
+ * 极简 glob → RegExp：`**`=跨段任意、`*`=单段任意、`?`=单字符；其余字面转义，整体锚定。
+ *
+ * @behavior
+ * Given glob 含 `**`/`*`/`?` 通配
+ * When globToRegExp
+ * Then 分别映射为跨段/单段/单字符匹配，其余字符字面转义
+ *
+ * @behavior
+ * Given 匹配语义
+ * When globToRegExp
+ * Then 整体锚定（^...$），不产生子串误匹配
+ */
 export function globToRegExp(glob: string): RegExp {
   let re = "";
   for (let i = 0; i < glob.length; i++) {

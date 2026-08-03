@@ -262,6 +262,8 @@ program
     }
   });
 
+// scan：按需增量重索引——diff 文件系统 vs 索引表（默认 mtime+size，--rehash 按内容对比）。
+// 带 --pipe 时退化为「源」角色：scan 出的变更交由管道处理（默认仅 index 落库）。
 program
   .command("scan")
   .description(
@@ -340,6 +342,8 @@ program
     },
   );
 
+// query/search：只读索引库（不重新解析文件），DataviewEngine 单次 open/close。
+// query 恒 JSON 输出，--json 仅为与其它命令对齐的接口一致性补丁。
 program
   .command("query")
   .description("执行 Dataview 子集查询")
@@ -388,6 +392,8 @@ program
     }
   });
 
+// base：Bases 无头引擎薄出口（设计 §15 API 先于 CLI）——只做参数装配与退出码判定，
+// 业务逻辑全在 BaseEngine；JSON 即契约，diagnostics 含 error → exit 1。
 program
   .command("base")
   .description("执行 .base view 查询（Bases 无头引擎 P1；稳定 JSON 契约，不渲染表格）")
@@ -396,10 +402,7 @@ program
     ".base 文件路径（vault 相对或绝对）；传 `-` 或加 --stdin 从标准输入读 .base 定义（动态 base 第一步）",
   )
   .option("--view <name>", "指定 view 名（缺省取 views[0]）")
-  .option(
-    "--stdin",
-    "从标准输入读 .base 定义（等效 file 传 `-`；TTY 无管道输入报错不挂起）",
-  )
+  .option("--stdin", "从标准输入读 .base 定义（等效 file 传 `-`；TTY 无管道输入报错不挂起）")
   .option(
     "--vault <path>",
     "Vault 目录（可多个，重复 --vault；可回退配置 vault）",
@@ -443,14 +446,13 @@ program
       // file 与 --stdin 二选一：同给时以 --stdin 为准（file 传 `-` 是简写，冗余无害）。
       // TTY 无管道输入 → 报错不挂起（stdin 永不 EOF，静默等待会表现为「命令挂住」）。
       const useStdin = opts.stdin || file === "-";
-      const source =
-        useStdin
-          ? (assertPipedStdin(
-              process.stdin.isTTY,
-              'echo "views: …" | x-basalt base - --vault ./my-vault',
-            ),
-            await readStdinText(process.stdin))
-          : undefined;
+      const source = useStdin
+        ? (assertPipedStdin(
+            process.stdin.isTTY,
+            'echo "views: …" | x-basalt base - --vault ./my-vault',
+          ),
+          await readStdinText(process.stdin))
+        : undefined;
 
       const engine = new BaseEngine();
       try {
@@ -696,6 +698,8 @@ meta
     },
   );
 
+// run：编排器命令。命令层只决定「源」（--stdin 文件列表 / --pipe where= DQL / 默认 scan diff），
+// 后续算子链执行、写后刷索引、防回环全在 Orchestrator.runBatch。
 program
   .command("run")
   .description(
@@ -762,6 +766,8 @@ program
     },
   );
 
+// watch：常驻命令（不退出）。两种模式：--pipe 走编排器（先 scan 建基线、再增量维护），
+// 否则 indexer.watch + 可选 --on-change shell 模板；SIGINT/SIGTERM 优雅退出。
 program
   .command("watch")
   .description("监听模式：索引 + 文件变更实时输出")
@@ -820,6 +826,8 @@ program
     },
   );
 
+// chat：可选 AI 驱动（无 key 友好禁用）。双层防护：X_BASALT_CHAT_CHILD 防递归嵌套 +
+// 确认有 key 后才懒加载 src/chat（无 key 环境不触达 AI SDK 依赖）。
 program
   .command("chat")
   .description("自然语言驱动 vault（可选 AI；需 AI_GATEWAY_API_KEY，无则禁用，不影响其他命令）")

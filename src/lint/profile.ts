@@ -97,6 +97,21 @@ function resolveInternal(
  * name 是 config profile 就用之（**同名覆盖内置**），否则回退内置；两者都不是则定向报错。
  * extends 合并语义（design §8.2）：单父、子覆盖父、required 并集、enums 按字段并集（只加不减）、
  * include 子覆盖父、环检测、未知父定向报错。
+ *
+ * @behavior
+ * Given name 为 config profile
+ * When resolveLintProfile
+ * Then 用之（同名覆盖内置），按 extends 链合并 required/enums/include
+ *
+ * @behavior
+ * Given name 非自定义且非内置
+ * When resolveLintProfile
+ * Then 定向报错列可用名（自定义 + 内置），不静默回退
+ *
+ * @behavior
+ * Given extends 存在环或指向未知父
+ * When resolveLintProfile
+ * Then 定向报错（环路径 / 未知父名）
  */
 export function resolveLintProfile(
   name: string,

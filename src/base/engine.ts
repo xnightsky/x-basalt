@@ -373,6 +373,21 @@ export class BaseEngine {
   /**
    * 执行一次 .base 查询。不 throw（行级/文档级/预算问题一律经 diagnostics 表达）；
    * 唯一例外是索引库打不开（fileMustExist）等编程/环境错误，与 DataviewEngine 同口径。
+   *
+   * @behavior
+   * Given basePath 与 source 双缺或双给
+   * When query
+   * Then 返回 invalid-schema 诊断 + 空结果（不 throw、不静默降级）
+   *
+   * @behavior
+   * Given 未知 conformance id
+   * When query
+   * Then 返回 invalid-schema 诊断 + 空结果，不执行任何数据集
+   *
+   * @behavior
+   * Given 文档/行级/预算问题（YAML 非法、函数类型错误、执行超限）
+   * When query
+   * Then 一律经 diagnostics 表达并返回空/部分结果，不 throw
    */
   query(options: BaseQueryOptions): BaseQueryResult {
     const limits: BaseExecutionLimits = { ...DEFAULT_BASE_EXECUTION_LIMITS, ...options.limits };

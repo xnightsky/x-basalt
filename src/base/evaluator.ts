@@ -209,7 +209,19 @@ function spend(state: EvalState, offset: number): void {
   spendShared(state.sharedBudget, state.limits);
 }
 
-/** 扣查询级共享操作数总额（engine 的 groupBy/summaries 迭代亦复用本函数，口径统一）。 */
+/**
+ * 扣查询级共享操作数总额（engine 的 groupBy/summaries 迭代亦复用本函数，口径统一）。
+ *
+ * @behavior
+ * Given 累计扣减不超过 sharedBudget
+ * When spendShared
+ * Then 正常扣减
+ *
+ * @behavior
+ * Given 累计扣减超过 sharedBudget
+ * When spendShared
+ * Then 抛 BaseBudgetError（engine 转 base/execution-budget + 空结果）
+ */
 export function spendShared(
   budget: BaseSharedOperationBudget | undefined,
   limits: BaseExecutionLimits,
@@ -922,6 +934,16 @@ function evalBinary(
  * @param expr - parser 产出的 AST（errors 非空时不应传入）
  * @param row - 一行运行时数据（note 原始 frontmatter + file 品牌值）
  * @param ctx - 预算与行级错误回调
+ *
+ * @behavior
+ * Given 表达式触发行级错误（类型/未知属性/安全拒绝）
+ * When evaluateExpression
+ * Then 经 ctx.onRowError 上报一次并返回 MISSING（filter 语境按 false，projection 由调用方决定）
+ *
+ * @behavior
+ * Given 表达式超出操作数预算（BaseBudgetError）
+ * When evaluateExpression
+ * Then 上抛（engine 转 base/execution-budget + 空结果），不吞错
  */
 export function evaluateExpression(expr: BaseExpr, row: BaseRow, ctx: EvalContext): BaseValue {
   const state: EvalState = {

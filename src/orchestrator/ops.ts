@@ -22,6 +22,16 @@ import type { BasaltDiagnostic } from "../diagnostic.js";
  * 含 {{row.xxx}} 插值的 actionToken 走插值路径：对每行渲染参数后再构造 Action。
  *
  * 这是 §5 数据传递的兑现点：base 的 formula 计算列经 {{row.x}} 抵达写算子。
+ *
+ * @behavior
+ * Given actionToken 不含 {{row.xxx}} 插值
+ * When buildOp
+ * Then parseAction 一次绑定，逐行复用同一 Action（零开销逃逸路径，§9.1-A 判据）
+ *
+ * @behavior
+ * Given actionToken 含 {{row.xxx}} 插值
+ * When buildOp
+ * Then 每行渲染参数后再构造 Action 执行（只读不求值，守 D4）；渲染失败计入 failed 但仍执行
  */
 function buildOp(actionToken: string): Op {
   // === §5 插值兑现：不含 {{row. 时走零开销逃逸路径（§9.1-A 判据保护） ===
@@ -127,6 +137,21 @@ const PARAM_OPS: Record<string, ParamBuilder> = {
  * DQL 错误处理策略：
  * - 源模式：返回空 rows + 一条 failed（path="<query>"）。
  * - 转换模式：每行各记一条 failed + rows 原样透传。
+ *
+ * @behavior
+ * Given 入参 rows 为空（源模式）
+ * When makeQueryOp.run
+ * Then 执行 DQL 并产出命中文件 Row；结果缺 file.path 列 → 空 rows + failed
+ *
+ * @behavior
+ * Given 入参 rows 非空（转换模式）
+ * When makeQueryOp.run
+ * Then 过滤保留命中行并把 DQL 列值合并进 fields（同名键 DQL 值覆盖上游）
+ *
+ * @behavior
+ * Given DQL 执行抛错
+ * When makeQueryOp.run
+ * Then 源模式返回空 rows + 单条 failed；转换模式每行各记 failed 且 rows 原样透传
  */
 function makeQueryOp(dql: string): Op {
   return {
@@ -245,6 +270,21 @@ function makeQueryOp(dql: string): Op {
  *   并把 search 的字段合并进对应 Row 的 fields（同名键以 search 的值为准，覆盖上游值）。
  *
  * 错误处理策略同 query 算子。
+ *
+ * @behavior
+ * Given 入参 rows 为空（源模式）
+ * When makeSearchOp.run
+ * Then 执行全文检索并产出命中文件 Row（fields 含 score/name/snippet）
+ *
+ * @behavior
+ * Given 入参 rows 非空（转换模式）
+ * When makeSearchOp.run
+ * Then 过滤保留命中行并把 search 字段合并进 fields（同名键 search 值覆盖上游）
+ *
+ * @behavior
+ * Given 检索抛错
+ * When makeSearchOp.run
+ * Then 源模式返回空 rows + 单条 failed；转换模式每行各记 failed 且 rows 原样透传
  */
 function makeSearchOp(text: string): Op {
   return {
@@ -332,6 +372,21 @@ function makeSearchOp(text: string): Op {
  *   若 warning 也算失败则任何 base 算子都会失败）。
  *
  * 生命周期：每次 run 自己开自己关 BaseEngine，不要泄漏连接。
+ *
+ * @behavior
+ * Given 入参 rows 为空（源模式）
+ * When makeBaseOp.run
+ * Then 执行 BaseEngine.query 并产出命中文件 Row（fields 含 formula 计算列）
+ *
+ * @behavior
+ * Given 入参 rows 非空（转换模式）
+ * When makeBaseOp.run
+ * Then 过滤保留命中行并把列值合并进 fields（同名键上游优先）
+ *
+ * @behavior
+ * Given 诊断 severity=error
+ * When makeBaseOp.run
+ * Then 记入 failed（不抛异常、不静默吞）；warning/info 不进 failed
  */
 function makeBaseOp(params: string): Op {
   // 解析 `base <file>[#<viewName>]` 格式

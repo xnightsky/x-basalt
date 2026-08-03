@@ -281,6 +281,16 @@ const FORBIDDEN_PROPERTY_NAMES: ReadonlySet<string> = new Set([
  * （入参 key 为 string，symbol 键天然够不到）。
  *
  * @returns 判别联合——调用方据此区分「缺失 → MISSING 传播」与「拒绝 → 行级错误」
+ *
+ * @behavior
+ * Given key 不存在
+ * When safeGetOwn
+ * Then 返回 missing（走 MISSING 传播路径）
+ *
+ * @behavior
+ * Given key 为禁键（__proto__/constructor 等）或 getter/符号键
+ * When safeGetOwn
+ * Then 返回 rejected（调用方转行级错误，不泄漏值）
  */
 export function safeGetOwn(obj: object, key: string): SafeGetOwnResult {
   if (FORBIDDEN_PROPERTY_NAMES.has(key)) return { status: "forbidden" };
@@ -301,6 +311,16 @@ export function safeGetOwn(obj: object, key: string): SafeGetOwnResult {
  * - 非有限 number（NaN/Infinity，JSON 不会有，防御宿主对象传入）→ null；
  * - 数组/普通对象递归包装；对象只取 own enumerable string key，
  *   且经 {@link safeGetOwn} 过滤（`__proto__` 字面量键、getter 直接剔除，不泄漏进值域）。
+ *
+ * @behavior
+ * Given primitive/null
+ * When wrapValue
+ * Then 原样返回（非有限 number 归一为 null）
+ *
+ * @behavior
+ * Given 数组/普通对象
+ * When wrapValue
+ * Then 递归包装为 list/object，且经 safeGetOwn 剔除禁键与 getter（不泄漏进值域）
  */
 export function wrapValue(raw: unknown): BaseValue {
   if (raw === undefined) return MISSING;
@@ -356,6 +376,16 @@ function utcEpochChecked(
  *   **拍板：无时区后缀的 datetime 按 UTC 解释**（无头执行无宿主时区上下文，
  *   避免同一 vault 在不同时区机器上结果漂移）；
  * - 其余一律返回 undefined（非补零、非法分量、带毫秒/其他形态均不猜）。
+ *
+ * @behavior
+ * Given 严格 ISO 日期/日期时间（YYYY-MM-DD 或 YYYY-MM-DDTHH:mm[:ss] 可带 Z/±hh:mm）
+ * When parseDateLike
+ * Then 返回 date/datetime 值（无时区后缀按 UTC 解释）
+ *
+ * @behavior
+ * Given 非补零/非法分量/带毫秒/其他形态
+ * When parseDateLike
+ * Then 返回 undefined（不猜、不部分解析，由调用方转行级类型错误）
  */
 export function parseDateLike(v: unknown): BaseDateValue | undefined {
   if (typeof v !== "string") return undefined;
@@ -413,6 +443,16 @@ const DURATION_STRING_RE = /^(-?\d+(?:\.\d+)?)\s*([A-Za-z]+)$/;
  * 与 duration 字面量词法同一套单位名）与官方短单位 `"1d"` / `"3M"`（大小写敏感）。
  * 不接受：`"ms"`（长度 2 而非长单位名）、无单位纯数字、多段组合（`"1d2h"`）——
  * 一律返回 undefined 由调用方转行级类型错误，不猜、不部分解析。
+ *
+ * @behavior
+ * Given 长单位名（"1day"/"1 day"/"2 hours"）或官方短单位（"1d"/"3M"，大小写敏感）
+ * When parseDurationLike
+ * Then 返回 duration 值
+ *
+ * @behavior
+ * Given "ms"/无单位纯数字/多段组合/未知单位
+ * When parseDurationLike
+ * Then 返回 undefined（不部分解析，由调用方转行级类型错误）
  */
 export function parseDurationLike(s: string): BaseDurationValue | undefined {
   const m = DURATION_STRING_RE.exec(s.trim());
@@ -444,6 +484,16 @@ const WIKILINK_VALUE_RE = /^\[\[([^\][]+)\]\]$/;
  * **暂定机制，行为待 oracle BASE-TYPE-006 冻结**：仅当整串恰为一个 wikilink
  * （`[[target]]` / `[[target|display]]` / `[[target#subpath]]` 及组合）时解析为 Link；
  * 其余字符串（含首尾多余文本、`[[ ]]` 空目标、`[[#heading]]` 同文锚点）返回 undefined。
+ *
+ * @behavior
+ * Given 整串恰为一个合法 wikilink（含 display/subpath 组合）
+ * When parseWikilinkValue
+ * Then 返回 link 值
+ *
+ * @behavior
+ * Given 含首尾多余文本/空目标/同文锚点/其他非 wikilink 形态
+ * When parseWikilinkValue
+ * Then 返回 undefined（不猜测、不部分解析）
  */
 export function parseWikilinkValue(s: string): BaseLinkValue | undefined {
   const m = WIKILINK_VALUE_RE.exec(s);
@@ -582,6 +632,26 @@ export function arithNeg(v: BaseValue): BaseValue {
  *
  * @param onElementCompare - list/object 每比较一对元素回调一次（evaluator 借此扣
  *   maxOperations 预算，回调内可抛 BaseBudgetError）
+ *
+ * @behavior
+ * Given 两侧均为 MISSING/null（oracle ① 合并口径）
+ * When typedEqual
+ * Then 视为相等（`missing == null` 为 true）
+ *
+ * @behavior
+ * Given 一侧为 MISSING/null 另一侧为实际值
+ * When typedEqual
+ * Then 不相等
+ *
+ * @behavior
+ * Given 品牌值（file/date/duration/link）
+ * When typedEqual
+ * Then 按各自键相等（path / epochMs / ms / 归一 path+subpath），display 不影响 link 相等
+ *
+ * @behavior
+ * Given primitive 类型不同（number vs string）
+ * When typedEqual
+ * Then 直接 false（数字 ≠ 数字字符串）
  */
 export function typedEqual(a: BaseValue, b: BaseValue, onElementCompare?: () => void): boolean {
   const aEmpty = a === MISSING || a === null;
@@ -658,6 +728,16 @@ export function typedEqual(a: BaseValue, b: BaseValue, onElementCompare?: () => 
 /**
  * truthiness 暂定口径（待 oracle BASE-PROP-004 冻结）：
  * falsy = MISSING / null / false / 0 / "" / 空列表；其余（含空对象、非空列表、file）truthy。
+ *
+ * @behavior
+ * Given MISSING/null/false/0/""/空列表
+ * When truthy
+ * Then 返回 false
+ *
+ * @behavior
+ * Given 空对象/非空列表/file/date/duration/link
+ * When truthy
+ * Then 返回 true
  */
 export function truthy(v: BaseValue): boolean {
   if (v === MISSING || v === null || v === false) return false;
@@ -677,6 +757,16 @@ export function truthy(v: BaseValue): boolean {
  * - duration ↔ duration（P2a）：按毫秒长度比较；
  * - 其余组合（boolean/list/object/file/link/MISSING/null 或混合类型）抛 {@link BaseTypeError}，
  *   由调用方（evaluator）叠加节点 offset 转行级诊断。
+ *
+ * @behavior
+ * Given number/string/date/duration 同类型两侧
+ * When compareValues
+ * Then 返回 -1/0/1 有序比较（string 按 UTF-16 字典序、date/duration 按 epoch/毫秒）
+ *
+ * @behavior
+ * Given 混合类型或不可比组合（boolean/list/object/file/link/MISSING/null）
+ * When compareValues
+ * Then 抛 BaseTypeError（不静默定序）
  */
 export function compareValues(a: BaseValue, b: BaseValue): number {
   if (typeof a === "number" && typeof b === "number") {
@@ -744,6 +834,16 @@ function rejectLinkSortKey(a: BaseValue, b: BaseValue): void {
  * ⚠️ 调用方**不得**用 `-sortKeyCompare(a, b)` 实现 DESC：那会把空值组的排名差一起翻转，
  * 空值跑到最前（这正是 runbook ② 记录的实现漂移）。方向必须经
  * {@link sortKeyCompareDirected} 施加。
+ *
+ * @behavior
+ * Given 任一侧为 null/MISSING
+ * When sortKeyCompare
+ * Then 空值恒排最后（与方向无关）
+ *
+ * @behavior
+ * Given 两侧均为可比类型
+ * When sortKeyCompare
+ * Then 按类型分组后有序比较（跨类型有确定性次序）
  */
 export function sortKeyCompare(a: BaseValue, b: BaseValue): number {
   rejectLinkSortKey(a, b);
@@ -764,6 +864,16 @@ export function sortKeyCompare(a: BaseValue, b: BaseValue): number {
  *
  * 这条与本仓 [runbook §1](../../docs/design/bases-oracle-runbook.md) 登记的口径一致——
  * 2026-07-28 之前是**实现**没做到（DESC 整体取反把空值翻到了最前），官方站在登记口径这边。
+ *
+ * @behavior
+ * Given 任一侧落在空值/不可比较组
+ * When sortKeyCompareDirected
+ * Then 空值恒在后，不受 direction 取反影响
+ *
+ * @behavior
+ * Given 两侧均可比
+ * When sortKeyCompareDirected
+ * Then 按 direction（ASC/DESC）施加方向
  */
 export function sortKeyCompareDirected(
   a: BaseValue,

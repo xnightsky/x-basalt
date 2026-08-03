@@ -49,7 +49,19 @@ function toDiagnostic(
   };
 }
 
-/** 纯函数：吃已读内容 + 已建索引，产出该文件的断链诊断（已过 ignore）。 */
+/**
+ * 纯函数：吃已读内容 + 已建索引，产出该文件的断链诊断（已过 ignore）。
+ *
+ * @behavior
+ * Given wikilink/markdownLink 节点
+ * When checkFile
+ * Then 逐一判定目标并按 ignore 过滤产出诊断
+ *
+ * @behavior
+ * Given 节点目标正常 / external_skipped
+ * When checkFile
+ * Then 不产出诊断
+ */
 export function checkFile(
   _fileAbs: string,
   fileRel: string,
@@ -83,7 +95,19 @@ export function checkFile(
   return diagnostics;
 }
 
-/** 编排全 vault 检查：枚举→建索引→逐 .md 解析判定→汇总排序。 */
+/**
+ * 编排全 vault 检查：枚举→建索引→逐 .md 解析判定→汇总排序。
+ *
+ * @behavior
+ * Given 多根 vault
+ * When checkVault
+ * Then 建全量白名单索引后逐 .md 解析判定（资源 embed 目标来自全部文件白名单）
+ *
+ * @behavior
+ * Given 汇总输出
+ * When checkVault
+ * Then 按 file/line/column 排序返回诊断
+ */
 export async function checkVault(opts: CheckOptions): Promise<BasaltDiagnostic[]> {
   const layout = resolveVaultLayout(opts.vault);
   const { all, markdown } = await collectFiles(layout.roots, layout.toKey);

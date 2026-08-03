@@ -192,6 +192,21 @@ export function spanPlusOffset(span: SourceSpan, source: string, offset: number)
  * @param doc - P0 文档层产物（其自身诊断不在此重复聚合，由 engine 先行合并）
  * @param viewName - 指定 view 名；undefined 取 views[0]（BASE-VIEW-001）
  * @param limits - 执行预算（本层消费 maxExpressionNodes）
+ *
+ * @behavior
+ * Given viewName 未指定
+ * When planBaseQuery
+ * Then 取 views[0] 编译（BASE-VIEW-001）
+ *
+ * @behavior
+ * Given 任一 order 列解析失败
+ * When planBaseQuery
+ * Then 聚合 error 诊断且不产出 columnExprs（engine 据此短路，半截 AST 不交求值侧）
+ *
+ * @behavior
+ * Given filter 含非法表达式
+ * When planBaseQuery
+ * Then 聚合 error 诊断且不产出 filter（global 与 view filter 先 AND 合并再编译）
  */
 export function planBaseQuery(
   doc: BaseDocument,
