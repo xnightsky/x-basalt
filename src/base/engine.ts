@@ -149,7 +149,7 @@ export type BaseOutputValue =
   | BaseOutputValue[]
   | { [key: string]: BaseOutputValue };
 
-/** BaseEngine.query() 入参（设计 §4，签名与契约一字不差）。 */
+/** BaseEngine.query() 入参（设计 §4；动态 base 第一步扩展：basePath 与 source 恰其一）。 */
 export interface BaseQueryOptions {
   /**
    * .base 路径（vault 相对或绝对；resolve 后必须落在 vaultRoots 内，BASE-SEC-008）。
@@ -378,6 +378,35 @@ export class BaseEngine {
     const limits: BaseExecutionLimits = { ...DEFAULT_BASE_EXECUTION_LIMITS, ...options.limits };
 
     // ---- 查询选项校验（诊断顺序 0：先于文档层）----
+    // basePath 与 source 必须恰其一（动态 base 第一步：source 为 stdin/字符串入参）。
+    // kimi 评审 High（2026-08-03）：两者双缺会让 checkEntryForm(undefined) 抛 TypeError，
+    // 违反 query()「不 throw」契约；双给时若静默取 source 则 basePath 被无声忽略——
+    // 非法参数声明期报错，不静默降级（与 pipe-closure PC-2 同口径）。
+    const hasBasePath = options.basePath !== undefined;
+    const hasSource = options.source !== undefined;
+    if (hasBasePath === hasSource) {
+      return {
+        conformance: CONFORMANCE,
+        base: hasSource ? STDIN_DISPLAY_NAME : (options.basePath ?? ""),
+        view: options.view ?? "",
+        columns: [],
+        total: 0,
+        rows: [],
+        diagnostics: [
+          baseDiagnostic(
+            hasSource ? STDIN_DISPLAY_NAME : (options.basePath ?? ""),
+            { line: 1, column: 1 },
+            BASE_RULES.invalidSchema,
+            "error",
+            hasSource
+              ? "basePath 与 source 只能二选一（同时提供时无法确定以哪个为准）"
+              : "必须提供 basePath（.base 文件路径）或 source（.base 内容字符串）之一",
+            { reason: hasSource ? "both_base_source" : "neither_base_source" },
+          ),
+        ],
+      };
+    }
+
     // 未知 conformance id → error + 空结果短路。rule 复用 base/invalid-schema（不新增无谓 rule）：
     // 与 types.json 的「配置形状不合法」同族（见 typeschema.ts 模块头复用口径）。
     const requested = options.conformance ?? CONFORMANCE;
@@ -416,24 +445,24 @@ export class BaseEngine {
     const entryIssue =
       options.source !== undefined ? undefined : checkEntryForm(options.basePath as string);
     if (entryIssue !== undefined) {
+      // 本分支仅在 source === undefined 时可达（source 模式直接跳过上方检查）：
+      // 双缺省已被「恰其一」校验拦截，basePath 在此必存在，直接使用、无需三元。
+      const display = options.basePath as string;
       return {
         conformance: effectiveConformance,
-        base: options.source !== undefined ? STDIN_DISPLAY_NAME : (options.basePath as string),
+        base: display,
         view: options.view ?? "",
         columns: [],
         total: 0,
         rows: [],
         diagnostics: [
           baseDiagnostic(
-            options.source !== undefined ? STDIN_DISPLAY_NAME : (options.basePath as string),
+            display,
             { line: 1, column: 1 },
             BASE_RULES.unsupportedFeature,
             "error",
             entryIssue.message,
-            {
-              target: options.source !== undefined ? STDIN_DISPLAY_NAME : (options.basePath as string),
-              reason: entryIssue.reason,
-            },
+            { target: display, reason: entryIssue.reason },
           ),
         ],
       };

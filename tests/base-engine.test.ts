@@ -708,11 +708,11 @@ test("DB-2a: source 字符串入参与文件模式同内容产出等价", () => 
 
 // DB-2a：source 模式跳过 checkEntryForm（路径形态只对文件有意义）——
 // 即使 source 内容合法，也不会因「basePath 无 .base 后缀 / 含 #」而误报 CTX 诊断
+// （source 模式不传 basePath；「双给」本身由恰其一校验拦截，见下两用例）
 test("DB-2a: source 模式不触发 checkEntryForm 入口形态诊断", () => {
   const source = readFileSync(baseFile("default.base"), "utf8");
   const r = engine.query({
     source,
-    basePath: "anything#not-a-file.base", // 文件模式会报 CTX-003；source 模式应跳过
     dbPath,
     vaultRoots: [vaultPath],
   });
@@ -749,3 +749,30 @@ test("DB-2a: source 模式不触发 path-outside-vault", () => {
   });
   assert.ok(!r.diagnostics.some((d) => d.rule === "base/path-outside-vault"));
 });
+
+// DB-2a（kimi 评审 High 修复）：basePath 与 source 必须「恰其一」——
+// 双缺省会让 checkEntryForm(undefined) 抛 TypeError，违反 query()「不 throw」契约；
+// 双给时 source 静默胜出、basePath 被忽略（非法参数应声明期报错，不静默降级）。
+test("DB-2a: basePath 与 source 双缺省 → error 诊断空结果，不 throw", () => {
+  const r = engine.query({ dbPath, vaultRoots: [vaultPath] } as BaseQueryOptions);
+  assert.deepEqual(r.rows, []);
+  assert.equal(r.total, 0);
+  const err = r.diagnostics.find((d) => d.severity === "error");
+  assert.ok(err !== undefined, "双缺省必须产 error 诊断");
+  assert.match(err.message, /basePath|source/);
+});
+
+test("DB-2a: basePath 与 source 双给 → error 诊断（不静默忽略 basePath）", () => {
+  const source = readFileSync(baseFile("default.base"), "utf8");
+  const r = engine.query({
+    source,
+    basePath: baseFile("default.base"),
+    dbPath,
+    vaultRoots: [vaultPath],
+  });
+  assert.deepEqual(r.rows, []);
+  const err = r.diagnostics.find((d) => d.severity === "error");
+  assert.ok(err !== undefined, "双给必须产 error 诊断");
+  assert.match(err.message, /二选一|source|basePath/);
+});
+
