@@ -1,6 +1,6 @@
 ---
-timestamp: 2026-07-31T04:18:48Z
-sha256: 9b2d245a3ddfd9965578c572a5273e5efeee288b1826d419f74fdd0185ad569d
+timestamp: 2026-08-03T17:24:44Z
+sha256: 450990ec14fe9fffe38d39f106fb744224d0e0135d9829fd5a21af1e6a83489e
 type: guide
 title: 与 AI 协作：技能召回与全局使用技能
 description: x-basalt 技能召回两条路径（CLI 自助 recall 与全局 SKILL.md）及可选 chat 命令说明

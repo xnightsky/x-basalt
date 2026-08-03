@@ -1,12 +1,12 @@
 {
   // chat（自然语言路径）的独立说明书，从 core 分离而来。
   //
-  // 为什么分离：chat 讲的是**另一条路径**——工具名（meta_set/pipeline_run）、JSON 参数、
+  // 为什么分离：chat 讲的是**另一条路径**——工具形态（cli 单执行口 + skills 元工具）、JSON 参数、
   // AI_GATEWAY 配置、REPL——这些在「CLI 直调」场景一个字都用不上，混在 core 里是纯负担。
   // 分离依据不是体量（chat 仅占 core 约 9%），而是语义纯度：一篇说明书不该同时讲两条路径。
   //
-  // 与 core / pipe 的分工：本篇只写「chat 特有」的部分——工具名与参数形态、chat 侧的三态、配 key。
-  // 每个工具背后的语义一律去对应正文取（读写命令 → core，pipeline_run → pipe），不在此重抄。
+  // 与 core / pipe 的分工：本篇只写「chat 特有」的部分——工具形态与参数、chat 侧的三态、配 key。
+  // 每个子命令背后的语义一律去对应正文取（读写命令 → core，run 批量 → pipe），不在此重抄。
   //
   // triggers 只吃 AI 词（chat/ai/自然语言/key/model/离线…），与 core 的说明书词、pipe 的管道词、
   // summary 的总览词刻意不重叠——于是 `recall 配 key` 只召回本篇而非 core 全文。

@@ -7,8 +7,8 @@ tags:
   - cli
   - chat
   - x-basalt
-timestamp: 2026-07-29T16:50:51Z
-sha256: f90b91034659fbc688f173a6d45a06200d8014e8bbba3e661420b0cc16895dd4
+timestamp: 2026-08-03T17:25:07Z
+sha256: 29c5b157c03519d0d7550713b128bdeab7e66745989f61862e8477cb05ce974c
 ---
 # chat 怎么玩 · x-basalt
 

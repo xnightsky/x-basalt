@@ -99,13 +99,24 @@ async function execCli(
     child.stdout?.on("data", (d: Buffer) => (stdout += d.toString("utf8")));
     child.stderr?.on("data", (d: Buffer) => (stderr += d.toString("utf8")));
     child.on("error", (err) =>
-      settle(() =>
+      settle(() => {
+        // 区分超时被杀（execFile 的 timeout 到期自动 SIGTERM，error.code=ETIMEDOUT 或 err.killed）
+        // 与启动失败：前者给可自纠的超时提示，后者才是环境问题。
+        const e = err as NodeJS.ErrnoException & { killed?: boolean };
+        const timedOut = e.code === "ETIMEDOUT" || e.killed === true;
         reject(
           new Error(
-            structuredMessage(new Error(`CLI 子进程启动失败：${err.message}`), "unknown"),
+            structuredMessage(
+              new Error(
+                timedOut
+                  ? `CLI 子进程超时（>${CHILD_TIMEOUT_MS}ms 已终止）——命令可能过重，缩小范围或换子命令`
+                  : `CLI 子进程启动失败：${err.message}`,
+              ),
+              "unknown",
+            ),
           ),
-        ),
-      ),
+        );
+      }),
     );
     child.on("close", (code) =>
       settle(() => {

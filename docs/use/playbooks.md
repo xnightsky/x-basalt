@@ -6,8 +6,8 @@ tags:
   - guide
   - cli
   - x-basalt
-timestamp: 2026-07-31T04:39:06Z
-sha256: a3eff861ac2153730d0e0830c3092cb16ddf6c8dfe0007cc0a3e89e0eb51b1b9
+timestamp: 2026-08-03T17:25:02Z
+sha256: 9731558512b0c9bc7e80bd5c2e1901f078085c9bf9e75733705fc7e6519ea40e
 ---
 # 玩法 · 按任务选命令
 
