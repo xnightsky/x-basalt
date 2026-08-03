@@ -1,0 +1,166 @@
+// === 自建实现: chat cli 单工具——唯一执行口（切 C 核心，2026-07-30 拍板）===
+//
+// 上游：tools.ts（buildTools 装配）；下游：execFile 执行 cli.js。
+// 纪律（chat-tool-surface.md §0 两条）：①工具 schema 与 CLI 一处定义——本壳不做参数语义
+// 解释，只透传 argv；②模型永远不拼 shell 字符串——参数走数组，execFile 无 shell。
+// 防递归：allowlist 结构性排除 chat/watch；spawn env 注入 X_BASALT_CHAT_CHILD=1 兜底。
+// 动态 base：模型传 { args: ["base", "-"], source } → source 写 stdin（第一步 stdin 入参落地后可用）。
+import { execFile } from "node:child_process";
+import { fileURLToPath } from "node:url";
+import { jsonSchema, tool, type Tool } from "ai";
+import type { Safety } from "./safety.js";
+import { classifyError, structuredMessage } from "./tool-errors.js";
+import type { ToolContext } from "./tools.js";
+
+/**
+ * 允许的顶层子命令（读+写白名单）。**刻意排除**：
+ * - `watch`：常驻监听、永不返回——会挂死 chat 会话（chat-tool-surface.md §风险）；
+ * - `chat`：AI 递归入口——模型不得嵌套起 AI loop（结构性排除 + env 兜底双保险）。
+ * 其余（parse/index/scan/query/search/base/skills/meta/run/links/lint）均为一次性命令。
+ */
+export const CLI_ALLOWLIST = new Set([
+  "parse",
+  "index",
+  "scan",
+  "query",
+  "search",
+  "base",
+  "skills",
+  "meta",
+  "run",
+  "links",
+  "lint",
+]);
+
+/** 子进程超时（ms）：CLI 命令都该毫秒级返回；超时杀掉防挂死。 */
+const CHILD_TIMEOUT_MS = 60_000;
+
+/** 防递归兜底环境变量：chat 启动检测到即拒（见 src/cli.ts chat 命令）。 */
+export const CHAT_CHILD_ENV = "X_BASALT_CHAT_CHILD";
+
+/** 默认 cli 入口：本文件同级的 src/cli.ts（dev 态 tsx 直跑；生产由调用方注入 dist 路径）。 */
+const CLI_ENTRY_DEFAULT = fileURLToPath(new URL("../cli.ts", import.meta.url));
+
+/**
+ * 执行一条 CLI 命令：argv 数组直传（无 shell），注入 vault/db，source 走 stdin。
+ * 手写 promise（不用 promisify(execFile)）：后者无法传 stdin 写 source。
+ */
+async function execCli(
+  cliEntry: string,
+  args: string[],
+  ctx: ToolContext,
+  source?: string,
+): Promise<{ stdout: string; stderr: string }> {
+  // --vault/--db 自动注入：用户 args 未给时补（多根 vault 展开为重复 --vault）。
+  // 用户显式给了就不覆盖（显式优先，与 CLI 语义一致）。
+  const hasVault = args.some((a) => a === "--vault");
+  const hasDb = args.some((a) => a === "--db");
+  const vaultFlags = hasVault
+    ? []
+    : (Array.isArray(ctx.vaultPath) ? ctx.vaultPath : [ctx.vaultPath]).flatMap((v) => [
+        "--vault",
+        v,
+      ]);
+  const dbFlags = hasDb || ctx.dbPath === undefined ? [] : ["--db", ctx.dbPath];
+  // cli 入口为 TS 源码时需要 --import tsx（dev 态/测试）；编译产物 .js 裸 node 即可。
+  const entry = cliEntry.endsWith(".ts") ? ["--import", "tsx", cliEntry] : [cliEntry];
+  const argv = [...entry, ...args, ...vaultFlags, ...dbFlags];
+
+  const child = execFile(
+    process.execPath,
+    argv,
+    {
+      env: { ...process.env, [CHAT_CHILD_ENV]: "1" },
+      timeout: CHILD_TIMEOUT_MS,
+      maxBuffer: 16 * 1024 * 1024, // 16 MiB：query/base 大结果不截进程侧，由 safety 层截断
+    },
+  );
+  return new Promise((resolve, reject) => {
+    let stdout = "";
+    let stderr = "";
+    let settled = false;
+    const settle = (fn: () => void) => {
+      if (!settled) {
+        settled = true;
+        fn();
+      }
+    };
+    child.stdout?.on("data", (d: Buffer) => (stdout += d.toString("utf8")));
+    child.stderr?.on("data", (d: Buffer) => (stderr += d.toString("utf8")));
+    child.on("error", (err) =>
+      settle(() =>
+        reject(
+          new Error(
+            structuredMessage(new Error(`CLI 子进程启动失败：${err.message}`), "unknown"),
+          ),
+        ),
+      ),
+    );
+    child.on("close", (code) =>
+      settle(() => {
+        if (code === 0) resolve({ stdout, stderr });
+        else {
+          const detail = stderr.trim() || stdout.trim();
+          reject(
+            new Error(
+              structuredMessage(
+                new Error(`CLI 退出码 ${code}：${detail || "(无输出)"}`),
+                classifyError(new Error(detail)),
+              ),
+            ),
+          );
+        }
+      }),
+    );
+    // timeout 到期：execFile 自动 SIGTERM 子进程并走 error 事件（kill 由 node 内置处理）。
+    if (source !== undefined) child.stdin?.end(source, "utf8");
+    else child.stdin?.end();
+  });
+}
+
+/**
+ * 造 cli 单工具。
+ *
+ * @param ctx       vault/db 上下文（注入用）
+ * @param safety    输出边界包裹 + 截断
+ * @param cliEntry  cli 入口文件绝对路径（缺省 src/cli.ts，dev 态 tsx 可直跑）
+ */
+export function buildCliTool(ctx: ToolContext, safety: Safety, cliEntry?: string): Tool {
+  return tool({
+    description:
+      "执行 x-basalt CLI 命令的唯一入口（一条命令=一次调用）。args 是命令与参数数组（子命令 + flags + 位置参数，逐项原样传递、不要拼成字符串）。可用子命令：parse/index/scan/query/search/base/skills/meta/run/links/lint（watch/chat 不允许）。query 查结构化字段、search 查正文、parse 解析单文件 AST、批量写用 run、.base view 查询用 base（可传 source 字段作为 .base 定义内容经 stdin 读取，免落盘）。结果含 total/counts 计数——数总量直接读 total，不要翻页枚举。写命令会直接落盘。不知道 CLI 语法先 skills_get 取 core。",
+    inputSchema: jsonSchema<{ args: string[]; source?: string }>({
+      type: "object",
+      properties: {
+        args: {
+          type: "array",
+          items: { type: "string" },
+          description: "CLI 命令与参数（如 ['query', 'LIST FROM #x'] 或 ['base', '-']）",
+        },
+        source: {
+          type: "string",
+          description: "可选：作为 stdin 传给子进程（如 base - 的 .base 定义内容）",
+        },
+      },
+      required: ["args"],
+      additionalProperties: false,
+    }),
+    execute: async ({ args, source }) => {
+      const sub = args[0];
+      if (sub === undefined || !CLI_ALLOWLIST.has(sub)) {
+        throw new Error(
+          structuredMessage(
+            new Error(
+              `不允许的子命令 "${sub ?? "(空)"}"。可用：${[...CLI_ALLOWLIST].join("/")}（watch/chat 禁止）`,
+            ),
+            "invalid",
+          ),
+        );
+      }
+      const { stdout, stderr } = await execCli(cliEntry ?? CLI_ENTRY_DEFAULT, args, ctx, source);
+      // stdout/stderr 合并：CLI 错误信息常走 stderr，模型都要看。
+      const content = [stdout, stderr].filter(Boolean).join("\n");
+      return safety.wrap(safety.truncate(content));
+    },
+  });
+}
