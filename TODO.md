@@ -1,6 +1,6 @@
 ---
-timestamp: 2026-08-03T16:17:16Z
-sha256: 5fd70e006a5ae06697caae3c87c55b793f3ba4b2727562aaf0d210e193e5ea16
+timestamp: 2026-08-03T17:12:11Z
+sha256: 6ba52712b0a254207ad9b3d07114b16671ad9b82bb9543fda9951f711bb83134
 ---
 # TODO · x-basalt
 
@@ -89,10 +89,11 @@ sha256: 5fd70e006a5ae06697caae3c87c55b793f3ba4b2727562aaf0d210e193e5ea16
 **实现前停点（已通过，留档）**：原定「若 P1 场景超过三分之一依赖附件 / 动态 UI `this` / 不可稳定观测的闭源语义，则退回 `.base` lint/inspect」。实际结论：P1 全部场景在 Markdown-only 口径下可实现且可测，未触发退回；附件与 `this` 划入 P3，争议语义走 oracle 校正而非猜测补齐。
 
 
-## 🧪 2026-07-28 动态 base（入参 base + chat `base_query`）——第一步已落地
+## 🧪 2026-07-28 动态 base（入参 base + chat `base_query`）——第一/二步已落地
 
-- [x] **第一步：`x-basalt base` 支持 stdin / 字符串入参（`-` 或 `--stdin`）**——✅ 2026-08-03 落地（8 个提交：`12e336d`/`d02d942`/`10d182a`/`c29eccd`/`357dca5`/`e9ee3a6`/`549d0a2`/`55de374`），计划：[`docs/plans/2026-08-03-bases-dynamic-stdin.md`](docs/plans/2026-08-03-bases-dynamic-stdin.md)。独立可用、不绑 chat：`echo "views: …" | x-basalt base -`。kimi(k3) 独立评审两轮 + 文档完善一轮：High（basePath/source 双缺省 TypeError）已修 + 6 个 Low 收口。
-- [ ] **第二步（前置缺口未清）：chat `base_query` 工具 + JSON Schema 约束 + 软/硬路由**——依赖「Bases 规范 skill」新建与命名避撞（`obsidian-base-spec` 0 处提到 Bases），见下段「前置缺口」。
+- [x] **第一步：`x-basalt base` 支持 stdin / 字符串入参（`-` 或 `--stdin`）**——✅ 2026-08-03 落地（8 个提交：`12e336d`/`d02d942`/`10d182a`/`c29eccd`/`357dca5`/`e9ee3a6`/`549d0a2`/`55de374`），计划：[`docs/plans/2026-08-03-bases-dynamic-stdin.md`](docs/plans/2026-08-03-bases-dynamic-stdin.md)。独立可用、不绑 chat：`echo "views: …" | x-basalt base -`。kimi(k3) 独立评审两轮 + 文档完善一轮：High（basePath/source 双缺省 TypeError）已修 + 6 个 Low 收口。场景库验证：large-vault-recall 393 篇上 stdin 与文件模式等价、total=119 与 truth 一致。
+- [x] **第二步（走切 C 路线）：chat 工具面收编为 cli 单工具，动态 base 经 `cli base -` 接入**——✅ 2026-08-03 落地（4 个提交：`0d9ba9d`/`0bffea8`/`e980c05`/`9515965`），计划：[`docs/plans/2026-08-03-chat-cli-tool.md`](docs/plans/2026-08-03-chat-cli-tool.md)。用户 2026-08-03 拍板「按切 C 走 cli 工具」替代原「手写 base_query 工具」路径（后者与已拍板的工具面架构冲突）。模型拿 cli{args:[...],source?} 单工具，`base -` 经 source 走 stdin；allowlist 排除 watch/chat + X_BASALT_CHAT_CHILD 防递归。mock 端到端已验证。
+- [ ] **第三步：evals 场景库 A/B（query vs base 结构化查询）**——需真实 chat + AI_GATEWAY_API_KEY，留待 evals 侧；切 C 后基座已就绪。
 
 **论证（2026-07-28，用户提出、当场论证成立）**：**性质变化：它把 Bases 从「读用户已有的 `.base` 资产」变成「AI 现场组装查询」，用户有没有 `.base` 文件不再是前提。**
 
