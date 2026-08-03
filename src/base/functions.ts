@@ -713,11 +713,10 @@ const ENTRIES: readonly BaseFunctionEntry[] = [
     impl: (r, _args, _ctx, entry) => {
       const d = expectDateReceiver(entry, r);
       const ms = ((d.epochMs % DAY_MS) + DAY_MS) % DAY_MS;
-      const pad = (n: number): string => String(n).padStart(2, "0");
       const h = Math.floor(ms / 3_600_000);
       const m = Math.floor((ms % 3_600_000) / 60_000);
       const s = Math.floor((ms % 60_000) / 1_000);
-      return `${pad(h)}:${pad(m)}:${pad(s)}`;
+      return `${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")}:${String(s).padStart(2, "0")}`;
     },
   },
   {
