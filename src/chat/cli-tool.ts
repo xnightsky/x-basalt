@@ -6,6 +6,7 @@
 // 防递归：allowlist 结构性排除 chat/watch；spawn env 注入 X_BASALT_CHAT_CHILD=1 兜底。
 // 动态 base：模型传 { args: ["base", "-"], source } → source 写 stdin（第一步 stdin 入参落地后可用）。
 import { execFile } from "node:child_process";
+import { existsSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { jsonSchema, tool, type Tool } from "ai";
 import type { Safety } from "./safety.js";
@@ -38,8 +39,18 @@ const CHILD_TIMEOUT_MS = 60_000;
 /** 防递归兜底环境变量：chat 启动检测到即拒（见 src/cli.ts chat 命令）。 */
 export const CHAT_CHILD_ENV = "X_BASALT_CHAT_CHILD";
 
-/** 默认 cli 入口：本文件同级的 src/cli.ts（dev 态 tsx 直跑；生产由调用方注入 dist 路径）。 */
-const CLI_ENTRY_DEFAULT = fileURLToPath(new URL("../cli.ts", import.meta.url));
+/** 默认 cli 入口：按运行时形态解析。
+ * dev/测试（本文件在 src/chat/ 下）→ 同目录树 ../cli.ts（TS 源码，node --import tsx 可跑）；
+ * 生产构建（本文件在 dist/chat/ 下）→ ../cli.js（编译产物，裸 node 可跑）。
+ * 不依赖调用方注入：cli 工具对 cli.ts（chat 命令）零改动即可在两种形态下工作。
+ */
+function defaultCliEntry(): string {
+  // dist 形态：dist/chat/cli-tool.js → ../cli.js 存在即用编译产物（生产无 tsx）。
+  const prod = fileURLToPath(new URL("../cli.js", import.meta.url));
+  if (existsSync(prod)) return prod;
+  // dev 形态：src/chat/cli-tool.ts → ../cli.ts（tsx 直跑）。
+  return fileURLToPath(new URL("../cli.ts", import.meta.url));
+}
 
 /**
  * 执行一条 CLI 命令：argv 数组直传（无 shell），注入 vault/db，source 走 stdin。
@@ -157,7 +168,12 @@ export function buildCliTool(ctx: ToolContext, safety: Safety, cliEntry?: string
           ),
         );
       }
-      const { stdout, stderr } = await execCli(cliEntry ?? CLI_ENTRY_DEFAULT, args, ctx, source);
+      const { stdout, stderr } = await execCli(
+        cliEntry ?? defaultCliEntry(),
+        args,
+        ctx,
+        source,
+      );
       // stdout/stderr 合并：CLI 错误信息常走 stderr，模型都要看。
       const content = [stdout, stderr].filter(Boolean).join("\n");
       return safety.wrap(safety.truncate(content));
