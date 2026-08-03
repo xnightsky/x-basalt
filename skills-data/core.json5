@@ -214,7 +214,7 @@
     {
       id: "chat",
       pattern: 'chat ["<自然语言>"] [--quiet] [--json]',
-      description: "自然语言路径（需 AI_GATEWAY_API_KEY；没配 key 只禁用本命令，其余命令全功能照常）。**完整用法不在本篇** —— 调用形态（单发/REPL/--quiet）、15 个内部工具与 CLI 命令的对应关系、chat 侧没有或禁止的能力（index 没有、base 没有、**watch 禁止——会挂死会话**）、AI_GATEWAY 配置与安全模型，一律见 `x-basalt skills get chat`。本篇只留这一行指路，不重抄。",
+      description: "自然语言路径（需 AI_GATEWAY_API_KEY；没配 key 只禁用本命令，其余命令全功能照常）。**完整用法不在本篇** —— 调用形态（单发/REPL/--quiet）、三个内部工具（cli 单执行口 + skills_recall/skills_get）与 CLI 命令的对应关系、chat 侧没有或禁止的能力（**watch/chat 禁止——常驻/递归会挂死会话**）、AI_GATEWAY 配置与安全模型，一律见 `x-basalt skills get chat`。本篇只留这一行指路，不重抄。",
       examples: ["x-basalt skills get chat"],
     },
     {

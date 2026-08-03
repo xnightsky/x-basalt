@@ -41,7 +41,7 @@
     {
       id: "pipe",
       pattern: "x-basalt skills get pipe",
-      description: "pipe — batch-edit many files in one run\n\n- `run --pipe` — the only way to edit >1 file; **never loop `meta set`**\n- source — scan diff (default) / `where=<full DQL>` / `--stdin`\n- ops — `actions=` seven classic actions, `step=` full operator set\n- writes — dry-run unless `--apply`; index auto-refreshed afterwards\n\nchat: yes — `pipeline_run{where, steps}`.",
+      description: "pipe — batch-edit many files in one run\n\n- `run --pipe` — the only way to edit >1 file; **never loop `meta set`**\n- source — scan diff (default) / `where=<full DQL>` / `--stdin`\n- ops — `actions=` seven classic actions, `step=` full operator set\n- writes — dry-run unless `--apply`; index auto-refreshed afterwards\n\nchat: yes — `cli{args:['run', …]}` (切 C 后 cli 单工具经 run 子命令批量写).",
     },
     {
       id: "chat",

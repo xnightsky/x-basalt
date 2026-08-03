@@ -24,16 +24,16 @@ sha256: a3eff861ac2153730d0e0830c3092cb16ddf6c8dfe0007cc0a3e89e0eb51b1b9
 
 | 你要做的事 | 走这个 | chat 里 |
 | --- | --- | --- |
-| [改一批文档](#改一批文档) | `run --pipe` | `pipeline_run` |
-| [改单篇的元数据](#改单篇的元数据) | `meta set` / `meta apply` | `meta_*` |
-| [按字段找笔记](#按字段找笔记) | `query`（DQL） | `query` |
-| [按正文找笔记](#按正文找笔记) | `search`（FTS5） | `search` |
-| [数有多少篇](#数有多少篇) | `query` 读 `total` | `query{size:0}` |
-| [建库与刷新索引](#建库与刷新索引) | `index` / `scan` | 只有 `scan` |
-| [跑 .base 视图](#跑-base-视图) | `base` | **没有** |
-| [看单个文件的结构](#看单个文件的结构) | `parse` | `parse` / `read_note` |
+| [改一批文档](#改一批文档) | `run --pipe` | `cli{args:['run',…]}` |
+| [改单篇的元数据](#改单篇的元数据) | `meta set` / `meta apply` | `cli{args:['meta','set',…]}` |
+| [按字段找笔记](#按字段找笔记) | `query`（DQL） | `cli{args:['query',…]}` |
+| [按正文找笔记](#按正文找笔记) | `search`（FTS5） | `cli{args:['search',…]}` |
+| [数有多少篇](#数有多少篇) | `query` 读 `total` | `cli{args:['query',…,'--size','0']}` |
+| [建库与刷新索引](#建库与刷新索引) | `index` / `scan` | `cli{args:['scan',…]}`（index 亦可） |
+| [跑 .base 视图](#跑-base-视图) | `base` | `cli{args:['base','-'],source}`（动态 base） |
+| [看单个文件的结构](#看单个文件的结构) | `parse` | `cli{args:['parse',…]}` |
 | [常驻自动维护](#常驻自动维护) | `watch` | **禁止** |
-| [查断链 / 按规则体检](#查断链--按规则体检) | `links` / `lint` | 经 `pipeline_run` |
+| [查断链 / 按规则体检](#查断链--按规则体检) | `links` / `lint` | `cli{args:['links',…]}` / `cli{args:['lint',…]}` |
 | [用自然语言干活](#用自然语言干活) | `chat` | — |
 
 ---
@@ -122,7 +122,7 @@ x-basalt base reports/tasks.base --view Active
 
 消费 vault 里已有的 Obsidian Bases 视图文件。**Bases 表达式不是 DQL**，两套文法。
 
-> chat 里没有这个工具，只能经 `pipeline_run` 的 `base` 算子间接用。
+> chat 里经 `cli{args:['base','-'], source}` 用（动态 base：.base 定义直接作为 source 传 stdin，免落盘）。
 > 语法与契约 → [Bases](bases.md)
 
 ## 看单个文件的结构

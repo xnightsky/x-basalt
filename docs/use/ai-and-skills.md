@@ -311,20 +311,22 @@ chat 既能读也能改 vault。**写动作直接落盘，没有逐个确认弹�
 
 1. **流式可观测**：模型推理与每一步动作实时回显——看到要改的不对，立刻按 **Ctrl+C** 中断。
 2. **原子写**：所有写经 `src/meta` 原子写（临时文件 + rename），中途 kill 不会留下半写损坏的文件。
-3. **批量先看报告**：`pipeline_run` 批量写会回显「N 文件 / M 改动」报告，面太大就刹车。
+3. **批量先看报告**：`cli run` 批量写会回显「N 文件 / M 改动」报告，面太大就刹车。
 4. **git 兜底**：vault 在 git 下时，误改可回滚。
 
 > 想要"只看不改"，目前用读命令（`query`/`meta get`）或直接对模型说"只列出来、先别改"。
 
 ### 工具面（chat 能调的既有能力）
 
-| 类        | 工具                                                              | 对应命令                                                  |
-| --------- | ----------------------------------------------------------------- | --------------------------------------------------------- |
-| 读        | query / parse / scan / meta_get / skills_recall                   | `query` / `parse` / `scan` / `meta get` / `skills recall` |
-| 写·单文件 | meta_set / meta_unset / meta_rename / meta_normalize / meta_apply | `meta set/unset/rename/normalize/apply`                   |
-| 写·批量   | pipeline_run                                                      | `run --pipe` / `scan --pipe`（一次性，不含常驻 watch）    |
+切 C 后（2026-08-03）chat 工具面收编为**单一 `cli` 工具** + 两个规范召回元工具：
 
-> **不支持常驻 watch / 监听**：chat 只做**一次性**操作，工具面**不含** `watch` / `index --watch` 这类常驻命令——常驻进程永不返回，会把 chat 循环**挂死**。要持续监听维护 vault，请用独立的 `x-basalt watch` 或 `x-basalt scan --pipe`（见 [indexing-and-sync.md](indexing.md)），不要走 chat。
+| 工具 | 形态 | 说明 |
+| ---- | ---- | ---- |
+| `cli` | `{args: string[], source?}` | 唯一执行口：argv 数组直传 CLI 子命令（parse/index/scan/query/search/base/skills/meta/run/links/lint；watch/chat 禁止） |
+| `skills_recall` | `{keyword}` | 模糊召回规范 |
+| `skills_get` | `{name}` | 按名取规范全文 |
+
+> **不支持常驻 watch / 监听**：`cli` 的 allowlist 结构性排除 `watch` / `chat`（常驻进程永不返回会挂死循环；chat 是 AI 递归入口）。要持续监听维护 vault，请用独立的 `x-basalt watch` 或 `x-basalt scan --pipe`（见 [indexing-and-sync.md](indexing.md)），不要走 chat。
 
 > **能力边界**：chat 做**结构化**任务（DQL/元数据/规范）**与正文全文检索**。「按笔记正文内容找」走 `search`（FTS5 + trigram，**已落地**），所以「找讲 X 的笔记」是可以的；但它是**字面子串**匹配、**非语义/向量检索**，不理解同义词与概念相关性。含中文的查询走 trigram 并集 OR 宽松召回，`total` 是召回数而非「确实含这一串的篇数」——口径详见 [命令参考 `search`](commands.md#search--全文检索正文)。
 
