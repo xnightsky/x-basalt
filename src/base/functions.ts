@@ -1308,22 +1308,28 @@ const ENTRIES: readonly BaseFunctionEntry[] = [
     name: "mean",
     receiver: "list",
     arity: { min: 0, max: 0 },
-    returnType: "number",
+    // oracle ⑧(a)：混合列表上可返回 null（全非 number 时），不再恒 number。
+    returnType: "any",
     scenarioIds: ["BASE-SUM-001"],
     // === Obsidian 规范来源: Bases list.mean()（官方自定义汇总示例 values.mean()）===
+    // oracle ⑧(a)（2026-08-02 · 1.13.4）：汇总 values 含空值且**计入分母**
+    // （`values.mean()`=0.25=(1+2)/12、entries=12），故「非 number 不计分子、计分母」；
+    // 全非 number（如 [null]）→ null（官方 summary-custom-limited 读数 null，非类型错误）。
+    // 空列表仍报错（均值无定义，不静默塌 0）。
     impl: (r, _args, _ctx, entry) => {
       const list = expectListReceiver(entry, r);
-      // 空列表 → 行级类型错误（均值无定义，不静默塌 0）；元素须全为 number。
       if (list.length === 0) {
         throw argTypeError(entry, "空列表无均值（mean 只定义在非空 number 列表上）");
       }
       let sum = 0;
+      let numberCount = 0;
       for (const item of list) {
-        if (typeof item !== "number") {
-          throw argTypeError(entry, `元素须全为 number，实为 ${typeNameOf(item)}`);
+        if (typeof item === "number") {
+          sum += item;
+          numberCount += 1;
         }
-        sum += item;
       }
+      if (numberCount === 0) return null;
       return sum / list.length;
     },
   },

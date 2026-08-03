@@ -78,11 +78,10 @@ views:
   # ⑧(a) 的**硬前置**——单独占一个 view，绝不与别的表达式混：这是七条里唯一
   # 「两个结果都能把决策钉死」的取证点，被同伴的求值失败连坐损失最大。
   #
-  # x-basalt 当前：list(1,2,null).mean() → null + property-type-mismatch 诊断
-  #                （list.mean() 要求元素全为 number），list(1,2).mean() → 1.5
-  # 官方给 1     → M1 成立（values 含空值 + mean 按全长求平均）→ 改 list.mean() + values 作用域
-  # 官方报错/空 → M1 证伪，官方的 values 不含空值、0.25 的分母是汇总层自取
-  #                → ⑧(a) 从「跟官方」翻成「不跟 + boundary」，一行代码不用改
+  # x-basalt 当前（oracle ⑧(a) 定案 2026-08-02 后）：list(1,2,null).mean() → 1
+  #                （非 number 不计分子、计分母）· list(1,2).mean() → 1.5
+  # 定案依据：官方 filter 里 list() 非字面量（直测关闭），汇总通道 values.mean()=0.25
+  # （entries=12）证实 values 含空值且计分母 → 改 list.mean() + values 作用域（breaking）。
   - type: table
     name: mean-mixed-list
     filters: file.path == "notes/CaseA.md"
@@ -90,12 +89,12 @@ views:
       - 'list(1, 2, null).mean()'
       - 'list(1, 2).mean()'
 
-  # ⑮ date.time() 返回什么（本仓：当日 UTC 零点起的 duration，非 "HH:mm" 字符串）
+  # ⑮ date.time() 返回什么（oracle ⑮ 定案：官方 "HH:mm:ss" 字符串，本仓已跟）
   # ⑯ date.format() 的数字 token / ⑰ date.relative() 的措辞与阶梯
   # x-basalt 当前（CaseE.created = 2026-07-01T10:30:00）：
-  #   time() → 37800000（=10h30m 的毫秒）· format("YYYY-MM-DD") → "2026-07-01"
-  #   format("HH:mm:ss") → "10:30:00" · relative() → "3 weeks ago"
-  # ⚠️ relative() 依赖当前时间，跨日重跑数值会变——判读看**措辞与阶梯**（英文？月=30d？），
+  #   time() → "10:30:00" · format("YYYY-MM-DD") → "2026-07-01"
+  #   format("HH:mm:ss") → "10:30:00" · relative() → "1 month ago"
+  # ⚠️ relative() 依赖当前时间，跨日重跑数值会变——判读看**措辞与阶梯**（英文？月=31d？），
   # 不把具体字符串当稳定结论。
   - type: table
     name: date-methods
@@ -126,7 +125,7 @@ views:
       - 'duration(1000)'
 
   # ㉖ duration 的 month/year 固定换算（本仓：month=30d、year=365d，作用于**全部** duration
-  # 算术而不只是 relative()）。x-basalt 当前：2592000000（30d）· 31536000000（365d）
+  # 算术而不只是 relative()）。x-basalt 当前（oracle ㉖ 后）：2678400000（31d）· 31536000000（365d）
   - type: table
     name: duration-units
     filters: file.path == "notes/CaseA.md"
@@ -242,9 +241,8 @@ views:
     order:
       - file.path
 
-  # ⑮ date.time() 的返回值形态：本仓 = 当日 UTC 零点起的 duration 毫秒数（37800000）。
-  #   与 number 相等 → 官方 time() 是毫秒数；与 duration(number) 相等 → 是 duration 对象；
-  #   都假且无错误 → 是 "HH:mm" 字符串类形态（另一个候选）。
+  # ⑮ date.time() 的返回值形态：官方 = "HH:mm:ss" 字符串（round-2 实据），本仓已跟；
+  #   两个候选（毫秒数 / duration 对象）官方都 0 行——这两个 view 现在两侧都 0 行，作对照留档。
   - type: table
     name: date-time-ms-eq
     filters: 'date("2026-07-01T10:30:00").time() == 37800000'

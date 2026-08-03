@@ -861,12 +861,13 @@ export class BaseEngine {
             );
             continue;
           }
-          // 顶层自定义汇总（SUM-002 暂定）：隐式 values 作用域 = 目标列跨行**非空**值列表
-          // （null/MISSING 剔除，与内置「空值跳过」口径对齐——mean 等 list 聚合遇空值即类型
-          // 错误，剔除后官方示例 values.mean().round(3) 可用）；无行上下文：values 之外
-          // note/file 属性为 MISSING（禁止访问行外状态，见 evaluator EvalContext.summaryValues）。
+          // 顶层自定义汇总（SUM-002，oracle ⑧(a) 定案 2026-08-02）：隐式 values 作用域 =
+          // 目标列跨行**全量**值（含 null/MISSING——官方 summary-custom entries=12、
+          // `values.mean()`=0.25 直接证实空值计入分母，mean 自行跳过分子）；无行上下文：
+          // values 之外 note/file 属性为 MISSING（禁止访问行外状态，见
+          // evaluator EvalContext.summaryValues）。
           const custom = plan.customSummaries[s.name] as CompiledCustomSummary; // 名字合法性 planner 已核验
-          const scopeValues = values.filter((v) => v !== MISSING && v !== null);
+          const scopeValues = values;
           const value = evaluateExpression(custom.ast, SUMMARY_ROW, {
             limits,
             ...(options.clock !== undefined ? { clock: options.clock } : {}),
@@ -895,10 +896,11 @@ export class BaseEngine {
                 continue;
               }
               const custom = plan.customSummaries[s.name] as CompiledCustomSummary;
+              // 组级自定义汇总同 ⑧(a)：values 含 null/MISSING，不计分子、计分母（与顶层统一）。
               const value = evaluateExpression(custom.ast, SUMMARY_ROW, {
                 limits,
                 ...(options.clock !== undefined ? { clock: options.clock } : {}),
-                summaryValues: values.filter((v) => v !== MISSING && v !== null),
+                summaryValues: values,
                 sharedBudget: opsBudget,
                 onRowError: (info) =>
                   pushRowDiagnostic(custom.span, custom.source, info, `汇总 ${s.name}`),

@@ -8,7 +8,8 @@
  * - GROUP-002（暂定拒绝，待 oracle）：list/tag 分组键 → base/unsupported-feature + 空结果；
  * - BASE-SUM-001：15 个内置汇总逐名断言；混合类型跳过、全部跳过 → null；
  *   计算集 = **limit 后**行集（2026-07-29 oracle⑧(b) 跟官方，原「limit 前全量」已翻）；
- * - SUM-002（暂定，待 oracle）：顶层自定义汇总 values.mean().round(3)；values 越权 → MISSING 口径；
+ * - SUM-002（oracle ⑧(a) 定案 2026-08-02）：顶层自定义汇总 values.mean().round(3)；
+ *   values 含空值、计分母；values 越权 → MISSING 口径；
  * - 未知汇总名 → base/unknown-function；groupBy/summaries 结构非法 → base/invalid-schema；
  * - 字符串拼接（arithAdd string+string 小修正）e2e。
  *
@@ -301,12 +302,13 @@ test("BASE-SUM-001: 汇总计算集为 limit 后行集（limit=2 → 只汇总�
 
 // ---------- SUM-002（暂定，待 oracle）：顶层自定义汇总 ----------
 
-// SUM-002（暂定）：官方示例形态 values.mean().round(3) 被 view 引用 → 正确值
-test("SUM-002: 顶层自定义汇总 values.mean().round(3)（暂定口径）", () => {
+// SUM-002（oracle ⑧(a) 定案 2026-08-02）：官方示例形态 values.mean().round(3) 被 view 引用
+test("SUM-002: 顶层自定义汇总 values.mean().round(3)（oracle ⑧(a)）", () => {
   const r = query("summaries-custom.base", "custom");
   assert.deepEqual(errorsOf(r), []);
-  // values = score 跨行非空值 [10,20,30]（null/MISSING 剔除，暂定）；mean=20，round(3)=20
-  assert.equal(r.summaries?.["score"], 20);
+  // values = score 跨行全量 [10,20,30,MISSING×3]（⑧(a) 后含空值、计分母）；
+  // mean = 60/6 = 10，round(3)=10（旧口径：非空值均值 20）
+  assert.equal(r.summaries?.["score"], 10);
 });
 
 // SUM-002（暂定）：values 越权（引用 file.name）→ 无行上下文，MISSING 口径可观察（结果 null）
