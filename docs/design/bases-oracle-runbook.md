@@ -7,8 +7,8 @@ tags:
   - bases
   - oracle
   - conformance
-timestamp: 2026-08-03T00:14:28Z
-sha256: 5001377be9a219cd8b5107df9c95dd8c74b974b4405f4b1b0d81f9b7b98f18dc
+timestamp: 2026-08-03T00:33:37Z
+sha256: 1535dfb5feb7d2cbaa6036f6f144f371f179a1211d96390d694077b5f28f19f2
 ---
 # Bases P1 争议语义官方 oracle 操作手册（runbook）
 
@@ -340,14 +340,14 @@ view 清单（26 个）：truthiness.base × 8（truthy-missing / truthy-explici
 | ⑫ | 全局字面替换 12 行、只替首个 0 行 | ✅ 一致（非 regex） |
 | ⑬ | BMP `"abc".reverse()=="cba"` 12 行；astral `"a💩b".reverse()=="b💩a"` **0 行** | 官方对代理对处理 ≠ code point → boundary（本仓保 code point 安全差异） |
 | ⑭ | number / date `isEmpty()==false` 各 12 行 | ✅ 一致 |
-| ⑮ | `time()=="10:30:00"` **12 行**、`=="10:30"` 0、`==37800000` 0 | ❌ 官方返回 `"HH:mm:ss"` 字符串 → **跟官方改**（本仓现为 duration 毫秒） |
+| ⑮ | `time()=="10:30:00"` **12 行**、`=="10:30"` 0、`==37800000` 0 | ❌ 官方返回 `"HH:mm:ss"` 字符串 → ✅ **2026-08-03 已跟**（time() 已改字符串） |
 | ⑯ | 数字 token 两谓词 12 行；`format("MMMM")=="七月"` **12 行** | 数字 token ✅；本地化 token 官方随界面语言 → boundary（本仓稳定数字 token） |
 | ⑰ | relative 依赖时钟/界面语言，未取证 | 维持本仓口径 + boundary |
 | ⑱ | `date(1000)` / `duration(1000)` 两候选均 0 行；`date()==date()` 对照 12 行 | 官方不支持 number 构造 → 本仓超集 boundary |
 | ⑲ | `file("CaseB").path == "notes/CaseB.md"` 12 行 | ✅ 一致（路径形态相同） |
 | ⑳ | `file.linksTo(file(...))` / `file.linksTo("CaseB")` 均 0 行 | 官方不可观测/不支持 → boundary |
-| ㉖ | `duration("1 year")==duration("365 days")` 12 行；month：31d 12 / 30d 0 / 28d 0 | year ✅ 一致；month ❌ 官方 31d → **跟官方改** |
-| ⑧(a) | `list(1,2).mean()==1.5` **0 行**、`list(1,2,null).mean()==1/1.5` 均 0、`list(1,2).isEmpty()==false` **0 行** → `list()` 非字面量；汇总通道 `values.mean()`=**0.25（entries=12）** | M1 机制成立：values 含空值、计分母 → **跟官方改** `list.mean()` + values 作用域（breaking） |
+| ㉖ | `duration("1 year")==duration("365 days")` 12 行；month：31d 12 / 30d 0 / 28d 0 | year ✅ 一致；month ❌ 官方 31d → ✅ **2026-08-03 已跟**（relative 阶梯同步） |
+| ⑧(a) | `list(1,2).mean()==1.5` **0 行**、`list(1,2,null).mean()==1/1.5` 均 0、`list(1,2).isEmpty()==false` **0 行** → `list()` 非字面量；汇总通道 `values.mean()`=**0.25（entries=12）** | M1 机制成立：values 含空值、计分母 → ✅ **2026-08-03 已跟**（breaking：`[1,2,null].mean()` 报错 → 1） |
 | ⑦ | groups 实读：`groupedDataCache` 按**整组键列表**成组——tags 两组 `[]`(11 行)/`["#project","#area"]`(CaseF)；list-prop 两组 `[1,2,3]`(CaseF)/`null`(11 行)；顶层行序随分组重排（3 个 DIFF） | 官方**不扇出**、行序随分组 → 与 GROUP-002 暂定口径相反，**待拍板** |
 | ㉓ | `group-desc-nullpos` 组序 **2 → 1 → null**（DESC） | 空值组恒最后、与方向无关（与 ② 同源）→ **当 bug 修**，`groupKeyCompareDirected` 已落地 |
 
@@ -364,7 +364,7 @@ view 清单（26 个）：truthiness.base × 8（truthy-missing / truthy-explici
    view 全报假分歧；改按 `rows.length`，且 file.path 列按 basename 归一。修后对照：
    **一致 27 · 存疑一致 8 · 分歧 3（全为 ⑦ 行序家族）· 跑不动 0**（38 view）。
 
-## 5. 校正（第一批 ✅ / 第二批决策已出 · ⑧(b) ✅ / round-2 判定已出：㉓ 已修，⑮㉖⑧(a) 实现待落）
+## 5. 校正（第一批 ✅ / 第二批决策已出 · ⑧(b) ✅ / round-2 判定已出：㉓⑮㉖⑧(a) ✅ 已修/已落地）
 
 > 取证轮只做取证、一行实现没改；**校正轮（2026-07-28）**：第一批 ①②④ 已落实现 + 回归用例
 > （复跑对照见 §4.10，分歧 7 → 2、无新增）；第二批 ⑦⑧⑨㉗ 决策已出——⑦⑨㉗ 落 documented
@@ -375,7 +375,7 @@ view 清单（26 个）：truthiness.base × 8（truthy-missing / truthy-explici
 
 > **round-2 校正（2026-08-02/03）**：㉓ 组序 DESC 空值恒最后 → **已按 bug 修**
 > （`groupKeyCompareDirected`，engine.ts，组序实测对齐官方 2→1→null）；⑮ `time()` 返回
-> `"HH:mm:ss"`、㉖ month=31d、⑧(a) mean 计分母 → **跟官方，实现待落**；⑬⑯⑱⑳⑪⑰ →
+> `"HH:mm:ss"`、㉖ month=31d、⑧(a) mean 计分母 → **跟官方，✅ 2026-08-03 已落地**；⑬⑯⑱⑳⑪⑰ →
 > documented boundary（vs-official §5.7 起逐条落档）；⑦ 官方不扇出 → 待拍板。
 
 | # | 差异 | 落点 | 取舍与状态 |
@@ -384,7 +384,7 @@ view 清单（26 个）：truthiness.base × 8（truthy-missing / truthy-explici
 | ② | DESC 时 null/missing 排到了最前 | `src/base/values.ts`（`sortKeyCompareDirected`） | **按自己登记的口径修** ✅ 2026-07-28——不是「跟不跟官方」，是实现与 §1 登记口径的漂移，官方恰好站在登记口径那边 |
 | ④ | 空 filter 数组当前是拒绝 | `src/base/planner.ts` | **跟官方** ✅ 2026-07-28：`and:[]`=真 / `or:[]`=假 / `not:[]`=真，官方稳定可重放，「P1 拒绝」没有依据了 |
 | ⑦ | 分组时顶层 rows 顺序 | `src/base/engine.ts`（groupBy） | **不跟** · boundary（2026-07-28 决策）：本轮只测到顶层行序、**没测到官方的分组内容与组序**（观察记录的 `groups` 字段是坏的，见 §5.2），跟等于照抄症状；且会牺牲字节稳定契约。理由全文 [vs-official §5.3](bases-vs-official.md) |
-| ⑧ | summary values 的两个维度 | `src/base/engine.ts`（summaries 取值集）/ `src/base/functions.ts`（`list.mean`） | **跟官方**（2026-07-28 决策）：**(b) limit 后 ✅ 2026-07-29 已落地**（`filtered` → `limited`，锁定用例翻为 `limitAfter`；顺带统一顶层/组级口径并共用一份 `perRowValues`，消掉重复求值与重复诊断）；**(a) 仍待前置取证**——要复现 0.25 必须同时改 `list.mean()`「非 number 不计分子、计分母」，而官方从没给过 `list.mean()` 在混合列表上的读数。先补一个 view 取证再动手。理由全文 [vs-official §5.4](bases-vs-official.md) |
+| ⑧ | summary values 的两个维度 | `src/base/engine.ts`（summaries 取值集）/ `src/base/functions.ts`（`list.mean`） | **跟官方**（2026-07-28 决策）：**(b) limit 后 ✅ 2026-07-29 已落地**（`filtered` → `limited`，锁定用例翻为 `limitAfter`；顺带统一顶层/组级口径并共用一份 `perRowValues`，消掉重复求值与重复诊断）；**(a) ✅ 2026-08-03 已落地**（round-2 取证：`list()` 官方非字面量、直测关闭；汇总通道 `values.mean()`=0.25/entries=12 证实计分母 → `list.mean()` 改「非 number 不计分子、计分母」+ values 作用域含空值，breaking）。理由全文 [vs-official §5.4](bases-vs-official.md) |
 | ⑨ | `+` 是否做字符串拼接 | `src/base/evaluator.ts`（`upgradeStringOperand`） | **不跟** · boundary（2026-07-28 决策）：官方那里是**静默的空**（没实现的洞，不是语义），砍掉纯亏；与本仓「不静默」立场一致。理由全文 [vs-official §5.5](bases-vs-official.md) |
 | ㉗ | 默认数据集是否含 `.base` 自身 | `src/base/engine.ts`（conformance 默认值） | **不改默认值** · boundary（2026-07-28 决策）：差异不静默（恒发 `markdown-only-dataset` warning），且官方读数只证明 `.base` 是行、**没证明附件也是行**（fixture 无附件样本），切默认等于顺带断言未取证的事；要对齐一条 flag 即可。理由全文 [vs-official §5.6](bases-vs-official.md) |
 

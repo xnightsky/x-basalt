@@ -7,8 +7,8 @@ tags:
   - bases
   - testing
   - x-basalt
-timestamp: 2026-08-03T00:15:32Z
-sha256: 3f256404e8c7d4eb85b06ea41ae05ff83078269e177a250f8689ea3082d18f02
+timestamp: 2026-08-03T00:33:37Z
+sha256: 96fd571fe23094fc6dc9172419028152a17e38aaa3a1c859554f87a9d682c467
 ---
 # Bases 实现状态追踪
 
@@ -87,7 +87,7 @@ sha256: 3f256404e8c7d4eb85b06ea41ae05ff83078269e177a250f8689ea3082d18f02
 > **2026-07-28 校正轮**：结论明确的第一批三条（① equality / ② sort 空值位 / ④ 空 filter 数组）已落实现 + 回归用例；
 > 余下四条（⑦⑧⑨㉗）需先出决策。⏳ 表示待校正，逐条取舍见 [runbook §5](bases-oracle-runbook.md) 与 [vs-official §5](bases-vs-official.md)。
 > **2026-08-02/03 round-2**（Obsidian 1.13.4，38 + 49 view 两次一致）：⑩..㉖ 全部出判定——
-> ㉓ 已修、⑮⑯㉖⑧(a) 跟官方（⑮㉖⑧(a) 实现待落）、⑦ 官方不扇出待拍板、⑬⑯⑱⑳⑪⑰ 落
+> ㉓⑮㉖⑧(a) ✅ 已修/已落地、⑦ 官方不扇出待拍板、⑬⑯⑱⑳⑪⑰ 落
 > documented boundary。判定明细见 [runbook §4.11](bases-oracle-runbook.md)。
 
 | 争议语义 | 场景编号 | 官方结论 | 状态 |
@@ -98,13 +98,13 @@ sha256: 3f256404e8c7d4eb85b06ea41ae05ff83078269e177a250f8689ea3082d18f02
 | 空 filter 数组（and:[]/or:[]/not:[]） | 设计 §6 | `and:[]`=真 / `or:[]`=假 / `not:[]`=真 | ✅ 2026-07-28 已校正（跟官方；planner 放行空数组，语义由 evalFilter 的 every/some 天然给出） |
 | `if()` lazy branch | 设计 §9 | lazy，**与实现一致** | ✅ 可转正 |
 | 二元运算的字符串→日期推断是否作用于 `+` | 语法 §5.1 / 设计 §8.3 | **原命题不成立**：官方 `+` 根本不拼接字符串，string+string 也得空 | ✅ 2026-07-28 决策：**不跟**，保留超集 + [documented boundary](bases-vs-official.md)（官方那里是静默的空，砍掉纯亏） |
-| 自定义 summary 的 `values` 边界 | BASE-SUM-002 | **含** null/missing（计入分母）、按 **limit 后** | ⏳ 2026-07-28 决策：**跟官方**，实现待落——(b) limit 后可直接改；(a) 有前置（要复现 0.25 必须同时改 `list.mean()`，而官方没给过它在混合列表上的读数），见 [vs-official §5.4](bases-vs-official.md) |
+| 自定义 summary 的 `values` 边界 | BASE-SUM-002 | **含** null/missing（计入分母）、按 **limit 后** | ✅ 2026-07-28 决策 + 2026-08-03 全部落地：(b) limit 后、(a) `list.mean()` 计分母 + values 含空值（官方 `values.mean()`=0.25/entries=12 定案），见 [vs-official §5.4](bases-vs-official.md) |
 | list 分组键扇出的顶层行序 | BASE-GROUP-002 | 顶层 rows 顺序随分组键变动 | ✅ 2026-07-28 决策：**不跟**，保 `file.path` 稳定序 + [documented boundary](bases-vs-official.md)（本轮只测到顶层行序，官方分组内容/组序**没测到**——观察记录 `groups` 字段是坏的） |
 | **默认数据集是否含 `.base` 自身** | BASE-DATA-001/002 | **含**（`.base` 文件自身也是行） | ✅ 2026-07-28 决策：**不改默认值** + [documented boundary](bases-vs-official.md)（差异恒发 warning 不静默；官方读数没证明附件也是行，切默认等于断言未取证的事） |
 | 分组组序的方向维度（DESC 空值位） | ㉓ | DESC 组序 **2 → 1 → null**，空值组恒最后 | ✅ 2026-08-02 已校正（当 bug 修：`groupKeyCompareDirected`，与 ② 同源；回归用例 `group-missing.base :: byAreaDesc` 标 oracle ㉓） |
 | ⑩ title / ⑪ slice（string）/ ⑫ replace / ⑭ isEmpty / ⑲ file().path | 函数覆盖率片 | 与本仓期望串**逐字一致** | ✅ 2026-08-02 可转正（filter 谓词 12 行命中；⑪ list 侧官方 `list()` 非字面量 → 本仓超集 boundary） |
-| ⑮ `date.time()` 返回形态 | 片二 | 官方返回 `"HH:mm:ss"` **字符串** | ⏳ 2026-08-02 决策：**跟官方**，实现待落（本仓现为 duration 毫秒） |
-| ㉖ duration month 换算 | 片二 | month=**31d**（year=365d 一致） | ⏳ 2026-08-02 决策：**跟官方**，实现待落（本仓现 30d） |
+| ⑮ `date.time()` 返回形态 | 片二 | 官方返回 `"HH:mm:ss"` **字符串** | ✅ 2026-08-03 已落地（跟官方；原 duration 毫秒已翻） |
+| ㉖ duration month 换算 | 片二 | month=**31d**（year=365d 一致） | ✅ 2026-08-03 已落地（跟官方；原 30d，relative 阶梯同步） |
 | ⑦ 分组内容（round-2 新实据） | BASE-GROUP-002 | 官方按**整组键列表**成组、**不扇出**（tags：`[]` / `["#project","#area"]`；list-prop：`[1,2,3]` / null） | ⏳ 2026-08-02 **待拍板**：与 GROUP-002 暂定扇出口径相反，改模型是大改（见 [vs-official §5.8](bases-vs-official.md)） |
 | ⑬ astral reverse / ⑯ format 本地化 / ⑱ number 构造器 / ⑳ linksTo / ⑪ list 字面量 / ⑰ relative | 函数覆盖率片 | 官方不可跟（非 code point / 随界面语言 / 不支持 / 不可观测 / 非字面量 / 时钟语言依赖） | ✅ 2026-08-02 决策：**不跟** + [documented boundary](bases-vs-official.md) §5.12（本仓保安全/稳定超集） |
 

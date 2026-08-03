@@ -1,6 +1,6 @@
 ---
-timestamp: 2026-08-03T00:13:37Z
-sha256: 09770303fbf9c077132e88b23bc37f7ea391733326af1350f3fbba7278a0252c
+timestamp: 2026-08-03T00:33:37Z
+sha256: c1c4415b5853d03751a119e0d492730e88dddbc27a7dc43ddea8559eccd8b2bd
 ---
 # TODO · x-basalt
 
@@ -30,7 +30,7 @@ sha256: 09770303fbf9c077132e88b23bc37f7ea391733326af1350f3fbba7278a0252c
 > **2026-08-02/03：oracle 第二轮取证完成（Obsidian 1.13.4）。** 38 view 全量 + types.base 专项
 > **49 view**（补 34 个 filter 上下文 view），全部两次一致、零崩溃。**16 条口径全部出判定**：
 > ⑩⑪⑫⑭⑲⑧(b)⑨㉔㉕ 与 x-basalt 一致；⑮ `time()` 官方返回 `"HH:mm:ss"`、㉖ month=31d、
-> ⑧(a) mean 计分母、㉓ 组序空值恒最后 → **跟官方**（㉓ 已修，其余实现待落）；
+> ⑧(a) mean 计分母、㉓ 组序空值恒最后 → **跟官方**（㉓⑮㉖⑧(a) 已修/已落地）；
 > ⑬ astral reverse / ⑯ MMMM / ⑱ 构造器 / ⑳ linksTo / ⑪ list 字面量 / ⑰ relative →
 > documented boundary；⑦ 官方按**整组键列表**分组不扇出 + 行序随分组 → **待拍板**。
 > 观察记录冻结在 evals 私有仓 `parity/oracle-observations/`（两份），判定明细见
@@ -67,9 +67,9 @@ sha256: 09770303fbf9c077132e88b23bc37f7ea391733326af1350f3fbba7278a0252c
 - [x] **oracle 第二轮取证（2026-08-02/03 完成，Obsidian 1.13.4）**：38 view 全量重跑 + types.base 专项 **49 view**（补 34 个 filter 上下文 view），全部两次一致、无 implementation-defined。一次定夺 ⑧(a)、⑩..⑳㉒..㉖ 与 ⑦ 分组内容/组序；工具侧同时修三处（多行 eval 载荷崩 CLI、1.13.4 groups 新结构、diff 行数字段），详见 [runbook §4.11](./docs/design/bases-oracle-runbook.md)。
 - [ ] **oracle round-2 收尾实现（判定已出，按序落）**
   - [x] **㉓ 组序 DESC 空值组恒最后**：`groupKeyCompareDirected` 已落地（2026-08-02），组序实测对齐官方 2→1→null，全量 test 1125 绿
-  - [ ] **⑮ `date.time()` 返回 `"HH:mm:ss"` 字符串**（官方实据：`time() == "10:30:00"` 12 行；本仓现返回 duration 毫秒）——小改 + 回归
-  - [ ] **㉖ `duration("1 month")` = 31 天**（官方实据：31d 12 行 / 30d 0 行 / 28d 0 行；year=365d 已一致）——小改 + 回归
-  - [ ] **⑧(a) `list.mean()` 非 number 不计分子、计分母 + values 作用域含空值**（官方实据：`values.mean()`=0.25、entries=12）——**breaking**：`[1,2,null].mean()` 从报错变 1
+  - [x] **⑮ `date.time()` 返回 `"HH:mm:ss"` 字符串**（2026-08-03 落地；CLI 实测 `created.time()` → "10:30:00"）
+  - [x] **㉖ `duration("1 month")` = 31 天**（2026-08-03 落地；CLI 实测 2678400000ms，relative 阶梯同步 31d）
+  - [x] **⑧(a) `list.mean()` 非 number 不计分子、计分母 + values 作用域含空值**（2026-08-03 落地；CLI 实测 `[1,2,null].mean()`=1、summary-custom=0.25 与官方一致）——**breaking**：`[1,2,null].mean()` 从报错变 1
   - [ ] **boundary 落档**：⑬ astral reverse（官方非 code point）、⑯ MMMM 本地化（官方随界面语言，本仓稳定数字 token）、⑱ date(number)/duration(number)（官方不支持）、⑳ linksTo（官方不可观测）、⑪ list 字面量（官方非字面量）、⑰ relative（时钟/语言依赖不可稳定取证）→ vs-official §5
   - [ ] **⑦ 分组语义拍板**：官方按**整组键列表**成组不扇出 + 顶层行序随分组（group-by-tags：`[]` / `["#project","#area"]` 两组；group-by-list-prop：`[1,2,3]` / null 两组）——改分组模型是大改，需用户决策
 - [ ] **P2 · typed formulas/group/summary**：Property 类型、Date/Link/File/List、公式依赖图与循环、高阶列表、groupBy/summaries；以真实需求逐项开计划。
