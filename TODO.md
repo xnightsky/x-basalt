@@ -1,6 +1,6 @@
 ---
-timestamp: 2026-08-01T19:57:07Z
-sha256: 8b0a0b3f2c13f83428d06cb00dc5921a7ad8ba8e4a35dc6d7d47fe925cfb494a
+timestamp: 2026-08-03T00:13:37Z
+sha256: 09770303fbf9c077132e88b23bc37f7ea391733326af1350f3fbba7278a0252c
 ---
 # TODO · x-basalt
 
@@ -27,7 +27,14 @@ sha256: 8b0a0b3f2c13f83428d06cb00dc5921a7ad8ba8e4a35dc6d7d47fe925cfb494a
 >
 > **2026-07-29：把「不需要 Obsidian 就能做的」全部做完（test 892 → 893）。** ⑧(b) 计算集改 limit 后已落地（顺带统一顶层/组级口径、消掉重复求值与重复诊断）；取证脚本的 `groups` 读取路径已修（首轮 26 个 view 全采成空，且是静默的）+ 加离线自检；⑩..㉖ 的 fixture 补齐 **12 个 view 覆盖 16 条**（㉑ 判定不可取证）。
 >
-> **现在只剩一个动作：开一次 Obsidian 跑第二轮取证。** 一次跑完可同时定夺 ⑧(a)、⑩..⑳㉒..㉖ 共 16 条、以及 ⑦ 的分组内容与组序。
+> **2026-08-02/03：oracle 第二轮取证完成（Obsidian 1.13.4）。** 38 view 全量 + types.base 专项
+> **49 view**（补 34 个 filter 上下文 view），全部两次一致、零崩溃。**16 条口径全部出判定**：
+> ⑩⑪⑫⑭⑲⑧(b)⑨㉔㉕ 与 x-basalt 一致；⑮ `time()` 官方返回 `"HH:mm:ss"`、㉖ month=31d、
+> ⑧(a) mean 计分母、㉓ 组序空值恒最后 → **跟官方**（㉓ 已修，其余实现待落）；
+> ⑬ astral reverse / ⑯ MMMM / ⑱ 构造器 / ⑳ linksTo / ⑪ list 字面量 / ⑰ relative →
+> documented boundary；⑦ 官方按**整组键列表**分组不扇出 + 行序随分组 → **待拍板**。
+> 观察记录冻结在 evals 私有仓 `parity/oracle-observations/`（两份），判定明细见
+> [runbook §4.11](./docs/design/bases-oracle-runbook.md)。
 
 - [x] **P0 · document/schema/diagnostic**：`.base` YAML + view 选择 + filter 结构校验 + expression source span；先完成 `BASE-DOC-001..009`。计划：[`docs/plans/2026-07-26-bases-p0-document-schema.md`](./docs/history/plans/2026-07-26-bases-p0-document-schema.md)（2026-07-26 落地，含 SEC-007/008）
 - [x] **P1 · Markdown query vertical slice**：独立 Bases AST/evaluator，支持 global+view filters、note/file properties、常用 file/string/list 方法、order/sort/limit 与稳定 JSON；不复用 DQL AST，不用 `eval`。计划：[`docs/plans/2026-07-26-bases-p1-markdown-query.md`](./docs/history/plans/2026-07-26-bases-p1-markdown-query.md)（2026-07-26 落地，含 SEC-001/002/003/009 与字节稳定；oracle 冻结项为暂定口径）
@@ -48,6 +55,7 @@ sha256: 8b0a0b3f2c13f83428d06cb00dc5921a7ad8ba8e4a35dc6d7d47fe925cfb494a
     - **这一步决定性、不会白跑**——两个结果都能把「改不改、怎么改」钉死：
       - 官方给 `1`（= M1 成立）→ 改 `list.mean()` + `values` 作用域 + 测试，约一小时。但这是**改通用函数**：任何用户表达式里的 `.mean()` 都跟着变，且变成反直觉语义（`[1,2,null].mean()` = 1 而非 1.5）。改动量小、影响面不小。
       - 官方报错或给空 → M1 被证伪，说明官方的 `values` 根本不含空值、`0.25` 是汇总层自己取的分母——**本仓模型表达不出来**，⑧(a) 随即从「跟官方」翻成「不跟 + boundary」，**一行代码不用改，只写文档**。
+    - **✅ 2026-08-02 取证定案（M1 机制成立）**：官方 filter 里 `list(...)` **不是字面量**（`list(1,2).isEmpty()==false` 0 行、`list(1,2).mean()==1.5` 0 行），`list(1,2,null).mean()` 这条路整体关闭；但**汇总通道直接证实机制**——`values.mean()` = **0.25（entries=12）**，即 values 含空值且计入分母。按「跟官方」实现：`list.mean()` 非 number 不计分子、计分母 + values 作用域含空值，约一小时、**breaking**（`[1,2,null].mean()` 从报错变 1）。
   - **成本与依赖**：(b) 半小时内、独立、不需要 Obsidian；(a) 的取证要 **Obsidian 开着**（跟第一批的复跑不同——那个读冻结记录，只需 `pnpm build`）。建议顺序：先落 (b)，(a) 等下次方便开 Obsidian 再一起取证。
 - [x] **oracle fixture 缺口 + 取证脚本 groups 路径（2026-07-29 全部补齐，见 [runbook §1.3](./docs/design/bases-oracle-runbook.md)）**
   - **fixture ✅**：补 **12 个 view** 覆盖 ⑩..㉖ 中的 16 条，全部在 x-basalt 侧跑通、有确定读数、无 error 诊断。17 条只用 12 个 view 是因为这批判据**全在投影列值里**，一个 view 挂一批常量表达式列就能一次读回多条（取证脚本 2026-07-28 已采 `cells`）。
@@ -56,9 +64,14 @@ sha256: 8b0a0b3f2c13f83428d06cb00dc5921a7ad8ba8e4a35dc6d7d47fe925cfb494a
   - **隔离原则**：已知报错或可能是自建扩展的表达式单独占 view（`mean-mixed-list` / `date-format-localized` / `ext-constructors`），免得官方求值失败连坐同伴。
   - **⑦ 的前置 ✅ 已修**：取证脚本的 `groups` 读取路径此前把 26 个 view 全采成 `key=null / rows=[]`，且是**静默**的。改为字段名自适应 + 结构探针 `groupProbe` + 跑完当场自检；另加离线自检（10 项，不需要 Obsidian）——`READ_RESULT` 是只在 Obsidian 里 eval 的源码串，正常路径一行都跑不到，这正是它能坏一整轮没人发现的原因。
   - **㉓ 的方向维度顺带确认**：`group-desc-nullpos` 实测组序 `null[4] → 2 → 1`，**空值组排最前**——即顶层 sort 空值恒最后（②已冻结）与分组 DESC 整体取反两处确实不一致，等官方读数定夺。
-- [ ] **oracle 第二轮取证（唯一剩余动作：开一次 Obsidian 跑一次）**
-  - 前置全部就绪：fixture 12 个新 view ✅、groups 读取路径 ✅、取证脚本全自动 ✅。view 总数 26 → 38，会连既有 26 条一起重跑（免费回归）。
-  - 一次跑完可同时定夺：**⑧(a)**（`list(1,2,null).mean()` 的官方读数 —— 给 1 则改 `list.mean()` + `values` 作用域约一小时；报错或空则 ⑧(a) 翻成「不跟 + boundary」，一行代码不用改）、**⑩..⑳㉒..㉖ 共 16 条**、**⑦** 的分组内容与组序（首轮 groups 是坏的，只测到顶层行序）。
+- [x] **oracle 第二轮取证（2026-08-02/03 完成，Obsidian 1.13.4）**：38 view 全量重跑 + types.base 专项 **49 view**（补 34 个 filter 上下文 view），全部两次一致、无 implementation-defined。一次定夺 ⑧(a)、⑩..⑳㉒..㉖ 与 ⑦ 分组内容/组序；工具侧同时修三处（多行 eval 载荷崩 CLI、1.13.4 groups 新结构、diff 行数字段），详见 [runbook §4.11](./docs/design/bases-oracle-runbook.md)。
+- [ ] **oracle round-2 收尾实现（判定已出，按序落）**
+  - [x] **㉓ 组序 DESC 空值组恒最后**：`groupKeyCompareDirected` 已落地（2026-08-02），组序实测对齐官方 2→1→null，全量 test 1125 绿
+  - [ ] **⑮ `date.time()` 返回 `"HH:mm:ss"` 字符串**（官方实据：`time() == "10:30:00"` 12 行；本仓现返回 duration 毫秒）——小改 + 回归
+  - [ ] **㉖ `duration("1 month")` = 31 天**（官方实据：31d 12 行 / 30d 0 行 / 28d 0 行；year=365d 已一致）——小改 + 回归
+  - [ ] **⑧(a) `list.mean()` 非 number 不计分子、计分母 + values 作用域含空值**（官方实据：`values.mean()`=0.25、entries=12）——**breaking**：`[1,2,null].mean()` 从报错变 1
+  - [ ] **boundary 落档**：⑬ astral reverse（官方非 code point）、⑯ MMMM 本地化（官方随界面语言，本仓稳定数字 token）、⑱ date(number)/duration(number)（官方不支持）、⑳ linksTo（官方不可观测）、⑪ list 字面量（官方非字面量）、⑰ relative（时钟/语言依赖不可稳定取证）→ vs-official §5
+  - [ ] **⑦ 分组语义拍板**：官方按**整组键列表**成组不扇出 + 顶层行序随分组（group-by-tags：`[]` / `["#project","#area"]` 两组；group-by-list-prop：`[1,2,3]` / null 两组）——改分组模型是大改，需用户决策
 - [ ] **P2 · typed formulas/group/summary**：Property 类型、Date/Link/File/List、公式依赖图与循环、高阶列表、groupBy/summaries；以真实需求逐项开计划。
   - [x] **P2a · formulas 核心**（typed values + 算术 + 依赖图/cycle + clock，BASE-FORM-001..006/SEC-006）：[`docs/plans/2026-07-27-bases-p2a-formulas.md`](./docs/history/plans/2026-07-27-bases-p2a-formulas.md)（2026-07-27 落地）
   - [x] **P2b · types.json / list 高阶 / groupBy / summaries**（BASE-TYPE-001..003、LIST-001、GROUP-001、SUM-001/002；TYPE-004 与 GROUP-002 待 oracle）计划：[`docs/plans/2026-07-27-bases-p2b-types-list-group-summary.md`](./docs/history/plans/2026-07-27-bases-p2b-types-list-group-summary.md)（2026-07-27 落地）
@@ -69,7 +82,7 @@ sha256: 8b0a0b3f2c13f83428d06cb00dc5921a7ad8ba8e4a35dc6d7d47fe925cfb494a
 
 - [x] **函数覆盖率补齐（六片全部落地，2026-07-28）**：注册表条目 **35 → 68**（63 条可执行 + 5 条白名单内显式拒绝）。①机械叶子 16 个 + 渲染类/`random` 拒绝 + `round` 归 number 组 → ②date/duration 构造 + date 方法组 → ③file/link 互转 + 行集解析器（含 `file(...)` 文法增量）→ ④`matches` + 三层 ReDoS 防护 → ⑤GROUP-002 扇出 + 组级汇总 → ⑥显式 `contextFile` 驱动 `this.*`（CTX-002/003 判不做 + 入口形态诊断）。四门全绿（test 880）。计划：[`docs/history/plans/2026-07-28-bases-functions.md`](./docs/history/plans/2026-07-28-bases-functions.md)
 
-**暂缓**：内置 chat 打磨、DQL 函数全集、task emoji 全字段、lint CI/baseline、embedding、复杂编排器。原本的优先级基准是「不能优先于 Bases oracle」；**2026-07-29 后这条基准基本解除**——oracle 侧不需要 Obsidian 的活已全部做完，剩下的唯一动作是「开一次 Obsidian 跑第二轮取证」，它不占用其他方向的时间（等下次方便开 App 时顺手做）。除非 dogfood 出现阻断性缺陷。
+**暂缓**：内置 chat 打磨、DQL 函数全集、task emoji 全字段、lint CI/baseline、embedding、复杂编排器。原本的优先级基准是「不能优先于 Bases oracle」；**2026-08-02/03 后这条基准已解除**——oracle 第二轮取证完成、16 条口径出判定；剩余是 ⑮/㉖/⑧(a) 三个「跟官方」实现 + boundary 落档 + ⑦ 拍板，均不依赖 Obsidian。除非 dogfood 出现阻断性缺陷。
 
 **实现前停点（已通过，留档）**：原定「若 P1 场景超过三分之一依赖附件 / 动态 UI `this` / 不可稳定观测的闭源语义，则退回 `.base` lint/inspect」。实际结论：P1 全部场景在 Markdown-only 口径下可实现且可测，未触发退回；附件与 `this` 划入 P3，争议语义走 oracle 校正而非猜测补齐。
 

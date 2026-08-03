@@ -7,8 +7,8 @@ tags:
   - bases
   - architecture
   - x-basalt
-timestamp: 2026-07-28T08:34:10Z
-sha256: a6f7f6779bbda3f9ecf202efa3bbb2582cba29088a2325b77ff91e030ef29361
+timestamp: 2026-08-03T00:15:11Z
+sha256: 75c8319c55ae939ec20712238a5c401e27dcd30f5556dbcfe1a2c11e0659f8c1
 ---
 # Bases · 官方怎么做 / 我们怎么做
 
@@ -451,9 +451,19 @@ obsidian base:query format=json                  # 查当前 base
 | ⑧ | summary `values` 的空值与 limit 两个维度 | **跟官方**（2026-07-28 决策；(b) 可直接落，(a) 卡在一条未取证的前置） | 见 §5.4 |
 | ⑨ | 官方 `+` 不做字符串拼接 | **不跟** · documented boundary（2026-07-28 决策） | 见 §5.5 |
 | ㉗ | 默认数据集是否含 `.base` 自身 | **不跟默认值** · documented boundary + 文档讲清取舍（2026-07-28 决策） | 见 §5.6 |
+| ㉓ | 分组 DESC 时空值组翻到最前 | **当 bug 修** ✅ 2026-08-02 | 与 ② 同源：官方实测组序 2→1→null，空值恒最后、与方向无关。见 §5.7 |
+| ⑦ | 官方按**整组键列表**成组（不扇出）+ 顶层行序随分组 | **待拍板**（round-2 新实据） | 首轮 groups 实读缺失，2026-08-02 已读全：`groupedDataCache` 键为整组键列表。见 §5.8 |
+| ⑧(a) | summary values 空值计入分母的机制 | **跟官方**（round-2 定案，实现待落） | `list()` 官方非字面量不可直测；汇总通道直接证实：values 含空值、计分母（0.25/12）。见 §5.9 |
+| ⑮ | `date.time()` 返回形态 | **跟官方**（实现待落） | 官方 `"HH:mm:ss"` 字符串；本仓现为 duration 毫秒。见 §5.10 |
+| ㉖ | duration 的 month 换算 | **跟官方**（实现待落） | 官方 31d（year=365d 与本仓一致）。见 §5.11 |
+| ⑬⑯⑱⑳⑪⑰ | astral reverse / format 本地化 / number 构造器 / linksTo / list 字面量 / relative | **不跟** · documented boundary（round-2 决策） | 逐条理由见 §5.12 |
 
 > 第二批四条 2026-07-28 已出决策，**实现只有 ⑧ 待落**（且卡在 §5.4 的前置取证上）；
 > ⑦⑨㉗ 的决策就是「维持现状 + 在这里写清为什么」，本身不产生代码改动。
+>
+> **round-2（2026-08-02/03）追加**：㉓ 已按 bug 修；⑧(a) 前置取证完成、机制由汇总通道证实，
+> 实现待落；⑮㉖ 两条新分歧跟官方、实现待落；⑦ 的 round-1 决策**被新实据挑战**（官方不扇出），
+> 暂维持现状、待拍板；⑬⑯⑱⑳⑪⑰ 落 boundary。
 
 ### 5.1 ① equality：MISSING 与 null 合并（跟官方）
 
@@ -595,6 +605,94 @@ x-basalt 正常拼接为 `"报告 备注"`。（原命题「拼接语境下是�
 
 **代价（诚实记录）**：把官方 `.base` 原样搬过来直接跑，默认会比官方少几行（少的正是 `.base` 自身等非 md 文件）。
 两个 conformance 的取舍见[使用指南 §6.2](../use/bases.md#62-all-files-模式附件并入数据集)。
+
+---
+
+### 5.7 ㉓ 分组组序的方向维度：当 bug 修（2026-08-02）
+
+**官方读数**（round-2 · 1.13.4 · `group-desc-nullpos`）：DESC 组序 **2 → 1 → null**——空值组
+恒排最后，与方向无关。这与顶层 sort 的 ② 完全同源：`groupBy` 的 DESC 此前是把
+`groupKeyCompare` 结果整体取反，空值组的「最后」排名差被一起翻转。
+
+**为什么当 bug 修**：本仓登记口径（runbook §1 ㉓）与官方同为「空值组最后」，实现没做到——和
+② 的定性完全一致，不是选择题。新增 `groupKeyCompareDirected(a, b, direction)`：任一侧落在
+null/MISSING 时直接给「空值在后」的定序，方向只作用于两侧都非空的情形。
+
+**落点**：`src/base/engine.ts`；回归用例 `tests/base-group-summary.test.ts`
+（`group-missing.base :: byAreaDesc`，断言组序 `front/back/null`），标注 oracle ㉓。
+
+### 5.8 ⑦ 分组内容与行序：round-2 新实据，待拍板
+
+**round-1 决策**（2026-07-28）是「不跟」：当时只测到顶层行序、官方的分组内容与组序根本没读到
+（观察记录 `groups` 字段是坏的），跟等于照抄症状；且会牺牲字节稳定契约。
+
+**round-2 实据**（2026-08-02 · 1.13.4）：`v.data.groupedDataCache` 读全后，官方是**按整组键列表
+成组、不扇出**：
+
+- `group-by-tags`：两组 = `[]`（11 个无标签文件）+ `["#project","#area"]`（CaseF）——CaseF 的
+  两个标签**没有**扇成两个组，而是作为一个键列表进一组；
+- `group-by-list-prop`：两组 = `[1,2,3]`（CaseF）+ `null`（11 行）；
+- 顶层行序随分组键重排（3 个 DIFF 同源）；DESC 组序空值恒最后（㉓）。
+
+本仓 GROUP-002 暂定口径是**扇出**（一行进其每个元素的组）——与官方相反。改跟官方需要动
+`groupBy` 分桶模型 + 行序 + 一组测试，且字节稳定契约会变；维持现状则是比官方**多**分组。
+**此条留待用户拍板**，不静默改。
+
+### 5.9 ⑧(a) summary values 计分母机制：跟官方（round-2 定案，实现待落）
+
+**取证结果**：官方 filter 里 `list(...)` **不是字面量**（`list(1,2).isEmpty()==false` 0 行、
+`list(1,2).mean()==1.5` 0 行、`list(1,2,null).mean()==1/1.5` 均 0 行、errors 恒空），所以
+`list(1,2,null).mean()` 这条直测路径整体关闭。但**汇总通道直接给出了机制**：
+`summary-custom` 的 `values.mean()` = **0.25、entries=12**——`values` 含 12 个条目
+（含 null 与 9 个 MISSING），mean 把它们**计入分母**（(1+2)/12）。
+
+**为什么跟**：M1 机制（values 含空值 + mean 计分母）被官方读数直接证实；本仓现在
+`values` 剔除空值、`list.mean()` 要求全 number，两条都相反。
+
+**实现（约一小时，breaking）**：`list.mean()` 改为「非 number 不计分子、计分母」+
+`values` 作用域含 null/MISSING。代价：`[1,2,null].mean()` 从报错变为 1——任何用户表达式里的
+`.mean()` 都跟着变，影响面不小，故实现前需用户知情。
+
+### 5.10 ⑮ `date.time()` 返回形态：跟官方（实现待落）
+
+**官方读数**：`date("2026-07-01T10:30:00").time() == "10:30:00"` 12 行，`=="10:30"` 0 行，
+`==37800000` 0 行 → 官方返回 **`"HH:mm:ss"` 字符串**，不是 duration 也不是毫秒数。
+本仓现返回「当日 UTC 零点起的 duration」。
+
+**为什么跟**：返回形态是投影契约的一部分，官方有稳定读数；且 `"HH:mm:ss"` 对人类读、
+对字符串拼接都更直接。实现 + 回归用例后，`created.time()` 的 CLI 输出从毫秒数变字符串
+（`date-methods` 的 x-basalt 读数注释同步改）。
+
+### 5.11 ㉖ duration 的 month 换算：跟官方（实现待落）
+
+**官方读数**：`duration("1 month") == duration("31 days")` 12 行、`=="30 days"` 0 行、
+`=="28 days"` 0 行；`duration("1 year") == duration("365 days")` 12 行（与本仓一致）。
+官方 month = **31 天**，本仓现值 = 30 天。
+
+**为什么跟**：官方有稳定读数，month=31d 是简单常数修正；year=365d 已一致。改动在
+`src/base/values.ts` 的 duration 换算 + 回归用例（`duration-units` 读数注释同步改）。
+
+### 5.12 boundary 批：⑬⑯⑱⑳⑪⑰（round-2 决策）
+
+以下各条官方**没有可跟的稳定语义**（或本仓保有一个明确更安全的超集），逐条记理由：
+
+- **⑬ astral reverse**：官方 BMP `"abc".reverse()=="cba"` 一致，但代理对
+  `"a💩b".reverse()=="b💩a"` 0 行——官方对 astral 的处理不是 code point 反转（可能按 code unit
+  拆坏代理对或静默失败）。本仓按 code point 反转不产生孤立代理项，是安全差异，保留 + boundary。
+- **⑯ format 本地化 token**：官方 `format("MMMM")=="七月"` 12 行——输出**随界面语言**（本机中文），
+  不是稳定契约；本仓有意只支持数字 token（YYYY/MM/…）并报错拒绝本地化 token，保留 + boundary。
+- **⑱ date(number)/duration(number)**：官方对照 `date("…")==date("…")` 12 行（通道可用），
+  但 `date(1000)` 与 epoch-ms / epoch-sec 两个候选都 0 行、`duration(1000)` 也 0 行 → 官方
+  **不支持 number 构造**。本仓支持是超集，保留 + boundary。
+- **⑳ linksTo**：`file.linksTo(file(...))` 与 `file.linksTo("CaseB")` 均 0 行、errors 空——
+  官方要么没有该函数要么不可观测。本仓的解析/文本双语义是超集，保留 + boundary。
+- **⑪ list 字面量**：官方 filter 里 `list(1,2)` 非字面量（`list(1,2).isEmpty()==false` 0 行），
+  本仓的字面量构造是超集，保留 + boundary（`list.slice` 等 list 方法随之不可与官方对拍）。
+- **⑰ relative()**：输出随时钟与界面语言变化（官方未给稳定读数），不可稳定取证；本仓固定英文 +
+  固定阶梯（month=30d/year=365d），保留 + boundary。
+
+> 上述 boundary 的 fixture view 与原始读数都在 evals 私有仓观察记录
+> `2026-08-02-bases-oracle2.json`，可随时重跑复核。
 
 ---
 

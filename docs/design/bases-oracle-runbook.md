@@ -7,8 +7,8 @@ tags:
   - bases
   - oracle
   - conformance
-timestamp: 2026-07-28T08:44:16Z
-sha256: bf0bca1dbe23567f6ae5a7a4eb3e136cd2432bacf4c6b79a84788942b6672e35
+timestamp: 2026-08-03T00:14:28Z
+sha256: 5001377be9a219cd8b5107df9c95dd8c74b974b4405f4b1b0d81f9b7b98f18dc
 ---
 # Bases P1 争议语义官方 oracle 操作手册（runbook）
 
@@ -18,9 +18,10 @@ sha256: bf0bca1dbe23567f6ae5a7a4eb3e136cd2432bacf4c6b79a84788942b6672e35
 >
 > 关于 `AGENTS.md`「严禁引入 Electron / Puppeteer / Playwright 等 GUI 自动化工具」：那条约束的对象是**产品依赖**——x-basalt 本身仍是零 GUI 依赖的纯 Node CLI，取证用的是 Obsidian 官方 CLI 且不进产品依赖树。本手册初版写的「项目硬约束禁 GUI 自动化，只能人工串行」把约束对象搞错了，是 §0.1 那次误判的一部分。
 
-## 0. 状态：✅ 已执行（2026-07-28，Obsidian 1.12.7）
+## 0. 状态：✅ 已执行（2026-07-28，Obsidian 1.12.7；2026-08-02/03 第二轮，Obsidian 1.13.4）
 
-**26 个 view 全部跑完，两次一致（无 `implementation-defined`）。结论见 §4，分歧清单见 §4.0。**
+**首轮 26 个 view 两次一致；第二轮 38 + 49 view 两次一致（无 `implementation-defined`）。
+首轮结论见 §4，round-2 判定见 §4.11，分歧清单见 §4.0。**
 
 ### 0.1 推翻了什么（原暂缓决策的三条依据，两条不成立）
 
@@ -318,7 +319,52 @@ view 清单（26 个）：truthiness.base × 8（truthy-missing / truthy-explici
 
 ⚠️ 复跑**没有覆盖** ⑧ 与 ⑨：对照器只比行集不比列值，而这两条的判据都在列值/汇总里。
 
-## 5. 校正（第一批 ✅ / 第二批决策已出 · ⑧(b) ✅，仅 ⑧(a) 待前置取证）
+### 4.11 第二轮取证（2026-08-02/03 · Obsidian 1.13.4 · 38 + 49 view）
+
+> 前提变化：会话中 Obsidian 自更新到 **1.13.4**（installer 仍记 1.12.7），结论的版本绑定因此刷新。
+> fixture 新增 **34 个 filter 上下文 view**（types.base，文件数未变），观察记录冻结在 evals 私有仓
+> `parity/oracle-observations/`（`2026-08-02-bases-oracle.json` 38 view 全量 +
+> `2026-08-02-bases-oracle2.json` 49 view types）。
+
+**为什么改 filter 上下文**：1.13.4 实测把 `note.<expr>` / 裸表达式**列**当属性列处理——不求值、
+无错误、渲染为空（`cachedFormulaOutputs={}`、propertyEditor 空），07-29 那批「表达式列」view
+判不出函数值。filter 会求值（round-1 date-eq-literal 已证），故新 view 全部用 filter 谓词：
+真 → 12 行、假 → 0 行；官方对不认识的函数**静默 0 行（errors 恒空）**，故关键处补对照组钉机制。
+
+**判定（⑩..㉖ 逐条）**：
+
+| # | 官方 1.13.4 实据 | 判定 |
+| --- | --- | --- |
+| ⑩ | `"hello world foo".title() == "Hello World Foo"` 12 行 | ✅ 一致 |
+| ⑪ | slice 负索引 / end 排他 / 越界钳制三谓词全 12 行；`list(...)` 字面量不可用 | string ✅ 一致；list 侧本仓超集 → boundary |
+| ⑫ | 全局字面替换 12 行、只替首个 0 行 | ✅ 一致（非 regex） |
+| ⑬ | BMP `"abc".reverse()=="cba"` 12 行；astral `"a💩b".reverse()=="b💩a"` **0 行** | 官方对代理对处理 ≠ code point → boundary（本仓保 code point 安全差异） |
+| ⑭ | number / date `isEmpty()==false` 各 12 行 | ✅ 一致 |
+| ⑮ | `time()=="10:30:00"` **12 行**、`=="10:30"` 0、`==37800000` 0 | ❌ 官方返回 `"HH:mm:ss"` 字符串 → **跟官方改**（本仓现为 duration 毫秒） |
+| ⑯ | 数字 token 两谓词 12 行；`format("MMMM")=="七月"` **12 行** | 数字 token ✅；本地化 token 官方随界面语言 → boundary（本仓稳定数字 token） |
+| ⑰ | relative 依赖时钟/界面语言，未取证 | 维持本仓口径 + boundary |
+| ⑱ | `date(1000)` / `duration(1000)` 两候选均 0 行；`date()==date()` 对照 12 行 | 官方不支持 number 构造 → 本仓超集 boundary |
+| ⑲ | `file("CaseB").path == "notes/CaseB.md"` 12 行 | ✅ 一致（路径形态相同） |
+| ⑳ | `file.linksTo(file(...))` / `file.linksTo("CaseB")` 均 0 行 | 官方不可观测/不支持 → boundary |
+| ㉖ | `duration("1 year")==duration("365 days")` 12 行；month：31d 12 / 30d 0 / 28d 0 | year ✅ 一致；month ❌ 官方 31d → **跟官方改** |
+| ⑧(a) | `list(1,2).mean()==1.5` **0 行**、`list(1,2,null).mean()==1/1.5` 均 0、`list(1,2).isEmpty()==false` **0 行** → `list()` 非字面量；汇总通道 `values.mean()`=**0.25（entries=12）** | M1 机制成立：values 含空值、计分母 → **跟官方改** `list.mean()` + values 作用域（breaking） |
+| ⑦ | groups 实读：`groupedDataCache` 按**整组键列表**成组——tags 两组 `[]`(11 行)/`["#project","#area"]`(CaseF)；list-prop 两组 `[1,2,3]`(CaseF)/`null`(11 行)；顶层行序随分组重排（3 个 DIFF） | 官方**不扇出**、行序随分组 → 与 GROUP-002 暂定口径相反，**待拍板** |
+| ㉓ | `group-desc-nullpos` 组序 **2 → 1 → null**（DESC） | 空值组恒最后、与方向无关（与 ② 同源）→ **当 bug 修**，`groupKeyCompareDirected` 已落地 |
+
+**工具侧三处修复（本轮暴露）**：
+
+1. **多行 eval 载荷崩 CLI/主进程**：round-2 的 READ_RESULT 改成多行（4595B/112 换行）后第一次
+   真跑就崩——Obsidian CLI 解析器截断多行 `code=` 参数，主进程 JSON.parse 弹错、socket 通道整体
+   卡死。修复：`evalJson` 发送前统一压单行（去注释 + 折叠空白）。教训：**CLI 载荷必须单行**
+   （round-1 READ_RESULT 恰好单行 902B 所以没踩到）。
+2. **1.13.4 groups 新结构**：`v.groups` 变成渲染表格组件，真实分组数据移到
+   `v.data.groupedDataCache = [{key:{data}, entries:[...]}]`（key.data 为整组键列表）。
+   READ_RESULT 加该路径 + 离线自检用例（11 项全过）。
+3. **diff 假分歧**：对照器拿 `total`（= filter 后 limit 前行数，契约）当行数比，带 limit 的
+   view 全报假分歧；改按 `rows.length`，且 file.path 列按 basename 归一。修后对照：
+   **一致 27 · 存疑一致 8 · 分歧 3（全为 ⑦ 行序家族）· 跑不动 0**（38 view）。
+
+## 5. 校正（第一批 ✅ / 第二批决策已出 · ⑧(b) ✅ / round-2 判定已出：㉓ 已修，⑮㉖⑧(a) 实现待落）
 
 > 取证轮只做取证、一行实现没改；**校正轮（2026-07-28）**：第一批 ①②④ 已落实现 + 回归用例
 > （复跑对照见 §4.10，分歧 7 → 2、无新增）；第二批 ⑦⑧⑨㉗ 决策已出——⑦⑨㉗ 落 documented
@@ -326,6 +372,11 @@ view 清单（26 个）：truthiness.base × 8（truthy-missing / truthy-explici
 > 落地**（test 892 → 893），**(a) 空值计入分母仍卡在前置取证**（见 vs-official §5.4）。
 > 每条都单独判断「跟官方」还是「落 documented boundary」，不存在无脑对齐；
 > 判断理由逐条写进 [`bases-vs-official.md`](bases-vs-official.md) §5。
+
+> **round-2 校正（2026-08-02/03）**：㉓ 组序 DESC 空值恒最后 → **已按 bug 修**
+> （`groupKeyCompareDirected`，engine.ts，组序实测对齐官方 2→1→null）；⑮ `time()` 返回
+> `"HH:mm:ss"`、㉖ month=31d、⑧(a) mean 计分母 → **跟官方，实现待落**；⑬⑯⑱⑳⑪⑰ →
+> documented boundary（vs-official §5.7 起逐条落档）；⑦ 官方不扇出 → 待拍板。
 
 | # | 差异 | 落点 | 取舍与状态 |
 | --- | --- | --- | --- |

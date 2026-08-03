@@ -7,8 +7,8 @@ tags:
   - bases
   - testing
   - x-basalt
-timestamp: 2026-07-28T08:32:23Z
-sha256: fc9eb3be183bf2eb3fcd7a822599c27ee0d8e0db4e5a7603d220377e4c1b9f3c
+timestamp: 2026-08-03T00:15:32Z
+sha256: 3f256404e8c7d4eb85b06ea41ae05ff83078269e177a250f8689ea3082d18f02
 ---
 # Bases 实现状态追踪
 
@@ -79,13 +79,16 @@ sha256: fc9eb3be183bf2eb3fcd7a822599c27ee0d8e0db4e5a7603d220377e4c1b9f3c
 | 1/100/10,000 篇基准（只记录不承诺） | 矩阵 §9 P1 门 | ✅ 2026-07-26（query 11ms/4ms/68ms，数值见计划「验证结论」，无需 SQL 下推） |
 | CLI 薄出口（`base` 命令）+ guides 补 Bases 章节 | 设计 §15（API 先于 CLI） | ✅ 2026-07-27（[计划](../history/plans/2026-07-27-bases-cli-export.md)；`x-basalt base` + `guides/querying-bases.md`，tests/base-cli.test.ts 7 用例） |
 
-## 3. P1 前置 oracle ✅ 取证完成 / 第一批校正 ✅ 已落地
+## 3. P1 前置 oracle ✅ 取证完成 / 第一二批校正 ✅ 已落地（round-2 判定已出）
 
 > **2026-07-28：26 个 view 全部取证完毕**（Obsidian 1.12.7，每个 view 连跑两次全部一致，无 `implementation-defined`）。
 > 同日上午曾判「⏸ 整体暂缓、不再排期」，当天下午被推翻——官方 CLI 的 `eval` 能读到 Bases 算好的行集，
 > 取证可脚本化、不需要人逐个点。误判复盘见 [runbook §0.1](bases-oracle-runbook.md)。
 > **2026-07-28 校正轮**：结论明确的第一批三条（① equality / ② sort 空值位 / ④ 空 filter 数组）已落实现 + 回归用例；
 > 余下四条（⑦⑧⑨㉗）需先出决策。⏳ 表示待校正，逐条取舍见 [runbook §5](bases-oracle-runbook.md) 与 [vs-official §5](bases-vs-official.md)。
+> **2026-08-02/03 round-2**（Obsidian 1.13.4，38 + 49 view 两次一致）：⑩..㉖ 全部出判定——
+> ㉓ 已修、⑮⑯㉖⑧(a) 跟官方（⑮㉖⑧(a) 实现待落）、⑦ 官方不扇出待拍板、⑬⑯⑱⑳⑪⑰ 落
+> documented boundary。判定明细见 [runbook §4.11](bases-oracle-runbook.md)。
 
 | 争议语义 | 场景编号 | 官方结论 | 状态 |
 | ---- | ---- | ---- | ---- |
@@ -98,9 +101,16 @@ sha256: fc9eb3be183bf2eb3fcd7a822599c27ee0d8e0db4e5a7603d220377e4c1b9f3c
 | 自定义 summary 的 `values` 边界 | BASE-SUM-002 | **含** null/missing（计入分母）、按 **limit 后** | ⏳ 2026-07-28 决策：**跟官方**，实现待落——(b) limit 后可直接改；(a) 有前置（要复现 0.25 必须同时改 `list.mean()`，而官方没给过它在混合列表上的读数），见 [vs-official §5.4](bases-vs-official.md) |
 | list 分组键扇出的顶层行序 | BASE-GROUP-002 | 顶层 rows 顺序随分组键变动 | ✅ 2026-07-28 决策：**不跟**，保 `file.path` 稳定序 + [documented boundary](bases-vs-official.md)（本轮只测到顶层行序，官方分组内容/组序**没测到**——观察记录 `groups` 字段是坏的） |
 | **默认数据集是否含 `.base` 自身** | BASE-DATA-001/002 | **含**（`.base` 文件自身也是行） | ✅ 2026-07-28 决策：**不改默认值** + [documented boundary](bases-vs-official.md)（差异恒发 warning 不静默；官方读数没证明附件也是行，切默认等于断言未取证的事） |
+| 分组组序的方向维度（DESC 空值位） | ㉓ | DESC 组序 **2 → 1 → null**，空值组恒最后 | ✅ 2026-08-02 已校正（当 bug 修：`groupKeyCompareDirected`，与 ② 同源；回归用例 `group-missing.base :: byAreaDesc` 标 oracle ㉓） |
+| ⑩ title / ⑪ slice（string）/ ⑫ replace / ⑭ isEmpty / ⑲ file().path | 函数覆盖率片 | 与本仓期望串**逐字一致** | ✅ 2026-08-02 可转正（filter 谓词 12 行命中；⑪ list 侧官方 `list()` 非字面量 → 本仓超集 boundary） |
+| ⑮ `date.time()` 返回形态 | 片二 | 官方返回 `"HH:mm:ss"` **字符串** | ⏳ 2026-08-02 决策：**跟官方**，实现待落（本仓现为 duration 毫秒） |
+| ㉖ duration month 换算 | 片二 | month=**31d**（year=365d 一致） | ⏳ 2026-08-02 决策：**跟官方**，实现待落（本仓现 30d） |
+| ⑦ 分组内容（round-2 新实据） | BASE-GROUP-002 | 官方按**整组键列表**成组、**不扇出**（tags：`[]` / `["#project","#area"]`；list-prop：`[1,2,3]` / null） | ⏳ 2026-08-02 **待拍板**：与 GROUP-002 暂定扇出口径相反，改模型是大改（见 [vs-official §5.8](bases-vs-official.md)） |
+| ⑬ astral reverse / ⑯ format 本地化 / ⑱ number 构造器 / ⑳ linksTo / ⑪ list 字面量 / ⑰ relative | 函数覆盖率片 | 官方不可跟（非 code point / 随界面语言 / 不支持 / 不可观测 / 非字面量 / 时钟语言依赖） | ✅ 2026-08-02 决策：**不跟** + [documented boundary](bases-vs-official.md) §5.12（本仓保安全/稳定超集） |
 
 > 取证方式与三个会静默出错的坑见 [runbook §0.2](bases-oracle-runbook.md)。原始观察数据由取证侧留档（不入本仓：机器生成、体量大，且与 §4 的人读结论重复存放必然漂移）。
-> **⑩..㉖ 共 17 条仍无 fixture view**（见 runbook §1.1 / §1.2）——取证已脚本化，补 view 是唯一门槛。
+> **⑩..㉖ 已全部有 fixture view 并完成 round-2 取证**（34 个 filter 上下文 view，见 runbook §4.11）；
+> 剩余实现见 TODO「oracle round-2 收尾实现」。
 > 校正清单 `rg -n "oracle" tests/base-evaluator.test.ts tests/base-engine.test.ts`。
 
 ## 4. P2 typed formulas / group / summary（P2a ✅ / P2b ✅ 2026-07-27）
