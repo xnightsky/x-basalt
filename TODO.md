@@ -89,9 +89,12 @@ sha256: d22250fa08e3c330f0f23538b78e80bc05327a554bc1e4f38f2bda8e313eefab
 **实现前停点（已通过，留档）**：原定「若 P1 场景超过三分之一依赖附件 / 动态 UI `this` / 不可稳定观测的闭源语义，则退回 `.base` lint/inspect」。实际结论：P1 全部场景在 Markdown-only 口径下可实现且可测，未触发退回；附件与 `this` 划入 P3，争议语义走 oracle 校正而非猜测补齐。
 
 
-## 🧪 2026-07-28 动态 base（入参 base + chat `base_query`）——已论证，待实现
+## 🧪 2026-07-28 动态 base（入参 base + chat `base_query`）——第一步已落地
 
-用户提出、当场论证成立的新方向。**性质变化：它把 Bases 从「读用户已有的 `.base` 资产」变成「AI 现场组装查询」，用户有没有 `.base` 文件不再是前提。**
+- [x] **第一步：`x-basalt base` 支持 stdin / 字符串入参（`-` 或 `--stdin`）**——✅ 2026-08-03 落地（`12e336d`/`d02d942`/`10d182a`/`c29eccd`），计划：[`docs/plans/2026-08-03-bases-dynamic-stdin.md`](docs/plans/2026-08-03-bases-dynamic-stdin.md)。独立可用、不绑 chat：`echo "views: …" | x-basalt base -`。kimi(k3) 独立评审一轮：High（basePath/source 双缺省 TypeError）已修 + 4 个 Low 收口。
+- [ ] **第二步（前置缺口未清，待第一步落地）：chat `base_query` 工具 + JSON Schema 约束 + 软/硬路由**——依赖「Bases 规范 skill」新建与命名避撞（`obsidian-base-spec` 0 处提到 Bases），见下段「前置缺口」。
+
+**论证（2026-07-28，用户提出、当场论证成立）**：**性质变化：它把 Bases 从「读用户已有的 `.base` 资产」变成「AI 现场组装查询」，用户有没有 `.base` 文件不再是前提。**
 
 **做什么**：`.base` 不必是磁盘上写死的文件，可作为**入参**传入（stdin / 字符串）；再把这个能力接进 chat，让 AI 自己组装 base 来查 vault。
 

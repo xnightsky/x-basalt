@@ -283,14 +283,15 @@ x-basalt search "缓存失效" --offset 20 --size 20
 ## `base` — .base view 查询
 
 ```
-x-basalt base <file.base> [--view <name>] [--vault <path...>] [--db <path>] [--format json|yaml] [--conformance <id>]
+x-basalt base [<file.base>] [--view <name>] [--stdin] [--vault <path...>] [--db <path>] [--format json|yaml] [--conformance <id>]
 ```
 
 执行 Obsidian `.base` view 的无头查询（Bases Markdown conformance 2026-07）：只读索引库，输出稳定 JSON，不渲染表格。
 
 | 参数/选项        | 默认                             | 说明                                                                       |
 | ---------------- | -------------------------------- | -------------------------------------------------------------------------- |
-| `<file.base>`    | 必填                             | vault 内 `.base` 路径（vault 相对或绝对；越出 vault 读取前拒绝）           |
+| `[<file.base>]`  | 必填（或 `--stdin`）             | vault 内 `.base` 路径（vault 相对或绝对；越出 vault 读取前拒绝）；传 `-` 或 `--stdin` 则从标准输入读 `.base` 定义（动态 base：不读文件、无越界检查、诊断 file 为 `<stdin>`） |
+| `--stdin`        | —                                | 从标准输入读 `.base` 定义（等效 file 传 `-`）；stdin 是交互终端时立即报错不挂起 |
 | `--view <name>`  | `views[0]`                       | 指定 view；不存在报 `base/view-not-found`（error，suggestions 列可用名）   |
 | `--vault <path>` | 配置 `vault`                     | 可重复传多个（多根 vault）                                                 |
 | `--db <path>`    | `.x-basalt/index.db` / 配置 `db` | 要查询的 SQLite 路径（只读打开）                                           |
@@ -314,6 +315,7 @@ x-basalt base <file.base> [--view <name>] [--vault <path...>] [--db <path>] [--f
 - `conformance` 回传**实际生效**口径：缺省 `bases-markdown-2026-07`（md-only，恒发 `base/markdown-only-dataset` warning）；`--conformance bases-all-files-2026-07` 时附件并入为行（附件行 note 属性投影 `null`、不发该 warning），旧库无 `vault_entries` 表自动降级回 md-only（compat warning）。
 - `total` = filter 后、limit 前行数；缺失属性投影为 `null` 且列保留。
 - 未显式 `sort` 按 `file.path` 升序稳定输出（附 `base/default-sort-tiebreak` info）；同库重复运行字节稳定。
+- **stdin 模式**（`-` / `--stdin`）：`base` 字段恒为 `"<stdin>"`，全部文档层诊断的 `file` 字段为 `"<stdin>"`（types.json 读取诊断除外——它指向其自身路径）；与文件模式对同一内容输出等价（行/列/total）。
 - **退出码**：`diagnostics` 含任一 `error` 级 → 输出完整 JSON（rows 为空）并退出码 1；仅 warning/info（如 md-only 恒发 warning）→ 0。
 
 **示例**
@@ -322,6 +324,8 @@ x-basalt base <file.base> [--view <name>] [--vault <path...>] [--db <path>] [--f
 x-basalt base views/projects.base --vault ./my-vault
 x-basalt base views/projects.base --view Active --vault ./my-vault --db ./index.db
 x-basalt base views/projects.base --conformance bases-all-files-2026-07 --vault ./my-vault   # all-files：附件也作为行
+# 动态 base：从管道读 .base 定义（不落盘），AI 可现场组装查询
+printf 'views:\n  - type: table\n    name: All\n    order: [file.name]\n' | x-basalt base - --vault ./my-vault
 ```
 
 `.base` 怎么写与支持的完整语法（顶层 key / view / filter / 表达式 / 函数全表 / 值语义）见 [writing-bases.md](bases.md)；输出契约细节、限制与报错速查见 [querying-bases.md](bases.md)。

@@ -356,7 +356,7 @@ test("DB-1b/c: parseBaseSource 虚拟名 <stdin> 穿透诊断且不触发路径�
   assert.ok(!doc.diagnostics.some((x) => x.rule === "base/path-outside-vault"));
 });
 
-// DB-1a：合法文档的表达式浅扫描 / filter 结构等完整校验链在 parseBaseSource 中同样生效
+// DB-1a：完整校验链（表达式浅扫描）与文件模式一致
 // （用 invalid fixture 里带表达式错误的 .base 验证诊断链一致）
 test("DB-1a: parseBaseSource 完整校验链（表达式浅扫描）与文件模式一致", () => {
   const rel = "snake-case-function.base";
@@ -369,4 +369,25 @@ test("DB-1a: parseBaseSource 完整校验链（表达式浅扫描）与文件模
   assert.ok(
     viaSource.diagnostics.some((x) => x.rule === "base/unknown-function" && x.severity === "error"),
   );
+});
+
+// DB-1a（kimi 评审 Low 补齐）：views 缺失 / 同名 view / 未知顶层 key / filter 结构
+// 四类结构校验在 parseBaseSource 名下显式对拍（此前只经 loadBaseDocument 委托共享代码路径，
+// 无 parseBaseSource 直接断言）。每类 fixture 都同时喂两个入口，断言诊断全等。
+test("DB-1a: parseBaseSource 结构校验（views 缺失/同名 view/未知 key/filter）与文件模式全等", () => {
+  const cases = [
+    "no-views.base",
+    "duplicate-view.base",
+    "unknown-top-key.base",
+    "deep-filter.base",
+  ];
+  for (const rel of cases) {
+    const absPath = join(INVALID, rel);
+    const source = readFileSync(absPath, "utf8");
+    const viaFile = loadBaseDocument({ basePath: absPath, vaultRoots: [INVALID] });
+    const viaSource = parseBaseSource(source, { file: rel });
+    // 诊断（rule/severity/位置）逐字段全等；file 字段同为 rel（同展示名）
+    assert.deepEqual(viaSource.diagnostics, viaFile.diagnostics, `diagnostics mismatch: ${rel}`);
+    assert.equal(viaSource.views.length, viaFile.views.length, `views length mismatch: ${rel}`);
+  }
 });
