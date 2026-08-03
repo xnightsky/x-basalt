@@ -145,64 +145,74 @@ test("BASE-GROUP-001: missing 分组键 DESC 仍排最后（oracle ㉓）", () =
   );
 });
 
-// GROUP-002（2026-07-28 覆盖率片五落地；暂定口径，待 oracle）：list 分组键**扇出**
-test("GROUP-002: list 分组键扇出——一行进入其每个元素的组", () => {
+// oracle ⑦（2026-08-02 · Obsidian 1.13.4）：list 分组键按**整组键列表**成组、不扇出——
+// 一行恰好一组，键 = 去重后的整组键列表（官方 group-by-tags 实读 [] / ["#project","#area"]）。
+test("GROUP-002: list 分组键按整组键列表成组（oracle ⑦ 跟官方）", () => {
   const r = query("group-list.base", "byTags");
   assert.deepEqual(errorsOf(r), []);
-  // 只有 Tagger 有 tags: [x, y] → 进 x 与 y 两组；其余 5 篇 tags 缺失 → MISSING 组（排最后）
+  // 只有 Tagger 有 tags: [x, y] → 一组键 ["x","y"]；其余 5 篇缺失 → null 组（排最后）
   assert.deepEqual(
     r.groups?.map((g) => g.key),
-    ["x", "y", null],
+    [["x", "y"], null],
   );
   assert.deepEqual(
     r.groups?.[0]?.rows.map((row) => row["file.name"]),
     ["Tagger.md"],
   );
-  assert.deepEqual(
-    r.groups?.[1]?.rows.map((row) => row["file.name"]),
-    ["Tagger.md"],
-  );
-  assert.equal(r.groups?.[2]?.rows.length, 5);
-  // 顶层 rows 仍是平铺一份（扇出只影响 groups）——契约不变
+  assert.equal(r.groups?.[1]?.rows.length, 5);
+  // 顶层 rows 仍是平铺一份；不扇出后组内行数之和 = rows.length
   assert.equal(r.total, 6);
   assert.equal(r.rows.length, 6);
-  // 扇出的代价：组内行数之和 > rows.length（已在 BaseQueryResult.groups 契约声明）
   const summed = r.groups?.reduce((n, g) => n + g.rows.length, 0);
-  assert.equal(summed, 7);
+  assert.equal(summed, 6);
 });
 
-test("GROUP-002: 扇出跨行重叠 + 行内重复元素去重", () => {
-  // list(status, area)：status 值跨行重叠，area 部分行缺失（MISSING 也是一个键）
+test("GROUP-002: 整组键列表——跨行重叠按完整键分桶，行内重复元素去重（oracle ⑦）", () => {
+  // byMulti：每行的 list(status, area) 是**一个键**，不再把 status 元素扇出去；
+  // 6 行 6 个互异完整键 → 6 组各 1 行（缺失元素在键里序列化为 null）。
   const r = query("group-list.base", "byMulti");
   assert.deepEqual(errorsOf(r), []);
   assert.deepEqual(
     r.groups?.map((g) => g.key),
-    ["active", "back", "done", "front", "paused", null],
+    [
+      ["active", "back"],
+      ["active", "front"],
+      ["active", null],
+      ["done", "back"],
+      ["done", "front"],
+      ["paused", null],
+    ],
   );
-  assert.deepEqual(
-    r.groups?.find((g) => g.key === "active")?.rows.map((row) => row["file.name"]),
-    ["Alpha.md", "Beta.md", "Tagger.md"],
+  assert.equal(r.groups?.every((g) => g.rows.length === 1), true);
+  assert.equal(
+    r.groups?.reduce((n, g) => n + g.rows.length, 0),
+    r.rows.length,
+    "不扇出：组内行数之和 = rows.length",
   );
-  // 行内重复元素去重：list(status, status) 不得把同一行塞进同一组两次
+  // byDup：行内重复元素去重，["active"] 一个组装 3 行
   const dup = query("group-list.base", "byDup");
   assert.deepEqual(errorsOf(dup), []);
   assert.deepEqual(
-    dup.groups?.find((g) => g.key === "active")?.rows.map((row) => row["file.name"]),
+    dup.groups?.map((g) => g.key),
+    [["active"], ["done"], ["paused"]],
+  );
+  assert.deepEqual(
+    dup.groups?.[0]?.rows.map((row) => row["file.name"]),
     ["Alpha.md", "Beta.md", "Tagger.md"],
   );
   assert.equal(
     dup.groups?.reduce((n, g) => n + g.rows.length, 0),
     dup.rows.length,
-    "每行恰好一个键 → 组内行数之和等于 rows.length",
   );
 });
 
-test("GROUP-002: 空 list 键视同 MISSING，不静默丢行", () => {
+// oracle ⑦：空列表成 **[] 键**（官方 file.tags 缺失即空列表的实读），不再视同 MISSING。
+test("GROUP-002: 空 list 键成 [] 组，不静默丢行（oracle ⑦）", () => {
   const r = query("group-list.base", "byEmpty");
   assert.deepEqual(errorsOf(r), []);
   assert.deepEqual(
     r.groups?.map((g) => g.key),
-    [null],
+    [[]],
   );
   assert.equal(r.groups?.[0]?.rows.length, 6, "全部 6 行都在，未被丢弃");
 });

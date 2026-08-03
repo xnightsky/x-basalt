@@ -197,9 +197,9 @@ export interface BaseQueryResult {
    * file.path tie-break（与顶层 rows 同一比较器）；rows 与顶层 rows 同一投影形状
    * （向后兼容，顶层 rows 平铺行为不变）。key 经 toOutputValue 序列化（稳定 JSON）。
    *
-   * **⚠ list 键会扇出**（2026-07-28 片五 GROUP-002）：分组键求值为 list 时，一行进入
-   * 其**每个元素**的组（`groupBy: tags` 的自然语义），因此 **`groups` 各组行数之和可能
-   * 大于 `rows.length`**——需要「每行恰好一次」的读出方请用顶层 `rows`。
+   * **list 键按整组键列表成组、不扇出**（oracle ⑦ 定案 2026-08-02：官方 `groupedDataCache`
+   * 实读 `[]`(11 行) / `["#project","#area"]`(CaseF)，一行恰好一组）；空列表成 `[]` 键、
+   * 显式缺失成 null 键；**组内行数之和恒等于 `rows.length`**。
    *
    * `summaries`（2026-07-28 片五）：view 同时配置 groupBy 与 summaries 时存在。
    * 计算集 = **该组在 limit 后的行**；顶层 `summaries` 自 2026-07-29 起同为 limit 后
@@ -288,8 +288,29 @@ function groupKeyCompareDirected(
     // 空值组恒最后：两侧都空 → 视为相等（由调用方的稳定序兜底）。
     return aEmpty && bEmpty ? 0 : aEmpty ? 1 : -1;
   }
+  // oracle ⑦：整组键列表是**一个键**（不扇出），list 组之间按确定性次序排；
+  // list 与标量/link 的相对次序无官方实据，取「标量在前」的确定性序（同 sortKeyCompare rank）。
+  const aList = Array.isArray(a);
+  const bList = Array.isArray(b);
+  if (aList || bList) {
+    if (aList && bList) {
+      const c = compareListGroupKeys(a, b);
+      return direction === "DESC" ? -c : c;
+    }
+    return aList ? 1 : -1;
+  }
   const c = groupKeyCompare(a, b);
   return direction === "DESC" ? -c : c;
+}
+
+/** 两个整组键列表的确定性比较：先比长度，再逐元素（复用 groupKeyCompare，link 安全）。 */
+function compareListGroupKeys(a: BaseValue[], b: BaseValue[]): number {
+  if (a.length !== b.length) return a.length - b.length;
+  for (let i = 0; i < a.length; i += 1) {
+    const c = groupKeyCompare(a[i] as BaseValue, b[i] as BaseValue);
+    if (c !== 0) return c;
+  }
+  return 0;
 }
 
 /** 诊断数组是否含 error 级（error 阻止结果，设计 §11）。 */
@@ -796,21 +817,18 @@ export class BaseEngine {
           else buckets.push({ key, rowIdx: [rowIdx] });
         };
         keys.forEach((key, i) => {
-          // GROUP-002（2026-07-28 覆盖率片五落地；暂定口径，待 oracle）：
-          // **list 键扇出**——一行进入其每个元素的组（`groupBy: tags` 的自然语义：
-          // 一篇多标签笔记应出现在每个标签下）。代价是「组内行数之和 ≥ rows.length」，
-          // 已在 BaseQueryResult.groups 契约里显式声明；顶层 rows 仍是平铺一份，不变。
+          // oracle ⑦（2026-08-02 · Obsidian 1.13.4 实据）：官方按**整组键列表**成组、不扇出——
+          // 一行恰好进一个桶，键 = 行内 typedEqual 去重后的整组键列表。空列表成 `[]` 键
+          // （官方 file.tags 缺失即空列表）；显式属性缺失仍走 MISSING → null 组。
           if (Array.isArray(key)) {
-            // 行内元素先 typedEqual 去重：`[a, a]` 不得把同一行塞进同一组两次。
+            // 行内元素先 typedEqual 去重：`[a, a]` 的键仍是 `[a]`。
             const seen: BaseValue[] = [];
             for (const el of key) {
               spendGroup();
               if (seen.some((s) => typedEqual(s, el))) continue;
               seen.push(el);
             }
-            // 空 list 视同 MISSING 键（单独成组），**不静默丢行**。
-            if (seen.length === 0) putInBucket(MISSING, i);
-            else for (const el of seen) putInBucket(el, i);
+            putInBucket(seen, i);
             return;
           }
           // link 是**标量**键（不是多值）：按路径感知相等分组，与 list 分道处理。
