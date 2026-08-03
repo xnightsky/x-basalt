@@ -7,8 +7,8 @@ tags:
   - bases
   - cli
   - stdin
-timestamp: 2026-08-03T15:48:33Z
-sha256: c15d53281c1d2709d14ce3f0eb7aa6431996e8a1e3b76b9240b1cf00eecd3ad6
+timestamp: 2026-08-03T15:58:48Z
+sha256: c4009e713fb96350a9979d54af5fd2e23fc0ae3569079f1d2a8d5bc4ad4ce800
 ---
 # 动态 base 第一步：stdin / 字符串入参
 
@@ -124,6 +124,10 @@ src/cli.ts             base 命令：<file> 变可选 + --stdin flag；file === 
 - types.json 读取诊断的 `file` 指向其自身路径（`.obsidian/types.json`），非 `<stdin>`——有意行为（file 字段反映「哪个文件产生诊断」），验收口径修订为「文档层诊断 file=<stdin>，外部文件自身诊断除外」。
 - DB-1a 对拍覆盖面已补齐（四类结构校验显式对拍）。
 - engine.ts 接口头注释已更新（不再声称「签名与契约一字不差」）。
+
+**kimi(k3) 复核结论（2026-08-03，两轮）**：
+- 第一轮（DB-1/DB-2 后）：High 1 个（basePath/source 双缺省 TypeError）→ 已修 `10d182a`；Low 4 个 → 已收口。
+- 第二轮（DB-3/DB-4 后）：无 High/Medium；CLI↔commands.md↔core.json5 三者一致、全量 1142 绿、端到端 stdin 与文件模式等价实测通过；Low 2 个（assertPipedStdin 示例误导 → 已修 `e9ee3a6`；core.json5 types.json 例外表述 → 已修）；Nit 记录（--context-file 文档缺口为既有问题，非本次引入）。
 
 ---
 
