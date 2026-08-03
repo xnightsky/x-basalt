@@ -56,6 +56,14 @@ export interface LoadBaseDocumentOptions {
   limits?: Partial<BaseDocumentLimits>;
 }
 
+/** parseBaseSource 入参（动态 base 第一步：纯解析入口，不碰 fs）。 */
+export interface ParseBaseSourceOptions {
+  /** 诊断/结果展示名：文件模式传 vault 相对路径（= loadBaseDocument 的 rel）；stdin 模式传 `<stdin>`。 */
+  file: string;
+  /** 文档层预算覆盖（缺省用 {@link DEFAULT_BASE_DOCUMENT_LIMITS}）。 */
+  limits?: Partial<BaseDocumentLimits>;
+}
+
 /** selectView 结果：命中的 view + 本次选择新产的诊断（不含 loadBaseDocument 已聚合的）。 */
 export interface SelectViewResult {
   view?: BaseView;
@@ -229,6 +237,36 @@ export function loadBaseDocument(options: LoadBaseDocumentOptions): BaseDocument
     ]);
   }
   const source = readFileSync(abs, "utf8");
+
+  // 「取 source」与「解析 source」拆开（动态 base 第一步）：本函数只负责路径安全 + 读取，
+  // 防线 3 起的全部解析/校验整体下沉 parseBaseSource（纯字符串入口，stdin 模式复用同一解析链）。
+  return parseBaseSource(source, { file: rel, limits });
+}
+
+/**
+ * 解析 .base 源码（纯字符串入参，不碰 fs）→ BaseDocument + 聚合诊断（不 throw，终止性问题以 error 诊断表达）。
+ *
+ * 动态 base 第一步（计划 2026-08-03-bases-dynamic-stdin.md）拆分产物：loadBaseDocument 的
+ * 「防线 3 起」整体迁入本函数，两者对同一 source 产出完全等价（仅 file 字段 = 调用方传入的展示名）。
+ *
+ * @behavior
+ * Given 合法 .base 源码
+ * When parseBaseSource(source, { file })
+ * Then 返回 views/unknownKeys 与全部 warning 级以下诊断，doc.path = file
+ *
+ * @behavior
+ * Given 非法 YAML 源码
+ * When parseBaseSource(source, { file: "<stdin>" })
+ * Then 返回 base/invalid-yaml（error，带完整文件位置），全部诊断 file 字段 = "<stdin>"
+ *
+ * 与 loadBaseDocument 的差异（有意）：不查 vaultRoots、不做 stat、不 readFileSync——
+ * 纯字符串入参天然无路径越界语义（BASE-SEC-008 是文件模式防线，见 loadBaseDocument）。
+ */
+export function parseBaseSource(source: string, options: ParseBaseSourceOptions): BaseDocument {
+  const limits: BaseDocumentLimits = { ...DEFAULT_BASE_DOCUMENT_LIMITS, ...options.limits };
+  // 历史变量名 rel：在 loadBaseDocument 中它是 vault 相对路径；本函数内它只是「展示名」
+  // （文件模式=vault 相对路径、stdin=<stdin>）。保留命名以最小化拆分 diff，不重写函数体。
+  const rel = options.file;
 
   // 防线 3：YAML 解析。安全默认 schema；LineCounter 供全部诊断换算完整文件行列。
   const lineCounter = new LineCounter();

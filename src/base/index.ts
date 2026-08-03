@@ -17,8 +17,10 @@ export type { BasaltDiagnostic } from "../diagnostic.js";
 export { BASE_RULES, baseDiagnostic, type BaseRuleId } from "./errors.js";
 export {
   loadBaseDocument,
+  parseBaseSource,
   selectView,
   type LoadBaseDocumentOptions,
+  type ParseBaseSourceOptions,
   type SelectViewResult,
 } from "./document.js";
 export { BASE_FUNCTION_NAMES, scanExpression, type ExpressionScanFinding } from "./expressions.js";

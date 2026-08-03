@@ -6,10 +6,11 @@
  */
 
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
 import { basename, dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { test } from "node:test";
-import { loadBaseDocument, selectView } from "../src/base/index.js";
+import { loadBaseDocument, parseBaseSource, selectView } from "../src/base/index.js";
 
 const FIXTURES = fileURLToPath(new URL("./fixtures/bases", import.meta.url));
 const MINIMAL = join(FIXTURES, "minimal");
@@ -316,4 +317,56 @@ test("设计 §5: vault 多根目录名冲突时拒绝执行且 reason 不伪装
   });
   // 同一目录去重后是单根，不算冲突——此处应正常解析。
   assert.equal(doc.path, "views/projects.base");
+});
+
+// === 动态 base 第一步：parseBaseSource（DB-1，计划 2026-08-03-bases-dynamic-stdin.md） ===
+// 把「取 source（文件模式：越界+stat+readFileSync）」与「解析 source（YAML→BaseDocument）」拆开；
+// parseBaseSource 是纯解析入口（不碰 fs），file 参数为诊断/结果的展示名（文件模式传 rel，stdin 传 <stdin>）。
+
+// DB-1a：同 source 经 parseBaseSource 与经 loadBaseDocument 产出等价（同 file 名时 views/diagnostics 完全一致）
+test("DB-1a: parseBaseSource 与 loadBaseDocument 同 file 名时产出等价", () => {
+  const rel = "views/projects.base";
+  const source = readFileSync(join(MINIMAL, rel), "utf8");
+  const viaFile = loadBaseDocument({ basePath: join(MINIMAL, rel), vaultRoots: [MINIMAL] });
+  const viaSource = parseBaseSource(source, { file: rel });
+  assert.equal(viaSource.path, rel);
+  assert.deepEqual(viaSource.views, viaFile.views);
+  assert.deepEqual(viaSource.diagnostics, viaFile.diagnostics);
+  assert.deepEqual(viaSource.unknownKeys, viaFile.unknownKeys);
+  assert.deepEqual(viaSource.viewsSpan, viaFile.viewsSpan);
+});
+
+// DB-1a：非法 YAML 经 parseBaseSource 产出与文件模式同 rule/位置，仅 file 字段为传入名
+// DB-1b：虚拟文件名 <stdin> 穿透到 doc.path 与全部诊断 file 字段
+// DB-1c：纯字符串入参无路径越界语义（不查 vaultRoots），path-outside-vault 只在文件模式出现
+test("DB-1b/c: parseBaseSource 虚拟名 <stdin> 穿透诊断且不触发路径越界", () => {
+  const source = readFileSync(join(INVALID, "bad-yaml.base"), "utf8");
+  const doc = parseBaseSource(source, { file: "<stdin>" });
+  assert.equal(doc.path, "<stdin>");
+  assert.equal(doc.views.length, 0);
+  assert.equal(doc.diagnostics.length, 1);
+  const d = doc.diagnostics[0];
+  assert.equal(d?.rule, "base/invalid-yaml");
+  assert.equal(d?.severity, "error");
+  assert.equal(d?.file, "<stdin>");
+  // 位置与文件模式一致（BASE-DOC-002 探针实测值）
+  assert.equal(d?.line, 4);
+  assert.equal(d?.column, 1);
+  // 无任何 path-outside-vault（纯解析入口根本没有 vault 概念）
+  assert.ok(!doc.diagnostics.some((x) => x.rule === "base/path-outside-vault"));
+});
+
+// DB-1a：合法文档的表达式浅扫描 / filter 结构等完整校验链在 parseBaseSource 中同样生效
+// （用 invalid fixture 里带表达式错误的 .base 验证诊断链一致）
+test("DB-1a: parseBaseSource 完整校验链（表达式浅扫描）与文件模式一致", () => {
+  const rel = "snake-case-function.base";
+  const absPath = join(INVALID, rel);
+  const source = readFileSync(absPath, "utf8");
+  const viaFile = loadBaseDocument({ basePath: absPath, vaultRoots: [INVALID] });
+  const viaSource = parseBaseSource(source, { file: rel });
+  assert.deepEqual(viaSource.diagnostics, viaFile.diagnostics);
+  // 诊断链确实生效：含 unknown-function error（BASE-DOC-008 语义）
+  assert.ok(
+    viaSource.diagnostics.some((x) => x.rule === "base/unknown-function" && x.severity === "error"),
+  );
 });
