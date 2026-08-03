@@ -10,6 +10,8 @@ import assert from "node:assert/strict";
 import { mkdtempSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { type ModelMessage } from "ai";
+import { MockLanguageModelV4, convertArrayToReadableStream } from "ai/test";
 import { before, test } from "node:test";
 import { fileURLToPath } from "node:url";
 import { buildCliTool, CHAT_CHILD_ENV } from "../../src/chat/cli-tool.js";
@@ -81,4 +83,61 @@ test("CC-1c: source 入参走 stdin（cli base -）", async () => {
   assert.match(s, /"base": "<stdin>"/);
   assert.match(s, /"view": "All"/);
   assert.match(s, /"total": 2/);
+});
+
+// CC-4a：mock 模型发 cli tool-call（base - + source）→ 完整 loop 链路成功
+// （切 C 后模型只拿 cli 一个执行口；动态 base 经 source 走 stdin，免落盘）
+test("CC-4a: mock 模型经 cli 工具跑 base -（source 走 stdin）端到端", async () => {
+  const { runLoop } = await import("../../src/chat/loop.js");
+  const { buildTools } = await import("../../src/chat/tools.js");
+
+  const USAGE = {
+    inputTokens: { total: 0, noCache: 0, cacheRead: 0, cacheWrite: 0 },
+    outputTokens: { total: 0 },
+    totalTokens: 0,
+  } as const;
+  // 第一步：调 cli{args:['base','-'], source}；第二步：读完结果后收尾
+  const model = new MockLanguageModelV4({
+    doStream: [
+      {
+        stream: convertArrayToReadableStream([
+          {
+            type: "tool-call",
+            toolCallId: "tc1",
+            toolName: "cli",
+            input: JSON.stringify({
+              args: ["base", "-"],
+              source: "views:\n  - type: table\n    name: All\n    order: [file.name, status]\n",
+            }),
+          },
+          { type: "finish", usage: USAGE, finishReason: "tool-calls" },
+        ]),
+      },
+      {
+        stream: convertArrayToReadableStream([
+          { type: "text-start", id: "td1" },
+          { type: "text-delta", id: "td1", delta: "共 2 篇" },
+          { type: "text-end", id: "td1" },
+          { type: "finish", usage: USAGE, finishReason: "stop" },
+        ]),
+      },
+    ] as unknown[],
+  });
+
+  const tools = buildTools({ dbPath, vaultPath: dir }, safety);
+  const events: Array<{ type: string; toolName?: string; output?: unknown }> = [];
+  await runLoop([{ role: "user", content: "列出全部笔记" } as ModelMessage], {
+    model,
+    tools,
+    maxSteps: 5,
+    onEvent: (e) => events.push(e as typeof events[number]),
+    system: "你是操作 Obsidian vault 的助手。",
+  });
+  // cli 工具被调用且结果含 <stdin> 查询输出
+  const call = events.find((e) => e.type === "tool-call" && e.toolName === "cli");
+  assert.ok(call, "模型应调用 cli 工具");
+  const result = events.find((e) => e.type === "tool-result" && e.toolName === "cli");
+  assert.ok(result, "应有 cli tool-result");
+  assert.match(String(result?.output), /"base": "<stdin>"/);
+  assert.match(String(result?.output), /"total": 2/);
 });
