@@ -89,7 +89,8 @@ views:
   # DESC 把整个次序取反、连空值组一起翻。
   # x-basalt 实测（2026-07-29，DESC）：**null[4] → 2 → 1**，空值组排在**最前**。
   # 即本仓两处确实不一致（顶层 sort 空值恒最后 vs 分组 DESC 空值最前），这正是要取证的。
-  # 官方若两个方向都把空值组排最后 → 与 ② 同源，按 bug 修；若也取反 → 维持现状 + 落文档。
+  # 官方（2026-08-02 · Obsidian 1.13.4 实测）：**2 → 1 → null**——两个方向都把空值组
+  # 排最后，与 ② 同源，按 bug 修（engine.ts groupKeyCompareDirected，oracle ㉓ 定案）。
   - type: table
     name: group-desc-nullpos
     groupBy:

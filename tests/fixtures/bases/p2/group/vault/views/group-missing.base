@@ -9,3 +9,13 @@ views:
     groupBy:
       property: area
       direction: ASC
+
+  # oracle ㉓（2026-08-02）：组序方向与空值位置正交——DESC 时空值组仍排最后。
+  - type: table
+    name: byAreaDesc
+    order:
+      - file.name
+      - area
+    groupBy:
+      property: area
+      direction: DESC

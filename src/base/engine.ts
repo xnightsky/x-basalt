@@ -264,12 +264,32 @@ function groupKeyCompare(a: BaseValue, b: BaseValue): number {
     return ka < kb ? -1 : ka > kb ? 1 : 0;
   }
   // 空值键排最后（沿用 sortKeyCompare 的 ASC 口径，link 不得插到它们后面）。
-  // 注意：**组序的方向维度未取证**——调用方对 DESC 整体取反，空值组因此翻到最前，
-  // 与顶层 sort 的「恒最后」（oracle runbook ②，已冻结）不同。㉓ 只登记了组序的相对次序、
-  // 没登记它是否与方向无关，官方 oracle 也未覆盖，故此处维持既有行为不动（见 runbook §5 备注）。
   if (a === null || a === MISSING) return 1;
   if (b === null || b === MISSING) return -1;
   return la ? 1 : -1;
+}
+
+/**
+ * 带方向的组键比较（oracle ㉓ 定案，2026-08-02 · Obsidian 1.13.4）。
+ *
+ * ㉓ 取证（group-desc-nullpos）：官方 DESC 组序 = 2 → 1 → null——**空值组恒排最后，
+ * 与方向无关**，与顶层 sort 的 ② 同源。故方向只作用于两侧都非空的情形；
+ * 任一侧落在 null/MISSING 时直接给「空值在后」的定序，不受 DESC 取反影响。
+ * 组键不抛 link 类型错误（分组只需确定性组序，见 {@link groupKeyCompare}）。
+ */
+function groupKeyCompareDirected(
+  a: BaseValue,
+  b: BaseValue,
+  direction: "ASC" | "DESC",
+): number {
+  const aEmpty = a === null || a === MISSING;
+  const bEmpty = b === null || b === MISSING;
+  if (aEmpty || bEmpty) {
+    // 空值组恒最后：两侧都空 → 视为相等（由调用方的稳定序兜底）。
+    return aEmpty && bEmpty ? 0 : aEmpty ? 1 : -1;
+  }
+  const c = groupKeyCompare(a, b);
+  return direction === "DESC" ? -c : c;
 }
 
 /** 诊断数组是否含 error 级（error 阻止结果，设计 §11）。 */
@@ -796,13 +816,10 @@ export class BaseEngine {
           // link 是**标量**键（不是多值）：按路径感知相等分组，与 list 分道处理。
           putInBucket(key, i);
         });
-        // 组序：groupKeyCompare（恒 ASC 语义，DESC 整体取反——沿用顶层 sort 的既有口径，
-        // null/MISSING/不可比键在同 rank 组内按首现序稳定）；桶内行序 = limited 顺序
-        // （= view sort + file.path tie-break，与顶层 rows 同一比较器结果）。
-        buckets.sort((a, b) => {
-          const c = groupKeyCompare(a.key, b.key);
-          return groupBy.direction === "DESC" ? -c : c;
-        });
+        // 组序：groupKeyCompareDirected（oracle ㉓ 定案——空值组恒最后、方向只作用于
+        // 可比键，与顶层 sort ② 同源）；桶内行序 = limited 顺序（= view sort +
+        // file.path tie-break，与顶层 rows 同一比较器结果）。
+        buckets.sort((a, b) => groupKeyCompareDirected(a.key, b.key, groupBy.direction));
         groups = buckets.map((b) => ({
           key: toOutputValue(b.key),
           rows: b.rowIdx.map((i) => outRows[i] as Record<string, BaseOutputValue>),

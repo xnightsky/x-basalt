@@ -132,6 +132,18 @@ test("BASE-GROUP-001: missing 分组键成组并排最后（暂定口径）", ()
   );
 });
 
+// oracle ㉓（2026-08-02 · Obsidian 1.13.4）：组序方向与空值位置正交——DESC 时
+// 空值组**恒排最后**（官方 group-desc-nullpos 实测 2 → 1 → null），与顶层 sort ② 同源。
+// 修复前：DESC 整体取反把空值组翻到最前（null → 2 → 1）。
+test("BASE-GROUP-001: missing 分组键 DESC 仍排最后（oracle ㉓）", () => {
+  const r = query("group-missing.base", "byAreaDesc");
+  assert.deepEqual(errorsOf(r), []);
+  assert.deepEqual(
+    r.groups?.map((g) => g.key),
+    ["front", "back", null],
+  );
+});
+
 // GROUP-002（2026-07-28 覆盖率片五落地；暂定口径，待 oracle）：list 分组键**扇出**
 test("GROUP-002: list 分组键扇出——一行进入其每个元素的组", () => {
   const r = query("group-list.base", "byTags");
