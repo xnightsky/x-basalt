@@ -36,6 +36,24 @@ export const CLI_ALLOWLIST = new Set([
 /** 子进程超时（ms）：CLI 命令都该毫秒级返回；超时杀掉防挂死。 */
 const CHILD_TIMEOUT_MS = 60_000;
 
+/**
+ * 接受 `--vault <path>` 选项的子命令（注入形态：选项）。
+ * 来源核对 src/cli.ts：query(351)/search(379)/base(415)/run(731) 均有 `.option("--vault")`。
+ */
+const VAULT_OPTION_COMMANDS = new Set(["query", "search", "base", "run"]);
+
+/**
+ * 接受 `[vault...]` 位置参数的子命令（注入形态：并列目录）。
+ * 来源核对 src/cli.ts：index(244)/scan(272)/links(921,927)/lint(965) 均有 `.argument("[vault...]")`。
+ */
+const VAULT_ARG_COMMANDS = new Set(["index", "scan", "links", "lint"]);
+
+/**
+ * 接受 `--db <path>` 选项的子命令。links/lint 无 --db（只读诊断不碰索引库），注入会报
+ * `unknown option`；parse/meta/skills 亦无。来源核对 src/cli.ts。
+ */
+const DB_COMMANDS = new Set(["index", "scan", "query", "search", "base", "run"]);
+
 /** 防递归兜底环境变量：chat 启动检测到即拒（见 src/cli.ts chat 命令）。 */
 export const CHAT_CHILD_ENV = "X_BASALT_CHAT_CHILD";
 
@@ -53,8 +71,15 @@ function defaultCliEntry(): string {
 }
 
 /**
- * 执行一条 CLI 命令：argv 数组直传（无 shell），注入 vault/db，source 走 stdin。
+ * 执行一条 CLI 命令：argv 数组直传（无 shell），按子命令形态注入 vault/db，source 走 stdin。
  * 手写 promise（不用 promisify(execFile)）：后者无法传 stdin 写 source。
+ *
+ * 注入按子命令分类（2026-08-03 根因修复，kimi/用户走查确认）——此前对所有子命令统一追加
+ * `--vault`，但只有部分命令接受该选项，其余报 `unknown option '--vault'` 触发模型死循环：
+ *   - query/search/base/run：`--vault <path>` 选项；
+ *   - index/scan/links/lint：`[vault...]` **位置参数**（追加目录）；
+ *   - parse/meta/skills：无 vault 概念（parse 按 cwd 解析、meta 走配置、skills 纯召回）——不注入；
+ *   - `--db` 仅注入到有该选项的命令（index/scan/query/search/base/run）；links/lint 无 --db，注入会报错。
  */
 async function execCli(
   cliEntry: string,
@@ -62,17 +87,20 @@ async function execCli(
   ctx: ToolContext,
   source?: string,
 ): Promise<{ stdout: string; stderr: string }> {
-  // --vault/--db 自动注入：用户 args 未给时补（多根 vault 展开为重复 --vault）。
-  // 用户显式给了就不覆盖（显式优先，与 CLI 语义一致）。
-  const hasVault = args.some((a) => a === "--vault");
-  const hasDb = args.some((a) => a === "--db");
-  const vaultFlags = hasVault
-    ? []
-    : (Array.isArray(ctx.vaultPath) ? ctx.vaultPath : [ctx.vaultPath]).flatMap((v) => [
-        "--vault",
-        v,
-      ]);
-  const dbFlags = hasDb || ctx.dbPath === undefined ? [] : ["--db", ctx.dbPath];
+  const sub = args[0] ?? "";
+  // 用户显式给了就不注入（显式优先，与 CLI 语义一致）；多根 vault 展开为重复 --vault 或并列位置参数。
+  const userVault = args.filter((a) => a === "--vault");
+  const userDb = args.some((a) => a === "--db");
+  const vaultDirs = Array.isArray(ctx.vaultPath) ? ctx.vaultPath : [ctx.vaultPath];
+  const usesVaultOption = VAULT_OPTION_COMMANDS.has(sub);
+  const usesVaultArg = VAULT_ARG_COMMANDS.has(sub);
+  const vaultFlags =
+    userVault.length > 0 || !(usesVaultOption || usesVaultArg)
+      ? []
+      : usesVaultOption
+        ? vaultDirs.flatMap((v) => ["--vault", v])
+        : vaultDirs; // 位置参数形态：直接并列目录（commander [vault...] variadic 收集）
+  const dbFlags = userDb || ctx.dbPath === undefined || !DB_COMMANDS.has(sub) ? [] : ["--db", ctx.dbPath];
   // cli 入口为 TS 源码时需要 --import tsx（dev 态/测试）；编译产物 .js 裸 node 即可。
   const entry = cliEntry.endsWith(".ts") ? ["--import", "tsx", cliEntry] : [cliEntry];
   const argv = [...entry, ...args, ...vaultFlags, ...dbFlags];

@@ -69,6 +69,39 @@ test("CC-1c: 注入 --vault/--db（用户未给时自动补）", async () => {
   assert.match(String(out), /"total": 2/);
 });
 
+// === 根因修复（2026-08-03）：注入按子命令分类，不再对所有命令统一追加 --vault ===
+
+// index/scan 走位置参数形态（[vault...]）：注入目录而非 --vault，不再报 unknown option
+test("根因: index 注入位置参数（非 --vault）", async () => {
+  // index 无 --vault 选项；注入形态应为并列目录。执行成功且不报 unknown option 即验证分类正确。
+  const out = await tool().execute!({ args: ["index"] }, {} as never);
+  assert.match(String(out), /已索引|indexed/i);
+});
+
+// parse 无 vault 概念：不注入任何 vault/db flag（文件按 cwd 解析，测试传绝对路径）
+test("根因: parse 不注入 vault/db（无该选项）", async () => {
+  const out = await tool().execute!({ args: ["parse", join(dir, "a.md")] }, {} as never);
+  assert.match(String(out), /<<VAULT_DATA T>>/);
+  // parse 成功输出 AST 而非 unknown option 错误
+  assert.doesNotMatch(String(out), /unknown option/);
+});
+
+// links/lint 无 --db：注入 db 会报 unknown option，必须跳过
+test("根因: links 不注入 --db（该命令无此选项）", async () => {
+  const out = await tool().execute!({ args: ["links", "check"] }, {} as never);
+  assert.doesNotMatch(String(out), /unknown option '--db'/);
+});
+
+// 用户显式给 --vault 时不重复注入（显式优先）
+test("根因: 用户显式 --vault 时不重复注入", async () => {
+  const out = await tool().execute!(
+    { args: ["query", 'LIST FROM ""', "--vault", dir] },
+    {} as never,
+  );
+  assert.match(String(out), /"total": 2/);
+  assert.doesNotMatch(String(out), /unknown option/);
+});
+
 // CC-1c：source 入参（动态 base stdin）经 stdin 传给子进程
 test("CC-1c: source 入参走 stdin（cli base -）", async () => {
   const source = "views:\n  - type: table\n    name: All\n    order: [file.name, status]\n";
