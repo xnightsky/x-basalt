@@ -1,31 +1,16 @@
-// === 自建实现: chat 工具面——既有原语包成 AI SDK tool（读直放 / 写直接落盘）===
+// === 自建实现: chat 工具面装配——cli 单工具 + skills 元工具（切 C，2026-07-30 拍板）===
 //
-// 上游：loop.ts；下游：query/parser/indexer/meta/skill/orchestrator 既有库。
-// 纪律：不重写原语，只包 tool-call schema；读工具结果经 safety 截断+包裹；
-// 写工具直接以非 dry-run 调原语落盘（无确认闸——安全靠 Ctrl+C 中断 + 既有原子写 + 流式可观测）。
-import { readFileSync } from "node:fs";
+// 上游：loop.ts；下游：cli-tool.ts（唯一执行口）、skill 召回。
+// 切 C 要点（chat-tool-surface.md §决策）：15 个手写工具（query/search/meta_*/pipeline_run…）
+// 已删除——它们与 CLI 各维护一份参数语义、必漂移（paths bug 实证）。现在模型只拿一个
+// `cli` 工具（argv 数组直传 execFile，schema 与 CLI 一处定义），外加两个 grounding 元工具
+// （skills_recall/skills_get，agent-browser 同款单列——它们是「模型说明书」、非 vault 能力面）。
+// RECALL_TOOL_NAMES 收编为 ["cli"]：调用 cli = 真查过 vault（skills_* 不算）。
 import { jsonSchema, tool, type ToolSet } from "ai";
-import { VaultIndexer } from "../indexer/index.js";
-import {
-  applyProfile,
-  coerceValue,
-  editMeta,
-  type MetaScalarType,
-  normalizeDoc,
-  readMeta,
-  renameMeta,
-  setMeta,
-  unsetMeta,
-} from "../meta/index.js";
-import { Orchestrator } from "../orchestrator/index.js";
-import type { PipelineConfig } from "../orchestrator/index.js";
-import { parseFrontmatter } from "../parser/frontmatter.js";
-import { VaultParser } from "../parser/index.js";
-import { DataviewEngine } from "../query/index.js";
 import { SkillRecall } from "../skill/index.js";
+import { buildCliTool } from "./cli-tool.js";
 import type { Safety } from "./safety.js";
 import { wrapToolErrors } from "./tool-errors.js";
-import { resolveVaultLayout } from "../utils/path.js";
 
 export interface ToolContext {
   dbPath: string;
@@ -34,30 +19,15 @@ export interface ToolContext {
 }
 
 /**
- * 计入"已从 vault 召回"的工具名（P1）：查询/读/写该 Obsidian vault 的工具。模型调用了其中任一，
- * 即视为真的查过 vault，chat 收尾不加"未召回"标注。**skills_recall / skills_get 取的是本 CLI 的
+ * 计入"已从 vault 召回"的工具名（P1）：cli 工具是唯一 vault 操作入口，模型调用了它即视为
+ * 真的查过 vault，chat 收尾不加"未召回"标注。**skills_recall / skills_get 取的是本 CLI 的
  * 规范说明、不是 vault 内容**，故刻意不列入——只用它们作答仍属"未从 vault 召回"。
- * 与 buildTools 的 tool 名一一对应，增删 vault 工具时同步维护。
  */
-export const RECALL_TOOL_NAMES = [
-  "query",
-  "parse",
-  "read_note",
-  "scan",
-  "list",
-  "search",
-  "meta_get",
-  "meta_set",
-  "meta_unset",
-  "meta_rename",
-  "meta_normalize",
-  "meta_apply",
-  "pipeline_run",
-];
+export const RECALL_TOOL_NAMES = ["cli"];
 
-/** "未从 vault 召回"如实标注文案（P1）：本轮零 {@link RECALL_TOOL_NAMES} 调用却给了实质答复时提示。 */
+/** "未从 vault 召回"如实标注文案（P1）：本轮零 cli 调用却给了实质答复时提示。 */
 export const NO_RECALL_NOTICE =
-  "⚠ 本次未调用任何 vault 检索工具，以上为模型通用知识、并非从该 Obsidian vault 召回——若需基于 vault 内容作答，请改用 search / query 等工具后再答。";
+  "⚠ 本次未调用任何 vault 检索工具（cli），以上为模型通用知识、并非从该 Obsidian vault 召回——若需基于 vault 内容作答，请改用 cli（query/search/scan 等子命令）后再答。";
 
 /** 读工具结果统一过 safety：非字符串先 JSON 化，再截断+边界包裹。 */
 function observe(safety: Safety, v: unknown): string {
@@ -65,239 +35,15 @@ function observe(safety: Safety, v: unknown): string {
   return safety.wrap(safety.truncate(s));
 }
 
-/** 工具层页大小：缺省取 def，给定则截断到 [0, max]（0 = 只看 total/counts 不取明细）。 */
-function clampSize(v: number | undefined, def: number, max: number): number {
-  if (v === undefined || Number.isNaN(v)) return def;
-  return Math.min(max, Math.max(0, Math.trunc(v)));
-}
-
-/** scan kind 标签。 */
-type ScanKind = "added" | "modified" | "deleted";
-
-/**
- * scan 报告 → 计数永远全（counts/byDir，标量、永不截断）+ 变更明细分页（changes）。
- * changes = (added⧺modified⧺deleted) 的窗口 [offset, offset+size)；counts/byDir/total 不随分页变化。
- * byDir 透传自 VaultIndexer.scan()（见 src/indexer/index.ts groupByDir）：按子目录问「各多少」
- * 时直接读 byDir，不要靠 changes 分页逐条数——目录数再多也是常数大小，不会撞 maxChars/撞顶。
- */
-function paginateScan(
-  report: {
-    added: string[];
-    modified: string[];
-    deleted: string[];
-    unchanged: number;
-    byDir: Record<string, { added: number; modified: number; deleted: number }>;
-  },
-  offset: number,
-  size: number,
-): {
-  counts: { added: number; modified: number; deleted: number; unchanged: number };
-  byDir: Record<string, { added: number; modified: number; deleted: number }>;
-  total: number;
-  offset: number;
-  size: number;
-  returned: number;
-  hasMore: boolean;
-  changes: { kind: ScanKind; path: string }[];
-} {
-  const flat: { kind: ScanKind; path: string }[] = [
-    ...report.added.map((path) => ({ kind: "added" as const, path })),
-    ...report.modified.map((path) => ({ kind: "modified" as const, path })),
-    ...report.deleted.map((path) => ({ kind: "deleted" as const, path })),
-  ];
-  const off = Math.max(0, Math.trunc(offset));
-  const changes = flat.slice(off, off + size);
-  return {
-    counts: {
-      added: report.added.length,
-      modified: report.modified.length,
-      deleted: report.deleted.length,
-      unchanged: report.unchanged,
-    },
-    byDir: report.byDir,
-    total: flat.length,
-    offset: off,
-    size,
-    returned: changes.length,
-    hasMore: off + changes.length < flat.length,
-    changes,
-  };
-}
-
 export function buildTools(ctx: ToolContext, safety: Safety): ToolSet {
-  const layout = resolveVaultLayout(ctx.vaultPath);
-  const toAbs = (file: string): string => layout.toAbs(file);
-
   // 末尾过 wrapToolErrors：工具失败统一分类、包成「带换策略建议」的结构化错误回灌模型（详见 tool-errors.ts）。
   return wrapToolErrors({
-    // ---- 读工具（带 execute，自动跑）----
-    query: tool({
-      description:
-        "执行 Dataview(DQL) 子集查询，返回匹配行（分页）。结构化只读，查不了正文。结果含 total（命中总数）/returned/hasMore——数总量直接看 total，不要靠翻页枚举。size 默认 50（上限 500，size=0 只回 total 不取行），offset 默认 0；翻页用 offset+=size。构造 DQL 不确定文法时，先 skills_get 取 obsidian-base-spec。",
-      inputSchema: jsonSchema<{ dql: string; offset?: number; size?: number }>({
-        type: "object",
-        properties: {
-          dql: { type: "string", description: "DQL 查询语句" },
-          offset: { type: "number", description: "结果起始偏移，默认 0" },
-          size: { type: "number", description: "本页最大行数，默认 50，上限 500（0=只回 total）" },
-        },
-        required: ["dql"],
-        additionalProperties: false,
-      }),
-      execute: ({ dql, offset, size }) => {
-        const engine = new DataviewEngine(ctx.dbPath);
-        try {
-          return observe(
-            safety,
-            engine.query(dql, { offset: offset ?? 0, size: clampSize(size, 50, 500) }),
-          );
-        } finally {
-          engine.close();
-        }
-      },
-    }),
-    parse: tool({
-      description: "解析单个 .md 文件为 Obsidian AST（wikilink/tag/task/callout 等）。",
-      inputSchema: jsonSchema<{ file: string }>({
-        type: "object",
-        properties: { file: { type: "string", description: ".md 文件路径" } },
-        required: ["file"],
-        additionalProperties: false,
-      }),
-      execute: ({ file }) =>
-        observe(safety, new VaultParser().parse(readFileSync(toAbs(file), "utf8"))),
-    }),
-    read_note: tool({
-      description:
-        "读取笔记正文（剥离 frontmatter 后的原文，非 AST、非仅 frontmatter；用它回答「读整篇/看看写了什么」类请求）。总是读盘取最新内容。按行分页：offset 起始行（默认 0，0-based），size 本页最大行数（默认 200，上限 2000，0=只回 totalLines 不取正文）；数总行数看 totalLines，翻页用 offset+=returned。",
-      inputSchema: jsonSchema<{ file: string; offset?: number; size?: number }>({
-        type: "object",
-        properties: {
-          file: { type: "string", description: ".md 文件路径" },
-          offset: { type: "number", description: "起始行（0-based），默认 0" },
-          size: {
-            type: "number",
-            description: "本页最大行数，默认 200，上限 2000（0=只回 totalLines）",
-          },
-        },
-        required: ["file"],
-        additionalProperties: false,
-      }),
-      execute: ({ file, offset, size }) => {
-        const content = readFileSync(toAbs(file), "utf8");
-        const lines = parseFrontmatter(content).body.split(/\r?\n/);
-        const off = Math.max(0, Math.trunc(offset ?? 0));
-        const sz = clampSize(size, 200, 2000);
-        const page = lines.slice(off, off + sz);
-        return observe(safety, {
-          path: file,
-          totalLines: lines.length,
-          offset: off,
-          returned: page.length,
-          hasMore: off + page.length < lines.length,
-          body: page.join("\n"),
-        });
-      },
-    }),
-    scan: tool({
-      description:
-        "对比文件系统与索引，报告新增/改动/删除（只读预览、不落盘）。返回 counts（各类总计数，标量永不截断——问总共多少看这里）+ byDir（按子目录标量计数，永不截断——问「每个子目录/每个目录下」各多少看这里，别逐条列 changes 数）+ changes（变更明细，分页）+ total/hasMore。size 默认 50（上限 500，0=只回 counts/byDir），offset 默认 0；翻页用 offset+=size。",
-      inputSchema: jsonSchema<{ rehash?: boolean; offset?: number; size?: number }>({
-        type: "object",
-        properties: {
-          rehash: { type: "boolean", description: "按内容对比（慢但稳），默认 mtime+size" },
-          offset: { type: "number", description: "changes 起始偏移，默认 0" },
-          size: {
-            type: "number",
-            description: "changes 本页最大条数，默认 50，上限 500（0=只回 counts）",
-          },
-        },
-        additionalProperties: false,
-      }),
-      execute: async ({ rehash, offset, size }) => {
-        const indexer = new VaultIndexer({ vaultPath: ctx.vaultPath, dbPath: ctx.dbPath });
-        try {
-          const report = await indexer.scan({ rehash: rehash ?? false, dryRun: true });
-          return observe(safety, paginateScan(report, offset ?? 0, clampSize(size, 50, 500)));
-        } finally {
-          indexer.close();
-        }
-      },
-    }),
-    list: tool({
-      description:
-        '列出笔记（按 folder/tag/name 过滤，分页；用它回答「有哪些笔记/列出 XX 下的笔记」类请求）。基于索引快照，新改动需先 scan/index 才能看见。folder 为目录前缀（含子目录，同 DQL FROM "folder"）；tag 为前缀语义（同 DQL FROM #tag，area 命中 area 与 area/work）；name 为文件名子串（不区分大小写）；三者可组合、按 AND 拼接。返回 total（命中总数）/returned/hasMore——数总量看 total，不要靠翻页枚举。size 默认 50（上限 500，0=只回 total 不取行），offset 默认 0；翻页用 offset+=size。',
-      inputSchema: jsonSchema<{
-        folder?: string;
-        tag?: string;
-        name?: string;
-        offset?: number;
-        size?: number;
-      }>({
-        type: "object",
-        properties: {
-          folder: { type: "string", description: "目录前缀（POSIX 相对路径），如 'Projects'" },
-          tag: { type: "string", description: "标签（不带 #），如 'area/work'" },
-          name: { type: "string", description: "文件名子串，不区分大小写" },
-          offset: { type: "number", description: "结果起始偏移，默认 0" },
-          size: { type: "number", description: "本页最大行数，默认 50，上限 500（0=只回 total）" },
-        },
-        additionalProperties: false,
-      }),
-      execute: ({ folder, tag, name, offset, size }) => {
-        const engine = new DataviewEngine(ctx.dbPath);
-        try {
-          return observe(
-            safety,
-            engine.list(
-              { folder, tag, name },
-              { offset: offset ?? 0, size: clampSize(size, 50, 500) },
-            ),
-          );
-        } finally {
-          engine.close();
-        }
-      },
-    }),
-    search: tool({
-      description:
-        "全文检索笔记正文（FTS5 + trigram 子串匹配，覆盖中英文；用它回答「哪篇笔记提到 X/讲了 X 的笔记」这类不知道具体是哪篇、需要按内容找的请求）。基于索引快照，新改动需先 scan/index 才能看见。query 至少 2 个字符，不支持 FTS5 查询语法。" +
-        "**匹配口径分两档，别把 total 当成「含该短语的篇数」**：纯 ASCII 查询是字面短语、多词按 AND；含中日韩汉字的查询走 trigram 并集 **OR 宽松召回**——只命中部分片段的笔记**也会计入 total**（例：搜「回归网-不存在」与搜「回归网」返回同样多的结果）。完整连续子串命中者由 bm25 **排在最前**，所以判断「到底有没有这一串」要看靠前的结果、或改用 query 的 contains() 精确判定，不要只读 total。" +
-        "返回 total/returned/hasMore；size 默认 50（上限 500），offset 默认 0；翻页用 offset+=size。",
-      inputSchema: jsonSchema<{ query: string; offset?: number; size?: number }>({
-        type: "object",
-        properties: {
-          query: { type: "string", description: "查询文本，至少 3 个字符" },
-          offset: { type: "number", description: "结果起始偏移，默认 0" },
-          size: { type: "number", description: "本页最大行数，默认 50，上限 500" },
-        },
-        required: ["query"],
-        additionalProperties: false,
-      }),
-      execute: ({ query, offset, size }) => {
-        const engine = new DataviewEngine(ctx.dbPath);
-        try {
-          return observe(
-            safety,
-            engine.search(query, { offset: offset ?? 0, size: clampSize(size, 50, 500) }),
-          );
-        } finally {
-          engine.close();
-        }
-      },
-    }),
-    meta_get: tool({
-      description: "读某笔记的 frontmatter；省略 key 返回整个元数据。",
-      inputSchema: jsonSchema<{ file: string; key?: string }>({
-        type: "object",
-        properties: { file: { type: "string" }, key: { type: "string" } },
-        required: ["file"],
-        additionalProperties: false,
-      }),
-      execute: ({ file, key }) => observe(safety, readMeta(toAbs(file), key) ?? null),
-    }),
+    // 唯一执行口：所有 vault 操作（读/写/查询/批量）都经 cli 子命令。argv 数组直传，无 shell。
+    cli: buildCliTool(ctx, safety),
+
+    // ---- grounding 元工具（模型说明书，非 vault 能力面；切 C 保留）----
     skills_recall: tool({
-      description: "按关键字模糊召回 Obsidian/DQL 规范与 CLI 说明书。",
+      description: "按关键字模糊召回 Obsidian/DQL/Bases 规范与 CLI 说明书。",
       inputSchema: jsonSchema<{ keyword: string }>({
         type: "object",
         properties: { keyword: { type: "string" } },
@@ -323,173 +69,6 @@ export function buildTools(ctx: ToolContext, safety: Safety): ToolSet {
           safety,
           new SkillRecall({ skillPath: ctx.skillPath }).get(name) ?? `✗ 未找到 skill：${name}`,
         ),
-    }),
-
-    // ---- 写工具（execute 直接以非 dry-run 落盘，无 confirm）----
-    meta_set: tool({
-      description:
-        "设置/更新某笔记的一个 frontmatter 属性（直接写入）。值类型/归一规则见 obsidian-base-spec。",
-      inputSchema: jsonSchema<{ file: string; key: string; value: string; type?: string }>({
-        type: "object",
-        properties: {
-          file: { type: "string" },
-          key: { type: "string" },
-          value: { type: "string" },
-          type: { type: "string", enum: ["string", "number", "boolean", "null", "list", "auto"] },
-        },
-        required: ["file", "key", "value"],
-        additionalProperties: false,
-      }),
-      execute: ({ file, key, value, type }) => {
-        const typed = coerceValue(value, (type ?? "auto") as MetaScalarType);
-        const r = editMeta(toAbs(file), (d) => setMeta(d, key, typed), { dryRun: false });
-        return r.changed ? `✓ set ${key} → ${file}` : `· 无变化：${file}`;
-      },
-    }),
-    meta_unset: tool({
-      description: "删除某笔记的一个 frontmatter 属性（直接写入）。",
-      inputSchema: jsonSchema<{ file: string; key: string }>({
-        type: "object",
-        properties: { file: { type: "string" }, key: { type: "string" } },
-        required: ["file", "key"],
-        additionalProperties: false,
-      }),
-      execute: ({ file, key }) => {
-        const r = editMeta(toAbs(file), (d) => unsetMeta(d, key), { dryRun: false });
-        return r.changed ? `✓ unset ${key} → ${file}` : `· 无变化：${file}`;
-      },
-    }),
-    meta_rename: tool({
-      description: "重命名某笔记的一个 frontmatter 键（直接写入）。",
-      inputSchema: jsonSchema<{ file: string; oldKey: string; newKey: string }>({
-        type: "object",
-        properties: {
-          file: { type: "string" },
-          oldKey: { type: "string" },
-          newKey: { type: "string" },
-        },
-        required: ["file", "oldKey", "newKey"],
-        additionalProperties: false,
-      }),
-      execute: ({ file, oldKey, newKey }) => {
-        const r = editMeta(toAbs(file), (d) => renameMeta(d, oldKey, newKey), { dryRun: false });
-        return r.changed ? `✓ rename ${oldKey}→${newKey} → ${file}` : `· 无变化：${file}`;
-      },
-    }),
-    meta_normalize: tool({
-      description: "归一某笔记 frontmatter（tags 列表化/去#/去重/单数键迁移）（直接写入）。",
-      inputSchema: jsonSchema<{ file: string; sortKeys?: boolean }>({
-        type: "object",
-        properties: { file: { type: "string" }, sortKeys: { type: "boolean" } },
-        required: ["file"],
-        additionalProperties: false,
-      }),
-      execute: ({ file, sortKeys }) => {
-        const r = editMeta(
-          toAbs(file),
-          (d) => {
-            normalizeDoc(d, { sortKeys: sortKeys ?? false });
-          },
-          { dryRun: false },
-        );
-        return r.changed ? `✓ normalize → ${file}` : `· 已规范：${file}`;
-      },
-    }),
-    meta_apply: tool({
-      description: "套用元数据 profile：机械预填 + sets 补缺（直接写入）。profile 语义见 core。",
-      inputSchema: jsonSchema<{
-        profile: string;
-        file: string;
-        sets?: Record<string, string>;
-        refreshDerived?: boolean;
-      }>({
-        type: "object",
-        properties: {
-          profile: { type: "string" },
-          file: { type: "string" },
-          sets: { type: "object", additionalProperties: { type: "string" } },
-          refreshDerived: { type: "boolean" },
-        },
-        required: ["profile", "file"],
-        additionalProperties: false,
-      }),
-      execute: ({ profile, file, sets, refreshDerived }) => {
-        const r = applyProfile(toAbs(file), profile, { sets, refreshDerived, dryRun: false });
-        return observe(safety, {
-          filled: r.filled,
-          overridden: r.overridden,
-          refreshed: r.refreshed,
-          missing: r.missing,
-          changed: r.changed,
-        });
-      },
-    }),
-    pipeline_run: tool({
-      description:
-        "对一批笔记跑声明式管道，批量直接写入。链两种写法，**steps 存在时优先于 actions**（与 CLI 同规则）：" +
-        "actions=[index/normalize/apply/set/unset/rename] 七个经典动作，参数不含顶层逗号时用它；" +
-        "steps=['完整算子 spec', …] 一元素一步、**不切分**——query/search/base/lint/links.check/filter/limit/dedup/map " +
-        "等算子与 {{row.x}} 插值只能走它，如 ['base reports/a.base#v', 'filter formula.urgency > 4', 'set priority={{row.formula.urgency}}']；" +
-        "算子与插值语义详见 core（skills_get 取）。两者至少给一个。" +
-        "where 用**完整** DQL 选源（必须以 LIST/TABLE/TASK 开头，如 'LIST FROM \"inbox\" WHERE type = null'；" +
-        "不能只写 FROM…/WHERE… 裸子句），省略则用 scan 差异源；链首放 query/base/search 算子亦可直接以查询结果为源。" +
-        "返回 total/changed/skipped 均以**文件**为单位，byAction 给分动作明细，steps[] 给逐步行数流水（定位行在哪一步被滤掉）。" +
-        "**写完索引已自动刷新**（reindexed 即刷新篇数），changed>0 就是写成功了——不必再 query/scan 复核一遍，那只会白烧步数。",
-      inputSchema: jsonSchema<{
-        actions?: string[];
-        steps?: string[];
-        where?: string;
-        paths?: string[];
-        ifExists?: string;
-        concurrency?: number;
-      }>({
-        type: "object",
-        properties: {
-          actions: { type: "array", items: { type: "string" } },
-          steps: { type: "array", items: { type: "string" } },
-          where: { type: "string" },
-          paths: { type: "array", items: { type: "string" } },
-          ifExists: { type: "string", enum: ["skip", "overwrite", "merge"] },
-          concurrency: { type: "number" },
-        },
-        required: [],
-        additionalProperties: false,
-      }),
-      execute: async ({ actions, steps, where, paths, ifExists, concurrency }) => {
-        // 引擎层 steps ?? actions 空链会静默零算子跑空批——在工具层就拦下，给模型可自纠的 invalid 错误。
-        if (!steps?.length && !actions?.length) {
-          throw new Error("缺少链定义：steps 与 actions 至少给一个（steps 存在时优先于 actions）");
-        }
-        const cfg: PipelineConfig = {
-          actions,
-          steps,
-          where,
-          paths: paths?.map(toAbs),
-          ifExists: (ifExists as PipelineConfig["ifExists"]) ?? "skip",
-          concurrency: concurrency ?? 4,
-          onBusy: "queue",
-          onError: "continue",
-          dryRun: false,
-        };
-        const orch = new Orchestrator({ vaultPath: ctx.vaultPath, dbPath: ctx.dbPath });
-        try {
-          const r = where ? await orch.runManual(cfg, { dql: where }) : await orch.runScan(cfg);
-          return observe(safety, {
-            total: r.total,
-            changed: r.changed,
-            skipped: r.skipped,
-            failed: r.failed,
-            dryRun: r.dryRun,
-            byAction: r.byAction,
-            // 逐步行数流水：模型据此定位「行在哪一步消失」（pipelines.md §9 口径），无需重跑排查。
-            steps: r.steps,
-            // 回传刷新篇数：模型据此确认「现在 query 已经能查到新值」，不必再自己 scan+index 兜一圈。
-            reindexed: r.reindexed,
-          });
-        } finally {
-          orch.close();
-        }
-      },
     }),
   });
 }
