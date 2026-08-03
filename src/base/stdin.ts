@@ -8,9 +8,7 @@
  */
 
 /** 读一个流到 EOF，返回 utf8 解码后的完整文本（空输入返回空串）。 */
-export async function readStdinText(
-  stream: AsyncIterable<string | Buffer>,
-): Promise<string> {
+export async function readStdinText(stream: AsyncIterable<string | Buffer>): Promise<string> {
   const chunks: string[] = [];
   for await (const chunk of stream) {
     chunks.push(typeof chunk === "string" ? chunk : chunk.toString("utf8"));

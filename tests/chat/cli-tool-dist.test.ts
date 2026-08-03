@@ -19,9 +19,13 @@ const require = createRequire(import.meta.url);
 const DIST_CLI_TOOL = fileURLToPath(new URL("../../dist/chat/cli-tool.js", import.meta.url));
 const hasDist = existsSync(DIST_CLI_TOOL);
 
-const { buildCliTool } = hasDist ? require("../../dist/chat/cli-tool.js") : { buildCliTool: undefined };
+const { buildCliTool } = hasDist
+  ? require("../../dist/chat/cli-tool.js")
+  : { buildCliTool: undefined };
 const { makeSafety } = hasDist ? require("../../dist/chat/safety.js") : { makeSafety: undefined };
-const { VaultIndexer } = hasDist ? require("../../dist/indexer/index.js") : { VaultIndexer: undefined };
+const { VaultIndexer } = hasDist
+  ? require("../../dist/indexer/index.js")
+  : { VaultIndexer: undefined };
 
 let dir: string;
 let dbPath: string;
@@ -36,17 +40,21 @@ async function setupVault(): Promise<void> {
   idx.close();
 }
 
-test("P1: dist 形态默认入口（不注入 cliEntry）→ 自动解析 dist/cli.js 并可查询", { skip: !hasDist }, async () => {
-  await setupVault();
-  const safety = makeSafety({ nonce: "T", maxChars: 8000 });
-  // 不传 cliEntry：默认入口必须按运行时形态解析（dist/chat/cli-tool.js → ../cli.js）
-  const tool = buildCliTool({ dbPath, vaultPath: dir }, safety);
-  const out = await tool.execute({ args: ["query", "LIST FROM \"\""] }, {});
-  const s = String(out);
-  assert.match(s, /<<VAULT_DATA T>>/);
-  assert.match(s, /"total": 2/);
-  rmSync(dir, { recursive: true, force: true });
-});
+test(
+  "P1: dist 形态默认入口（不注入 cliEntry）→ 自动解析 dist/cli.js 并可查询",
+  { skip: !hasDist },
+  async () => {
+    await setupVault();
+    const safety = makeSafety({ nonce: "T", maxChars: 8000 });
+    // 不传 cliEntry：默认入口必须按运行时形态解析（dist/chat/cli-tool.js → ../cli.js）
+    const tool = buildCliTool({ dbPath, vaultPath: dir }, safety);
+    const out = await tool.execute({ args: ["query", 'LIST FROM ""'] }, {});
+    const s = String(out);
+    assert.match(s, /<<VAULT_DATA T>>/);
+    assert.match(s, /"total": 2/);
+    rmSync(dir, { recursive: true, force: true });
+  },
+);
 
 test("P1: dist 形态 cli base - + source 走 stdin", { skip: !hasDist }, async () => {
   await setupVault();

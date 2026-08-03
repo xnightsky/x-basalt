@@ -11,7 +11,12 @@ import { mkdtempSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { before, test } from "node:test";
-import { buildTools, NO_RECALL_NOTICE, RECALL_TOOL_NAMES, type ToolContext } from "../../src/chat/tools.js";
+import {
+  buildTools,
+  NO_RECALL_NOTICE,
+  RECALL_TOOL_NAMES,
+  type ToolContext,
+} from "../../src/chat/tools.js";
 import { makeSafety } from "../../src/chat/safety.js";
 import { VaultIndexer } from "../../src/indexer/index.js";
 
@@ -47,7 +52,7 @@ test("CC-2a: 工具面 = { cli, skills_recall, skills_get }", () => {
 // CC-2a：cli 工具 execute 可用（透传 argv，经真实子进程）
 test("CC-2a: cli 工具 execute 执行 query 子命令", async () => {
   const tools = buildTools(ctx(), safety);
-  const out = await tools.cli.execute!({ args: ["query", "LIST FROM \"\""] }, {} as never);
+  const out = await tools.cli.execute!({ args: ["query", 'LIST FROM ""'] }, {} as never);
   assert.match(String(out), /<<VAULT_DATA T>>/);
 });
 

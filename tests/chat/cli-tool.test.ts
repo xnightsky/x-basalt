@@ -40,10 +40,7 @@ function tool() {
 
 // CC-1a：argv 数组逐项透传（含带空格参数不被切碎），stdout 返回
 test("CC-1a: cli query 经 args 数组透传，结果带 total", async () => {
-  const out = await tool().execute!(
-    { args: ["query", "LIST FROM \"\""] },
-    {} as never,
-  );
+  const out = await tool().execute!({ args: ["query", 'LIST FROM ""'] }, {} as never);
   const s = String(out);
   assert.match(s, /<<VAULT_DATA T>>/); // safety 包裹
   assert.match(s, /"total": 2/);
@@ -51,10 +48,7 @@ test("CC-1a: cli query 经 args 数组透传，结果带 total", async () => {
 
 // CC-1a：非 0 exit → 结构化错误（复用 classifyError）
 test("CC-1a: CLI 报错 → 结构化错误带分类", async () => {
-  await assert.rejects(
-    tool().execute!({ args: ["query", "BAD DQL"] }, {} as never),
-    /\[工具失败·/,
-  );
+  await assert.rejects(tool().execute!({ args: ["query", "BAD DQL"] }, {} as never), /\[工具失败·/);
 });
 
 // CC-1b：allowlist 拒绝 watch（常驻）与 chat（防递归）
@@ -71,7 +65,7 @@ test("CC-1b: 防递归双保险——CHAT_CHILD_ENV 常量已定义", () => {
 // CC-1c：--vault/--db 自动注入（args 未含时）
 test("CC-1c: 注入 --vault/--db（用户未给时自动补）", async () => {
   // 不带 --vault/--db：工具壳补上后应能正常查询（同 CC-1a 语义）
-  const out = await tool().execute!({ args: ["query", "LIST FROM \"\""] }, {} as never);
+  const out = await tool().execute!({ args: ["query", 'LIST FROM ""'] }, {} as never);
   assert.match(String(out), /"total": 2/);
 });
 
@@ -130,7 +124,7 @@ test("CC-4a: mock 模型经 cli 工具跑 base -（source 走 stdin）端到端"
     model,
     tools,
     maxSteps: 5,
-    onEvent: (e) => events.push(e as typeof events[number]),
+    onEvent: (e) => events.push(e as (typeof events)[number]),
     system: "你是操作 Obsidian vault 的助手。",
   });
   // cli 工具被调用且结果含 <stdin> 查询输出

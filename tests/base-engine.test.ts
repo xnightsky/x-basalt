@@ -732,9 +732,7 @@ test("DB-2a: source 模式非法 YAML 产 invalid-yaml 空结果且 file=<stdin>
   });
   assert.deepEqual(r.rows, []);
   assert.equal(r.total, 0);
-  const err = r.diagnostics.find(
-    (d) => d.rule === "base/invalid-yaml" && d.severity === "error",
-  );
+  const err = r.diagnostics.find((d) => d.rule === "base/invalid-yaml" && d.severity === "error");
   assert.ok(err !== undefined);
   assert.equal(err.file, "<stdin>");
 });
@@ -775,4 +773,3 @@ test("DB-2a: basePath 与 source 双给 → error 诊断（不静默忽略 baseP
   assert.ok(err !== undefined, "双给必须产 error 诊断");
   assert.match(err.message, /二选一|source|basePath/);
 });
-

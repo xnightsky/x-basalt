@@ -77,15 +77,11 @@ async function execCli(
   const entry = cliEntry.endsWith(".ts") ? ["--import", "tsx", cliEntry] : [cliEntry];
   const argv = [...entry, ...args, ...vaultFlags, ...dbFlags];
 
-  const child = execFile(
-    process.execPath,
-    argv,
-    {
-      env: { ...process.env, [CHAT_CHILD_ENV]: "1" },
-      timeout: CHILD_TIMEOUT_MS,
-      maxBuffer: 16 * 1024 * 1024, // 16 MiB：query/base 大结果不截进程侧，由 safety 层截断
-    },
-  );
+  const child = execFile(process.execPath, argv, {
+    env: { ...process.env, [CHAT_CHILD_ENV]: "1" },
+    timeout: CHILD_TIMEOUT_MS,
+    maxBuffer: 16 * 1024 * 1024, // 16 MiB：query/base 大结果不截进程侧，由 safety 层截断
+  });
   return new Promise((resolve, reject) => {
     let stdout = "";
     let stderr = "";
@@ -179,12 +175,7 @@ export function buildCliTool(ctx: ToolContext, safety: Safety, cliEntry?: string
           ),
         );
       }
-      const { stdout, stderr } = await execCli(
-        cliEntry ?? defaultCliEntry(),
-        args,
-        ctx,
-        source,
-      );
+      const { stdout, stderr } = await execCli(cliEntry ?? defaultCliEntry(), args, ctx, source);
       // stdout/stderr 合并：CLI 错误信息常走 stderr，模型都要看。
       const content = [stdout, stderr].filter(Boolean).join("\n");
       return safety.wrap(safety.truncate(content));

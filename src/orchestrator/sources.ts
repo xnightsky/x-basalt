@@ -110,10 +110,7 @@ export async function readPathList(stream: AsyncIterable<string | Buffer>): Prom
  *                   避免复用同一报错时指引到无关命令——kimi 评审 Low 2026-08-03）
  * @throws 当 stdin 是交互终端时抛出带示例的错误
  */
-export function assertPipedStdin(
-  isTTY: boolean | undefined,
-  example?: string,
-): void {
+export function assertPipedStdin(isTTY: boolean | undefined, example?: string): void {
   if (isTTY) {
     throw new Error(
       `--stdin 需要管道输入（例：${example ?? 'x-basalt query "LIST FROM #pkm" --json | jq -r \'.rows[]["file.path"]\' | x-basalt run --stdin --pipe actions=normalize'}）；当前 stdin 是交互终端`,
