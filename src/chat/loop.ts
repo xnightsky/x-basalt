@@ -160,11 +160,7 @@ export async function runLoop(messages: ModelMessage[], deps: LoopDeps): Promise
   const [steps, usage] = await Promise.all([result.steps, result.usage]);
   const stillActing = (steps.at(-1)?.toolCalls?.length ?? 0) > 0;
   const exhausted = steps.length >= deps.maxSteps && stillActing;
-  const stopReason: StopReason = stormTriggered
-    ? "error-storm"
-    : exhausted
-      ? "exhausted"
-      : "done";
+  const stopReason: StopReason = stormTriggered ? "error-storm" : exhausted ? "exhausted" : "done";
   // P1：本轮产出了实质文本答复、却零 vault 检索工具调用 → 如实标注（配了 noRecallNotice 才启用）。
   const noRecallNotice =
     deps.noRecallNotice && !usedRecallTool && answerChars >= NO_RECALL_MIN_ANSWER_CHARS

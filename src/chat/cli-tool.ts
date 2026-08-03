@@ -100,7 +100,8 @@ async function execCli(
       : usesVaultOption
         ? vaultDirs.flatMap((v) => ["--vault", v])
         : vaultDirs; // 位置参数形态：直接并列目录（commander [vault...] variadic 收集）
-  const dbFlags = userDb || ctx.dbPath === undefined || !DB_COMMANDS.has(sub) ? [] : ["--db", ctx.dbPath];
+  const dbFlags =
+    userDb || ctx.dbPath === undefined || !DB_COMMANDS.has(sub) ? [] : ["--db", ctx.dbPath];
   // cli 入口为 TS 源码时需要 --import tsx（dev 态/测试）；编译产物 .js 裸 node 即可。
   const entry = cliEntry.endsWith(".ts") ? ["--import", "tsx", cliEntry] : [cliEntry];
   const argv = [...entry, ...args, ...vaultFlags, ...dbFlags];
