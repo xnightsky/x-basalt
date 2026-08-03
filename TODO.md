@@ -1,6 +1,6 @@
 ---
-timestamp: 2026-08-03T00:33:37Z
-sha256: c1c4415b5853d03751a119e0d492730e88dddbc27a7dc43ddea8559eccd8b2bd
+timestamp: 2026-08-03T00:48:56Z
+sha256: 6c962ac0918728a5a884c23ff6d57841f5bf6fedf39ed65d2f49a4bbfb03f14a
 ---
 # TODO · x-basalt
 
@@ -32,7 +32,8 @@ sha256: c1c4415b5853d03751a119e0d492730e88dddbc27a7dc43ddea8559eccd8b2bd
 > ⑩⑪⑫⑭⑲⑧(b)⑨㉔㉕ 与 x-basalt 一致；⑮ `time()` 官方返回 `"HH:mm:ss"`、㉖ month=31d、
 > ⑧(a) mean 计分母、㉓ 组序空值恒最后 → **跟官方**（㉓⑮㉖⑧(a) 已修/已落地）；
 > ⑬ astral reverse / ⑯ MMMM / ⑱ 构造器 / ⑳ linksTo / ⑪ list 字面量 / ⑰ relative →
-> documented boundary；⑦ 官方按**整组键列表**分组不扇出 + 行序随分组 → **待拍板**。
+> documented boundary；⑦ 官方按**整组键列表**分组不扇出 → ✅ **已跟**（2026-08-03；
+> 顶层行序保留稳定序 → boundary）。
 > 观察记录冻结在 evals 私有仓 `parity/oracle-observations/`（两份），判定明细见
 > [runbook §4.11](./docs/design/bases-oracle-runbook.md)。
 
@@ -71,7 +72,7 @@ sha256: c1c4415b5853d03751a119e0d492730e88dddbc27a7dc43ddea8559eccd8b2bd
   - [x] **㉖ `duration("1 month")` = 31 天**（2026-08-03 落地；CLI 实测 2678400000ms，relative 阶梯同步 31d）
   - [x] **⑧(a) `list.mean()` 非 number 不计分子、计分母 + values 作用域含空值**（2026-08-03 落地；CLI 实测 `[1,2,null].mean()`=1、summary-custom=0.25 与官方一致）——**breaking**：`[1,2,null].mean()` 从报错变 1
   - [ ] **boundary 落档**：⑬ astral reverse（官方非 code point）、⑯ MMMM 本地化（官方随界面语言，本仓稳定数字 token）、⑱ date(number)/duration(number)（官方不支持）、⑳ linksTo（官方不可观测）、⑪ list 字面量（官方非字面量）、⑰ relative（时钟/语言依赖不可稳定取证）→ vs-official §5
-  - [ ] **⑦ 分组语义拍板**：官方按**整组键列表**成组不扇出 + 顶层行序随分组（group-by-tags：`[]` / `["#project","#area"]` 两组；group-by-list-prop：`[1,2,3]` / null 两组）——改分组模型是大改，需用户决策
+  - [x] **⑦ 分组语义（2026-08-03 已跟）**：按**整组键列表**成组不扇出（group-by-tags：`[]` / `[project,area]`；group-by-list-prop：`[1,2,3]` / null，CLI 实测与官方一致）；**顶层行序保留 file.path 稳定序** → 行序差异落 documented boundary（vs-official §5.8）
 - [ ] **P2 · typed formulas/group/summary**：Property 类型、Date/Link/File/List、公式依赖图与循环、高阶列表、groupBy/summaries；以真实需求逐项开计划。
   - [x] **P2a · formulas 核心**（typed values + 算术 + 依赖图/cycle + clock，BASE-FORM-001..006/SEC-006）：[`docs/plans/2026-07-27-bases-p2a-formulas.md`](./docs/history/plans/2026-07-27-bases-p2a-formulas.md)（2026-07-27 落地）
   - [x] **P2b · types.json / list 高阶 / groupBy / summaries**（BASE-TYPE-001..003、LIST-001、GROUP-001、SUM-001/002；TYPE-004 与 GROUP-002 待 oracle）计划：[`docs/plans/2026-07-27-bases-p2b-types-list-group-summary.md`](./docs/history/plans/2026-07-27-bases-p2b-types-list-group-summary.md)（2026-07-27 落地）

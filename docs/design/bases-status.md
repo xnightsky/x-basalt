@@ -7,8 +7,8 @@ tags:
   - bases
   - testing
   - x-basalt
-timestamp: 2026-08-03T00:33:37Z
-sha256: 96fd571fe23094fc6dc9172419028152a17e38aaa3a1c859554f87a9d682c467
+timestamp: 2026-08-03T00:48:56Z
+sha256: 52432ecc079999bfff6214b64b7479527df7ca8476edf0cc5f7dc3e35f341561
 ---
 # Bases 实现状态追踪
 
@@ -105,7 +105,7 @@ sha256: 96fd571fe23094fc6dc9172419028152a17e38aaa3a1c859554f87a9d682c467
 | ⑩ title / ⑪ slice（string）/ ⑫ replace / ⑭ isEmpty / ⑲ file().path | 函数覆盖率片 | 与本仓期望串**逐字一致** | ✅ 2026-08-02 可转正（filter 谓词 12 行命中；⑪ list 侧官方 `list()` 非字面量 → 本仓超集 boundary） |
 | ⑮ `date.time()` 返回形态 | 片二 | 官方返回 `"HH:mm:ss"` **字符串** | ✅ 2026-08-03 已落地（跟官方；原 duration 毫秒已翻） |
 | ㉖ duration month 换算 | 片二 | month=**31d**（year=365d 一致） | ✅ 2026-08-03 已落地（跟官方；原 30d，relative 阶梯同步） |
-| ⑦ 分组内容（round-2 新实据） | BASE-GROUP-002 | 官方按**整组键列表**成组、**不扇出**（tags：`[]` / `["#project","#area"]`；list-prop：`[1,2,3]` / null） | ⏳ 2026-08-02 **待拍板**：与 GROUP-002 暂定扇出口径相反，改模型是大改（见 [vs-official §5.8](bases-vs-official.md)） |
+| ⑦ 分组内容（round-2 新实据） | BASE-GROUP-002 | 官方按**整组键列表**成组、**不扇出**（tags：`[]` / `["#project","#area"]`；list-prop：`[1,2,3]` / null） | ✅ 2026-08-03 已跟：整组键列表成组不扇出（顶层行序保留稳定序 → boundary，见 [vs-official §5.8](bases-vs-official.md)） |
 | ⑬ astral reverse / ⑯ format 本地化 / ⑱ number 构造器 / ⑳ linksTo / ⑪ list 字面量 / ⑰ relative | 函数覆盖率片 | 官方不可跟（非 code point / 随界面语言 / 不支持 / 不可观测 / 非字面量 / 时钟语言依赖） | ✅ 2026-08-02 决策：**不跟** + [documented boundary](bases-vs-official.md) §5.12（本仓保安全/稳定超集） |
 
 > 取证方式与三个会静默出错的坑见 [runbook §0.2](bases-oracle-runbook.md)。原始观察数据由取证侧留档（不入本仓：机器生成、体量大，且与 §4 的人读结论重复存放必然漂移）。

@@ -7,8 +7,8 @@ tags:
   - bases
   - oracle
   - conformance
-timestamp: 2026-08-03T00:33:37Z
-sha256: 1535dfb5feb7d2cbaa6036f6f144f371f179a1211d96390d694077b5f28f19f2
+timestamp: 2026-08-03T00:48:56Z
+sha256: a4b61f2c4d779e97268a4886774f7b588519f5018c2eb69afa9c7d13bfd8baa9
 ---
 # Bases P1 争议语义官方 oracle 操作手册（runbook）
 
@@ -348,7 +348,7 @@ view 清单（26 个）：truthiness.base × 8（truthy-missing / truthy-explici
 | ⑳ | `file.linksTo(file(...))` / `file.linksTo("CaseB")` 均 0 行 | 官方不可观测/不支持 → boundary |
 | ㉖ | `duration("1 year")==duration("365 days")` 12 行；month：31d 12 / 30d 0 / 28d 0 | year ✅ 一致；month ❌ 官方 31d → ✅ **2026-08-03 已跟**（relative 阶梯同步） |
 | ⑧(a) | `list(1,2).mean()==1.5` **0 行**、`list(1,2,null).mean()==1/1.5` 均 0、`list(1,2).isEmpty()==false` **0 行** → `list()` 非字面量；汇总通道 `values.mean()`=**0.25（entries=12）** | M1 机制成立：values 含空值、计分母 → ✅ **2026-08-03 已跟**（breaking：`[1,2,null].mean()` 报错 → 1） |
-| ⑦ | groups 实读：`groupedDataCache` 按**整组键列表**成组——tags 两组 `[]`(11 行)/`["#project","#area"]`(CaseF)；list-prop 两组 `[1,2,3]`(CaseF)/`null`(11 行)；顶层行序随分组重排（3 个 DIFF） | 官方**不扇出**、行序随分组 → 与 GROUP-002 暂定口径相反，**待拍板** |
+| ⑦ | groups 实读：`groupedDataCache` 按**整组键列表**成组——tags 两组 `[]`(11 行)/`["#project","#area"]`(CaseF)；list-prop 两组 `[1,2,3]`(CaseF)/`null`(11 行)；顶层行序随分组重排（3 个 DIFF） | 官方**不扇出** → ✅ **2026-08-03 已跟**（键/组序对齐官方；顶层行序保留 file.path 稳定序 → boundary，见 vs-official §5.8） |
 | ㉓ | `group-desc-nullpos` 组序 **2 → 1 → null**（DESC） | 空值组恒最后、与方向无关（与 ② 同源）→ **当 bug 修**，`groupKeyCompareDirected` 已落地 |
 
 **工具侧三处修复（本轮暴露）**：
@@ -376,7 +376,8 @@ view 清单（26 个）：truthiness.base × 8（truthy-missing / truthy-explici
 > **round-2 校正（2026-08-02/03）**：㉓ 组序 DESC 空值恒最后 → **已按 bug 修**
 > （`groupKeyCompareDirected`，engine.ts，组序实测对齐官方 2→1→null）；⑮ `time()` 返回
 > `"HH:mm:ss"`、㉖ month=31d、⑧(a) mean 计分母 → **跟官方，✅ 2026-08-03 已落地**；⑬⑯⑱⑳⑪⑰ →
-> documented boundary（vs-official §5.7 起逐条落档）；⑦ 官方不扇出 → 待拍板。
+> documented boundary（vs-official §5.7 起逐条落档）；⑦ 官方不扇出 → ✅ **2026-08-03 已跟**
+> （顶层行序保留稳定序 → boundary）。
 
 | # | 差异 | 落点 | 取舍与状态 |
 | --- | --- | --- | --- |
