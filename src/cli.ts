@@ -445,7 +445,11 @@ program
       const useStdin = opts.stdin || file === "-";
       const source =
         useStdin
-          ? (assertPipedStdin(process.stdin.isTTY), await readStdinText(process.stdin))
+          ? (assertPipedStdin(
+              process.stdin.isTTY,
+              'echo "views: …" | x-basalt base - --vault ./my-vault',
+            ),
+            await readStdinText(process.stdin))
           : undefined;
 
       const engine = new BaseEngine();

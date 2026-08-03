@@ -106,12 +106,17 @@ export async function readPathList(stream: AsyncIterable<string | Buffer>): Prom
  * 为什么必须报错：终端上 stdin 永不 EOF，静默等待会表现为「命令挂住」——最难排查的一类体验。
  *
  * @param isTTY - `process.stdin.isTTY`（管道输入时为 undefined）
+ * @param example - 调用方自己的管道用法示例（缺省给 run 的示例；base --stdin 传入 base 的示例，
+ *                   避免复用同一报错时指引到无关命令——kimi 评审 Low 2026-08-03）
  * @throws 当 stdin 是交互终端时抛出带示例的错误
  */
-export function assertPipedStdin(isTTY: boolean | undefined): void {
+export function assertPipedStdin(
+  isTTY: boolean | undefined,
+  example?: string,
+): void {
   if (isTTY) {
     throw new Error(
-      '--stdin 需要管道输入（例：x-basalt query "LIST FROM #pkm" --json | jq -r \'.rows[]["file.path"]\' | x-basalt run --stdin --pipe actions=normalize）；当前 stdin 是交互终端',
+      `--stdin 需要管道输入（例：${example ?? 'x-basalt query "LIST FROM #pkm" --json | jq -r \'.rows[]["file.path"]\' | x-basalt run --stdin --pipe actions=normalize'}）；当前 stdin 是交互终端`,
     );
   }
 }
