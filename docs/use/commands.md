@@ -1,6 +1,6 @@
 ---
-timestamp: 2026-07-31T04:43:38Z
-sha256: f1073545c51f2b2027d086f75dc9fe774d0c9056be42a35dcff5e091c774d25a
+timestamp: 2026-08-03T16:07:02Z
+sha256: eb80117e484a34b658d8e8a3fcae072b0353700bee3478b05187d57966d997e3
 type: guide
 title: 命令参考 · x-basalt
 description: x-basalt CLI 全部子命令的参数、输出形态与示例
@@ -290,8 +290,8 @@ x-basalt base [<file.base>] [--view <name>] [--stdin] [--vault <path...>] [--db 
 
 | 参数/选项        | 默认                             | 说明                                                                       |
 | ---------------- | -------------------------------- | -------------------------------------------------------------------------- |
-| `[<file.base>]`  | 必填（或 `--stdin`）             | vault 内 `.base` 路径（vault 相对或绝对；越出 vault 读取前拒绝）；传 `-` 或 `--stdin` 则从标准输入读 `.base` 定义（动态 base：不读文件、无越界检查、诊断 file 为 `<stdin>`） |
-| `--stdin`        | —                                | 从标准输入读 `.base` 定义（等效 file 传 `-`）；stdin 是交互终端时立即报错不挂起 |
+| `[<file.base>]`  | 必填（或 `--stdin`）             | vault 内 `.base` 路径（vault 相对或绝对；越出 vault 读取前拒绝）；传 `-` 或 `--stdin` 则从标准输入读 `.base` 定义（动态 base：不读文件、无越界检查、文档层诊断 file 为 `<stdin>`） |
+| `--stdin`        | —                                | 从标准输入读 `.base` 定义（等效 file 传 `-`，与 file 同给时以 `--stdin` 为准）；stdin 是交互终端时立即报错不挂起 |
 | `--view <name>`  | `views[0]`                       | 指定 view；不存在报 `base/view-not-found`（error，suggestions 列可用名）   |
 | `--vault <path>` | 配置 `vault`                     | 可重复传多个（多根 vault）                                                 |
 | `--db <path>`    | `.x-basalt/index.db` / 配置 `db` | 要查询的 SQLite 路径（只读打开）                                           |
@@ -328,7 +328,7 @@ x-basalt base views/projects.base --conformance bases-all-files-2026-07 --vault 
 printf 'views:\n  - type: table\n    name: All\n    order: [file.name]\n' | x-basalt base - --vault ./my-vault
 ```
 
-`.base` 怎么写与支持的完整语法（顶层 key / view / filter / 表达式 / 函数全表 / 值语义）见 [writing-bases.md](bases.md)；输出契约细节、限制与报错速查见 [querying-bases.md](bases.md)。
+`.base` 怎么写与支持的完整语法（顶层 key / view / filter / 表达式 / 函数全表 / 值语义）、输出契约细节、限制与报错速查，见 [bases.md](bases.md)。
 
 ---
 

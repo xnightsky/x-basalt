@@ -1,6 +1,6 @@
 ---
-timestamp: 2026-08-03T00:53:00Z
-sha256: d22250fa08e3c330f0f23538b78e80bc05327a554bc1e4f38f2bda8e313eefab
+timestamp: 2026-08-03T16:07:47Z
+sha256: 57624e5182f63e264703fddc468e23c31dcfef8143350caec20455747e6e0cf5
 ---
 # TODO · x-basalt
 
@@ -92,7 +92,7 @@ sha256: d22250fa08e3c330f0f23538b78e80bc05327a554bc1e4f38f2bda8e313eefab
 ## 🧪 2026-07-28 动态 base（入参 base + chat `base_query`）——第一步已落地
 
 - [x] **第一步：`x-basalt base` 支持 stdin / 字符串入参（`-` 或 `--stdin`）**——✅ 2026-08-03 落地（`12e336d`/`d02d942`/`10d182a`/`c29eccd`），计划：[`docs/plans/2026-08-03-bases-dynamic-stdin.md`](docs/plans/2026-08-03-bases-dynamic-stdin.md)。独立可用、不绑 chat：`echo "views: …" | x-basalt base -`。kimi(k3) 独立评审一轮：High（basePath/source 双缺省 TypeError）已修 + 4 个 Low 收口。
-- [ ] **第二步（前置缺口未清，待第一步落地）：chat `base_query` 工具 + JSON Schema 约束 + 软/硬路由**——依赖「Bases 规范 skill」新建与命名避撞（`obsidian-base-spec` 0 处提到 Bases），见下段「前置缺口」。
+- [ ] **第二步（前置缺口未清）：chat `base_query` 工具 + JSON Schema 约束 + 软/硬路由**——依赖「Bases 规范 skill」新建与命名避撞（`obsidian-base-spec` 0 处提到 Bases），见下段「前置缺口」。
 
 **论证（2026-07-28，用户提出、当场论证成立）**：**性质变化：它把 Bases 从「读用户已有的 `.base` 资产」变成「AI 现场组装查询」，用户有没有 `.base` 文件不再是前提。**
 

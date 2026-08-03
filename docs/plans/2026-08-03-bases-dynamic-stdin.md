@@ -7,8 +7,8 @@ tags:
   - bases
   - cli
   - stdin
-timestamp: 2026-08-03T15:58:48Z
-sha256: c4009e713fb96350a9979d54af5fd2e23fc0ae3569079f1d2a8d5bc4ad4ce800
+timestamp: 2026-08-03T16:06:35Z
+sha256: b8e0cad249255276ba3b6a994a58a1f8825241d1e450e25f3988343e0949478d
 ---
 # 动态 base 第一步：stdin / 字符串入参
 
@@ -107,7 +107,7 @@ src/cli.ts             base 命令：<file> 变可选 + --stdin flag；file === 
   - 读流到 EOF 成字符串；注入 `Readable.from` 分片测试；Buffer 分片 utf8 解码；空输入返回空串。
 - [x] **DB-3b CLI `-` / `--stdin`（red→green）**
   - 文件：`src/cli.ts` + `tests/base-cli.test.ts`。
-  - `<file>` 参数变可选；新增 `--stdin` flag；`file === "-"` 或 `--stdin` → 读 stdin：
+  - `<file>` 参数变可选；新增 `--stdin` flag；`file === "-"` 或 `--stdin` → 读 stdin（file 与 `--stdin` 同给时以 `--stdin` 为准）：
     - TTY 无管道输入 → 报错不挂起（复用 orchestrator 的 assertPipedStdin；该函数 isTTY 分支已有单测）。
     - stdin 内容 → `engine.query({ source, ... })`，`--vault`/`--view`/`--db`/`--format`/`--conformance`/`--context-file` 照常生效。
   - e2e：`echo "views: …" | pnpm cli -- base - --vault …` 与 `--stdin` 等价于文件模式输出；空 stdin → views 缺失 error（exit 1）。
@@ -136,6 +136,6 @@ src/cli.ts             base 命令：<file> 变可选 + --stdin flag；file === 
 - `pnpm run typecheck` / `pnpm run lint` / `pnpm test` 全绿（本次触及 base 公共契约 `BaseQueryOptions` 与 CLI 命令签名，按 AGENTS「完成定义」升级到全量）。
 - `echo "views: …" | pnpm cli -- base - --vault <vault> --db <db>` 与文件模式输出等价（同内容同 result，base 字段 = `<stdin>` 除外）。
 - `pnpm cli -- base --stdin --vault <vault> --db <db>`（管道输入）等价；TTY 无管道 → 报错不挂起。
-- 全部诊断（error/warning）的 `file` 字段在 stdin 模式 = `<stdin>`。
+- 文档层诊断（error/warning）的 `file` 字段在 stdin 模式 = `<stdin>`（types.json 读取诊断除外——其 `file` 指向自身路径 `.obsidian/types.json`，口径修订见上「kimi 评审 Low 收口」）。
 - 路径越界检查（BASE-SEC-008）在 stdin 模式不触发（根本不读文件）；文件模式行为不变（回归既有用例）。
 - 无残留「后续」注释指向已实现的能力；`loadBaseDocument` 与 `parseBaseSource` 职责注释分界清晰。
