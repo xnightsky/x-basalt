@@ -157,3 +157,250 @@ views:
       - 'file.linksTo(file("CaseB"))'
       - 'file.linksTo("CaseB")'
       - 'file.hasLink("CaseB")'
+
+# ============================================================================
+# 2026-08-02 补：⑧(a)/⑩..⑳㉖ 的 **filter 上下文**取证（round-2 教训）
+#
+# round-2 实测（Obsidian 1.13.4）：官方把 `note.<expr>` / 裸表达式**列**当属性列处理——
+# 不求值、无错误、渲染为空（cachedFormulaOutputs={}、propertyEditor 空）。因此上面
+# 07-29 那批「表达式列」view 判不出函数值，必须把表达式放进**官方会求值的上下文**。
+# round-1 已证明 filter 会求值（date-eq-literal 等），故这批全部用 filter 谓词：
+#   谓词为真 → 12 行；谓词为假 → 0 行；官方不认该函数 → errors 非空（照录不判读）。
+# 每个谓词**独立占一个 view**（隔离原则：官方对不认识的函数可能整个 view 求值失败）。
+# 无 filter 的基线仍 12 行（fixture 文件数未变）。
+# ============================================================================
+
+  # ⑧(a) 决定性二分：官方 `list(1, 2, null).mean()` 到底等于什么。
+  #   == 1   → M1 成立：null 计入分母（(1+2)/3）→ 改 list.mean() + values 作用域
+  #   == 1.5 → M2 成立：null 只被剔除（(1+2)/2）→ 维持现状
+  #   两 view 都 0 行且 errors 非空 → 官方根本不支持混合列表 mean → ⑧(a) 翻 boundary
+  - type: table
+    name: mean-mixed-eq-1
+    filters: 'list(1, 2, null).mean() == 1'
+    order:
+      - file.path
+  - type: table
+    name: mean-mixed-eq-15
+    filters: 'list(1, 2, null).mean() == 1.5'
+    order:
+      - file.path
+
+  # ⑩ title()：按空白切词 + 词首大写 + 词余小写。
+  - type: table
+    name: str-title-eq
+    filters: '"hello world foo".title() == "Hello World Foo"'
+    order:
+      - file.path
+
+  # ⑪ slice(start, end?)：负索引从尾数；end 排他；越界钳制。
+  - type: table
+    name: str-slice-neg-eq
+    filters: '"abcdef".slice(-3) == "def"'
+    order:
+      - file.path
+  - type: table
+    name: str-slice-end-eq
+    filters: '"abcdef".slice(1, 3) == "bc"'
+    order:
+      - file.path
+  - type: table
+    name: str-slice-clamp-eq
+    filters: '"abc".slice(0, 99) == "abc"'
+    order:
+      - file.path
+
+  # ⑫ replace(a, b)：字面子串全局替换 vs 只替首个 vs regex（`.` 匹配任意字符）。
+  #   global → "a-b-c"；first-only → "a-b.c"；regex(首匹配) → "-.b.c"。
+  - type: table
+    name: str-replace-global-eq
+    filters: '"a.b.c".replace(".", "-") == "a-b-c"'
+    order:
+      - file.path
+  - type: table
+    name: str-replace-first-eq
+    filters: '"a.b.c".replace(".", "-") == "a-b.c"'
+    order:
+      - file.path
+
+  # ⑬ reverse()：用 BMP 外的代理对（💩 U+1F4A9）区分 code point 与 code unit 反转。
+  #   code point → "b💩a"；code unit（代理对拆坏）→ 不会是 "b💩a"。
+  - type: table
+    name: str-reverse-astral-eq
+    filters: '"a💩b".reverse() == "b💩a"'
+    order:
+      - file.path
+
+  # ⑭ number/date 的 isEmpty() 恒 false（各自独立成 view，避免一个报错连坐另一个）。
+  - type: table
+    name: is-empty-num-eq
+    filters: 'number(0).isEmpty() == false'
+    order:
+      - file.path
+  - type: table
+    name: is-empty-date-eq
+    filters: 'date("2026-07-01").isEmpty() == false'
+    order:
+      - file.path
+
+  # ⑮ date.time() 的返回值形态：本仓 = 当日 UTC 零点起的 duration 毫秒数（37800000）。
+  #   与 number 相等 → 官方 time() 是毫秒数；与 duration(number) 相等 → 是 duration 对象；
+  #   都假且无错误 → 是 "HH:mm" 字符串类形态（另一个候选）。
+  - type: table
+    name: date-time-ms-eq
+    filters: 'date("2026-07-01T10:30:00").time() == 37800000'
+    order:
+      - file.path
+  - type: table
+    name: date-time-dur-eq
+    filters: 'date("2026-07-01T10:30:00").time() == duration(37800000)'
+    order:
+      - file.path
+
+  # ⑯ date.format() 的数字 token（YYYY-MM-DD / HH:mm:ss）。
+  - type: table
+    name: date-format-ymd-eq
+    filters: 'date("2026-07-01").format("YYYY-MM-DD") == "2026-07-01"'
+    order:
+      - file.path
+  - type: table
+    name: date-format-hms-eq
+    filters: 'date("2026-07-01T10:30:00").format("HH:mm:ss") == "10:30:00"'
+    order:
+      - file.path
+
+  # ⑯ 另一半：本地化 token（x-basalt 有意拒绝，隔离；看官方认不认、输出什么语言）。
+  - type: table
+    name: date-format-localized-eq
+    filters: 'date("2026-07-01").format("MMMM") == "July"'
+    order:
+      - file.path
+
+  # ⑱ date(number) / duration(number)（x-basalt 自建扩展，官方很可能没有）。
+  #   date(1000)：epoch 毫秒 → 1970-01-01T00:00:01；epoch 秒 → 00:16:40。
+  - type: table
+    name: ext-date-ms-eq
+    filters: 'date(1000) == date("1970-01-01T00:00:01")'
+    order:
+      - file.path
+  - type: table
+    name: ext-duration-num-eq
+    filters: 'duration(1000) == 1000'
+    order:
+      - file.path
+
+  # ⑲ file(path) 的解析结果路径形态（本仓 "notes/CaseB.md"；官方若只给文件名则 0 行）。
+  - type: table
+    name: file-resolve-eq
+    filters: 'file("CaseB").path == "notes/CaseB.md"'
+    order:
+      - file.path
+
+  # ⑳ linksTo 两种入参：file 值走解析比 path；string/link 走文本匹配。
+  # 样本依赖 CaseE 正文里的 [[CaseB]]——两个谓词各自独立成 view。
+  - type: table
+    name: file-links-to-resolve-eq
+    filters: 'file.linksTo(file("CaseB")) == true'
+    order:
+      - file.path
+  - type: table
+    name: file-links-to-text-eq
+    filters: 'file.linksTo("CaseB") == true'
+    order:
+      - file.path
+
+  # ㉖ duration 的 month/year 固定换算（本仓 30d / 365d）。
+  - type: table
+    name: duration-month-eq
+    filters: 'duration("1 month") == duration("30 days")'
+    order:
+      - file.path
+  - type: table
+    name: duration-year-eq
+    filters: 'duration("1 year") == duration("365 days")'
+    order:
+      - file.path
+
+# ============================================================================
+# 2026-08-02 第二批：第一轮 0 行的 view 全是「无 errors 静默失败」，无法区分
+# 「求值为假」与「函数不认」。这批补**机制对照组**：先证明该函数+== 通道在官方
+# 可用，再判第一轮的 0 行是真假值还是函数缺失。全部沿用隔离原则。
+# ============================================================================
+
+  # ⑧(a) 机制对照：纯列表 mean 通道是否可用（可用 → mean-mixed 的 0/0 是官方
+  # 真值 ≠1/≠1.5；不可用 → mean-mixed 两 view 作废，⑧(a) 仍需另想办法）。
+  - type: table
+    name: mean-pure-eq-15
+    filters: 'list(1, 2).mean() == 1.5'
+    order:
+      - file.path
+
+  # ⑬ 机制对照：BMP 字符串 reverse 是否可用（可用 → astral 0 行说明官方对代理对
+  # 的处理与本仓不同；不可用 → reverse 整体缺失，astral 0 行无判别力）。
+  - type: table
+    name: str-reverse-bmp-eq
+    filters: '"abc".reverse() == "cba"'
+    order:
+      - file.path
+
+  # ⑮ 候选形态：time() 若返回 "HH:mm" / "HH:mm:ss" 字符串，二者其一应命中。
+  - type: table
+    name: date-time-hhmm-str-eq
+    filters: 'date("2026-07-01T10:30:00").time() == "10:30"'
+    order:
+      - file.path
+  - type: table
+    name: date-time-hhmmss-str-eq
+    filters: 'date("2026-07-01T10:30:00").time() == "10:30:00"'
+    order:
+      - file.path
+
+  # ㉖ month 长度钉死：year=365d 已证实 duration(string)+== 通道可用，
+  # month ≠ 30d 是真实差异；试 31d / 28d。
+  - type: table
+    name: duration-month-31-eq
+    filters: 'duration("1 month") == duration("31 days")'
+    order:
+      - file.path
+  - type: table
+    name: duration-month-28-eq
+    filters: 'duration("1 month") == duration("28 days")'
+    order:
+      - file.path
+
+  # ⑱ 机制对照：date(字面量)+== 通道可用与否（决定 ext-date-ms 的 0 行怎么读）。
+  - type: table
+    name: date-self-eq
+    filters: 'date("2026-07-01") == date("2026-07-01")'
+    order:
+      - file.path
+  # date(number) 若是 epoch **秒**：1000s = 1970-01-01T00:16:40。
+  - type: table
+    name: ext-date-sec-eq
+    filters: 'date(1000) == date("1970-01-01T00:16:40")'
+    order:
+      - file.path
+
+  # ⑯ 本地化 token：MMMM 若不是英文 July，试中文（界面语言候选）。
+  - type: table
+    name: date-format-localized-zh-eq
+    filters: 'date("2026-07-01").format("MMMM") == "七月"'
+    order:
+      - file.path
+
+  # ⑧(a) 字符串输出候选：mean 若返回字符串形态（官方函数值渲染为文本），
+  # 与 number 比恒假；试字符串 "1"。
+  - type: table
+    name: mean-mixed-str1-eq
+    filters: 'list(1, 2, null).mean() == "1"'
+    order:
+      - file.path
+
+  # ⑧(a)/⑪ 的收尾判别：官方 filter 里的 `list(1, 2)` 到底是不是**字面量**。
+  # 若 isEmpty()==false 命中 12 行 → list() 是字面量，mean() 的 0/0 是值形态问题；
+  # 若 0 行 → list() 不是字面量（更像行上下文属性访问器），mean/切片字面量取证
+  # 路径整体关闭，⑧(a) 只能由汇总读数（values.mean()=0.25、entries=12）定论。
+  - type: table
+    name: list-literal-is-empty-eq
+    filters: 'list(1, 2).isEmpty() == false'
+    order:
+      - file.path
