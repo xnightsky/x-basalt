@@ -283,7 +283,7 @@ x-basalt search "缓存失效" --offset 20 --size 20
 ## `base` — .base view 查询
 
 ```
-x-basalt base [<file.base>] [--view <name>] [--stdin] [--vault <path...>] [--db <path>] [--format json|yaml] [--conformance <id>]
+x-basalt base [<file.base>] [--view <name>] [--stdin] [--vault <path...>] [--db <path>] [--format json|yaml] [--conformance <id>] [--context-file <path>]
 ```
 
 执行 Obsidian `.base` view 的无头查询（Bases Markdown conformance 2026-07）：只读索引库，输出稳定 JSON，不渲染表格。
@@ -297,6 +297,7 @@ x-basalt base [<file.base>] [--view <name>] [--stdin] [--vault <path...>] [--db 
 | `--db <path>`    | `.x-basalt/index.db` / 配置 `db` | 要查询的 SQLite 路径（只读打开）                                           |
 | `--format <fmt>` | `json`（或配置 `format`）        | 输出格式：`json`（缩进 2）或 `yaml`                                        |
 | `--conformance <id>` | `bases-markdown-2026-07`    | 数据集口径：缺省仅 Markdown；`bases-all-files-2026-07` 附件并入为行；未知值报 `base/invalid-schema` |
+| `--context-file <path>` | 无 | `this.*` 的显式上下文文件（vault 内路径）；不传则 `.base` 里的 `this.*` 报 `base/dynamic-context-required`；传了却找不到该文件 → error + 空结果。完整语义见 [bases.md §3.5](bases.md#35-属性引用) |
 
 **输出形态**
 
@@ -694,7 +695,7 @@ pipelines:
 ## `chat` — 自然语言驱动（可选 AI）
 
 ```
-x-basalt chat [input] [--model <name>] [--max-steps <n>] [--vault <path>]... [--db <path>]
+x-basalt chat [input] [--model <name>] [--max-steps <n>] [--vault <path>]... [--db <path>] [-q|--quiet] [--json] [--trace [file]]
 ```
 
 用自然语言驱动 vault：给 `[input]` 走**单发**（翻译→执行→输出→退出），省略则进 **REPL**（多轮、累积上下文）。底层工具面已收编为**单一 `cli` 工具**（切 C，2026-07-30 拍板）——模型只拿一个执行口，`args` 数组直传 CLI 子命令（query / parse / scan / meta / run / base …），外加 `skills_recall` / `skills_get` 两个规范召回元工具；**写动作直接落盘**（无确认闸，靠 `Ctrl+C` 中断 + 原子写兜底）。watch / chat 子命令被 allowlist 排除（常驻/递归，双保险拒绝）。
@@ -707,6 +708,9 @@ x-basalt chat [input] [--model <name>] [--max-steps <n>] [--vault <path>]... [--
 | `--model <name>`   | 配置 / `AI_GATEWAY_MODEL` | 覆盖模型名                                                              |
 | `--max-steps <n>`  | `20`                      | agentic 最大步数；**撞顶不再静默停**——单发提示、REPL 可输入「继续」续跑 |
 | `--vault` / `--db` | 同其他命令（回退配置）    | 库目录 / 索引路径                                                       |
+| `-q, --quiet`      | 关                          | 单发只输出答案与 no-recall/exhausted 结果限定，完全隐藏工具过程（供 AI/脚本程序化调用，避免过程轨迹白占上下文） |
+| `--json`           | 关                          | 单发结束后输出一个结构化 JSON 对象（优先于 `--quiet`）                  |
+| `--trace [file]`   | 关                          | 落盘 chat 事件到 JSONL；省略 `file` 按时间戳自动命名到 `.x-basalt/chat-traces/` |
 
 REPL 内命令：`help` 用法 · `examples` 可玩示例 · `继续` 撞顶续跑 · `quit`/`exit`/`q` 退出；`Ctrl+C` 中断当前轮。
 
