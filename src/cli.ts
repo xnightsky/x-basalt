@@ -853,6 +853,14 @@ program
         trace?: string | true;
       },
     ) => {
+      // 防递归兜底（切 C，chat-tool-surface.md §风险）：cli 工具 spawn 的子进程带
+      // X_BASALT_CHAT_CHILD=1，chat 检测到即拒——allowlist 已结构性排除 chat 子命令，
+      // 此处双保险兜住 allowlist 误配/被绕。
+      if (process.env.X_BASALT_CHAT_CHILD === "1") {
+        console.error("✗ 不允许在 chat 内嵌套启动 chat（防递归）");
+        process.exitCode = 1;
+        return;
+      }
       // 先检查 AI key：无 key 直接友好退出，避免先报 "需要 --vault" 造成误导。
       // provider.ts 无 AI SDK 顶层依赖，可安全懒加载；真正触达 SDK 的 index.ts 仍延后到本分支有 key 之后。
       const { resolveProvider, NO_KEY_MESSAGE } = await import("./chat/provider.js");

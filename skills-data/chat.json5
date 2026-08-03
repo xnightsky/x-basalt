@@ -11,7 +11,7 @@
   // triggers 只吃 AI 词（chat/ai/自然语言/key/model/离线…），与 core 的说明书词、pipe 的管道词、
   // summary 的总览词刻意不重叠——于是 `recall 配 key` 只召回本篇而非 core 全文。
   name: "chat",
-  description: "x-basalt chat 自然语言路径：调用形态（单发/REPL/--quiet/--json）、15 个内部工具与 CLI 命令的对应关系、chat 侧没有或禁止的能力、AI_GATEWAY 配置与安全模型。CLI 直调不需要本篇。",
+  description: "x-basalt chat 自然语言路径：调用形态（单发/REPL/--quiet/--json）、三个内部工具（cli 单执行口 + skills 元工具）与 CLI 命令的对应关系、chat 侧没有或禁止的能力、AI_GATEWAY 配置与安全模型。CLI 直调不需要本篇。",
   triggers: [
     "chat",
     "ai",
@@ -61,19 +61,19 @@
     {
       id: "tools",
       pattern: "chat 内部工具 ⟷ CLI 命令对应表",
-      description: "chat 把 CLI 能力包成 15 个工具（名字与参数形态和 CLI 不同，语义一致）：读 query{dql,offset,size} / parse{file} / read_note{file,offset,size} / scan{rehash,offset,size} / list{folder,tag,name} / search{query,offset,size} / meta_get{file,key} / skills_recall{keyword} / skills_get{name}；写 meta_set / meta_unset / meta_rename / meta_normalize / meta_apply / pipeline_run。**分页参数名与 CLI 不同**：CLI 用 `--offset/--size`，工具用 `offset/size`（默认 50、上限 500，size=0 只回 total）；计数口径本身与 CLI 一致（读 total，别全量再数），见 core 的「计数与分页」条。各工具的语义、边界、DQL 文法一律去 core 对应命令条取。",
+      description: "chat 工具面已收编为三个工具（切 C，2026-07-30 拍板）：**cli（唯一执行口）** + skills_recall / skills_get（grounding 元工具）。cli 的入参是 `{args: string[]}`——命令与参数数组逐项原样传递（如 {args:['query','LIST FROM #x']}、{args:['base','-'],source:'…'}），不做字符串拼接。可用的子命令就是 CLI 全集减 watch/chat（parse/index/scan/query/search/base/skills/meta/run/links/lint）。**分页参数即 CLI 的 --offset/--size**（默认 50、上限 500，--size 0 只回 total）；计数口径与 CLI 一致（读 total，别全量再数），见 core 的「计数与分页」条。子命令语义、边界、DQL 文法一律去 core 对应命令条取。",
       examples: [
         "// CLI: x-basalt meta set note.md status done",
-        '// chat 工具: meta_set{file:"note.md", key:"status", value:"done"}',
+        '// chat 工具: cli{args:["meta","set","note.md","status","done"]}',
       ],
     },
     {
       id: "limits",
       pattern: "chat 侧没有 / 禁止的能力",
-      description: "**index —— 没有**：chat 不做全量建库，只有 scan（增量）。**base —— 没有**：`.base` view 无头查询在 chat 里没有独立工具，只能经 pipeline_run 的 `base` 算子间接用。**watch / index --watch —— 禁止**：绝不让 chat 跑常驻命令，会永不返回、把会话挂死；持续维护 vault 用独立终端的 watch，或 cron 跑 scan --pipe。**批量走 pipeline_run**：steps=['完整算子 spec', …] 一元素一步不切分，actions=[…] 是七个经典动作的简写；**changed>0 即写成功且索引已刷新**，不要再 query/scan 复核，那只是白烧步数。",
+      description: "**index —— 有但慎用**：cli 子命令允许 index（全量建库），但日常增量用 scan。**base —— 可用（动态 base）**：cli base 子命令支持 - / --stdin 入参，模型可传 source 字段作为 .base 定义内容经 stdin 读取，免落盘。**watch / chat —— 禁止**：allowlist 结构性排除（watch 常驻会永不返回、挂死会话；chat 是 AI 递归入口，嵌套起 AI loop 双保险拒绝：allowlist 排除 + X_BASALT_CHAT_CHILD 环境变量检测）。**批量写走 cli run**：steps=[…] 一元素一步不切分、actions=[…] 七个经典动作简写；**changed>0 即写成功且索引已刷新**，不要再 query/scan 复核，那只是白烧步数。",
       examples: [
-        "// 批量：pipeline_run{where:'LIST FROM \"inbox\" WHERE !type', steps:['set type=note']}",
-        "// 常驻维护不要进 chat：另开终端 x-basalt watch ./vault --pipe actions=normalize --apply",
+        "// 批量：cli{args:['run','--pipe','step=set type=note','--pipe','where=LIST FROM \"inbox\" WHERE !type']}",
+        "// 动态 base：cli{args:['base','-'],source:'views:…'}",
       ],
     },
     {

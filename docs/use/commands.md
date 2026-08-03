@@ -697,7 +697,7 @@ pipelines:
 x-basalt chat [input] [--model <name>] [--max-steps <n>] [--vault <path>]... [--db <path>]
 ```
 
-用自然语言驱动 vault：给 `[input]` 走**单发**（翻译→执行→输出→退出），省略则进 **REPL**（多轮、累积上下文）。底层把既有读写原语（query / parse / scan / meta\_\* / skills / pipeline_run）包成工具，模型自行多步调用；**写动作直接落盘**（无确认闸，靠 `Ctrl+C` 中断 + 原子写兜底）。
+用自然语言驱动 vault：给 `[input]` 走**单发**（翻译→执行→输出→退出），省略则进 **REPL**（多轮、累积上下文）。底层工具面已收编为**单一 `cli` 工具**（切 C，2026-07-30 拍板）——模型只拿一个执行口，`args` 数组直传 CLI 子命令（query / parse / scan / meta / run / base …），外加 `skills_recall` / `skills_get` 两个规范召回元工具；**写动作直接落盘**（无确认闸，靠 `Ctrl+C` 中断 + 原子写兜底）。watch / chat 子命令被 allowlist 排除（常驻/递归，双保险拒绝）。
 
 > **可选 AI**：需 `AI_GATEWAY_API_KEY`（兼容 `AI_GATEWAY_*`）；**无 key 时本命令友好退出、不影响其他命令**。内核零 AI，仅本命令懒加载 `ai` SDK。
 

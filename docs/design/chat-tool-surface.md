@@ -13,6 +13,7 @@ sha256: 85adb9886e1857f90eede60ce3f997ce0c3e11efe09afc30cd7ad57fde3333f4
 # chat 工具面架构：单一真相源评估（对标 agent-browser）
 
 > 日期：2026-07-30 · 类型：**设计评估（提案·待拍板）**，不是开工契约。
+> **实现状态：✅ 已落地（2026-08-03，计划 [2026-08-03-chat-cli-tool.md](../plans/2026-08-03-chat-cli-tool.md)）**——`src/chat/cli-tool.ts` 单工具 + `tools.ts` 收编为 { cli, skills_recall, skills_get } + `X_BASALT_CHAT_CHILD` 防递归。
 > 触发：chat 审查实锤 `pipeline_run` 的 `paths` 参数静默失效（`src/chat/tools.ts:467` 把模型给的路径 `toAbs` 成绝对路径，喂给匹配**相对主键**的 glob 路由过滤 `src/orchestrator/route.ts:53`，永不命中）——根因不是某行代码写错，而是 chat 手工维护着第二张能力表面，语义靠人肉对齐 CLI，必漂移。
 > 关联：[chat 读写机制](chat-readwrite.md)、[chat skill grounding](chat-skill-grounding.md)、对标调研 [`../history/research/2026-06-30-chat-gap-vs-agent-browser.md`](../history/research/2026-06-30-chat-gap-vs-agent-browser.md)。
 
