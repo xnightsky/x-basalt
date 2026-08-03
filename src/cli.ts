@@ -36,6 +36,7 @@ import { renderHuman } from "./links/report.js";
 import { runLint } from "./lint/index.js";
 import { renderHuman as renderLintHuman } from "./lint/report.js";
 import { BaseEngine, type BaseQueryOptions } from "./base/index.js";
+import { readStdinText } from "./base/stdin.js";
 import { DataviewEngine } from "./query/index.js";
 import { SkillRecall } from "./skill/index.js";
 import { renderSkill, renderSkillList, renderSkills } from "./skill/render.js";
@@ -390,8 +391,15 @@ program
 program
   .command("base")
   .description("执行 .base view 查询（Bases 无头引擎 P1；稳定 JSON 契约，不渲染表格）")
-  .argument("<file>", ".base 文件路径（vault 相对或绝对）")
+  .argument(
+    "[file]",
+    ".base 文件路径（vault 相对或绝对）；传 `-` 或加 --stdin 从标准输入读 .base 定义（动态 base 第一步）",
+  )
   .option("--view <name>", "指定 view 名（缺省取 views[0]）")
+  .option(
+    "--stdin",
+    "从标准输入读 .base 定义（等效 file 传 `-`；TTY 无管道输入报错不挂起）",
+  )
   .option(
     "--vault <path>",
     "Vault 目录（可多个，重复 --vault；可回退配置 vault）",
@@ -409,10 +417,11 @@ program
     "this.* 的显式上下文文件（vault 内路径；无头执行没有「当前活动文件」，不给则 this.* 报诊断）",
   )
   .action(
-    (
-      file: string,
+    async (
+      file: string | undefined,
       opts: {
         view?: string;
+        stdin: boolean;
         vault: string[];
         db?: string;
         format?: string;
@@ -429,10 +438,20 @@ program
       );
       const vaultRoots = Array.isArray(vaultInput) ? vaultInput : [vaultInput];
       const dbPath = opts.db ?? config.db ?? DEFAULT_DB;
+
+      // 动态 base 第一步（DB-3）：`-` / `--stdin` 从标准输入读 .base 定义（不读文件、无越界语义）。
+      // file 与 --stdin 二选一：同给时以 --stdin 为准（file 传 `-` 是简写，冗余无害）。
+      // TTY 无管道输入 → 报错不挂起（stdin 永不 EOF，静默等待会表现为「命令挂住」）。
+      const useStdin = opts.stdin || file === "-";
+      const source =
+        useStdin
+          ? (assertPipedStdin(process.stdin.isTTY), await readStdinText(process.stdin))
+          : undefined;
+
       const engine = new BaseEngine();
       try {
         const result = engine.query({
-          basePath: file,
+          ...(useStdin ? { source } : { basePath: file as string }),
           view: opts.view,
           dbPath,
           vaultRoots,

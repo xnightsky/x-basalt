@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
-import { mkdtempSync, rmSync } from "node:fs";
+import { mkdtempSync, rmSync, readFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { after, before, test } from "node:test";
@@ -36,10 +36,11 @@ after(() => {
   rmSync(tmpDir, { recursive: true, force: true });
 });
 
-/** 同步跑一次 CLI，返回退出码与输出。 */
-function run(args: string[]): { status: number; stdout: string; stderr: string } {
+/** 同步跑一次 CLI，返回退出码与输出。input 可选：传入则作为 stdin 管道输入。 */
+function run(args: string[], input?: string): { status: number; stdout: string; stderr: string } {
   const r = spawnSync(process.execPath, ["--import", TSX, CLI, ...args], {
     encoding: "utf8",
+    ...(input !== undefined ? { input } : {}),
   });
   return { status: r.status ?? -1, stdout: r.stdout ?? "", stderr: r.stderr ?? "" };
 }
@@ -233,4 +234,59 @@ test("--context-file 指向不存在的文件：exit 1 + error 诊断 + rows 为
     ),
   );
   assert.deepEqual(result.rows, []);
+});
+
+// === 动态 base 第一步：CLI stdin 入参（DB-3b，计划 2026-08-03-bases-dynamic-stdin.md） ===
+// `-` / `--stdin` 从管道读 .base 定义；与文件模式对同一内容等价，诊断 file=<stdin>。
+
+const defaultBaseSource = readFileSync(defaultBase, "utf8");
+
+function stdinArgs(extra: string[] = []): string[] {
+  return ["base", "--stdin", "--vault", vaultPath, "--db", dbPath, ...extra];
+}
+
+test("DB-3b: `-` 从 stdin 读 .base 定义，与文件模式等价", () => {
+  const viaStdin = run(["base", "-", "--vault", vaultPath, "--db", dbPath], defaultBaseSource);
+  assert.equal(viaStdin.status, 0, viaStdin.stderr);
+  const viaFile = run(["base", defaultBase, "--vault", vaultPath, "--db", dbPath]);
+  const fromStdin = parseJson(viaStdin.stdout);
+  const fromFile = parseJson(viaFile.stdout);
+  assert.equal(fromStdin.view, fromFile.view);
+  assert.deepEqual(fromStdin.columns, fromFile.columns);
+  assert.equal(fromStdin.total, fromFile.total);
+  assert.deepEqual(fromStdin.rows, fromFile.rows);
+  assert.equal(fromStdin.base, "<stdin>");
+  assert.equal(fromFile.base, "views/default.base");
+  // 诊断结构一致（md-only warning 等），file 字段不同是唯一差异
+  assert.deepEqual(
+    fromStdin.diagnostics.map((d) => ({ rule: d.rule, severity: d.severity })),
+    fromFile.diagnostics.map((d) => ({ rule: d.rule, severity: d.severity })),
+  );
+});
+
+test("DB-3b: --stdin 与 `-` 等价", () => {
+  const viaFlag = run(stdinArgs(), defaultBaseSource);
+  const viaDash = run(["base", "-", "--vault", vaultPath, "--db", dbPath], defaultBaseSource);
+  assert.equal(viaFlag.status, 0, viaFlag.stderr);
+  assert.equal(viaFlag.stdout, viaDash.stdout);
+});
+
+test("DB-3b: stdin 非法 YAML → exit 1 + invalid-yaml error（file=<stdin>）", () => {
+  const r = run(stdinArgs(), "views: [");
+  assert.equal(r.status, 1);
+  const result = parseJson(r.stdout);
+  assert.ok(
+    result.diagnostics.some(
+      (d) => d.rule === "base/invalid-yaml" && d.severity === "error" && d.file === "<stdin>",
+    ),
+  );
+  assert.deepEqual(result.rows, []);
+});
+
+test("DB-3b: file 与 --stdin 同给 → --stdin 优先（file 传 `-` 是简写，冗余无害）", () => {
+  const r = run(stdinArgs([defaultBase]), defaultBaseSource);
+  assert.equal(r.status, 0, r.stderr);
+  const result = parseJson(r.stdout);
+  assert.equal(result.base, "<stdin>");
+  assert.ok(result.total > 0);
 });
