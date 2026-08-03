@@ -15,7 +15,7 @@
  */
 
 import assert from "node:assert/strict";
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync, readFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { after, before, test } from "node:test";
@@ -669,4 +669,83 @@ test("执行预算: maxTotalOperations 跨行累计耗尽转 execution-budget（
     [],
   );
   assert.ok(ok.total > 0);
+});
+
+// ---------- 动态 base 第一步：source 字符串入参（DB-2，计划 2026-08-03-bases-dynamic-stdin.md） ----------
+// source 模式 = 不读文件、跳过 checkEntryForm 与路径越界（BASE-SEC-008 是文件模式防线），
+// 诊断 file 字段用虚拟名 <stdin>；对同一内容，source 模式与文件模式产出等价结果。
+
+// DB-2a：source 模式与文件模式同内容 → rows/columns/total 等价，仅 base 字段 = <stdin>
+test("DB-2a: source 字符串入参与文件模式同内容产出等价", () => {
+  const source = readFileSync(baseFile("default.base"), "utf8");
+  const viaFile = query("default.base");
+  const viaSource = engine.query({
+    source,
+    dbPath,
+    vaultRoots: [vaultPath],
+  });
+  // 查询结果等价（视图/行/列/汇总）
+  assert.equal(viaSource.view, viaFile.view);
+  assert.deepEqual(viaSource.columns, viaFile.columns);
+  assert.equal(viaSource.total, viaFile.total);
+  assert.deepEqual(viaSource.rows, viaFile.rows);
+  assert.deepEqual(viaSource.summaries, viaFile.summaries);
+  assert.deepEqual(viaSource.groups, viaFile.groups);
+  // 诊断一致（含 md-only warning），仅 file 字段 = <stdin>
+  assert.deepEqual(
+    viaSource.diagnostics.map((d) => ({ rule: d.rule, severity: d.severity, message: d.message })),
+    viaFile.diagnostics.map((d) => ({ rule: d.rule, severity: d.severity, message: d.message })),
+  );
+  assert.equal(viaSource.base, "<stdin>");
+  // 文档层诊断 file = <stdin>；types.json 读取诊断（base/invalid-schema）指向其自身路径
+  // （P2b 行为：vault 内显式类型表照读，file 字段反映「哪个文件产生诊断」，与 base 来源无关）。
+  assert.ok(
+    viaSource.diagnostics
+      .filter((d) => !d.file.startsWith(".obsidian/")) // 排除 types.json 读取诊断
+      .every((d) => d.file === "<stdin>"),
+  );
+});
+
+// DB-2a：source 模式跳过 checkEntryForm（路径形态只对文件有意义）——
+// 即使 source 内容合法，也不会因「basePath 无 .base 后缀 / 含 #」而误报 CTX 诊断
+test("DB-2a: source 模式不触发 checkEntryForm 入口形态诊断", () => {
+  const source = readFileSync(baseFile("default.base"), "utf8");
+  const r = engine.query({
+    source,
+    basePath: "anything#not-a-file.base", // 文件模式会报 CTX-003；source 模式应跳过
+    dbPath,
+    vaultRoots: [vaultPath],
+  });
+  assert.deepEqual(errorsOf(r), []);
+  assert.ok(r.total > 0);
+  // 无 base_embed_reference / base_code_block 诊断
+  assert.ok(!r.diagnostics.some((d) => d.reason === "base_embed_reference"));
+  assert.ok(!r.diagnostics.some((d) => d.reason === "base_code_block"));
+});
+
+// DB-2a：source 模式非法 YAML → 空结果 + base/invalid-yaml error（file=<stdin>），不 throw
+test("DB-2a: source 模式非法 YAML 产 invalid-yaml 空结果且 file=<stdin>", () => {
+  const r = engine.query({
+    source: "views: [",
+    dbPath,
+    vaultRoots: [vaultPath],
+  });
+  assert.deepEqual(r.rows, []);
+  assert.equal(r.total, 0);
+  const err = r.diagnostics.find(
+    (d) => d.rule === "base/invalid-yaml" && d.severity === "error",
+  );
+  assert.ok(err !== undefined);
+  assert.equal(err.file, "<stdin>");
+});
+
+// DB-2a：source 模式无路径越界语义——<stdin> 不是文件路径，不触发 SEC-008
+test("DB-2a: source 模式不触发 path-outside-vault", () => {
+  const source = readFileSync(baseFile("default.base"), "utf8");
+  const r = engine.query({
+    source,
+    dbPath,
+    vaultRoots: [vaultPath],
+  });
+  assert.ok(!r.diagnostics.some((d) => d.rule === "base/path-outside-vault"));
 });

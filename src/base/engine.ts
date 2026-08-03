@@ -45,7 +45,7 @@
 import Database from "better-sqlite3";
 import type { Database as Db } from "better-sqlite3";
 import type { BasaltDiagnostic } from "../diagnostic.js";
-import { loadBaseDocument } from "./document.js";
+import { loadBaseDocument, parseBaseSource } from "./document.js";
 import {
   evaluateExpression,
   isBaseBudgetError,
@@ -96,6 +96,13 @@ const CONFORMANCE = "bases-markdown-2026-07" as const;
 const CONFORMANCE_ALL_FILES = "bases-all-files-2026-07" as const;
 
 /**
+ * source 模式（动态 base 第一步：stdin/字符串入参）的诊断/结果展示名。
+ * 无文件路径——不伪造一个 vault 相对路径，统一用 <stdin> 声明「内容来自标准输入」
+ * （计划 2026-08-03-bases-dynamic-stdin.md；TODO「技术细节」口径）。
+ */
+const STDIN_DISPLAY_NAME = "<stdin>" as const;
+
+/**
  * BaseEngine 支持的 conformance id 联合（P3 片二数据集开关）。
  * `BaseQueryResult.conformance` 回传**实际生效**口径：all-files 遇旧库降级时回传 markdown
  * 并附 compat warning（口径见 query() 降级段注释）。
@@ -144,8 +151,17 @@ export type BaseOutputValue =
 
 /** BaseEngine.query() 入参（设计 §4，签名与契约一字不差）。 */
 export interface BaseQueryOptions {
-  /** .base 路径（vault 相对或绝对；resolve 后必须落在 vaultRoots 内，BASE-SEC-008）。 */
-  basePath: string;
+  /**
+   * .base 路径（vault 相对或绝对；resolve 后必须落在 vaultRoots 内，BASE-SEC-008）。
+   * 与 {@link source} 二选一：提供 source 时本字段可省略（stdin 模式无文件路径）。
+   */
+  basePath?: string;
+  /**
+   * .base 内容直接给出（动态 base 第一步：stdin/字符串入参，不读文件）。
+   * 提供时：跳过 checkEntryForm 入口形态检查与 BASE-SEC-008 路径越界（不读文件故无越界语义）；
+   * 诊断与结果 base 字段用虚拟名 `<stdin>`。
+   */
+  source?: string;
   /** 指定 view 名；缺省取 views[0]（BASE-VIEW-001）。 */
   view?: string;
   /** 索引库路径（engine 只读打开；:memory: 仅测试用）。 */
@@ -368,14 +384,14 @@ export class BaseEngine {
     if (requested !== CONFORMANCE && requested !== CONFORMANCE_ALL_FILES) {
       return {
         conformance: CONFORMANCE, // 未执行任何数据集，回传缺省口径
-        base: options.basePath, // 文档层未运行，无法 resolve 出 vault 相对路径，原样回传入参
+        base: options.source !== undefined ? STDIN_DISPLAY_NAME : (options.basePath as string), // 文档层未运行，原样回传入参（source 模式用 <stdin>）
         view: options.view ?? "",
         columns: [],
         total: 0,
         rows: [],
         diagnostics: [
           baseDiagnostic(
-            options.basePath,
+            options.source !== undefined ? STDIN_DISPLAY_NAME : (options.basePath as string),
             { line: 1, column: 1 },
             BASE_RULES.invalidSchema,
             "error",
@@ -395,34 +411,45 @@ export class BaseEngine {
     // 这两项官方形态只在 Obsidian 界面里渲染才有意义，无头执行拿不到宿主上下文、产物无
     // 消费方，故判❌不做（用户 2026-07-28 拍板）。但**不能静默**：用户真写成这两种形态时
     // 必须得到一条说清楚「不做 + 为什么 + 该怎么写」的诊断，而不是一句 YAML 解析失败。
-    const entryIssue = checkEntryForm(options.basePath);
+    // 动态 base 第一步（DB-2）：source 模式跳过本检查——路径形态只对「文件」有意义，
+    // stdin 无文件路径可查（且 `#`/扩展名检查对虚拟名 `<stdin>` 会误报）。
+    const entryIssue =
+      options.source !== undefined ? undefined : checkEntryForm(options.basePath as string);
     if (entryIssue !== undefined) {
       return {
         conformance: effectiveConformance,
-        base: options.basePath,
+        base: options.source !== undefined ? STDIN_DISPLAY_NAME : (options.basePath as string),
         view: options.view ?? "",
         columns: [],
         total: 0,
         rows: [],
         diagnostics: [
           baseDiagnostic(
-            options.basePath,
+            options.source !== undefined ? STDIN_DISPLAY_NAME : (options.basePath as string),
             { line: 1, column: 1 },
             BASE_RULES.unsupportedFeature,
             "error",
             entryIssue.message,
-            { target: options.basePath, reason: entryIssue.reason },
+            {
+              target: options.source !== undefined ? STDIN_DISPLAY_NAME : (options.basePath as string),
+              reason: entryIssue.reason,
+            },
           ),
         ],
       };
     }
 
     // ---- 文档层（诊断顺序 1：文档层）----
-    const doc = loadBaseDocument({
-      basePath: options.basePath,
-      vaultRoots: options.vaultRoots,
-      limits,
-    });
+    // 动态 base 第一步（DB-2）：source 模式走纯解析入口 parseBaseSource（不读文件、无越界语义），
+    // 诊断/结果 file 字段统一为 <stdin>；文件模式维持 loadBaseDocument 原路径。
+    const doc =
+      options.source !== undefined
+        ? parseBaseSource(options.source, { file: STDIN_DISPLAY_NAME, limits })
+        : loadBaseDocument({
+            basePath: options.basePath as string,
+            vaultRoots: options.vaultRoots,
+            limits,
+          });
     const diagnostics: BasaltDiagnostic[] = [...doc.diagnostics];
     const base = doc.path;
 
