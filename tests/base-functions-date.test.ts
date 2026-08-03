@@ -160,7 +160,7 @@ test("parseDurationLike 单元口径（值层直调）", () => {
   assert.equal(parseDurationLike("1day")?.ms, 86_400_000);
   assert.equal(parseDurationLike("  2 hours  ")?.ms, 7_200_000);
   assert.equal(parseDurationLike("-1d")?.ms, -86_400_000, "负 duration 合法");
-  assert.equal(parseDurationLike("1M")?.ms, 30 * 86_400_000, "month 固定 30 天");
+  assert.equal(parseDurationLike("1M")?.ms, 31 * 86_400_000, "month 固定 31 天（oracle ㉖）");
   assert.equal(parseDurationLike("1y")?.ms, 365 * 86_400_000, "year 固定 365 天");
   assert.equal(parseDurationLike("1toString"), undefined, "不得命中 Object 原型键");
   assert.equal(parseDurationLike("1constructor"), undefined);
@@ -197,13 +197,14 @@ test("BASE-TYPE-005: date.format 拒绝本地化 token 与未闭合转义", () =
   assert.match(e.message, /未闭合/u);
 });
 
-test("BASE-TYPE-005: date.time 返回当日 UTC 零点起的 duration", () => {
+// oracle ⑮（2026-08-02 · Obsidian 1.13.4）：官方 time() 返回 "HH:mm:ss" 字符串
+// （`time() == "10:30:00"` 12 行；`=="10:30"` 与 `==37800000` 均 0 行）。原 duration 口径已翻。
+test("BASE-TYPE-005: date.time 返回当日 UTC 的 HH:mm:ss 字符串（oracle ⑮ 跟官方）", () => {
   const row = makeRow({ ts: "2026-08-09T07:05:03Z", d: "2026-08-09" });
-  assert.equal(ok("ts.time() == 7hours + 5minutes + 3seconds", row), true);
-  assert.equal(ok("d.time() == 0milliseconds", row), true, "date 精度的 time 恒为 0");
-  assert.ok(isDurationValue(ok("ts.time()", row)));
-  // 可比较：这正是选 duration 而非 "HH:mm" 字符串的理由
-  assert.equal(ok("ts.time() < 12hours", row), true);
+  assert.equal(ok("ts.time()", row), "07:05:03");
+  assert.equal(ok("d.time()", row), "00:00:00", "date 精度的 time 恒为 00:00:00");
+  assert.equal(ok('ts.time() == "07:05:03"', row), true);
+  assert.equal(ok('d.time() == "00:00:00"', row), true);
 });
 
 test("BASE-FORM-006: date.relative 走注入 clock，字节稳定", () => {

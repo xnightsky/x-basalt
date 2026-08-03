@@ -307,10 +307,10 @@ function formatDateValue(entry: BaseFunctionEntry, epochMs: number, fmt: string)
 }
 
 // === 自建实现: relative()（官方输出随界面语言变，不可复刻，故定义自有确定性口径）===
-/** 相对时间的单位阶梯（由大到小；month=30day、year=365day 沿用值域既有固定约定）。 */
+/** 相对时间的单位阶梯（由大到小；month=31day、year=365day 沿用值域固定约定，oracle ㉖）。 */
 const RELATIVE_STEPS: readonly (readonly [string, number])[] = [
   ["year", 365 * DAY_MS],
-  ["month", 30 * DAY_MS],
+  ["month", 31 * DAY_MS],
   ["week", 7 * DAY_MS],
   ["day", DAY_MS],
   ["hour", 3_600_000],
@@ -702,17 +702,22 @@ const ENTRIES: readonly BaseFunctionEntry[] = [
     name: "time",
     receiver: "date",
     arity: { min: 0, max: 0 },
-    returnType: "any",
+    returnType: "string",
     scenarioIds: ["BASE-TYPE-005"],
     // === Obsidian 规范来源: Bases date.time() ===
+    // oracle ⑮（2026-08-02 · 1.13.4）：官方返回 **"HH:mm:ss" 字符串**
+    // （`time() == "10:30:00"` 12 行；`=="10:30"` 与 `==37800000` 均 0 行）。
+    // 原「当日 UTC 零点起的 duration」口径已翻；要 duration 用 date 差或 format 后解析。
+    // precision="date" 的值恒为 "00:00:00"（其 epoch 就是当日 UTC 00:00）。
+    // 取模两次是为负 epoch（1970 前的日期）也落在 [0, DAY_MS)。
     impl: (r, _args, _ctx, entry) => {
       const d = expectDateReceiver(entry, r);
-      // === 自建实现（暂定口径，待 oracle）===
-      // 返回**当日 UTC 零点起的 duration**，而不是 "HH:mm" 字符串：duration 是既有类型，
-      // 可比较（`t > 12hours`）、可算术；要字符串用 format("HH:mm") 即可，不需要两条路。
-      // precision="date" 的值恒为 0 duration（其 epoch 就是当日 UTC 00:00）。
-      // 取模两次是为负 epoch（1970 前的日期）也落在 [0, DAY_MS)。
-      return createDurationValue(((d.epochMs % DAY_MS) + DAY_MS) % DAY_MS, "millisecond");
+      const ms = ((d.epochMs % DAY_MS) + DAY_MS) % DAY_MS;
+      const pad = (n: number): string => String(n).padStart(2, "0");
+      const h = Math.floor(ms / 3_600_000);
+      const m = Math.floor((ms % 3_600_000) / 60_000);
+      const s = Math.floor((ms % 60_000) / 1_000);
+      return `${pad(h)}:${pad(m)}:${pad(s)}`;
     },
   },
   {

@@ -142,8 +142,8 @@ export interface BaseDateValue {
 
 /**
  * Duration 运行时值（P2a）：毫秒长度。
- * month/year 按固定换算（拍板约定，官方未定义精确历法语义）：
- * month = 30 day、year = 365 day；其余单位按 SI（minute=60s、hour=60min、day=24h、week=7day）。
+ * month/year 按固定换算（oracle ㉖，2026-08-02 官方 1.13.4 实测）：
+ * month = 31 day、year = 365 day；其余单位按 SI（minute=60s、hour=60min、day=24h、week=7day）。
  */
 export interface BaseDurationValue {
   readonly [DURATION_BRAND]: true;
@@ -191,7 +191,7 @@ const DURATION_UNIT_MS: Record<BaseDurationUnit, number> = {
   hour: 3_600_000,
   day: 86_400_000,
   week: 604_800_000, // 7 day
-  month: 2_592_000_000, // 30 day（固定约定）
+  month: 2_678_400_000, // 31 day（oracle ㉖ 跟官方：duration("1 month")==duration("31 days")）
   year: 31_536_000_000, // 365 day（固定约定）
 };
 
@@ -430,7 +430,7 @@ export function parseDurationLike(s: string): BaseDurationValue | undefined {
   return createDurationValue(Number(m[1]), unit);
 }
 
-/** 一天的毫秒数（`date.time()` 取「当日 UTC 零点起的时长」用）。 */
+/** 一天的毫秒数（`date.time()` 取「当日 UTC 的时分秒」用）。 */
 export const DAY_MS = 86_400_000;
 
 // === Obsidian 规范来源: wikilink 形态 `[[target]]` / `[[target|display]]` / `[[target#subpath]]` ===

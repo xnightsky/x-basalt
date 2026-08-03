@@ -91,7 +91,7 @@ test("parseDateLike：非法形态拒绝", () => {
   assert.equal(parseDateLike(undefined), undefined);
 });
 
-// BASE-FORM-001（值层半段）：duration 单位毫秒换算（month=30day、year=365day 固定约定）
+// BASE-FORM-001（值层半段）：duration 单位毫秒换算（month=31day、year=365day，oracle ㉖）
 test("duration 换算：单位表与 month/year 固定约定", () => {
   assert.equal(createDurationValue(1, "millisecond").ms, 1);
   assert.equal(createDurationValue(1, "second").ms, 1_000);
@@ -99,7 +99,7 @@ test("duration 换算：单位表与 month/year 固定约定", () => {
   assert.equal(createDurationValue(1, "hour").ms, 3_600_000);
   assert.equal(createDurationValue(1, "day").ms, DAY_MS);
   assert.equal(createDurationValue(1, "week").ms, 7 * DAY_MS);
-  assert.equal(createDurationValue(1, "month").ms, 30 * DAY_MS); // 固定约定
+  assert.equal(createDurationValue(1, "month").ms, 31 * DAY_MS); // oracle ㉖ 跟官方（31d）
   assert.equal(createDurationValue(1, "year").ms, 365 * DAY_MS); // 固定约定
   assert.equal(createDurationValue(2.5, "day").ms, 2.5 * DAY_MS);
 });

@@ -99,8 +99,8 @@ test("e2e 片二：date/duration 构造与 date 方法（relative 走注入 cloc
   const row = onlyRow(query("dateFns")); // Alpha：due=2026-08-01
   assert.equal(row['date(due).format("YYYY/MM/DD")'], "2026/08/01");
   assert.equal(row['due.format("[到期] MM-DD")'], "到期 08-01");
-  // date("…T09:30:00Z").time() → 当日零点起 9h30m，duration 输出为毫秒 number
-  assert.equal(row['date("2026-08-01T09:30:00Z").time()'], 9 * 3_600_000 + 30 * 60_000);
+  // oracle ⑮（2026-08-02 跟官方）：date.time() 返回 "HH:mm:ss" 字符串
+  assert.equal(row['date("2026-08-01T09:30:00Z").time()'], "09:30:00");
   // clock=2026-07-28T12:00Z，due=2026-08-01T00:00Z → 相差 3.5 天 → "in 3 days"
   assert.equal(row["due.relative()"], "in 3 days");
   assert.equal(row['duration("2 hours")'], 7_200_000);
