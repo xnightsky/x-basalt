@@ -57,6 +57,10 @@ const SHORT_TARGET_MAX = 80;
 const EXHAUSTED_NOTICE =
   "⚠ 已达步数上限、任务可能未完成——REPL 中输入「继续」可接着跑；单发可重试时加大 --max-steps。";
 
+/** 错误风暴护栏提示（2026-08-03）：连续工具失败达阈值强制停止。 */
+const ERROR_STORM_NOTICE =
+  "⚠ 连续工具失败已达阈值、已强制停止——模型可能陷在同一类错误里死循环（如重复用错误参数调命令）。请检查 vault 状态/工具用法后重试，或换一种问法。";
+
 /** 单发事件输出档位；full 也用于保持 REPL 现有完整轨迹。 */
 export type ChatOutputProfile = "full" | "summary" | "quiet" | "json";
 
@@ -167,6 +171,9 @@ function renderFinish(e: LoopEvent, context: RenderContext): void {
   if (e.noRecallNotice) context.writers.stdout(`\n${e.noRecallNotice}\n`);
   if (e.stopReason === "exhausted") {
     context.writers.stdout(`\n${EXHAUSTED_NOTICE}\n`);
+  } else if (e.stopReason === "error-storm") {
+    // 错误风暴：死循环止血，给明确提示（不引导「继续」——继续只会重蹈死循环）。
+    context.writers.stdout(`\n${ERROR_STORM_NOTICE}\n`);
   } else if (context.profile === "full") {
     context.writers.stdout("\n· 完成\n");
   }

@@ -7,10 +7,11 @@ import { stepCountIs, streamText, type ModelMessage, type ToolSet } from "ai";
 /**
  * 循环停止原因：
  * - done：模型自然收尾（finishReason==='stop'，话说完了）；
- * - exhausted：撞 maxSteps 顶时模型还想继续调工具（finishReason==='tool-calls'），即「话说一半被截断」。
- * 区分二者是为了不再「撞顶静默停」——exhausted 下提示用户、REPL 可续跑。
+ * - exhausted：撞 maxSteps 顶时模型还想继续调工具（finishReason==='tool-calls'），即「话说一半被截断」；
+ * - error-storm：连续工具失败达 maxToolErrors 阈值（2026-08-03 护栏）——AI 死循环止血：
+ *   模型反复用错误入参调工具（如 cli 注入的 --vault 对部分子命令无效），每次失败都换法重试但始终失败。
  */
-export type StopReason = "done" | "exhausted";
+export type StopReason = "done" | "exhausted" | "error-storm";
 
 export interface LoopEvent {
   type: "text" | "tool-call" | "tool-result" | "tool-error" | "finish";
@@ -68,6 +69,15 @@ export interface LoopDeps {
    */
   recallToolNames?: string[];
   /**
+   * 连续工具失败阈值（错误风暴护栏，2026-08-03）：流内累计**连续** tool-error 达此值即
+   * 强制中断（stopReason='error-storm'）。缺省 5。
+   *
+   * 为什么是「连续」而非「累计」：模型正常多步任务中偶发 1-2 次失败（写命令路径错、
+   * DQL 拼错）是健康的自纠信号（A≠B 换法），不该打断；只有**连续**失败才说明模型
+   * 陷在同一类错误里死循环（本次 cli --vault 注入 bug 的形态）。成功一次即重置计数。
+   */
+  maxToolErrors?: number;
+  /**
    * "未从 vault 召回"标注文案（P1）。本轮产出实质文本答复却零 {@link recallToolNames} 调用时，
    * 经 finish 事件的 {@link LoopEvent.noRecallNotice} 下发给渲染层。未提供 = 不启用该检测（行为不变）。
    */
@@ -94,18 +104,33 @@ export async function runLoop(messages: ModelMessage[], deps: LoopDeps): Promise
   if (deps.abortSignal?.aborted) {
     throw new DOMException("This operation was aborted", "AbortError");
   }
+  // 错误风暴护栏（2026-08-03）：内部 controller 在连续 tool-error 达阈值时主动 abort，
+  // 与外部 abortSignal（Ctrl+C）区分——外部中断由调用方吞掉（行为不变），内部护栏中断
+  // 转为 stopReason='error-storm'。用 AbortSignal.any 组合两者，任一触发即停。
+  const stormAbort = new AbortController();
+  const maxToolErrors = deps.maxToolErrors ?? 5;
+  const combined =
+    deps.abortSignal !== undefined
+      ? AbortSignal.any([deps.abortSignal, stormAbort.signal])
+      : stormAbort.signal;
   const result = streamText({
     model: deps.model as Parameters<typeof streamText>[0]["model"],
     system: deps.system, // 顶层系统提示；v7 禁止 system 进 messages
     tools: deps.tools,
     messages,
     stopWhen: stepCountIs(deps.maxSteps),
-    abortSignal: deps.abortSignal,
+    abortSignal: combined,
   });
   // P1「未从 vault 召回」检测：累计实质答复长度 + 是否调用过 recall 工具。
   const recallSet = new Set(deps.recallToolNames ?? []);
   let answerChars = 0;
   let usedRecallTool = false;
+  // 错误风暴护栏：连续 tool-error 计数（成功一次即重置）。
+  let consecutiveToolErrors = 0;
+  // 达阈值标记：abort 后 SDK 可能不向迭代器抛 AbortError（finish 事件照常），
+  // 故不用 catch 判定，改在 stopReason 判定处优先检查此标记（实测 mock 下 abort 后
+  // stream 正常结束、steps 正常返回，AbortError 不抛到迭代器——2026-08-03 实测）。
+  let stormTriggered = false;
   for await (const part of result.stream) {
     // 注：part 字段名以 ai@7.0.x 为准——text-delta 的 .text/.delta、tool-call 的 .toolName/.input、
     // tool-result 的 .output、tool-error 的 .error。input/output/error 此前被丢弃，是本次可观测性修复点。
@@ -118,18 +143,28 @@ export async function runLoop(messages: ModelMessage[], deps: LoopDeps): Promise
       if (recallSet.has(part.toolName)) usedRecallTool = true;
       deps.onEvent({ type: "tool-call", toolName: part.toolName, input: part.input });
     } else if (part.type === "tool-result") {
+      // 成功一次即重置连续失败计数：偶发失败是自纠信号，只有连续失败才是死循环。
+      consecutiveToolErrors = 0;
       deps.onEvent({ type: "tool-result", toolName: part.toolName, output: part.output });
     } else if (part.type === "tool-error") {
+      consecutiveToolErrors++;
       deps.onEvent({ type: "tool-error", toolName: part.toolName, error: part.error });
+      if (consecutiveToolErrors >= maxToolErrors) {
+        stormTriggered = true;
+        stormAbort.abort(); // 触发 streamText 中断（不再消费后续步骤，省 token/时间）
+      }
     }
   }
-  // 区分自然完成 vs 撞步数顶：步数已达 maxSteps 且最后一步仍在调工具（toolCalls 非空＝模型还想继续动作，
-  // 只是被 stopWhen 截断）→ exhausted；否则 done。不用 finishReason 判定——它在 mock/部分 provider 下
-  // 聚合为 'other' 不可靠，而 step.toolCalls 是 provider 无关的「还想动作」信号。
+  // 区分自然完成 vs 撞步数顶 vs 错误风暴：护栏标记优先（连续失败达阈值即 error-storm，
+  // 不论步骤数——死循环必须强制停，不该等撞 maxSteps）。
   const [steps, usage] = await Promise.all([result.steps, result.usage]);
   const stillActing = (steps.at(-1)?.toolCalls?.length ?? 0) > 0;
   const exhausted = steps.length >= deps.maxSteps && stillActing;
-  const stopReason: StopReason = exhausted ? "exhausted" : "done";
+  const stopReason: StopReason = stormTriggered
+    ? "error-storm"
+    : exhausted
+      ? "exhausted"
+      : "done";
   // P1：本轮产出了实质文本答复、却零 vault 检索工具调用 → 如实标注（配了 noRecallNotice 才启用）。
   const noRecallNotice =
     deps.noRecallNotice && !usedRecallTool && answerChars >= NO_RECALL_MIN_ANSWER_CHARS

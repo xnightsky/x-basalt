@@ -196,3 +196,137 @@ test("P1：未配置 noRecallNotice → 行为不变、永不加标注", async (
   const finish = events.find((e) => e.type === "finish");
   assert.ok(!finish?.noRecallNotice, "未配置标注时不应产出标注");
 });
+
+// === 2026-08-03 错误风暴护栏：连续 tool-error 超阈值强制停止（AI 死循环止血） ===
+
+/** 总是抛错的工具（模拟模型反复用错误参数调同一工具）。 */
+function alwaysFailTools() {
+  return {
+    fail: tool({
+      description: "always fails",
+      inputSchema: jsonSchema<{ x: string }>({
+        type: "object",
+        properties: { x: { type: "string" } },
+        required: ["x"],
+        additionalProperties: false,
+      }),
+      execute: () => {
+        throw new Error("boom");
+      },
+    }),
+  };
+}
+
+/** mock 模型：每步都调 fail 工具（持续失败，模拟死循环）。 */
+function makeFailLoopModel() {
+  return new MockLanguageModelV4({
+    doStream: [
+      {
+        stream: convertArrayToReadableStream([
+          {
+            type: "tool-call",
+            toolCallId: "tc1",
+            toolName: "fail",
+            input: JSON.stringify({ x: "1" }),
+          },
+          { type: "finish", usage: USAGE, finishReason: "tool-calls" },
+        ]),
+      },
+      {
+        stream: convertArrayToReadableStream([
+          {
+            type: "tool-call",
+            toolCallId: "tc2",
+            toolName: "fail",
+            input: JSON.stringify({ x: "2" }),
+          },
+          { type: "finish", usage: USAGE, finishReason: "tool-calls" },
+        ]),
+      },
+      {
+        stream: convertArrayToReadableStream([
+          {
+            type: "tool-call",
+            toolCallId: "tc3",
+            toolName: "fail",
+            input: JSON.stringify({ x: "3" }),
+          },
+          { type: "finish", usage: USAGE, finishReason: "tool-calls" },
+        ]),
+      },
+      {
+        stream: convertArrayToReadableStream([
+          {
+            type: "tool-call",
+            toolCallId: "tc4",
+            toolName: "fail",
+            input: JSON.stringify({ x: "4" }),
+          },
+          { type: "finish", usage: USAGE, finishReason: "tool-calls" },
+        ]),
+      },
+      {
+        stream: convertArrayToReadableStream([
+          {
+            type: "tool-call",
+            toolCallId: "tc5",
+            toolName: "fail",
+            input: JSON.stringify({ x: "5" }),
+          },
+          { type: "finish", usage: USAGE, finishReason: "tool-calls" },
+        ]),
+      },
+      {
+        stream: convertArrayToReadableStream([
+          {
+            type: "tool-call",
+            toolCallId: "tc6",
+            toolName: "fail",
+            input: JSON.stringify({ x: "6" }),
+          },
+          { type: "finish", usage: USAGE, finishReason: "tool-calls" },
+        ]),
+      },
+    ] as unknown[],
+  });
+}
+
+test("错误风暴护栏：连续 tool-error 达阈值（5）→ 强制停止且 stopReason=error-storm", async () => {
+  const events: LoopEvent[] = [];
+  const result = await runLoop([{ role: "user", content: "循环失败" }], {
+    model: makeFailLoopModel(),
+    tools: alwaysFailTools(),
+    maxSteps: 20, // 步数顶远高于阈值：证明停止来自错误计数而非撞顶
+    onEvent: (e) => events.push(e),
+    // 默认 maxToolErrors=5
+  });
+  assert.equal(result.stopReason, "error-storm", "连续失败应触发 error-storm 而非 exhausted/done");
+  const finish = events.find((e) => e.type === "finish");
+  assert.equal(finish?.stopReason, "error-storm");
+  // 步数应远小于 maxSteps（护栏在撞顶前介入）
+  assert.ok((finish?.steps ?? 99) < 20, "护栏应在 maxSteps 前触发");
+});
+
+test("错误风暴护栏：maxToolErrors 可配置（阈值 2）", async () => {
+  const events: LoopEvent[] = [];
+  const result = await runLoop([{ role: "user", content: "循环失败" }], {
+    model: makeFailLoopModel(),
+    tools: alwaysFailTools(),
+    maxSteps: 20,
+    onEvent: (e) => events.push(e),
+    maxToolErrors: 2,
+  });
+  assert.equal(result.stopReason, "error-storm");
+});
+
+test("错误风暴护栏：阈值内失败不触发（1 次失败 + 成功收尾 = done）", async () => {
+  // 单次失败后正常收尾：不应触发护栏
+  const events: LoopEvent[] = [];
+  const result = await runLoop([{ role: "user", content: "x" }], {
+    model: makeMockModel(), // 先调 echo（成功）再收尾——无错误
+    tools: probeTools([]),
+    maxSteps: 5,
+    onEvent: (e) => events.push(e),
+  });
+  assert.equal(result.stopReason, "done");
+});
