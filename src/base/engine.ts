@@ -277,11 +277,7 @@ function groupKeyCompare(a: BaseValue, b: BaseValue): number {
  * 任一侧落在 null/MISSING 时直接给「空值在后」的定序，不受 DESC 取反影响。
  * 组键不抛 link 类型错误（分组只需确定性组序，见 {@link groupKeyCompare}）。
  */
-function groupKeyCompareDirected(
-  a: BaseValue,
-  b: BaseValue,
-  direction: "ASC" | "DESC",
-): number {
+function groupKeyCompareDirected(a: BaseValue, b: BaseValue, direction: "ASC" | "DESC"): number {
   const aEmpty = a === null || a === MISSING;
   const bEmpty = b === null || b === MISSING;
   if (aEmpty || bEmpty) {

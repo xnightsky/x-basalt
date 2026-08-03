@@ -183,7 +183,10 @@ test("GROUP-002: 整组键列表——跨行重叠按完整键分桶，行内重
       ["paused", null],
     ],
   );
-  assert.equal(r.groups?.every((g) => g.rows.length === 1), true);
+  assert.equal(
+    r.groups?.every((g) => g.rows.length === 1),
+    true,
+  );
   assert.equal(
     r.groups?.reduce((n, g) => n + g.rows.length, 0),
     r.rows.length,
