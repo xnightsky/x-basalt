@@ -9,6 +9,7 @@ import { execFile } from "node:child_process";
 import { existsSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { jsonSchema, tool, type Tool } from "ai";
+import { resolveVaultLayout } from "../utils/path.js";
 import type { Safety } from "./safety.js";
 import { classifyError, structuredMessage } from "./tool-errors.js";
 import type { ToolContext } from "./tools.js";
@@ -54,6 +55,69 @@ const VAULT_ARG_COMMANDS = new Set(["index", "scan", "links", "lint"]);
  */
 const DB_COMMANDS = new Set(["index", "scan", "query", "search", "base", "run"]);
 
+/** 带值的文件型命令选项；定位位置参数时必须连同后一个 argv 一起跳过。 */
+const FILE_COMMAND_VALUE_OPTIONS = new Set(["--format", "--type", "--set"]);
+
+/**
+ * 返回命令中位置参数的 argv 下标，供 chat 在不改变 Commander 参数顺序的前提下改写文件路径。
+ *
+ * @behavior
+ * Given 文件参数前有 `--format yaml` 或重复 `--set key=value`
+ * When 定位位置参数
+ * Then 跳过选项及其值，只返回真正的位置参数下标
+ */
+function positionalIndexes(args: string[], start: number): number[] {
+  const indexes: number[] = [];
+  for (let i = start; i < args.length; i++) {
+    const arg = args[i] as string;
+    if (arg === "--") {
+      for (let j = i + 1; j < args.length; j++) indexes.push(j);
+      break;
+    }
+    if (arg.startsWith("-")) {
+      if (FILE_COMMAND_VALUE_OPTIONS.has(arg)) i++;
+      continue;
+    }
+    indexes.push(i);
+  }
+  return indexes;
+}
+
+/**
+ * 把 chat 从索引结果取得的 vault 主键还原为物理文件路径。
+ *
+ * `parse` / `meta` 的公开 CLI 有意保持“直接接收文件路径”，不承担 vault 布局解析；chat 却会把
+ * query/search 返回的 `file.path` 原样交给它们。单根嵌套目录和多根命名空间下，主键不等于 cwd
+ * 相对路径，因此必须在这层已持有 ToolContext 的边界完成转换，避免读失败或写中 cwd 下的同名文件。
+ *
+ * @behavior
+ * Given 单根 vault 位于 cwd 的嵌套目录且索引主键为 `a.md`
+ * When chat 调用 parse/meta
+ * Then 子进程收到该 vault 内 `a.md` 的绝对路径
+ *
+ * @behavior
+ * Given 多根 vault 主键为 `plans/a.md`
+ * When chat 调用 parse/meta
+ * Then 按根命名空间解析到 plans 根，而不是 cwd 下的 `plans/a.md`
+ */
+function resolveFileArgs(args: string[], vaultPath: string | string[]): string[] {
+  const command = args[0];
+  let fileIndex: number | undefined;
+  if (command === "parse") {
+    [fileIndex] = positionalIndexes(args, 1);
+  } else if (command === "meta") {
+    const metaCommand = args[1];
+    const positions = positionalIndexes(args, 2);
+    fileIndex = metaCommand === "apply" ? positions[1] : positions[0];
+    if (metaCommand === "profile") fileIndex = undefined;
+  }
+  if (fileIndex === undefined || args[fileIndex] === undefined) return args;
+
+  const rewritten = [...args];
+  rewritten[fileIndex] = resolveVaultLayout(vaultPath).toAbs(args[fileIndex] as string);
+  return rewritten;
+}
+
 /** 防递归兜底环境变量：chat 启动检测到即拒（见 src/cli.ts chat 命令）。 */
 export const CHAT_CHILD_ENV = "X_BASALT_CHAT_CHILD";
 
@@ -78,7 +142,8 @@ function defaultCliEntry(): string {
  * `--vault`，但只有部分命令接受该选项，其余报 `unknown option '--vault'` 触发模型死循环：
  *   - query/search/base/run：`--vault <path>` 选项；
  *   - index/scan/links/lint：`[vault...]` **位置参数**（追加目录）；
- *   - parse/meta/skills：无 vault 概念（parse 按 cwd 解析、meta 走配置、skills 纯召回）——不注入；
+ *   - parse/meta/skills：无 vault 选项，故不注入 flag；但 parse/meta 的文件参数会在 chat 壳层先由
+ *     vault 主键还原为绝对路径，避免索引键被 CLI 按 cwd 误解；
  *   - `--db` 仅注入到有该选项的命令（index/scan/query/search/base/run）；links/lint 无 --db，注入会报错。
  */
 async function execCli(
@@ -87,10 +152,11 @@ async function execCli(
   ctx: ToolContext,
   source?: string,
 ): Promise<{ stdout: string; stderr: string }> {
-  const sub = args[0] ?? "";
+  const resolvedArgs = resolveFileArgs(args, ctx.vaultPath);
+  const sub = resolvedArgs[0] ?? "";
   // 用户显式给了就不注入（显式优先，与 CLI 语义一致）；多根 vault 展开为重复 --vault 或并列位置参数。
-  const userVault = args.filter((a) => a === "--vault");
-  const userDb = args.some((a) => a === "--db");
+  const userVault = resolvedArgs.filter((a) => a === "--vault");
+  const userDb = resolvedArgs.some((a) => a === "--db");
   const vaultDirs = Array.isArray(ctx.vaultPath) ? ctx.vaultPath : [ctx.vaultPath];
   const usesVaultOption = VAULT_OPTION_COMMANDS.has(sub);
   const usesVaultArg = VAULT_ARG_COMMANDS.has(sub);
@@ -104,7 +170,7 @@ async function execCli(
     userDb || ctx.dbPath === undefined || !DB_COMMANDS.has(sub) ? [] : ["--db", ctx.dbPath];
   // cli 入口为 TS 源码时需要 --import tsx（dev 态/测试）；编译产物 .js 裸 node 即可。
   const entry = cliEntry.endsWith(".ts") ? ["--import", "tsx", cliEntry] : [cliEntry];
-  const argv = [...entry, ...args, ...vaultFlags, ...dbFlags];
+  const argv = [...entry, ...resolvedArgs, ...vaultFlags, ...dbFlags];
 
   const child = execFile(process.execPath, argv, {
     env: { ...process.env, [CHAT_CHILD_ENV]: "1" },

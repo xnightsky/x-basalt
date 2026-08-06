@@ -22,6 +22,8 @@
 
 ### Fixed
 
+- **chat 把索引主键当 cwd 相对路径，导致 `parse` 连续失败，`meta` 甚至可能写错同名文件** —— `query` / `search` 返回的是 vault 布局主键：单根嵌套目录下为根内相对路径，多根下为 `<根目录名>/<相对路径>`；但 chat 的 CLI 壳此前只给 query/search 注入 vault，把 parse/meta 文件参数原样交给按 cwd 读写的命令。模型拿到 `file.path` 后只能反复猜测物理目录前缀，连续失败会撞 error-storm；更危险的是 cwd 下恰有同名路径时，meta 会静默写错目标。现由持有 `ToolContext` 的 chat 壳统一经既有 `VaultLayout.toAbs` 把 parse/meta 文件参数还原为绝对路径，公开 CLI 签名与索引键格式均不变；选项位于文件参数前、多根命名空间两类回归已锁定。
+
 - **pnpm 版本从「固定精确版」改为「最小版本约束」** —— `packageManager: pnpm@10.33.0` 是精确锁定（corepack 设计如此、不支持范围）；现删除该字段，改用 `engines.pnpm: ">=10.33.0"` 声明最小版本。本地开发时 pnpm 版本低于下限会直接报 `ERR_PNPM_UNSUPPORTED_ENGINE`，等于或高于下限的 pnpm 10/11 均可正常使用；`AGENTS.md` 与 `docs/use/install.md` 同步更新。
 
 - **pnpm 10 不再读取 `package.json` 的 `pnpm` 字段，原生构建放行配置迁移到 `pnpm-workspace.yaml`** —— pnpm 10 对 `package.json` 中 `pnpm.onlyBuiltDependencies` 的读取已移除，每次 `pnpm` 命令都会打 WARN。现把 `onlyBuiltDependencies: [better-sqlite3]` 迁至 `pnpm-workspace.yaml`（pnpm 10 设置的唯一新位置）并从 `package.json` 删除该字段，告警消失、放行语义不变；`AGENTS.md` 与 `docs/use/` 相关说明同步更新。
