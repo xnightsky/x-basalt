@@ -251,3 +251,18 @@ test("tool-error 无 cause 时仍输出可读 message，省略 code/classificati
   assert.equal("code" in err, false, "无 code 时不应虚构 code");
   assert.equal("classification" in err, false, "无分类前缀时不应虚构 classification");
 });
+
+test("tool-error 超长 message 受有界预览约束（截断并附省略标记）", () => {
+  const path = join(tmpRoot, "tool-error-trunc.jsonl");
+  const tracer = createTracer({ path, maxSteps: 5 });
+  const longMsg = "x".repeat(5000);
+  tracer.sink({ type: "tool-error", toolName: "cli", error: new Error(longMsg) }, 1);
+  tracer.close();
+
+  const rec = readJsonl(path)[1] as Record<string, unknown>;
+  const err = rec.error as Record<string, unknown>;
+  const msg = err.message as string;
+  assert.ok(msg.length < longMsg.length, "超长 message 应被截断");
+  assert.match(msg, /…（已截断，原长 5000）/, "应附截断省略标记与原长");
+  assert.ok(msg.startsWith("x".repeat(2000)), "截断后保留前 2000 字符");
+});
