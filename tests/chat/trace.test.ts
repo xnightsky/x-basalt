@@ -213,3 +213,41 @@ test("写入失败：不抛错、只警告一次、后续 sink 不再写", () =>
     console.warn = origWarn;
   }
 });
+
+test("tool-error 落盘为可 JSON 化的 { message, code?, classification? }，不再落成空对象", () => {
+  const path = join(tmpRoot, "tool-error.jsonl");
+  const tracer = createTracer({ path, maxSteps: 5 });
+
+  // 模拟 wrapExecute 抛出的结构化 Error：message 带 [工具失败·分类]，cause 带底层 code。
+  const cause = new Error("ENOENT: no such file") as Error & { code: string };
+  cause.code = "ENOENT";
+  const bogus = new Error("[工具失败·not-found] ENOENT: no such file 目标不存在");
+  (bogus as { cause?: unknown }).cause = cause;
+
+  tracer.sink({ type: "tool-error", toolName: "cli", error: bogus }, 1);
+  tracer.close();
+
+  const lines = readJsonl(path);
+  const rec = lines[1] as Record<string, unknown>;
+  assert.equal(rec.type, "tool-error");
+  assert.equal(rec.toolName, "cli");
+  // 关键断言：error 不再是空对象，而是带可读 message/code/classification。
+  const err = rec.error as Record<string, unknown>;
+  assert.ok(err && typeof err === "object", "tool-error 应被归一为对象");
+  assert.match(err.message as string, /ENOENT/, "应保留可读 message");
+  assert.equal(err.code, "ENOENT", "应从 cause 取到底层 code");
+  assert.equal(err.classification, "not-found", "应从 [工具失败·分类] 前缀取分类");
+});
+
+test("tool-error 无 cause 时仍输出可读 message，省略 code/classification", () => {
+  const path = join(tmpRoot, "tool-error-plain.jsonl");
+  const tracer = createTracer({ path, maxSteps: 5 });
+  tracer.sink({ type: "tool-error", toolName: "cli", error: new Error("boom failed") }, 1);
+  tracer.close();
+
+  const rec = readJsonl(path)[1] as Record<string, unknown>;
+  const err = rec.error as Record<string, unknown>;
+  assert.match(err.message as string, /boom failed/);
+  assert.equal("code" in err, false, "无 code 时不应虚构 code");
+  assert.equal("classification" in err, false, "无分类前缀时不应虚构 classification");
+});

@@ -55,7 +55,7 @@ export function buildTools(ctx: ToolContext, safety: Safety): ToolSet {
     }),
     skills_get: tool({
       description:
-        "按名读取规范全文（skills_recall 召不回时用此精确读取）。可用：core(x-basalt 能力总览/CLI 用法/DQL 基础/meta·pipeline)、obsidian-base-spec(精确 DQL 文法+frontmatter/tag 提取规则)。",
+        "按名读取规范全文（skills_recall 召不回时用此精确读取）。可用：core(x-basalt 能力总览/CLI 用法/DQL 基础/meta·pipeline)、obsidian-base-spec(精确 DQL 文法+frontmatter/tag 提取规则)、bases(.base 视图语法/生成动态 base)、summary(总览挑方向)、pipe(批量)、chat(自然语言路径)。",
       inputSchema: jsonSchema<{ name: string }>({
         type: "object",
         properties: {
