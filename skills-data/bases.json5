@@ -1,0 +1,130 @@
+{
+  // Bases（.base 视图）运行时技能：教模型生成「动态 base」所需的最小语法闭环。
+  // 与 obsidian-base-spec（Obsidian Markdown + DQL，不含 Bases）刻意分工：本篇只讲 .base 用法，
+  // Markdown/DQL 文法别来查这里。core 里只有 base 命令的调用方式与输出契约，没有 .base 语法，
+  // 要在 chat 里生成/改写 .base 前，先用本文召回（直接 source 可改写）再动手。
+  // 本 skills 的读者是 AI：格式用「可直接改写的完整 source + 关键语义要点」，不堆官方文档全文。
+  name: "bases",
+  description:
+    "Bases（Obsidian 官方「把笔记当数据库查」）的 `.base` 视图文件语法：filters 表达式、and/or/not 递归、view 的 order/sort/limit 与 total 口径。要生成动态 `.base`、给 cli base 传 stdin 定义时用它；Obsidian Markdown/DQL 文法用 `obsidian-base-spec`。",
+  triggers: [
+    "bases",
+    "base file",
+    "base view",
+    ".base",
+    ".base 文件",
+    "base 语法",
+    "base filters",
+    "base filter",
+    "base sort",
+    "base order",
+    "base limit",
+    "base total",
+    "base view 定义",
+    "动态 base",
+    "dynamic base",
+    "base 视图",
+    "base 查询定义",
+    "base 表达式",
+    "bases 语法",
+    "bases 视图",
+    "bases 查询",
+    "bases 过滤器",
+    "bases 排序",
+    "bases 分页",
+    "bases 投影",
+    "bases engine",
+  ],
+  patterns: [
+    'filters: status == "进行中"',
+    "filters:\n  and:\n    - status\n    - file.inFolder(\"项目\")",
+    "sort:\n  - property: due\n    direction: ASC",
+    "order: [file.name, status, owner]",
+    "limit: 20",
+  ],
+  rules: [
+    {
+      id: "pnl-mentality",
+      pattern: "基线认知：把 .base 当成一组『预设好的一堆视图』（类似 CREATE VIEW 文件）",
+      description:
+        "一个 `.base` 就是一份 YAML，描述『在这张表上怎么筛、显示哪些列、怎么排、截断多少』。心智对照（都是反直觉点，先记住）：行=vault 每篇 Markdown 笔记；列=两类属性——`file.*`（文件元数据）或 note 属性（frontmatter 键，直接写属性名）。**`order` 是投影列清单、不是排序（名字起坏了）；`sort` 才是排序**。`total` 永远指 filter 后、limit 前的行数。",
+      examples: ['status == "进行中"', "filters: status  // 真值筛选：有该属性且值非空的笔记留下"],
+    },
+    {
+      id: "filter-string",
+      pattern: "filters 表达式字符串（最常用形态）",
+      description:
+        "`filters` 可以直接写一条表达式字符串。运算符是 **`==` `!=` `&&` `||` `!`**（不是 DQL 的 `=` `AND` `OR` `NOT`——那些写进 `.base` 会报 `base/expression-syntax`）。字符串相等用 `==` 且值加引号；属性真值判断直接写裸属性名；`file.inFolder(\"...\")` / `file.hasTag(\"...\")` 是常用 file 方法。优先级低→高：`||` → `&&` → `== !=` → `< > <= >=` → `+ -` → `* /` → 一元`! -` → `.成员/调用`。",
+      examples: [
+        'filters: status == "进行中"',
+        'filters: status == "进行中" && priority < 3',
+        'filters: file.inFolder("项目")',
+        "filters: status  // 真值：有 status 且非空",
+      ],
+    },
+    {
+      id: "filter-bool",
+      pattern: "filters 递归 and / or / not（单键对象形态）",
+      description:
+        "要组合条件时，`filters` 用**单键对象**：`and` / `or` / `not`，值是 filter 数组，可递归嵌套。`and` 全部满足；`or` 任一满足；`not` 是「不满足其中任何一项」（= `NOT(a OR b ...)`）。**一个对象只能有一个键**，值必须是数组，空数组报错。嵌套深度有上限。",
+      examples: [
+        "filters:\n  and:\n    - status == \"进行中\"\n    - file.inFolder(\"项目\")",
+        "filters:\n  or:\n    - priority == 1\n    - file.hasTag(\"紧急\")",
+        "filters:\n  not:\n    - file.inFolder(\"归档\")",
+        "filters:\n  and:\n    - status\n    - or:\n        - priority < 3\n        - file.hasTag(\"紧急\")",
+      ],
+    },
+    {
+      id: "view-order-sort-limit",
+      pattern: "view 配置：type/name 必填，order 投影、sort 排序、limit 截断",
+      description:
+        "`.base` 至少要有非空 `views` 数组；每个 view 至少要有 `type` 和 `name`（**都必填**，目前 `type` 只支持 `table`）。`order` 是 string 数组：**投影列清单**（缺省 `[\"file.name\"]`，字符串属性名要加双引号）；`sort` 是 `{ property, direction }` 数组，多键按数组顺序，`direction` 仅 `ASC`/`DESC`（缺省 ASC），`property` 可以是 `file.name`、note 属性、`formula.<名>`；`limit` 是非负整数。\n**total vs rows**：`total` = filter 后、limit 前的总行数；`rows.length` ≤ `limit`。不显式 `sort` 时按 `file.path` 稳定序。",
+      examples: [
+        "views:\n  - type: table\n    name: 全部",
+        "views:\n  - type: table\n    name: Active\n    order: [file.name, status, owner]\n    sort:\n      - property: due\n        direction: ASC\n    limit: 20",
+      ],
+    },
+    {
+      id: "source-box",
+      pattern: "source：可直接改写的完整 .base 例子（3 个）",
+      description:
+        "下面是 3 个**完整、可直接改写**的 `.base` 定义（作为 cli base 的 source 经 stdin 或文件传入）。要生成动态 base，复制最近的一个、按需改 filters/order/sort/limit 即可。",
+      examples: [
+        "# 简单过滤：筛选有 status 且值为“进行中”的笔记，投影三列\nfilters: status == \"进行中\"\nviews:\n  - type: table\n    name: 进行中\n    order: [file.name, status, owner]",
+        "# 嵌套布尔：进行中 且 (优先级<3 或 打了“紧急”标签) 且 不在“归档”目录\nfilters:\n  and:\n    - status == \"进行中\"\n    - or:\n        - priority < 3\n        - file.hasTag(\"紧急\")\n    - not:\n        - file.inFolder(\"归档\")\nviews:\n  - type: table\n    name: 紧急进行中\n    order: [file.name, status, priority]",
+        "# 排序 + 截断：按 due 升序取前 20\nfilters: status\nviews:\n  - type: table\n    name: 最近到期\n    order: [file.name, status, due]\n    sort:\n      - property: due\n        direction: ASC\n    limit: 20",
+      ],
+    },
+    {
+      id: "stdin-call",
+      pattern: "cli base 怎么吃 .base：文件或 --stdin（动态 base）",
+      description:
+        "`x-basalt base` 无头执行 `.base`：传文件路径 或 用 `--stdin`（或 file 传 `-`）从标准输入读定义（不读文件、无越界检查）——**动态 base 就用 stdin**。跑之前先确认索引已建/已扫（查的是索引快照不是实时文件；改 `.base` 立即生效，改笔记内容必须先 index/scan）。输出恒为 JSON：`{ conformance, base, view, columns, total, rows, diagnostics }`。",
+      examples: [
+        "x-basalt base views/projects.base --vault ./my-vault",
+        "printf 'views:\\n  - type: table\\n    name: Active\\n    order: [file.name]' | x-basalt base - --vault ./my-vault",
+        "// 动态 base：stdin 给定义，无文件写盘",
+        "x-basalt base --stdin --vault ./my-vault",
+      ],
+    },
+    {
+      id: "syntax-pitfalls",
+      pattern: "常见坑（生成 .base 最容易写错的地方）",
+      description:
+        "把 DQL/别的语法混进 `.base` 是最高频失败：**字符串相等用 `==` 不是 `=`**；布尔用 `&&` `||` `!` 不是 `AND` `OR` `NOT`；`order` 是投影列不是排序、`sort` 才是排序；`file.*` 才带前缀、note 属性直接写名（`note.status` 显式亦可，带空格/特殊字符用 `note[\"Review Status\"]`）；`this.*` 需要显式 `--context-file`，无头执行没有「当前活动文件」。",
+      examples: [
+        "错误: filters: status = \"进行中\"   → 正确: filters: status == \"进行中\"   (and/or 同理)",
+        "错误: 把 DQL 的 `AND` 写进 .base   → 正确: `&&`（写成 AND 报 base/expression-syntax）",
+        "错误: 想排序却用 order       → 正确: order 是投影列、排序用 sort",
+        "错误: 用 this.* 但不传 --context-file → 报 base/dynamic-context-required",
+      ],
+    },
+  ],
+  metadata: {
+    spec_source: "Obsidian Bases 官方文档 2026-07-22 快照 + x-basalt docs/use/bases.md（x-basalt 实际实现为自足语法真相源）",
+    conformance: "bases-markdown-2026-07 / bases-all-files-2026-07",
+    doc: "docs/use/bases.md",
+    covers: ["filters 表达式", "and/or/not 递归", "order 投影", "sort 排序", "limit 截断", "stdin 动态 base"],
+    non_goals: "本技能只给「模型生成动态 base 的最小闭环」；Bases 引擎的公式/formulas/summaries/groupBy 高级能力有意不展开（需要时查 docs/use/bases.md）",
+  },
+}

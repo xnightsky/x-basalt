@@ -36,7 +36,7 @@
     {
       id: "core",
       pattern: "x-basalt skills get core",
-      description: "core — query & edit one vault\n\n- `index` / `scan` — build & refresh the SQLite index\n- `query` — DQL over structured fields (frontmatter/tags/links); **cannot search body text**\n- `search` — FTS5 over body text; use when you don't know which note\n- `meta` — read/write frontmatter; the only write path for a single file\n- `base` — run a `.base` view headless\n- `parse` — single-file AST\n- `watch` — daemon, re-index on change\n\nchat: same tools, except `index` and `base` (not exposed) and `watch` (**forbidden** — never returns, hangs the session).",
+      description: "core — query & edit one vault\n\n- `index` / `scan` — build & refresh the SQLite index\n- `query` — DQL over structured fields (frontmatter/tags/links); **cannot search body text**\n- `search` — FTS5 over body text; use when you don't know which note\n- `meta` — read/write frontmatter; the only write path for a single file\n- `base` — run a `.base` view headless (.base 语法→ `skills get bases`)\n- `parse` — single-file AST\n- `watch` — daemon, re-index on change\n\nchat: same tools, except `index` and `base` (not exposed) and `watch` (**forbidden** — never returns, hangs the session).",
     },
     {
       id: "pipe",

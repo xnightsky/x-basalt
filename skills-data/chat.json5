@@ -61,7 +61,7 @@
     {
       id: "tools",
       pattern: "chat 内部工具 ⟷ CLI 命令对应表",
-      description: "chat 工具面已收编为三个工具（切 C，2026-07-30 拍板）：**cli（唯一执行口）** + skills_recall / skills_get（grounding 元工具）。cli 的入参是 `{args: string[]}`——命令与参数数组逐项原样传递（如 {args:['query','LIST FROM #x']}、{args:['base','-'],source:'…'}），不做字符串拼接。可用的子命令就是 CLI 全集减 watch/chat（parse/index/scan/query/search/base/skills/meta/run/links/lint）。query/search 返回的 `file.path` 是 vault 主键，**直接原样交给 parse/meta 即可**：chat 壳会按单根/多根布局还原物理文件，模型不要猜 repo 或 vault 目录前缀。**分页参数即 CLI 的 --offset/--size**（默认 50、上限 500，--size 0 只回 total）；计数口径与 CLI 一致（读 total，别全量再数），见 core 的「计数与分页」条。子命令语义、边界、DQL 文法一律去 core 对应命令条取。",
+      description: "chat 工具面已收编为三个工具（切 C，2026-07-30 拍板）：**cli（唯一执行口）** + skills_recall / skills_get（grounding 元工具）。cli 的入参是 `{args: string[]}`——命令与参数数组逐项原样传递（如 {args:['query','LIST FROM #x']}、{args:['base','-'],source:'…'}），不做字符串拼接。可用的子命令就是 CLI 全集减 watch/chat（parse/index/scan/query/search/base/skills/meta/run/links/lint）。query/search 返回的 `file.path` 是 vault 主键，**直接原样交给 parse/meta 即可**：chat 壳会按单根/多根布局还原物理文件，模型不要猜 repo 或 vault 目录前缀。**分页参数即 CLI 的 --offset/--size**（默认 50、上限 500，--size 0 只回 total；**仅 query/search 支持，base 不支持**）；计数口径与 CLI 一致（读 total，别全量再数），见 core 的「计数与分页」条。子命令语义、边界、DQL 文法一律去 core 对应命令条取。",
       examples: [
         "// CLI: x-basalt meta set note.md status done",
         '// chat 工具: cli{args:["meta","set","note.md","status","done"]}',
@@ -70,7 +70,7 @@
     {
       id: "limits",
       pattern: "chat 侧没有 / 禁止的能力",
-      description: "**index —— 有但慎用**：cli 子命令允许 index（全量建库），但日常增量用 scan。**base —— 可用（动态 base）**：cli base 子命令支持 - / --stdin 入参，模型可传 source 字段作为 .base 定义内容经 stdin 读取，免落盘。**watch / chat —— 禁止**：allowlist 结构性排除（watch 常驻会永不返回、挂死会话；chat 是 AI 递归入口，嵌套起 AI loop 双保险拒绝：allowlist 排除 + X_BASALT_CHAT_CHILD 环境变量检测）。**批量写走 cli run**：steps=[…] 一元素一步不切分、actions=[…] 七个经典动作简写；**changed>0 即写成功且索引已刷新**，不要再 query/scan 复核，那只是白烧步数。",
+      description: "**index —— 有但慎用**：cli 子命令允许 index（全量建库），但日常增量用 scan。**base —— 可用（动态 base）**：cli base 子命令支持 - / --stdin 入参，模型可传 source 字段作为 .base 定义内容经 stdin 读取，免落盘；`.base` 里该写什么语法，先 `skills_get bases` 取（别凭记忆/照 DQL 写——`=`/`AND` 会报 base/expression-syntax）。**watch / chat —— 禁止**：allowlist 结构性排除（watch 常驻会永不返回、挂死会话；chat 是 AI 递归入口，嵌套起 AI loop 双保险拒绝：allowlist 排除 + X_BASALT_CHAT_CHILD 环境变量检测）。**批量写走 cli run**：steps=[…] 一元素一步不切分、actions=[…] 七个经典动作简写；**changed>0 即写成功且索引已刷新**，不要再 query/scan 复核，那只是白烧步数。",
       examples: [
         "// 批量：cli{args:['run','--pipe','step=set type=note','--pipe','where=LIST FROM \"inbox\" WHERE !type']}",
         "// 动态 base：cli{args:['base','-'],source:'views:…'}",

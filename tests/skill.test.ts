@@ -158,9 +158,9 @@ test("get 不存在的名返回 undefined", () => {
   assert.equal(new SkillRecall().get("zzz-no-such-skill"), undefined);
 });
 
-test("all 含内置五篇（摘要 + 说明书三篇 + 基础规范）", () => {
+test("all 含内置六篇（摘要 + 说明书三篇 + 基础规范 + bases）", () => {
   const names = new SkillRecall().all().map((s) => s.name);
-  for (const n of ["summary", "core", "pipe", "chat", "obsidian-base-spec"]) {
+  for (const n of ["summary", "core", "pipe", "chat", "obsidian-base-spec", "bases"]) {
     assert.ok(names.includes(n), `内置目录应含 ${n}`);
   }
 });
@@ -302,4 +302,66 @@ test("renderSkillList 渲染 name 与 description 列表", () => {
   assert.match(text, /甲说明/);
   assert.match(text, /b-skill/);
   assert.match(text, /乙说明/);
+});
+
+// === 2026-08-08：新增独立 Bases 运行时 skill（BG-1/BG-4）===
+// 拉一套与 Markdown/DQL 的 obsidian-base-spec 平行、但独立分工的 .base 语法真相源。
+
+test("Bases skill 被自动加载（list 含 bases）且规则 id 唯一", () => {
+  const recall = new SkillRecall();
+  const bases = recall.get("bases");
+  assert.ok(bases, "内置目录应含新增的 bases skill");
+  const ids = bases!.rules.map((r) => r.id).filter(Boolean);
+  assert.ok(ids.length > 0, "bases skill 的每条 rule 应有 id");
+  assert.ok(
+    ids.length === bases!.rules.length,
+    "bases skill 每条 rule 都应给 id（可用 pick 按条取）",
+  );
+  assert.equal(new Set(ids).size, ids.length, "bases rule id 应唯一（kebab-case）");
+});
+
+test("Bases 技能词召回 bases，且不与 obsidian-base-spec 串篇", () => {
+  const recall = new SkillRecall();
+  // 这些词应精确召回 bases（第一篇），且不把 Markdown/DQL 篇也一并带出。
+  for (const kw of ["bases", "动态 base", ".base", "base 语法", "base sort"]) {
+    const names = recall.recall(kw).map((s) => s.name);
+    assert.ok(
+      names[0] === "bases",
+      `「${kw}」最相关应召回 bases，实际首位：${names[0]}（全：${names.join(",")}）`,
+    );
+  }
+  assert.ok(
+    recall.recall("动态 base").some((s) => s.name === "bases"),
+    "「动态 base」应召回 bases",
+  );
+});
+
+test("Bases 中文触发词也能召回 bases", () => {
+  const recall = new SkillRecall();
+  for (const kw of ["base 语法", "base 视图", "base 查询定义"]) {
+    assert.ok(
+      recall.recall(kw).some((s) => s.name === "bases"),
+      `中文触发词「${kw}」应召回 bases`,
+    );
+  }
+});
+
+test("bases 提供 3 个可直接改写的完整 source 例子", () => {
+  const bases = new SkillRecall().get("bases")!;
+  const box = bases.rules.find((r) => r.id === "source-box");
+  assert.ok(box, "应有 source-box 规则");
+  const complete = (box.examples ?? []).filter((ex) => /filters/.test(ex) && /views:/.test(ex));
+  assert.ok(
+    complete.length >= 3,
+    `source-box 应提供 ≥3 个完整 .base 例子，实际 ${complete.length}`,
+  );
+});
+
+test("obsidian-base-spec 描述指出 Bases 语法改由 bases skill 提供（不串篇）", () => {
+  const spec = new SkillRecall().get("obsidian-base-spec")!;
+  assert.match(
+    spec.description,
+    /`bases`/,
+    "obsidian-base-spec 描述应指向 bases 技能、声明自己不含 .base 语法",
+  );
 });
