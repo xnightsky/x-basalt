@@ -7,7 +7,7 @@
  */
 
 import assert from "node:assert/strict";
-import { mkdtempSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { type ModelMessage } from "ai";
@@ -78,12 +78,34 @@ test("根因: index 注入位置参数（非 --vault）", async () => {
   assert.match(String(out), /已索引|indexed/i);
 });
 
-// parse 无 vault 概念：不注入任何 vault/db flag（文件按 cwd 解析，测试传绝对路径）
-test("根因: parse 不注入 vault/db（无该选项）", async () => {
-  const out = await tool().execute!({ args: ["parse", join(dir, "a.md")] }, {} as never);
+// parse 无 vault 选项：工具壳不注入 flag，但须把索引主键按 vault 布局还原成绝对路径。
+test("根因: parse 的单根 vault 主键不按 cwd 误解析", async () => {
+  const out = await tool().execute!({ args: ["parse", "--format", "json", "a.md"] }, {} as never);
   assert.match(String(out), /<<VAULT_DATA T>>/);
-  // parse 成功输出 AST 而非 unknown option 错误
+  // 选项可出现在文件参数前；parse 仍成功且不需要模型猜 vault 目录前缀。
   assert.doesNotMatch(String(out), /unknown option/);
+});
+
+test("根因: meta 的多根 vault 主键按命名空间还原", async () => {
+  const parent = mkdtempSync(join(tmpdir(), "xb-clitool-multiroot-"));
+  const docsRoot = join(parent, "docs");
+  const plansRoot = join(parent, ".tmp", "plans");
+  mkdirSync(docsRoot, { recursive: true });
+  mkdirSync(plansRoot, { recursive: true });
+  writeFileSync(join(docsRoot, "a.md"), "---\nkind: docs\n---\n", "utf8");
+  writeFileSync(join(plansRoot, "a.md"), "---\nkind: plans\n---\n", "utf8");
+
+  const multiRootTool = buildCliTool(
+    { dbPath, vaultPath: [docsRoot, plansRoot] },
+    safety,
+    CLI_ENTRY,
+  );
+  const out = await multiRootTool.execute!(
+    { args: ["meta", "get", "--format", "json", "plans/a.md", "kind"] },
+    {} as never,
+  );
+  assert.match(String(out), /"plans"/);
+  assert.doesNotMatch(String(out), /"docs"/);
 });
 
 // links/lint 无 --db：注入 db 会报 unknown option，必须跳过

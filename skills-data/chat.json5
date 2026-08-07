@@ -61,7 +61,7 @@
     {
       id: "tools",
       pattern: "chat 内部工具 ⟷ CLI 命令对应表",
-      description: "chat 工具面已收编为三个工具（切 C，2026-07-30 拍板）：**cli（唯一执行口）** + skills_recall / skills_get（grounding 元工具）。cli 的入参是 `{args: string[]}`——命令与参数数组逐项原样传递（如 {args:['query','LIST FROM #x']}、{args:['base','-'],source:'…'}），不做字符串拼接。可用的子命令就是 CLI 全集减 watch/chat（parse/index/scan/query/search/base/skills/meta/run/links/lint）。**分页参数即 CLI 的 --offset/--size**（默认 50、上限 500，--size 0 只回 total）；计数口径与 CLI 一致（读 total，别全量再数），见 core 的「计数与分页」条。子命令语义、边界、DQL 文法一律去 core 对应命令条取。",
+      description: "chat 工具面已收编为三个工具（切 C，2026-07-30 拍板）：**cli（唯一执行口）** + skills_recall / skills_get（grounding 元工具）。cli 的入参是 `{args: string[]}`——命令与参数数组逐项原样传递（如 {args:['query','LIST FROM #x']}、{args:['base','-'],source:'…'}），不做字符串拼接。可用的子命令就是 CLI 全集减 watch/chat（parse/index/scan/query/search/base/skills/meta/run/links/lint）。query/search 返回的 `file.path` 是 vault 主键，**直接原样交给 parse/meta 即可**：chat 壳会按单根/多根布局还原物理文件，模型不要猜 repo 或 vault 目录前缀。**分页参数即 CLI 的 --offset/--size**（默认 50、上限 500，--size 0 只回 total）；计数口径与 CLI 一致（读 total，别全量再数），见 core 的「计数与分页」条。子命令语义、边界、DQL 文法一律去 core 对应命令条取。",
       examples: [
         "// CLI: x-basalt meta set note.md status done",
         '// chat 工具: cli{args:["meta","set","note.md","status","done"]}',

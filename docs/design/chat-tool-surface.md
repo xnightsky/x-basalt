@@ -111,6 +111,16 @@ flowchart TD
 
 顺手项：`paths` bug 随工具面删除自然消亡——文件列表语义归 CLI 的 `--stdin` 源（或给 `run` 补显式 `--paths` 源），不再有 chat 层 `toAbs`。
 
+### 4.1 文件路径不是普通 argv：索引主键必须在壳层还原
+
+切 C 后仍有一条不能“逐项原样透传”的跨层不变量：`query` / `search` 给模型的 `file.path` 是 **vault 布局主键**，而 `parse` / `meta` 的公开 CLI 接收的是物理文件路径、按 cwd 解析。两者只在“vault 根恰好等于 cwd”时偶然相同：
+
+- 单根位于嵌套目录时，主键 `a.md` 实际应读 `<vault>/a.md`；
+- 多根时，主键 `plans/a.md` 的 `plans` 是根命名空间，物理根可能是 `.tmp/plans`，不能当 cwd 下的目录；
+- 读侧解析错会触发模型反复猜前缀并撞 error-storm，写侧解析错则可能静默修改 cwd 下的同名文件。
+
+因此 `src/chat/cli-tool.ts` 在 spawn 前仅对 `parse` / `meta` 的文件位置参数调用既有 `resolveVaultLayout(...).toAbs(...)`，再把绝对路径交给原 CLI。转换放在 chat 壳而非 `cli.ts`：壳持有本轮确定的 `ToolContext.vaultPath`，能无歧义解释索引主键；公开 `parse` / `meta` 仍可独立操作任意显式文件路径，不新增 `--vault`，也不复制第二套路由算法。
+
 后续扩展口（非本轮）：AI-native 新工具（语义检索等，§3 准入规则第二条）以独立工具加入，与 `cli` 工具并存——工具面只有「1 个 CLI 执行口 + N 个 AI-native 能力」，N 的每个都要过「CLI 不该长这个」的审查。
 
 ## 5. 未决 / 风险
