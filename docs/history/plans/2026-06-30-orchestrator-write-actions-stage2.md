@@ -1,6 +1,6 @@
 ---
-timestamp: 2026-06-30T00:01:23Z
-sha256: ffa2a2caa71168fd66469d8046718648c6af45030359bf9a55440e0f4c1810bb
+timestamp: 2026-08-07T00:15:31Z
+sha256: 5e61ec96cc05a678e9d4f830995079e19f89b4ff462c49aecdaace011537790c
 type: plan
 title: 变更编排器 P1 写动作 —— CLI if-exists 解析 + 集成测试 + 文档同步
 description: 编排器 P1 写动作 if-exists 与集成测试段 2/2 实现计划
@@ -13,7 +13,7 @@ tags:
 
 > **For agentic workers:** 严格 TDD（先 red 后 green）逐子步实现；步骤用 `- [ ]` 跟踪。  
 > 日期：2026-06-30 · 主题：把 `--pipe if-exists=` 接入 CLI，补写动作 run() 集成测试与 CLI 端到端测试，同步文档与 skill。  
-> 真相源（设计）：[`../specs/2026-06-29-change-orchestration-design.md`](../specs/2026-06-29-change-orchestration-design.md) §8/§12。  
+> 真相源（设计）：[`change-orchestration.md`](../../design/change-orchestration.md) §8/§12。
 > 前置计划：[`2026-06-29-change-orchestration.md`](2026-06-29-change-orchestration.md)（P0 已落地）。
 
 **Goal:** 完成编排器 P1 写动作最后一公里：CLI `--pipe if-exists=skip|overwrite|merge` 解析进 `PipelineConfig.ifExists`，并补 `apply/set/unset/rename` 的 run() 集成测试与 CLI 端到端测试，最后同步 `docs/guides/commands.md` 与 `skills-def/x-basalt/SKILL.md`。

@@ -7,8 +7,8 @@ tags:
   - chat
   - agent-browser
   - gap-analysis
-timestamp: 2026-06-30T15:34:23Z
-sha256: 7bb0adf511305eae6203c9324951b33a2cca816c94922bc5d39f11d2944027cf
+timestamp: 2026-08-01T19:58:37Z
+sha256: e31b6b87fb608a9b37f55532f1d1843b3f4f2d27c6ac789a6fb7d51492936623
 ---
 
 # chat 对标 agent-browser — 能力差距诊断与改进方向

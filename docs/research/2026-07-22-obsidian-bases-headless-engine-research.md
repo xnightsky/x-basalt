@@ -8,16 +8,16 @@ tags:
   - bases
   - headless
   - query-engine
-timestamp: 2026-07-22T11:00:19Z
-sha256: 899fd5afecce1dfab7508f4265afe1de134f0867e49dd812b2b06f2c3912f634
+timestamp: 2026-08-07T00:12:49Z
+sha256: 4ca06437e8eb18d46e3c420bd1aa2ff7b571abe585103f404b502888b1c8ed77
 ---
 
 # Obsidian Bases 无头执行引擎调研
 
 > 日期：2026-07-22
 > 口径：官方公开文档以本日快照为准；社区实现只作可行性与风险线索。
-> 关联场景：[`../testing/2026-07-22-bases-scenario-matrix.md`](../../design/bases-scenarios.md)
-> 目标规范：[`../specs/2026-07-22-bases-headless-engine-design.md`](../../design/bases-engine.md)
+> 关联场景：[`../testing/2026-07-22-bases-scenario-matrix.md`](../design/bases-scenarios.md)
+> 目标规范：[`../specs/2026-07-22-bases-headless-engine-design.md`](../design/bases-engine.md)
 
 ## 1. 结论
 

@@ -10,8 +10,8 @@ tags:
   - indexer
   - query
   - x-basalt
-timestamp: 2026-07-02T06:24:00Z
-sha256: c370b2d14b95485d95d5564963fbfe40916fb4fa73473f37a606173e637e2840
+timestamp: 2026-08-07T00:12:49Z
+sha256: 4dff97724be2e3268396da4f16731a5435cd3548cafb752b5c8c203061290bf0
 ---
 # inline fields（`key:: value`）设计规格：三形态文法 · `inline_fields` 数据模型 · 字段解析语义
 
@@ -91,7 +91,7 @@ Dataview 把 inline 字段与 frontmatter 标量并入**同一字段命名空间
 - `file.inlineFields` 聚合对象字段（D5 不做）；
 - meta 层写回 inline。
 
-> **2026-07-02 调研定案（修订）**：本 backlog 各项**默认不做**——多源对抗验证的调研显示生态正结构性转向 frontmatter/Properties（官方 Bases 明确不支持 inline、后继者 Datacore 被官方建议弃用之），inline 支持定位为**兼容存量 vault 的读侧能力**，v1 落地即止；除非 dogfood 出现真实刚需再逐项立案。证据链见 [`../research/2026-07-02-inline-fields-adoption-outlook.md`](../history/research/2026-07-02-inline-fields-adoption-outlook.md)。
+> **2026-07-02 调研定案（修订）**：本 backlog 各项**默认不做**——多源对抗验证的调研显示生态正结构性转向 frontmatter/Properties（官方 Bases 明确不支持 inline、后继者 Datacore 被官方建议弃用之），inline 支持定位为**兼容存量 vault 的读侧能力**，v1 落地即止；除非 dogfood 出现真实刚需再逐项立案。证据链见 [`../research/2026-07-02-inline-fields-adoption-outlook.md`](../research/2026-07-02-inline-fields-adoption-outlook.md)。
 
 ## 6. 规范化产物（冻结后为唯一权威定义，实现按此落码）
 

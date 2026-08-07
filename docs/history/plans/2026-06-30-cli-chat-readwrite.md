@@ -7,15 +7,15 @@ tags:
   - chat
   - ai
   - x-basalt
-timestamp: 2026-06-29T23:59:11Z
-sha256: 8da454676d043340eff734b2814b527cc2f79d5fc60ae569f44f22d1ea9b50c9
+timestamp: 2026-08-06T23:58:46Z
+sha256: faba2bc96c2cb0569f5b2251c2b0cbc44acc72a07301171d96c744432225ebc5
 ---
 
 # CLI chat（读+写）实现计划
 
 > **For agentic workers:** REQUIRED SUB-SKILL: 用 superpowers:subagent-driven-development（或 executing-plans）逐任务实现。步骤用 `- [ ]` 复选框跟踪。
 > 本计划交付方式：**pi 起进程逐段实现，编排方编排+独立复核**（见记忆 pi-handoff-workflow：pi 自报不可信、会越界/漏 lint，每段须独立验证）。
-> 设计真相源：[`../specs/2026-06-30-cli-chat-readwrite-design.md`](../specs/2026-06-30-cli-chat-readwrite-design.md)（父评估 [`../specs/2026-06-28-cli-chat-design.md`](../specs/2026-06-28-cli-chat-design.md)）。
+> 设计真相源：[`chat-readwrite.md`](../../design/chat-readwrite.md)（父评估 [`../decisions/2026-06-28-cli-chat-design.md`](../decisions/2026-06-28-cli-chat-design.md)）。
 
 **Goal:** 给 x-basalt 加一个可选 AI 的 `chat` 子命令，用自然语言驱动既有读/写原语（plan→act→observe 循环，单发 + REPL）；读写都直接执行（**无逐动作确认闸**），靠 Ctrl+C 中断 + 原子写兜底。
 

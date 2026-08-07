@@ -1,6 +1,6 @@
 ---
-timestamp: 2026-06-30T00:01:23Z
-sha256: 258eb0b681505af72fdb6a8a2fc9f8b8e07044c7acfa0be5357d185062ff77ba
+timestamp: 2026-08-06T23:57:26Z
+sha256: 2663ba9fdb268a20d2e0a6b0c34e050dc771ce78d4d1847fce997f0998f43132
 type: plan
 title: 阶段 2 下钻：DQL 内核做深 · 原子子步
 description: DQL 内核扩展与做深的原子实现子步与验收
@@ -14,7 +14,7 @@ tags:
 
 > 日期：2026-06-26 · 父计划：[`2026-06-26-execution-roadmap.md`](2026-06-26-execution-roadmap.md) 阶段 2
 > 真相源：`skills-def/biz-dql-subset/SKILL.md`（DQL 子集 + AST→SQL 映射 + 隐式字段语义）、调研 [`../research/2026-06-25-obsidian-spec-and-deps.md`](../research/2026-06-25-obsidian-spec-and-deps.md) §3
-> 现状：覆盖 [`../specs/2026-06-26-coverage-matrix.md`](../specs/2026-06-26-coverage-matrix.md) §B（DQL ~70%）
+> 现状：覆盖 [`../decisions/2026-06-26-coverage-matrix.md`](../decisions/2026-06-26-coverage-matrix.md) §B（DQL ~70%）
 
 ## ⚠️ 前置冲突（开工前必须解决）
 
@@ -33,7 +33,7 @@ DQL 子集真相源把当前子集定义为**严格边界**，明确 `TASK/CALEN
   - 目标：选定 DQL 文法实现工具。
   - 动作：各写最小 spike 解析 `LIST FROM #x WHERE a = 1 AND contains(file.tags,"y") SORT b DESC LIMIT 5`；验证 ESM/NodeNext 接入、错误位置、TS 类型。
   - 验收：选定其一（推荐 **chevrotain**：纯 TS、无生成步骤、Node22 已满足、错误恢复+IDE 友好；备选 peggy）。决策写入 specs。
-  - 证据：两 spike 均打印**一致**的正确 AST；决策 + 实证评估矩阵见 [`../specs/2026-06-27-dql-grammar-tool-decision.md`](../specs/2026-06-27-dql-grammar-tool-decision.md)。
+  - 证据：两 spike 均打印**一致**的正确 AST；决策 + 实证评估矩阵见 [`../decisions/2026-06-27-dql-grammar-tool-decision.md`](../decisions/2026-06-27-dql-grammar-tool-decision.md)。
   - **结论**：选 **chevrotain@12.0.0**（已落 `dependencies`，待 S2.3 接入）；peggy 已移除。关键依据：端到端类型安全（peggy `parse()` 返回 `any`）、LL 错误定位贴近真实错误点、内建多错误恢复。
   - 前置：阶段 0。
 
@@ -76,7 +76,7 @@ DQL 子集真相源把当前子集定义为**严格边界**，明确 `TASK/CALEN
   - 证据：`pnpm test tests/query-parser.test.ts`。
   - 前置：S2.3。
 
-- [x] **S2.5 parser：FROM（#tag / "folder" / [[link]]）** ✅ 2026-06-27（三来源解析对齐旧语义；and/or 多源不解析→报错）
+- [x] **S2.5 parser：FROM（#tag / "folder" / `[[link]]`）** ✅ 2026-06-27（三来源解析对齐旧语义；and/or 多源不解析→报错）
   - 动作：测试先行；解析三种来源到 AST.from。
   - 验收：三种来源解析正确；FROM and/or 按裁决报错或解析（依 S2.2a）。
   - 证据：`pnpm test tests/query-parser.test.ts`。
@@ -122,7 +122,7 @@ DQL 子集真相源把当前子集定义为**严格边界**，明确 `TASK/CALEN
 
 - [x] **S2.14 多键 SORT** ✅ 2026-06-27：parser 产多键数组 + sql-gen 多列 ORDER BY（结构 S2.2c/S2.7 就位，本步补单元测）。
 - [x] **S2.15 WHERE null 判断** ✅ 2026-06-27：WhereExpr 加 `isnull` 节点；`= null`/`!= null` → `IS NULL`/`IS NOT NULL`（不参数化 null）；其他比较符 + null 报错。
-- [x] **S2.15b 裸字段真值 / 一元 `!`（isTruthy）** ✅ 2026-07-01：补正官方对标遗漏——词法加 `Bang` token（`!=` 仍归 `Op`）、AST 加 `truthy` 节点、`!field`=`not(truthy)`；`generateSql` 用 `json_type` CASE 复刻官方 `Values.isTruthy()`（null/0/空串/空数组/空对象/false 皆 falsy），与 `= null`/`!= null`（显式 null 比较）语义分离。TDD：token/AST/优先级/SQL-shape/端到端分歧（`flag:0`→`!flag` 无、`!=null` 有）逐项测；全量 428 绿 + 新增 18。设计 + 真相源同步（§7）见 [`../specs/2026-07-01-dql-truthiness-existence-design.md`](../specs/2026-07-01-dql-truthiness-existence-design.md)。
+- [x] **S2.15b 裸字段真值 / 一元 `!`（isTruthy）** ✅ 2026-07-01：补正官方对标遗漏——词法加 `Bang` token（`!=` 仍归 `Op`）、AST 加 `truthy` 节点、`!field`=`not(truthy)`；`generateSql` 用 `json_type` CASE 复刻官方 `Values.isTruthy()`（null/0/空串/空数组/空对象/false 皆 falsy），与 `= null`/`!= null`（显式 null 比较）语义分离。TDD：token/AST/优先级/SQL-shape/端到端分歧（`flag:0`→`!flag` 无、`!=null` 有）逐项测；全量 428 绿 + 新增 18。设计 + 真相源同步（§7）见 [`dql-truthiness.md`](../../design/dql-truthiness.md)。
 - [x] **S2.16 WHERE 日期比较** ✅ 2026-06-27：frontmatter 日期按 ISO 字符串字典序比较（= 日期序，无需特殊类型）；数值列 mtime/ctime 直接比较；区间过滤测试。**注**：task `due_date` 提取仍依赖阶段1 S1.3，届时复用本比较路径。
 - [x] **S2.17 函数集完整** ✅ 2026-06-27：contains 家族（已 S2.9/S2.10）+ 内置标量 `lower/upper/length/round` 作比较左操作数（length 数组→json_array_length）+ `date(today)/date(now)` 求值 ISO 串作右值；parser 区分谓词 vs scalar 函数；逐函数单元测 + parser 行为/错误测。
 - [x] **S2.18 GROUP BY** ✅ 2026-06-27：分组键 + `json_group_array(DISTINCT f.path) AS rows` + `GROUP BY`；端到端验证分组聚合。

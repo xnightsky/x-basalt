@@ -8,13 +8,13 @@ tags:
   - bases
   - functions
   - x-basalt
-timestamp: 2026-07-27T19:50:41Z
-sha256: 9985d3309f1d6907d08f655298f4c57f725863a6608a2a345864b75ed29b11d8
+timestamp: 2026-08-06T23:58:46Z
+sha256: 8bb5b0fb0135960f29d6b29d0ccc7b6331dc16d523da51802d56c2e4b0c44af7
 ---
 # 计划：Bases 函数覆盖率（51% → ~90%）
 
 > 2026-07-28 · 来源：用户目标「把 Bases 函数覆盖率从 51% 推到 ~90%」。
-> 语法真相源：[`../design/bases-syntax.md`](../design/bases-syntax.md) §4.4；实现状态 living 文档：[`../design/bases-status.md`](../design/bases-status.md)；使用者全表：[`../use/bases.md`](../use/bases.md) §3.6。
+> 语法真相源：[`bases-syntax.md`](../../design/bases-syntax.md) §4.4；实现状态 living 文档：[`bases-status.md`](../../design/bases-status.md)；使用者全表：[`bases.md`](../../use/bases.md) §3.6。
 > 前置：P0/P1/P2a/P2b/P3a + code review 修复全部落地，四门全绿（typecheck / lint / format / test **820**）。
 > 骨架已齐（filter / 属性引用 / file 字段 / order-sort-limit / formulas / 类型系统 / groupBy / summaries / 附件数据集），**缺口全在叶子函数**。
 

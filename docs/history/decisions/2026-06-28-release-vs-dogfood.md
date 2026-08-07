@@ -7,15 +7,15 @@ tags:
   - release
   - dogfood
   - x-basalt
-timestamp: 2026-06-29T23:59:10Z
-sha256: e4f6b6618b303169cf8df7118593d1529662c6aeba6a9c63b1ebcae96b8f17b0
+timestamp: 2026-08-06T23:56:42Z
+sha256: a04f2155d7ebeed155dc8bdb62e9edce1ea3547897499a7331a5345577657b88
 ---
 
 # 决策评估：先继续 dogfood 还是先开源
 
 > 日期：2026-06-28　类型：决策/ADR（发布时机）
 > 触发：用户问「先用一阵还是先开源」。本文给诚实评估 + 明确推荐 + 开源前 checklist。
-> 关联：现状见 [`TODO.md`](../../TODO.md)「dogfood 观察期」；许可证/开源前检查政策已落地（commit 97fe800）。
+> 关联：现状见 [`TODO.md`](../../../TODO.md)「dogfood 观察期」；许可证/开源前检查政策已落地（commit 97fe800）。
 
 ## 结论先行（TL;DR）
 

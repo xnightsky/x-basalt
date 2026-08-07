@@ -1,6 +1,6 @@
 ---
-timestamp: 2026-06-30T00:01:23Z
-sha256: eb1d186afd2acc675d1a40c1f4b9b8ff600e5943a9b1c13821b9743c72395b73
+timestamp: 2026-08-07T00:12:49Z
+sha256: 49a19bb1c776091bfc8e9d0f80fc4972dc67f23f7acfda68c1d46747b49f926a
 type: research
 title: 调研：业界现成库逐模块普查
 description: parser/indexer/query 各模块现成开源库的逐模块普查
@@ -13,14 +13,14 @@ tags:
 
 > 目的：逐模块核实业界现成库，回答三问——**①语言 ②当前能不能用到 ③能用怎么用上**。
 > 方法：5 个并行调研 agent 联网（npm registry / GitHub）+ 主线二次核实关键版本/许可证。
-> 关联：依赖决策 [`../specs/2026-06-26-deps-build-vs-buy.md`](../decisions/2026-06-26-deps-build-vs-buy.md)、覆盖矩阵 [`../specs/2026-06-26-coverage-matrix.md`](../decisions/2026-06-26-coverage-matrix.md)
+> 关联：依赖决策 [`../specs/2026-06-26-deps-build-vs-buy.md`](../history/decisions/2026-06-26-deps-build-vs-buy.md)、覆盖矩阵 [`../specs/2026-06-26-coverage-matrix.md`](../history/decisions/2026-06-26-coverage-matrix.md)
 > ⚠️ 状态：registry 镜像本轮疑似返回部分**旧缓存**（版本/engines/license 与实测依赖对不上），凡受影响处标「待 `pnpm install` 复核」。落地选型以真实安装为准。
 
 ## 0. 总览（买 / 建 速读）
 
 | 模块         | 现成库结论                                           | 建议                                                                                                                                                                         |
 | ------------ | ---------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| 解析 parser  | ⚠️ remark-obsidian-md 实为**建站渲染**插件、覆盖更窄 | **自建已胜出，保留**（2026-06-28 实测对标反转「组装」结论，见 [`../specs/2026-06-28-parser-buy-vs-build-decision.md`](../decisions/2026-06-28-parser-buy-vs-build-decision.md)） |
+| 解析 parser  | ⚠️ remark-obsidian-md 实为**建站渲染**插件、覆盖更窄 | **自建已胜出，保留**（2026-06-28 实测对标反转「组装」结论，见 [`../specs/2026-06-28-parser-buy-vs-build-decision.md`](../history/decisions/2026-06-28-parser-buy-vs-build-decision.md)） |
 | 索引 indexer | 存储/监听已用；SQL 构建可引 kysely；全文检索用 FTS5  | **小幅买**：kysely + FTS5；存储/监听维持                                                                                                                                     |
 | 查询 DQL     | ⚠️ 无可依赖现成库（全绑 Obsidian 或非 DQL）          | **自建做深**：peggy 重写文法 + 自建执行；dataview 仅作 AST 参考                                                                                                              |
 | skill 召回   | ✅ 轻量模糊匹配库                                    | **买**：Fuse.js 替手写匹配                                                                                                                                                   |
@@ -43,7 +43,7 @@ tags:
 | gray-matter                                    | JS   | ✅         | frontmatter，已在用，保留                                                                                                                                                 |
 
 - **#tag / task(自定义状态+due_date) / ^blockRef 无现成库精确覆盖** → 继续自建（现有正则已较完善）。
-- **模块建议（2026-06-28 实测后反转）**：~~以 remark-obsidian-md 为主力组装~~ → **保留全自建**。实测 remark-obsidian-md 是「笔记→网页 HTML」的建站渲染插件（按磁盘路径读文件、需 vault+contentMap 解析链接为 URL、headless 字符串输入直接崩），目标与 x-basalt 的 headless 元数据提取错位；且 tag/task/blockRef 完全不做、无代码区掩码。详见 [`../specs/2026-06-28-parser-buy-vs-build-decision.md`](../decisions/2026-06-28-parser-buy-vs-build-decision.md)。`@flowershow/remark-wiki-link` 等死依赖留阶段 5 评估移除。
+- **模块建议（2026-06-28 实测后反转）**：~~以 remark-obsidian-md 为主力组装~~ → **保留全自建**。实测 remark-obsidian-md 是「笔记→网页 HTML」的建站渲染插件（按磁盘路径读文件、需 vault+contentMap 解析链接为 URL、headless 字符串输入直接崩），目标与 x-basalt 的 headless 元数据提取错位；且 tag/task/blockRef 完全不做、无代码区掩码。详见 [`../specs/2026-06-28-parser-buy-vs-build-decision.md`](../history/decisions/2026-06-28-parser-buy-vs-build-decision.md)。`@flowershow/remark-wiki-link` 等死依赖留阶段 5 评估移除。
 
 ## 2. 索引层 indexer
 
@@ -112,7 +112,7 @@ tags:
 | 项                        | 结果                             | 备注                                                                                                                                    |
 | ------------------------- | -------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------- |
 | remark-obsidian-md 许可证 | ⚠️ **manifest license 字段缺失** | 与「MIT」说法矛盾；**选型前查 repo LICENSE 确认**，否则法律风险                                                                         |
-| remark-obsidian 许可证    | ❌ **GPL-3.0**                   | 确认警示成立，MIT 项目不可用（传染机制与选库清单见 [`../guides/dependency-license-policy.md`](../../design/dependency-license-policy.md)） |
+| remark-obsidian 许可证    | ❌ **GPL-3.0**                   | 确认警示成立，MIT 项目不可用（传染机制与选库清单见 [`../guides/dependency-license-policy.md`](../design/dependency-license-policy.md)） |
 | better-sqlite3 Node 版本  | 待核实                           | mirror 返回旧版(12.4.1，无 engines)；实测依赖 12.11.1，**v12 可能已弃 Node 18** → `pnpm install`(Node18) 验证                           |
 | chokidar Node 版本        | 待核实                           | mirror 返回 4.0.3(node≥14)；实测依赖 5.x，**5.x 可能需 Node 20.19+** → 与 `engines.node>=18` 潜在冲突                                   |
 | chevrotain Node 版本      | ✅ engines node≥22               | 与项目 Node 18 冲突，故 DQL 文法构件改选 peggy/ohm                                                                                      |

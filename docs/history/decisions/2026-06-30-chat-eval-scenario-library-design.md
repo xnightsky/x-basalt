@@ -7,15 +7,15 @@ tags:
   - chat
   - evals
   - scenario-library
-timestamp: 2026-06-30T15:43:35Z
-sha256: fc55501f2f44487539705d5febf079069e8b1269dcdd3204d1570ddede589d9f
+timestamp: 2026-08-07T00:12:49Z
+sha256: d5b80f30b5a096747b23e800e49e5c5d12f5de7139f5965609b5fc43d010121b
 ---
 
 # chat 评估 / 场景库设计草案（对标 agent-browser evals）
 
 > 日期：2026-06-30。状态：**设计草案 — 选址/格式待用户拍板**，本篇不实现。
 > 触发：dogfood 实测 chat 痛点（操作失败率高 / 轮询撞顶停），且「需要的场景太多，不可能堆在项目仓库里」。
-> 对标：`vercel-labs/agent-browser` 的 `evals/` 体系（详见 [`../research/2026-06-30-chat-gap-vs-agent-browser.md`](../research/2026-06-30-chat-gap-vs-agent-browser.md) §3）。
+> 对标：`vercel-labs/agent-browser` 的 `evals/` 体系（详见 [`../../research/2026-06-30-chat-gap-vs-agent-browser.md`](../../research/2026-06-30-chat-gap-vs-agent-browser.md) §3）。
 
 ## 1. 目的与定位
 
@@ -77,7 +77,7 @@ sha256: fc55501f2f44487539705d5febf079069e8b1269dcdd3204d1570ddede589d9f
 
 ## 5. 与 chat 改进的闭环
 
-场景库是「体检仪」：chat 改进（[chat gap 篇](../research/2026-06-30-chat-gap-vs-agent-browser.md) 的 P0 重试 / 撞顶续作 / P1 新工具）→ 跑场景库 → 看失败率/撞顶率指标动没动 → 决定下一步。无场景库则改进无从验证。
+场景库是「体检仪」：chat 改进（[chat gap 篇](../../research/2026-06-30-chat-gap-vs-agent-browser.md) 的 P0 重试 / 撞顶续作 / P1 新工具）→ 跑场景库 → 看失败率/撞顶率指标动没动 → 决定下一步。无场景库则改进无从验证。
 
 ## 6. 待定项汇总 + 下一步
 

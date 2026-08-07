@@ -1,16 +1,18 @@
 ---
 type: guide
-title: 归档标准 —— 什么情况下 plan 应移入 archived/
-description: 定义 docs/plans/archived/ 的准入标准和维护规范，确保归档行为有据可依、不丢失上下文
+title: 归档标准 —— 什么情况下 plan 应移入 history/plans/
+description: 定义 docs/history/plans/ 的准入标准和维护规范，确保归档行为有据可依、不丢失上下文
 tags:
   - plan
   - meta
   - x-basalt
+timestamp: 2026-08-06T23:59:45Z
+sha256: c7d239d0c193e54e1d16ecc35b3cc9f59eb34fade6c014e6eddb745b01ea91f4
 ---
 
 # 归档标准
 
-> 归档 = 从 `docs/plans/` 移入 `docs/plans/archived/`。**不是删除**，文件仍在仓库中、git history 完整。
+> 归档 = 从 `docs/plans/` 移入 `docs/history/plans/`。**不是删除**，文件仍在仓库中、git history 完整。
 > 归档的目的是让 `docs/plans/` 保持活跃 plan 的"可见集"，archive 作为历史决策的"可查集"。
 
 ---
@@ -65,7 +67,7 @@ tags:
 
 ```bash
 # 归档一个 plan：
-git mv docs/plans/<name>.md docs/plans/archived/
+git mv docs/plans/<name>.md docs/history/plans/<name>.md
 
 # 归档前必须做：
 # 1. 对照三问 checklist
@@ -81,4 +83,7 @@ git mv docs/plans/<name>.md docs/plans/archived/
 |--------|---------|---------|-------------|
 | `2026-07-kb-compiler-complete.md`（合并） | 2026-07-22 | 替代 P0–P3b 五份独立 plan | 见合并文档「收敛声明 / Backlog」段 |
 | `2026-06-meta-complete.md`（合并） | 2026-07-22 | 替代 Phase 1–3 三份独立 plan | 见合并文档「设计决策」段 |
-| 其余 10 份单文件 plan | — | 已完成实现，归档保留。详见各自文件  | — |
+| `2026-07-30-pipe-closure.md` | 2026-08-07 | 全部计划项与安全收口完成 | 见计划内验收记录 |
+| `2026-07-30-pipeline-index-freshness.md` | 2026-08-07 | 验收已全部达成 | 见计划内验收记录 |
+| `2026-08-03-bases-dynamic-stdin.md` | 2026-08-07 | stdin 首步完成；真实 chat eval 另留 TODO | 见 TODO 与计划验收记录 |
+| 其余已归档单文件 plan | — | 已完成实现，归档保留。详见各自文件 | — |

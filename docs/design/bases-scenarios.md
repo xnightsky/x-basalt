@@ -8,14 +8,14 @@ tags:
   - bases
   - conformance
   - fixtures
-timestamp: 2026-07-22T10:50:29Z
-sha256: 31c64ecc3ec841452da6f3505a2fa2afd9dac15fd1b1864ea08dfb1ee23db753
+timestamp: 2026-08-07T00:12:49Z
+sha256: a55a2d4cb2fde0b38b57e428b6e102b86dea44f0da702bc9dc2268c9d67fbecc
 ---
 
 # Obsidian Bases 无头执行场景矩阵
 
 > 日期：2026-07-22
-> 调研依据：[`../research/2026-07-22-obsidian-bases-headless-engine-research.md`](../history/research/2026-07-22-obsidian-bases-headless-engine-research.md)
+> 调研依据：[`../research/2026-07-22-obsidian-bases-headless-engine-research.md`](../research/2026-07-22-obsidian-bases-headless-engine-research.md)
 > 设计契约：[`../specs/2026-07-22-bases-headless-engine-design.md`](bases-engine.md)
 
 ## 1. 目标

@@ -9,14 +9,14 @@ tags:
   - datacore
   - bases
   - x-basalt
-timestamp: 2026-07-02T06:23:57Z
-sha256: fff456d77a11bfe7e7730b4c2a7234f2d2ddfb2a714d715d501e91cc70967e87
+timestamp: 2026-08-07T00:12:49Z
+sha256: 668391586826a14609b0144db4e2d54a70be403268a3d4d3eecfa76520d55e60
 ---
 # inline fields（`key:: value`）采用度与前景调研——定位定案
 
 > 日期：2026-07-02 · 类型：调研（多源对抗验证）
 > 方法：deep-research 流水线——问题拆 6 个搜索角度并行检索 → 抓取 22 个来源、提取 99 条可证伪论断 → 取 25 条做 3 票对抗性验证（≥2/3 反驳判伪）：**15 条存活、10 条被毙**。
-> 触发：#28 inline fields 落地后，用户质疑该玩法的真实价值；本结论直接决定 [`../specs/2026-07-02-inline-fields-design.md`](../../design/inline-fields.md) §5 backlog 的取舍。
+> 触发：#28 inline fields 落地后，用户质疑该玩法的真实价值；本结论直接决定 [`../specs/2026-07-02-inline-fields-design.md`](../design/inline-fields.md) §5 backlog 的取舍。
 
 ## 一句话结论
 
@@ -54,4 +54,4 @@ inline fields 是**真实、官方文档化**的 Dataview 语法，存在真实�
 1. **v1 读侧支持（#28）保留不拆**：定位为「兼容存量 vault」的能力，成本已付清（实现与 502 用例全绿）。
 2. **spec §5 backlog 各项默认不做**（值类型化 / 多值列表化 / 带空格 key / `file.inlineFields` / meta 写回 inline）——除非 dogfood 出现真实刚需再逐项立案。
 3. **方向押 frontmatter/Properties**：meta 写侧既有路线正确；下一个调研对象是官方 Bases `.base` 格式与 task emoji 字段。
-4. 面向使用者的口径已同步进教程：[`../guides/tutorial-rating-inline-fields.md`](../../use/tutorial-inline-fields.md) §5「该不该用」。
+4. 面向使用者的口径已同步进教程：[`../guides/tutorial-rating-inline-fields.md`](../use/tutorial-inline-fields.md) §5「该不该用」。

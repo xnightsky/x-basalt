@@ -1,6 +1,6 @@
 ---
-timestamp: 2026-06-30T00:01:23Z
-sha256: c6229c369032e8d45234abf363ad93bd704846093060fe2bc62a4da2cb5d12a3
+timestamp: 2026-08-07T00:12:49Z
+sha256: 509e6fcf78b35d2be8c0f8410a368497a4f5cf01df8f905caa9ed310a94fcf19
 type: spec
 title: meta 子集冻结 · frontmatter 写侧
 description: meta 命令 frontmatter 写侧 Phase 1-3 子集冻结规格
@@ -13,7 +13,7 @@ tags:
 
 > 日期：2026-06-28 · 状态：冻结（Phase 1 CRUD + Phase 2 normalize + Phase 3 profile/apply）
 > 实现：`src/meta/`（document 往返内核 / operations CRUD / normalize 归一 / profiles+derive+apply 策略 / index 编排+原子写）；CLI `meta` 组。
-> 计划：`../plans/2026-06-28-meta-frontmatter-write.md`（P1）、`../plans/2026-06-28-meta-normalize.md`（P2）、`../plans/2026-06-28-meta-derive-profiles.md`（P3，调研 [`../research/2026-06-28-metadata-profiles-research.md`](../history/research/2026-06-28-metadata-profiles-research.md)）。
+> 计划：`../plans/2026-06-28-meta-frontmatter-write.md`（P1）、`../plans/2026-06-28-meta-normalize.md`（P2）、`../plans/2026-06-28-meta-derive-profiles.md`（P3，调研 [`../research/2026-06-28-metadata-profiles-research.md`](../research/2026-06-28-metadata-profiles-research.md)）。
 > 测试真相源：`tests/meta-document.test.ts` / `meta-ops.test.ts` / `meta.test.ts` / `meta-adversarial.test.ts` / `meta-normalize.test.ts` / `meta-derive.test.ts` / `meta-apply.test.ts` / `cli.test.ts`(meta 段)。
 
 本文件冻结 x-basalt **写侧**第一期支持的 frontmatter 操作子集——「声称支持」即以本文 + 对应测试为准。

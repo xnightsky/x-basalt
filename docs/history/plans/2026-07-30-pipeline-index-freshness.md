@@ -1,5 +1,6 @@
 ---
 type: plan
+status: done
 title: 管道写后索引新鲜度 + 报告口径订正
 description: 修复 run 管道写动作落盘后不刷索引导致「成功回执与验证通道互相矛盾」，附 DQL 缺查询头定向引导、RunReport 改按文件计数，以及列举类回答凭空补齐的提示词纪律
 tags:
@@ -7,7 +8,7 @@ tags:
   - orchestrator
   - query
   - chat
-timestamp: 2026-07-29T16:21:57Z
+timestamp: 2026-08-06T23:59:45Z
 sha256: 7bc12ad24330b372c3a31db1e365810c6ec74960ff8e1ead698139277d61b7b4
 ---
 # 管道写后索引新鲜度 + 报告口径订正

@@ -7,8 +7,8 @@ tags:
   - chat
   - cli-tool
   - architecture
-timestamp: 2026-08-03T17:11:59Z
-sha256: a7da9d37dc754ce8a8141d2770d9e059611e27911af447f5ffb0c0bdce95b8f3
+timestamp: 2026-08-06T23:59:45Z
+sha256: 8a2e930aad278ce1b6267cb955fc7a491c71f6cee5037a9509543a184c9f86e2
 ---
 # chat 工具面彻底切 C（cli 单工具 + 动态 base 走 stdin）
 
@@ -90,7 +90,7 @@ tests/chat/*.test.ts    既有 loop/repl 测试适配（tools 面变化）。
 ### CC-4：动态 base 端到端验证
 
 - [x] **CC-4a chat 里 cli base - 端到端（red→green）** → commit `9515965`：mock 模型经 cli 工具跑 `base -`（source 走 stdin）完整 loop 链路成功
-- [ ] **CC-4b evals 场景库 A/B（后续计划）**：TODO「动态 base」第三步留待 evals 侧（需真实 chat + key），不在本计划
+- **后续项（不属于本计划）CC-4b evals 场景库 A/B**：已留在 TODO「动态 base」第三步，需真实 chat + key。
 
 ### CC-5：重测试 + 收口
 

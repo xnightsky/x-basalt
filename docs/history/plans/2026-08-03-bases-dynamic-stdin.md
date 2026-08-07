@@ -1,5 +1,6 @@
 ---
 type: plan
+status: done
 title: 动态 base 第一步：stdin / 字符串入参
 description: 让 .base 不必是磁盘文件——x-basalt base 支持从 stdin（- 或 --stdin）读入查询定义，为 chat base_query 工具铺路
 tags:
@@ -7,14 +8,14 @@ tags:
   - bases
   - cli
   - stdin
-timestamp: 2026-08-03T16:06:35Z
-sha256: b8e0cad249255276ba3b6a994a58a1f8825241d1e450e25f3988343e0949478d
+timestamp: 2026-08-06T23:59:45Z
+sha256: 538e988dd3a66cb02419461fbd9b1ffbd6c1d94729dd7494fc6d7cfe988abc0b
 ---
 # 动态 base 第一步：stdin / 字符串入参
 
 > **For agentic workers:** 用 TDD（先 red 后 green）逐子步实现；步骤用 `- [ ]` 跟踪。
 > 日期：2026-08-03 · 主题：`x-basalt base` 支持 stdin 入参（`-` / `--stdin`），`loadBaseDocument` 拆「取 source」与「解析 source」
-> 真相源（论证）：[`TODO.md`](../TODO.md)「🧪 2026-07-28 动态 base」段
+> 真相源（论证）：[`TODO.md`](../../../TODO.md)「🧪 2026-07-28 动态 base」段
 > 触发：用户拍板「直接开动态 base 第一步（写计划 + TDD 落地）」
 
 **Goal:** `.base` 不必是磁盘上写死的文件，可作为**入参**传入（stdin / 字符串）。本计划只落「第一步：stdin 入参」——`x-basalt base -` / `--stdin` 从管道读入 `.base` 定义并执行，独立可用（命令行管道直接受益：`echo "views: …" | x-basalt base -`），**不绑 chat**。chat 侧 `base_query` 工具与软/硬路由、skill 前置缺口，属后续计划。

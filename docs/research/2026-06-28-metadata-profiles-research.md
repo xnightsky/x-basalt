@@ -1,6 +1,6 @@
 ---
-timestamp: 2026-06-30T00:01:23Z
-sha256: 9e2a52653bc7790c690c9cfd75b517415726b84f8e62e313abee35fe5023bb4f
+timestamp: 2026-08-07T00:12:49Z
+sha256: 2a6faf6f4f0a78e7eb400447301bcdbe78fb36b227af1b855747e6ec19dff68b
 type: research
 title: 元数据策略（profile）调研：derive 功能设计依据
 description: OKF/Obsidian/SSG 元数据惯例调研与 profile derive 设计依据
@@ -14,7 +14,7 @@ tags:
 
 > 日期：2026-06-28 · 来源：deep-research run `wf_d56251ed-15e`（5 角度 fan-out + 对抗式核验，23 源 / 113 声明 / 25 核验 / 18 confirmed）
 > 用途：为 meta 写侧 Phase 3「derive = 元数据策略/profile 幂等补缺」选首批内置 profile 与字段定型。
-> 关联：[`../plans/2026-06-28-meta-frontmatter-write.md`](../plans/2026-06-28-meta-frontmatter-write.md)、[`../specs/2026-06-28-meta-subset-frozen.md`](../../design/meta-subset.md)。
+> 关联：[`../plans/2026-06-meta-complete.md`](../history/plans/2026-06-meta-complete.md)、[`../specs/2026-06-28-meta-subset-frozen.md`](../design/meta-subset.md)。
 
 ## 头号结论
 

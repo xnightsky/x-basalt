@@ -7,11 +7,13 @@ tags:
   - orchestrator
   - design
   - x-basalt
-timestamp: 2026-07-30T15:53:52Z
-sha256: ff136760667bd418bf735a45f906d5ccf8992ca512304e4925d8de87bc4e423f
+timestamp: 2026-08-06T23:57:07Z
+sha256: 91ea0c64f9cfa0ba035f001c5ebc78e2102b8d51f3ff3a00e77dde3e5d7f1684
 ---
 
 # 设计评估：变更编排器（change orchestration）—— 统一 watch / scan / 手动 三源的声明式维护管线
+
+> **当前状态（2026-08-07）**：本文的五段管线、`run` / `watch` / `scan` 接线与统一算子执行层均已落地。下面保留的分阶段与触发条件用于解释设计取舍；当前执行层的实现状态、回归口径与剩余边界以 [`pipeline-op-model.md`](pipeline-op-model.md) 和根 [`TODO.md`](../../TODO.md) 为准。
 
 > 日期：2026-06-29 · 类型：设计评估（**非开工**，只论"将来若做，怎么做才立得住"）
 > 触发：用户问 TODO 里 `migrate`（vault 级批量改造）怎么做 → 三方调研后判定「migrate 这个维度不该单独立项」，真正值得做的是围绕**变更流**的编排能力。
@@ -361,7 +363,7 @@ x-basalt query "LIST FROM #pkm" --json | jq -r '.rows[]["file.path"]' \
 
 ## 14. 编排算子集（operator catalog）
 
-> **2026-07-28 后续**：本节把算子当"概念命名"，实现层仍是 `Action.run(ev: ChangeEvent)` 单文件签名，导致 `query`/`search`/`base`/`links`/`lint` 五个已有能力接不进管道。执行层模型的升级提案见 [`pipeline-op-model.md`](pipeline-op-model.md)（统一 `Row` 流动单位 + 单算子签名 + 调度可换），**提案状态、代码未动**；本节的取舍与命名被它沿用。
+> **实现状态（2026-08-07）**：本节的概念命名已由 [`pipeline-op-model.md`](pipeline-op-model.md) 落地为统一 `Row` 流动单位、单一 `Op` 签名与可替换调度层。`query` / `search` / `base` / `links.*` / `lint` 已可进入管道；本节保留其风险、取舍与算子分类，具体实现与测试编号以后者为准。
 
 > 把 §5 的能力维度落成**可命名、可组合的算子**——配置（§8）即这些算子的声明式组合。每个算子标注**现代体系出处**（借自哪个算子/概念）与**引入后对 x-basalt 体系的影响**。命名为设想，不冻结；取舍沿用 §5（🟢P0 / 🟡P1 / ⚪P2）。
 

@@ -9,8 +9,8 @@ tags:
   - rating
   - dql
   - x-basalt
-timestamp: 2026-07-02T06:23:59Z
-sha256: 83ac8f691ebeb6eb574c48dafac4c5fe86003ee60e928ed98cdc6bc4de5cbec4
+timestamp: 2026-08-07T00:12:49Z
+sha256: 993019c1fdfebcb1436f33e1c8c0a429f05d7d61dbc3abe1810da8a18d0b6f6a
 ---
 # 教程：给笔记打分——`rating:: 5` 与 inline fields 上手
 
@@ -129,7 +129,7 @@ x-basalt query "LIST WHERE !rating" --db ./i.db
 
 ## 5. 老实话：这玩法该不该用？
 
-2026-07 做过一轮多源对抗验证的深度调研（证据链见 [inline fields 采用度与前景调研](../history/research/2026-07-02-inline-fields-adoption-outlook.md)），结论：
+2026-07 做过一轮多源对抗验证的深度调研（证据链见 [inline fields 采用度与前景调研](../research/2026-07-02-inline-fields-adoption-outlook.md)），结论：
 
 - **它是真的**：Dataview 官方语法，存在整个读书 vault 靠它驱动的真实用户。
 - **但生态在退场**：Obsidian 官方的 Properties/Bases 只认 frontmatter，官方明确表示「没有支持 inline 的计划」；连 Dataview 自己的后继者 Datacore 都被官方建议弃用它，降级为 opt-in 遗留选项。

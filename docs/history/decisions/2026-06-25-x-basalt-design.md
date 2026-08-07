@@ -1,6 +1,6 @@
 ---
-timestamp: 2026-06-30T00:01:23Z
-sha256: 826548a69b9a425f9a6cb93f3720376d492d785155cf34a9bc4f724b8971c66d
+timestamp: 2026-08-06T23:56:42Z
+sha256: 0b0c4a9e863cff1ce346c057dcafa1c75b4177f9e0c1ab92331a44b6579a2ddd
 type: spec
 title: 设计：x-basalt
 description: x-basalt 总体设计：模块划分、边界约束与 MVP 验收标准
@@ -67,7 +67,7 @@ class VaultParser {
 
 文件：`types.ts`（类型）、`frontmatter.ts`（gray-matter 封装）、`wikilink.ts`（wikilink/embed 提取）、`index.ts`（编排 + 其余节点提取）。Obsidian 专有语法全部自建提取，`remark-parse` 仅用于拿基础 AST 辅助定位。
 
-> **[2026-06-26 偏差标注]** 实现与本契约存在分叉：(1) `remark-parse` 实际**零 import**，解析全为手写字符串（见 [`2026-06-26-deps-build-vs-buy.md`](2026-06-26-deps-build-vs-buy.md)）；(2) `types.ts` 的 `task`/`blockRef` 节点额外带 `line` 字段（本契约未列，实现注释已解释）；(3) 调研要求的 task `due_date` 未在节点中实现。逐项见 [`../testing/2026-06-26-audit.md`](../testing/2026-06-26-audit.md) 与 [`2026-06-26-coverage-matrix.md`](2026-06-26-coverage-matrix.md)。
+> **[2026-06-26 偏差标注]** 实现与本契约存在分叉：(1) `remark-parse` 实际**零 import**，解析全为手写字符串（见 [`2026-06-26-deps-build-vs-buy.md`](2026-06-26-deps-build-vs-buy.md)）；(2) `types.ts` 的 `task`/`blockRef` 节点额外带 `line` 字段（本契约未列，实现注释已解释）；(3) 调研要求的 task `due_date` 未在节点中实现。逐项见 [`../2026-06-26-audit.md`](../2026-06-26-audit.md) 与 [`2026-06-26-coverage-matrix.md`](2026-06-26-coverage-matrix.md)。
 
 ### 3.2 indexer（`src/indexer/`）
 

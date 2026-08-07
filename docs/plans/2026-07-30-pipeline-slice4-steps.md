@@ -7,8 +7,8 @@ tags:
   - orchestrator
   - pipeline
   - cli
-timestamp: 2026-07-30T15:58:27Z
-sha256: b46871605789f2d8c7086424db637d223d819e4028de97b87035a06281fb09cb
+timestamp: 2026-08-06T23:59:45Z
+sha256: 3efcb1c14e4c73ed483cd3031e31223483c8f7ab099b4cfa0ccac80f8f0d8e91
 ---
 
 # 统一算子模型片四：声明式步骤列表（steps/step）
@@ -16,7 +16,7 @@ sha256: b46871605789f2d8c7086424db637d223d819e4028de97b87035a06281fb09cb
 > **For agentic workers:** 用 TDD（先 red 后 green）逐子步实现；步骤用 `- [ ]` 跟踪。
 > 日期：2026-07-30 · 主题：统一算子模型片四 · 配置面
 > 真相源（设计）：[`../design/pipeline-op-model.md`](../design/pipeline-op-model.md) §9 片四 + D12
-> 前序：[`2026-07-30-pipe-closure.md`](2026-07-30-pipe-closure.md)（参数面收口）、TODO「统一算子模型」
+> 前序：[`2026-07-30-pipe-closure.md`](../history/plans/2026-07-30-pipe-closure.md)（参数面收口）、TODO「统一算子模型」
 
 **Goal:** `--pipe` 获得无分隔符的算子链表达方式：配置段 `pipelines.<name>.steps: string[]`
 （一元素一算子 spec）+ CLI 可重复 `--pipe step=<spec>`（按出现顺序成链）。

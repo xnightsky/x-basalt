@@ -1,5 +1,6 @@
 ---
 type: plan
+status: done
 title: 变更编排管道收尾计划（pipe closure）
 description: 补齐 --pipe 参数面（内联 debounce/on-error/on-busy、非法值与未知 key 报错、括号感知切分）、set 列表值与原生管道 stdin 源，使命令行与配置段一一对应
 tags:
@@ -7,14 +8,14 @@ tags:
   - orchestrator
   - pipeline
   - cli
-timestamp: 2026-07-30T16:04:39Z
-sha256: 0f0bd127af4ae750fac4e02ef129725b6b2921052d6abd1fcdd20be1bffa7711
+timestamp: 2026-08-06T23:59:45Z
+sha256: 4a6ed131e2bf7c484fd8cc6c7395b80af3de0f25a3555c20cd6212017e4c75cb
 ---
 # 变更编排管道收尾计划（pipe closure）
 
 > **For agentic workers:** 用 TDD（先 red 后 green）逐子步实现；步骤用 `- [ ]` 跟踪。
 > 日期：2026-07-30 · 主题：把 `--pipe` 参数面与源接入收口到 spec §8 的冻结口径
-> 真相源（设计）：[`../specs/2026-06-29-change-orchestration-design.md`](../specs/2026-06-29-change-orchestration-design.md) §8
+> 真相源（设计）：[`change-orchestration.md`](../../design/change-orchestration.md) §8
 > 前序：[`2026-06-29-change-orchestration.md`](2026-06-29-change-orchestration.md)（P0 全部完成）
 > 触发：用户 goal「pipe 做到没收尾，请做完」。
 

@@ -7,8 +7,8 @@ tags:
   - optimization
   - overview
   - index
-timestamp: 2026-06-30T15:44:28Z
-sha256: 59a88e2b3b1e6f0f531a86b169d9693bb72d9719a122135f7a02f95d138e351b
+timestamp: 2026-08-07T00:12:49Z
+sha256: 58d1955f0ad34fb759a84af64a087528f4d85040e74f2804fec69ce068cf7f0c
 ---
 
 # x-basalt 优化方向总览（2026-06-30 会话）
@@ -32,11 +32,11 @@ sha256: 59a88e2b3b1e6f0f531a86b169d9693bb72d9719a122135f7a02f95d138e351b
 | # | 方向 | 状态 | 文档 |
 |---|---|---|---|
 | A | **功能覆盖 gap**（对标官方 Dataview/Obsidian） | ✅ 已调研落地 | [`2026-06-30-feature-gap-vs-dataview-obsidian.md`](2026-06-30-feature-gap-vs-dataview-obsidian.md) |
-| B | **chat 可用性**（对标 agent-browser，三痛点） | ✅ 已调研落地 | [`2026-06-30-chat-gap-vs-agent-browser.md`](2026-06-30-chat-gap-vs-agent-browser.md) |
-| C | **chat 评估/场景库**（兄弟目录素材库） | 📝 设计草案（选址/格式待拍板） | [`../specs/2026-06-30-chat-eval-scenario-library-design.md`](../specs/2026-06-30-chat-eval-scenario-library-design.md) |
+| B | **chat 可用性**（对标 agent-browser，三痛点） | ✅ 已调研落地 | [`2026-06-30-chat-gap-vs-agent-browser.md`](../../research/2026-06-30-chat-gap-vs-agent-browser.md) |
+| C | **chat 评估/场景库**（兄弟目录素材库） | 📝 设计草案（选址/格式待拍板） | [`../decisions/2026-06-30-chat-eval-scenario-library-design.md`](../decisions/2026-06-30-chat-eval-scenario-library-design.md) |
 | D | 架构整洁（`cli.ts` 721 行拆分） | 💡 候选，未展开 | 本篇 §3 |
 | E | 性能基准（benchmark） | 💡 候选，预防性（无已知瓶颈） | 本篇 §3 |
-| F | 写侧 / 编排器 P1+、lint schema 校验、FTS5 | 💡 既有 backlog | [`../../TODO.md`](../../TODO.md) |
+| F | 写侧 / 编排器 P1+、lint schema 校验、FTS5 | 💡 既有 backlog | [`../../../TODO.md`](../../../TODO.md) |
 
 ## 3. 候选方向（本会话未展开，备忘）
 

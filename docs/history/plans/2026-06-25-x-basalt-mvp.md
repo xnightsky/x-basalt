@@ -1,6 +1,6 @@
 ---
-timestamp: 2026-06-30T00:01:23Z
-sha256: 4f62deced65dbaec7a90a14a389fe5b61a454f2ef0ed39a47f14de9259da6026
+timestamp: 2026-08-06T23:57:26Z
+sha256: 81c5b20b7984ff7a2b44cd76015cf0c73f8b5be967b4be6669f4d1afd29acaa0
 type: plan
 title: 计划：x-basalt MVP 分阶段实现
 description: 按检查点分阶段实现 parser/indexer/query/skill/cli 五模块 MVP
@@ -12,8 +12,8 @@ tags:
 # 计划：x-basalt MVP 分阶段实现
 
 > 日期：2026-06-25 · 类型：大型任务（跨 5 个一级模块）
-> 设计：[`../specs/2026-06-25-x-basalt-design.md`](../specs/2026-06-25-x-basalt-design.md)
-> 执行真相源：根 [`TODO.md`](../../TODO.md)
+> 设计：[`../decisions/2026-06-25-x-basalt-design.md`](../decisions/2026-06-25-x-basalt-design.md)
+> 执行真相源：根 [`TODO.md`](../../../TODO.md)
 
 ## 目标
 
@@ -87,7 +87,7 @@ tags:
 - 阶段 3（2026-06-25 验证通过）：
   - 手写 `tokenizer → parseQuery(ast) → generateSql`，全参数化绑定；`DataviewEngine` 只读打开库并注册 `REGEXP` 自定义函数。
   - 隐式字段经相关子查询 JOIN（tags/inlinks/outlinks/tasks），inlinks/outlinks 用 `DISTINCT`；frontmatter 标量经 `json_extract` 且字段名白名单校验防注入。
-  - `tests/query.test.ts` 11 例：README 示例（→ Alpha）、TABLE+FROM"folder"、FROM [[link]] 反链、contains(file.tags) 前缀、聚合数组、inlinks 去重、regexmatch、AND/OR/NOT、非子集字段报错、DqlSyntaxError。
+  - `tests/query.test.ts` 11 例：README 示例（→ Alpha）、TABLE+FROM"folder"、FROM `[[link]]` 反链、contains(file.tags) 前缀、聚合数组、inlinks 去重、regexmatch、AND/OR/NOT、非子集字段报错、DqlSyntaxError。
 - 阶段 4（2026-06-25 验证通过）：
   - `skill/loader.ts`（JSON5 + 目录解析 env>~/.obsidian-core>内置 + 兜底）、`skill/index.ts`（name/triggers 双向子串模糊召回）；`tests/skill.test.ts` 5 例（含空目录兜底）。
   - `cli.ts` commander 接线五子命令 + `--format json|yaml`（YAML 极简块序列化，Date→ISO）、`--watch`、`--on-change {file}`。

@@ -8,15 +8,15 @@ tags:
   - ai
   - design
   - x-basalt
-timestamp: 2026-06-29T23:59:11Z
-sha256: f68003dcff5bb3b246f7016d4025299c8a770e185c3b653ca698667354e505ed
+timestamp: 2026-08-06T23:56:42Z
+sha256: 41f5cfc85bbe7b010b988df5d5387a20b788035f53587ec5be3f34a7da30d28b
 ---
 
 # 设计评估：CLI chat（自然语言驱动 vault）—— 对标 agent-browser，最小可选 AI
 
 > 日期：2026-06-28 · 类型：设计评估（**非开工**，只论"将来若做，怎么做才立得住"）
 > 触发：用户问 qmd 借鉴价值 → 收敛到"CLI chat 对标 `agent-browser chat`"。
-> 关联：检索后端见 [`2026-06-28-semantic-retrieval-integration.md`](../../design/semantic-retrieval.md)；现状/backlog 见 [`../../TODO.md`](../../TODO.md)；AI/技能定位见 [`../guides/ai-and-skills.md`](../guides/ai-and-skills.md)。
+> 关联：检索后端见 [`2026-06-28-semantic-retrieval-integration.md`](../../design/semantic-retrieval.md)；现状/backlog 见 [`../../../TODO.md`](../../../TODO.md)；AI/技能定位见 [`../../use/ai-and-skills.md`](../../use/ai-and-skills.md)。
 > 外部对标：`vercel-labs/agent-browser`（Rust，`chat` 命令把自然语言翻成既有 CLI 原语执行）。
 
 ## 0. 这份文档要回答的问题

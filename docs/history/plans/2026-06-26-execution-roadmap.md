@@ -1,6 +1,6 @@
 ---
-timestamp: 2026-06-30T00:01:23Z
-sha256: 0a47cf4eb58b89f9ba4386053101fd8fb10ad184e1f2762dd31164c22ece86af
+timestamp: 2026-08-07T00:12:49Z
+sha256: fe90169ea61457ab77a101cfa0dfca004ae82da62b059479462d7f903c9f27c5
 type: plan
 title: 可执行路线图：全模块收口 + 做深内核
 description: x-basalt 全模块收口与 DQL 内核做深的可执行路线图
@@ -12,7 +12,7 @@ tags:
 # 可执行路线图：全模块收口 + 做深内核（x-basalt → 可信 1.0）
 
 > 日期：2026-06-26 · 类型：大型执行计划（跨全部 5 个一级模块）
-> 依据：生态定位 [`../research/2026-06-26-libraries-survey.md`](../research/2026-06-26-libraries-survey.md)、体检 [`../testing/2026-06-26-audit.md`](../testing/2026-06-26-audit.md)、覆盖矩阵 [`../specs/2026-06-26-coverage-matrix.md`](../specs/2026-06-26-coverage-matrix.md)、依赖决策 [`../specs/2026-06-26-deps-build-vs-buy.md`](../specs/2026-06-26-deps-build-vs-buy.md)、许可证政策 [`../guides/dependency-license-policy.md`](../guides/dependency-license-policy.md)
+> 依据：生态定位 [`../../research/2026-06-26-libraries-survey.md`](../../research/2026-06-26-libraries-survey.md)、体检 [`../2026-06-26-audit.md`](../2026-06-26-audit.md)、覆盖矩阵 [`../decisions/2026-06-26-coverage-matrix.md`](../decisions/2026-06-26-coverage-matrix.md)、依赖决策 [`../decisions/2026-06-26-deps-build-vs-buy.md`](../decisions/2026-06-26-deps-build-vs-buy.md)、许可证政策 [`../../design/dependency-license-policy.md`](../../design/dependency-license-policy.md)
 
 ## 为什么这么做（一句话依据）
 
@@ -62,7 +62,7 @@ tags:
   - 前置：S0.1。
 
 - [x] **S0.4 许可证基线扫描**
-  - 动作：按 [`许可证政策`](../guides/dependency-license-policy.md) 检查现有依赖；引入 `license-checker`/`pnpm licenses list` 跑一次，记录结果到依赖决策文档。
+  - 动作：按 [`许可证政策`](../../design/dependency-license-policy.md) 检查现有依赖；引入 `license-checker`/`pnpm licenses list` 跑一次，记录结果到依赖决策文档。
   - 验收：无 GPL/AGPL/未声明依赖；有清单为证。
   - 证据：`pnpm licenses list`（或 `npx license-checker --summary`）输出无 GPL/AGPL。
   - 前置：S0.1。
@@ -77,12 +77,12 @@ tags:
 
 ## 阶段 1 · 解析层改为组装　❎ 关闭（2026-06-28：实测对标后决定保留自建）
 
-> **结论**：S1.1 spike 实测，remark-obsidian-md（MIT）是建站渲染插件、headless 直接崩、不做 tag/task/blockRef、无代码区掩码；自建解析 8 类全覆盖且更正确。**本阶段关闭，不做组装。** 决策见 [`../specs/2026-06-28-parser-buy-vs-build-decision.md`](../specs/2026-06-28-parser-buy-vs-build-decision.md)。S1.2 取消；S1.3 的 task `due_date` 早已在 indexer 实现。
+> **结论**：S1.1 spike 实测，remark-obsidian-md（MIT）是建站渲染插件、headless 直接崩、不做 tag/task/blockRef、无代码区掩码；自建解析 8 类全覆盖且更正确。**本阶段关闭，不做组装。** 决策见 [`../decisions/2026-06-28-parser-buy-vs-build-decision.md`](../decisions/2026-06-28-parser-buy-vs-build-decision.md)。S1.2 取消；S1.3 的 task `due_date` 早已在 indexer 实现。
 
 - [x] **S1.1 复核 remark-obsidian-md 许可证与能力（卡点）** ✅ 2026-06-28 → **结论：保留自建**
   - license：remark-obsidian-md = **MIT**（不卡）；remark-obsidian = GPL-3.0（排除）。
   - 能力实测：headless 字符串输入即崩（按磁盘路径 readFileSync）；需 vault+contentMap 渲染成 HTML/URL；tag/task/blockRef 完全不做。
-  - 决策：[`../specs/2026-06-28-parser-buy-vs-build-decision.md`](../specs/2026-06-28-parser-buy-vs-build-decision.md)。
+  - 决策：[`../decisions/2026-06-28-parser-buy-vs-build-decision.md`](../decisions/2026-06-28-parser-buy-vs-build-decision.md)。
 
 - [ ] **S1.2 搭 unified 管线 + 适配层（red→green）**
   - 动作：先写 `tests/parser.test.ts` 对现有 5 个 fixture 的期望节点（沿用现有断言）；再用 `unified().use(remarkParse).use(remarkObsidianMd)` + visitor 把 mdast 映射到 `ObsidianNode`。
@@ -111,11 +111,11 @@ tags:
 - [x] **S2.1 文法工具选型 spike：chevrotain vs peggy（卡点）** ✅ 2026-06-27 → 选 **chevrotain**
   - 动作：各写一个最小 spike 解析 `LIST FROM #x WHERE a = 1 SORT b DESC LIMIT 5`，验证 ESM/NodeNext 接入、错误位置、TS 类型体验。
   - 验收：选定其一（推荐 **chevrotain**：纯 TS、无生成步骤、Node22 已满足、错误恢复 + IDE 友好）；记录决策到 specs。
-  - 证据：两 spike 均产出一致 AST；决策 + 评估矩阵见 [`../specs/2026-06-27-dql-grammar-tool-decision.md`](../specs/2026-06-27-dql-grammar-tool-decision.md)。chevrotain 已落 `dependencies`、peggy 已移除。
+  - 证据：两 spike 均产出一致 AST；决策 + 评估矩阵见 [`../decisions/2026-06-27-dql-grammar-tool-decision.md`](../decisions/2026-06-27-dql-grammar-tool-decision.md)。chevrotain 已落 `dependencies`、peggy 已移除。
   - 前置：S0.1。
 
 - [ ] **S2.2 冻结目标 DQL 子集 + AST 契约**
-  - 动作：以 obsidian-dataview 源码 `src/query/parse.ts` 为**参考**（只读、不依赖），在 specs 写出目标子集与 AST 类型：LIST/TABLE/TASK + FROM(#tag/folder/[[link]]/AND/OR/NOT) + WHERE(比较/逻辑/函数/null/日期) + SORT(多键) + LIMIT + GROUP BY + FLATTEN + WITHOUT ID + 隐式字段全集。
+  - 动作：以 obsidian-dataview 源码 `src/query/parse.ts` 为**参考**（只读、不依赖），在 specs 写出目标子集与 AST 类型：LIST/TABLE/TASK + FROM(#tag/folder/`[[link]]`/AND/OR/NOT) + WHERE(比较/逻辑/函数/null/日期) + SORT(多键) + LIMIT + GROUP BY + FLATTEN + WITHOUT ID + 隐式字段全集。
   - 验收：specs 有冻结的子集清单 + AST 类型；标明 CALENDAR/DataviewJS 为范围外。
   - 证据：specs 文档评审通过（自检：每条都能对到 SQL 策略）。
   - 前置：S2.1。
@@ -145,7 +145,7 @@ tags:
   - 前置：S2.5。
 
 - [ ] **S2.7 DQL 覆盖矩阵收口（黑盒消除）**
-  - 动作：更新 [`覆盖矩阵`](../specs/2026-06-26-coverage-matrix.md) DQL 部分到实际状态；每个 ✅ 必须有测试编号佐证；明确剩余 ❌（CALENDAR/DataviewJS）。
+  - 动作：更新 [`覆盖矩阵`](../decisions/2026-06-26-coverage-matrix.md) DQL 部分到实际状态；每个 ✅ 必须有测试编号佐证；明确剩余 ❌（CALENDAR/DataviewJS）。
   - 验收：矩阵无"声称支持但无测试"的格；DQL 子集覆盖率有量化结论。
   - 证据：矩阵每行链接到测试用例；`pnpm test tests/query.test.ts` 全绿。
   - 前置：S2.6。
@@ -220,7 +220,7 @@ tags:
 
 ## 阶段 5 · 收口与发布　⏸ 推迟（2026-06-28：先进 dogfood 观察期）
 
-> **方案调整**：核心模块已做深，但**先不发布**。已 `npm link` 全局安装，实际使用一段时间，据真实反馈迭代后再发布。S3.4(kysely)/S3.5(FTS5) 可选增强同样暂缓，按观察暴露的需求再定。详见 [`TODO.md`](../../TODO.md)「当前：dogfood 观察期」。
+> **方案调整**：核心模块已做深，但**先不发布**。已 `npm link` 全局安装，实际使用一段时间，据真实反馈迭代后再发布。S3.4(kysely)/S3.5(FTS5) 可选增强同样暂缓，按观察暴露的需求再定。详见 [`TODO.md`](../../../TODO.md)「当前：dogfood 观察期」。
 
 - [ ] **S5.1 覆盖矩阵 + 体检全量更新**
   - 动作：覆盖矩阵所有模块更新到实际；体检报告关闭已修项、保留遗留。

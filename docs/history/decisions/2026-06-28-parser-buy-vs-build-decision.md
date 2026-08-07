@@ -1,6 +1,6 @@
 ---
-timestamp: 2026-06-30T00:01:23Z
-sha256: 5c0cee07c9872bd5f5d3ae3fca3d21033daf9a2c0f5ed4ebeae220d08e0a8c63
+timestamp: 2026-08-07T00:12:49Z
+sha256: 3ac77f1e64edd19dad9809ee328d1e0bcc37809362901c1d8e84e8948a3b7a32
 type: spec
 title: 解析层 buy-vs-build 决策：保留自建
 description: parser 保留自建、不替换 remark-obsidian-md 的 spike 结论
@@ -14,8 +14,8 @@ tags:
 
 > 日期：2026-06-28 · 类型：选型决策（ADR 性质）
 > 父计划：[`../plans/2026-06-26-execution-roadmap.md`](../plans/2026-06-26-execution-roadmap.md) 阶段 1 / S1.1
-> 依据：[`2026-06-26-deps-build-vs-buy.md`](2026-06-26-deps-build-vs-buy.md) A 项、[`../research/2026-06-26-libraries-survey.md`](../research/2026-06-26-libraries-survey.md) §1
-> 标尺：[`biz-obsidian-spec`](../../skills-def/biz-obsidian-spec/SKILL.md)（Obsidian 官方语法行为）
+> 依据：[`2026-06-26-deps-build-vs-buy.md`](2026-06-26-deps-build-vs-buy.md) A 项、[`../../research/2026-06-26-libraries-survey.md`](../../research/2026-06-26-libraries-survey.md) §1
+> 标尺：[`biz-obsidian-spec`](../../../skills-def/dev/biz-obsidian-spec/SKILL.md)（Obsidian 官方语法行为）
 
 ## 决策
 

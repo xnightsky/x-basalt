@@ -7,8 +7,8 @@ tags:
   - cli
   - chat
   - x-basalt
-timestamp: 2026-08-03T17:25:07Z
-sha256: 29c5b157c03519d0d7550713b128bdeab7e66745989f61862e8477cb05ce974c
+timestamp: 2026-08-07T00:12:49Z
+sha256: 27bce4e1cb79b4377340894a927a22a2112e0b80991f0d1b3f376e4d293405c9
 ---
 # chat 怎么玩 · x-basalt
 
@@ -97,7 +97,7 @@ x-basalt chat
   匹配口径**分两档**：纯 ASCII 是字面短语（多词 AND）；含中文时切 trigram 取并集 **OR 宽松召回**——只命中部分片段的笔记也会计入 `total`，完整子串命中者由 bm25 排最前。所以别把 `search` 的 `total` 当成「确实含这一串的篇数」，详见 [命令参考 `search`](commands.md#search--全文检索正文)。
 - **写无确认闸**：写动作直接改文件，靠 `Ctrl+C` 中断 + 原子写兜底，**没有逐动作确认**。别拿重要库直接玩写。
 - **常驻/监听不可用**：chat 工具皆一次性；不存在 watch（会挂死对话），它被系统提示禁止尝试。
-- **效果未量化**：AI 行为质量尚无场景库回归（见 [`../research/2026-06-30-chat-gap-vs-agent-browser.md`](../history/research/2026-06-30-chat-gap-vs-agent-browser.md) §3）。
+- **效果未量化**：AI 行为质量尚无场景库回归（见 [`../research/2026-06-30-chat-gap-vs-agent-browser.md`](../research/2026-06-30-chat-gap-vs-agent-browser.md) §3）。
 
 ## 8. 没 key 怎么办
 

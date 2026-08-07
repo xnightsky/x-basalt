@@ -1,27 +1,32 @@
 ---
 type: design
 title: 内置 pipeline 改造：统一算子模型
-description: 把编排器的流动单位从文件事件升级为 Row、算子统一为批进批出单签名、调度与算子分离；让 query/search/base/links/lint 都能进管道，并为 shell 管道预留接缝。设计提案，未实现
+description: 已落地的统一 pipeline 算子模型：Row 流动单位、单一 Op 签名与调度分离；覆盖读算子、纯函数算子、steps 配置面及剩余边界
 tags:
   - design
   - orchestration
   - pipeline
   - x-basalt
-timestamp: 2026-08-01T19:56:48Z
-sha256: 855673b002670b430b4b1db9b7bdf3d6568fa7b18556eb189200a5c40ef2af3b
+timestamp: 2026-08-06T23:56:25Z
+sha256: c5bd7935a6f964a69560d03e2bf690b8839b3ba2651a72801f7c963c7dcad3f2
 ---
 # 内置 pipeline 改造：统一算子模型
 
-> 上游设计：[`change-orchestration.md`](change-orchestration.md)（五段流水线、动作清单、算子集）。本文是其**执行层模型的升级提案**，不替代它——脊梁（§1）、风险清单（§9）、YAGNI 边界（§11）全部沿用。
+> 上游设计：[`change-orchestration.md`](change-orchestration.md)（五段流水线、动作清单、算子集）。本文记录其**已落地的执行层模型**，不替代它——脊梁（§1）、风险清单（§9）、YAGNI 边界（§11）全部沿用。
 > 下游设计：[`shell-pipe-portability.md`](shell-pipe-portability.md)（多平台 shell 管道），依赖本文的算子模型，排在本文之后。
 
-## 0. 状态：设计提案，未实现
+## 0. 状态：片一至片四已落地
 
-**代码一行不动。** 本文只冻结模型与切口，实现另行立计划（`docs/plans/`）。
+本文描述当前实现，而非待实施提案。统一模型已由 `src/orchestrator/types.ts`（`Row` / `Op` / `OpOutcome`）、`run.ts`（`runOpPipeline`）、`registry.ts`、`ops.ts` 与 `ops-pure.ts` 共同承载。
 
-现有 `x-basalt run --pipe actions=…` 的**对外行为与契约**保持不变——本提案是向后兼容的扩容，
-不是重写。但**内部执行语义有两处显式重定义**（`concurrency` 与 `onError`，见 §6），
-相应测试要改写而非保留，判据见 §9.1。
+| 片 | 已落地范围 | 主要验证 |
+| --- | --- | --- |
+| 一 | `Row`、`Op` / `OpOutcome`、统一注册表、批算子调度 | `tests/orchestrator-oppipeline.test.ts` |
+| 二 | `query` / `search` / `base` / `links.*` / `lint` 读算子 | `tests/orchestrator-ops-query.test.ts`、`tests/orchestrator-ops-base.test.ts`、`tests/orchestrator-ops-diagnostics.test.ts` |
+| 三 | `filter` / `map` / `limit` / `dedup` 与 `{{row.x}}` 插值 | `tests/orchestrator-ops-pure.test.ts`、`tests/orchestrator-oppipeline.test.ts` |
+| 四 | 配置 `steps` 与可重复 `--pipe step=`，保留 `actions` 兼容面 | `tests/orchestrator-params.test.ts`、`tests/orchestrator-cli.test.ts` |
+
+现有 `x-basalt run --pipe actions=…` 的对外契约保持兼容；`steps` 是面向含逗号算子参数的增量入口。`concurrency` 与 `onError` 的内部语义已按 §6 实现，并由 §9.1 的显式回归判据覆盖。
 
 > **2026-07-30 增补**：动手前发现原文有两处设计缺口 + 一条假判据，已补齐并落 D6/D7/D8——
 > 批算子模型下并发无处安放（§3.2.1）、`Op.run → Row[]` 表达不了逐行失败（§3.2）、
@@ -47,11 +52,11 @@ sha256: 855673b002670b430b4b1db9b7bdf3d6568fa7b18556eb189200a5c40ef2af3b
 | `src/indexer` | `VaultIndexer.update/removeByKey/scan` | ✅ `index` 动作 |
 | `src/meta` | `editMeta`/`setMeta`/`unsetMeta`/`renameMeta`/`normalizeDoc`/`applyProfile` | ✅ 5 个动作 |
 | `src/parser` | `VaultParser.parse` | ✅ `parse` 动作 |
-| `src/query` | `DataviewEngine.query` | ⚠️ 仅作路由谓词（`where=`），不是算子 |
-| `src/query` | `DataviewEngine.search` | ❌ |
-| `src/base` | `BaseEngine.query` | ❌ |
-| `src/links` | `runLinksCheck` / `runLinksSuggest` | ❌ |
-| `src/lint` | `runLint` | ❌ |
+| `src/query` | `DataviewEngine.query` | ✅ `query` 算子，可作源或转换 |
+| `src/query` | `DataviewEngine.search` | ✅ `search` 算子，可作源或转换 |
+| `src/base` | `BaseEngine.query` | ✅ `base` 算子，可作源或转换 |
+| `src/links` | `runLinksCheck` / `runLinksSuggest` | ✅ `links.*` 算子，可作源或转换 |
+| `src/lint` | `runLint` | ✅ `lint` 算子，可作源或转换 |
 
 **能力早就在了，是编排器的接口太窄接不进来。** 这不是"再补几个动作"能解决的——`links.check` 产出诊断列表、`base` 产出带计算列的行、`search` 产出带评分的命中，**它们的产物都不是"文件路径"**，而现有管道只能流动文件路径。
 
@@ -216,22 +221,22 @@ CLI 子命令与管道步骤**从同一张表取算子**。现在 `cli.ts` 和 `
 
 ## 4. 算子清单
 
-全部**包装现有函数**，不造新的 vault 能力——沿用 `change-orchestration.md` §7 的纪律（动作只包装，不绕过 indexer/meta 的写边界）。
+已落地算子均**包装现有函数**，不造新的 vault 能力——沿用 `change-orchestration.md` §7 的纪律（动作只包装，不绕过 indexer/meta 的写边界）。`scan` / `watch` 仍是编排器的事件源接线；`emit` 尚未进入当前实现。
 
 | 算子 | 角色 | 包装 | 现状 |
 | --- | --- | --- | --- |
-| `scan` | 源 | `VaultIndexer` FS↔DB diff | 已有 |
-| `watch` | 源 | chokidar | 已有 |
-| `query <dql>` | 源/转换 | `DataviewEngine.query` | 提升为算子 |
-| `search <text>` | 源 | `DataviewEngine.search` | 新接 |
-| `base <file>#<view>` | 源/转换 | `BaseEngine.query` | 新接 |
-| `links.check` / `links.suggest` | 转换 | `runLinksCheck/Suggest` | 新接 |
-| `lint` | 转换 | `runLint` | 新接 |
-| `parse` | 动作 | `VaultParser` | 已有 |
-| `index` | 动作 | `VaultIndexer` | 已有 |
-| `meta.set/unset/rename/normalize/apply` | 动作 | `src/meta` | 已有 |
-| `filter <expr>` `map` `limit <n>` `dedup <key>` | 转换 | 纯函数 | 新增 |
-| `emit [json\|yaml]` | 汇 | `src/format.ts` | 新接 |
+| `scan` | 源接线 | `VaultIndexer` FS↔DB diff | 已有；投影为初始 `Row[]` |
+| `watch` | 源接线 | chokidar | 已有；经 debounce / dedup 后投影为 `Row[]` |
+| `query <dql>` | 源/转换 | `DataviewEngine.query` | ✅ 已落地 |
+| `search <text>` | 源/转换 | `DataviewEngine.search` | ✅ 已落地 |
+| `base <file>#<view>` | 源/转换 | `BaseEngine.query` | ✅ 已落地 |
+| `links.check` / `links.suggest` | 源/转换 | `runLinksCheck/Suggest` | ✅ 已落地 |
+| `lint` | 源/转换 | `runLint` | ✅ 已落地 |
+| `parse` | 动作 | `VaultParser` | ✅ 已包装为 Op |
+| `index` | 动作 | `VaultIndexer` | ✅ 已包装为 Op |
+| `meta.set/unset/rename/normalize/apply` | 动作 | `src/meta` | ✅ 已包装为 Op |
+| `filter <expr>` `map` `limit <n>` `dedup <key>` | 转换 | 纯函数 | ✅ 已落地 |
+| `emit [json\|yaml]` | 汇 | `src/format.ts` | 未实现；CLI 仍负责最终输出 |
 
 ## 5. 数据传递
 
@@ -241,7 +246,7 @@ CLI 子命令与管道步骤**从同一张表取算子**。现在 `cli.ts` 和 `
 base tasks.base#overdue → meta.set status={{row.next_status}}
 ```
 
-`base` 的 formula 计算列直接喂给写动作——**现在完全做不到**（计算列在进管道时就被丢弃了）。
+`base` 的 formula 计算列可经 `Row.fields` 直接喂给写动作；`src/orchestrator/ops.ts` 的 `{{row.x}}` 插值已把这条链路落地。
 
 插值只读 `Row`，**不引入表达式求值器**（守 §11 的"不做任意脚本编排器"）；需要计算就用 `map` 算子或在 `.base` 的 formula 里算好。
 
@@ -273,8 +278,8 @@ base tasks.base#overdue → meta.set status={{row.next_status}}
 ## 7. 兼容与迁移
 
 - `x-basalt run --pipe actions=normalize,index --apply` **原样可用**，行为不变。
-- 迁移正确性的判据就是现有测试：889 用例全绿 = 语义没漂（数字以动手当天实测为准，勿照抄本文）。
-- `ChangeEvent` 类型保留为 `Row` 的窄化别名，不做破坏性删除。
+- 迁移验收不以某次总用例数作判据，而以 §9.1 的对外契约、重定义语义与安全性断言为准。
+- `ChangeEvent` 类型保留为 `Row` 的窄化投影，不做破坏性删除。
 
 ## 8. 不做（守 `change-orchestration.md` §11）
 
@@ -286,26 +291,19 @@ base tasks.base#overdue → meta.set status={{row.next_status}}
 
 ## 9. 分阶段切口
 
-| 片 | 内容 | 独立验收 |
-| --- | --- | --- |
-| 一 | `Row` + `Op`/`OpOutcome` 签名 + `registry`；现有 7 动作迁到新签名 | 见 §9.1（**不是**「测试全绿」） |
-| 二 | 接只读算子：`query` / `search` / `base` / `links.*` / `lint` | 每个算子既能当源又能当中段，各有用例 |
-| 三 | 纯函数算子 `filter/map/limit/dedup` + `{{row.x}}` 插值 | `base → meta.set` 端到端跑通计算列传递 |
-| 四 | 配置面：`--pipe` 支持声明式步骤列表，保留现有 kv 兼容 | 新旧两种写法产出同一份 `RunReport` |
+| 片 | 内容 | 独立验收 | 状态 |
+| --- | --- | --- | --- |
+| 一 | `Row` + `Op`/`OpOutcome` 签名 + `registry`；现有动作迁到新签名 | 见 §9.1（**不是**「测试全绿」） | ✅ 已落地 |
+| 二 | 接只读算子：`query` / `search` / `base` / `links.*` / `lint` | 每个算子既能当源又能当中段，各有用例 | ✅ 已落地 |
+| 三 | 纯函数算子 `filter/map/limit/dedup` + `{{row.x}}` 插值 | `base → meta.set` 端到端跑通计算列传递 | ✅ 已落地 |
+| 四 | 配置面：`--pipe` 支持声明式步骤列表，保留现有 kv 兼容 | 新旧两种写法产出同一份 `RunReport` | ✅ 已落地 |
 
-片一是纯重构（零功能变化），是后三片的前置；片二、片三、片四各自可停。
+四个切口已按顺序实施并分别建立回归覆盖。片一虽无直接用户可见收益，却为片二至片四提供了统一的行模型、算子契约与调度接缝；分片提交和独立验收避免了模型错误在后续能力接入时被放大。
 
-**风险分布是倒挂的，这决定了推进方式**：片一占了本次改造的大部分风险（翻转执行模型、触碰
-`src/orchestrator` 10 个测试文件共 90 个用例）却**零用户可见收益**；片二一落地就有东西可用
-（`base`/`lint`/`links` 进管道），并且会立刻反过来检验片一的模型对不对。所以即便一次性推到
-完整形态，也要**按片提交、逐片验收**，不要攒成一个大提交——片一的模型错误只有在片二才暴露，
-攒着做会让回退代价从「一片」变成「全部」。
-
-### 9.1 片一的验收判据（替换「889 测试全绿」）
+### 9.1 片一的验收记录（替换「889 测试全绿」）
 
 原判据「现有测试全绿 = 行为不变 = 迁移正确」**不成立**：§6 已明确 `concurrency` 与 `onError`
-两项语义要重定义，`tests/orchestrator-run.test.ts` 中锁这两项的用例**必然要改**——改了判据本身，
-它就不再能证明任何事。拆成「对外契约不变（可机械比对）」+「内部语义显式重定义并重测」两半：
+两项语义已经重定义，相关用例已按新边界重写。验收因此拆为「对外契约不变（可机械比对）」+「内部语义显式重定义并重测」两半：
 
 **A. 对外契约逐字不变**（不需要人判断，能机械比对）
 
@@ -348,29 +346,18 @@ base tasks.base#overdue → meta.set status={{row.next_status}}
 | D13 | `links.check` / `lint` 的诊断统一挂 `Row.fields.diagnostics`，类型复用 `src/lint/report.ts` 的 `BasaltDiagnostic[]`，不另造形状；源模式一行一文件、转换模式按行路径合并 | §12 片二必决项：写第一个诊断类算子前必须拍死。实现已按此落地（`src/orchestrator/ops.ts` `diagnosticsToRows`，lint/links.check 共用），本文回写从「倾向」改「已定」 | ①键名用单数 `diagnostic`——数组语义被键名否定；②再包一层 `{ items }`——与既有诊断结构两套形状；③塞 `Row.failed`——那是执行失败语义，会污染 `onError=continue` 的行剔除 |
 | D14 | 读源算子（`query`/`search`/`base`）行 `path` = 索引主键（`layout.toKey`：单根 POSIX 相对，多根 `<根目录名>/<相对>`），与写侧 `toAbs` 互逆 | §12 片二必决项：多根下不归一，读侧行 path 与写动作 / 索引键对不上，路由与防回环会静默失配。`query`/`search` 本就透传 DB 键、`base` 的 `file.path` 也来自索引键（`src/base/source.ts`），零换算天然一致；显式断言 Op-S3 / Op-B9，不再依赖「片二跑通」的巧合 | ①读侧自行 `relative(root, abs)` 重算——单根与旧键一致、多根丢命名空间前缀，两套键并存；②行 path 返回绝对路径——泄露物理位置且与索引键不可比；③给 `Row` 加第二套键字段——污染行模型，路由 / 防回环 / 写动作全部要跟着改 |
 
-## 11. 验收口径
+## 11. 验收记录
 
-1. 片一按 **§9.1 的 A/B/C 八条**验收（原「889 测试全绿」已作废，理由见 D8）。
-2. 每个新接算子有「作源」「作中段」两种用法的独立用例。
-3. `base` 的 formula 计算列能经 `{{row.x}}` 抵达写动作，有端到端用例。
-4. 调度层可替换性有实证：至少存在一个不经 debounce/watch 的最小执行器跑通同一条算子链。
-5. 片四：同一算子链 `actions` 与 `steps` 两种写法产出 `RunReport` 既有字段逐字段相等（对拍）；
-   含逗号参数的算子（如 `filter tags contains "a,b"`）在 `steps` 下正确、在 `actions` 下按既有
-   行为报错——把该差异钉成契约而非暗坑（D12）。
-6. dry-run 闸与防回环在新模型下仍受现有用例保护（不新增豁免）。
+1. 片一按 **§9.1 的 A/B/C 八条**完成验收（原「889 测试全绿」已作废，理由见 D8）。
+2. `query` / `search` / `base` / `links.*` / `lint` 均有作源或作中段的独立测试，适用时两种角色均覆盖。
+3. `base` 的 formula 计算列可经 `{{row.x}}` 抵达写动作，并有端到端测试。
+4. `runOpPipeline` 作为不经 debounce/watch 的最小执行器，已实证运行同一条算子链。
+5. `actions` 与 `steps` 的兼容、含逗号参数的 `steps` 行为以及 `RunReport` 字段对拍均有回归覆盖（D12）。
+6. dry-run 闸、自产生写防回环与写后刷索引仍由既有及新增测试保护，未增加豁免路径。
 
-## 12. 未决问题
+## 12. 当前边界与后续项
 
-**片三前必须定**：
-
-- `filter <expr>` 的表达式用什么？复用 DQL 的 WHERE 子集，还是只做字段比较？倾向后者（守 D4）。
-
-**已定，不再是未决**：
-
-- ~~`links.check` / `lint` 诊断挂 `fields` 哪个键~~ → D13（`Row.fields.diagnostics: BasaltDiagnostic[]`，
-  源模式一行一文件、转换模式按行路径合并）。
-- ~~多根 vault 下 `base`/`search` 行 `path` 归一到哪个命名空间~~ → D14（与索引主键同源
-  `layout.toKey`，写侧 `toAbs` 是其逆；显式断言 Op-S3 / Op-B9）。
-- ~~并发在批算子模型下落在哪一层~~ → D6（调度层按 `rowwise` 切批）。
-- ~~逐行失败怎么传给调度层~~ → D7（`OpOutcome.failed`）。
-- ~~片一拿什么当验收判据~~ → D8 / §9.1。
+- `filter <expr>` 已按字段比较实现；不复用 DQL WHERE 子集，也不引入新的表达式求值器（D4）。
+- `emit` 汇算子尚未实现；当前由 CLI 负责最终输出，避免在本轮额外扩展数据面。
+- `onBusy=restart` / `ignore` 仍未实现：需要为执行器接入 `AbortSignal` 协作取消，见根 `TODO.md` 的变更编排器余项。
+- 多平台 stdin/stdout shell 管道仍由下游 [`shell-pipe-portability.md`](shell-pipe-portability.md) 单独定义；本模型保留其调度接缝，但不把裸 shell 算子并入当前范围。
