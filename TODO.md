@@ -1,6 +1,6 @@
 ---
-timestamp: 2026-08-07T17:09:33Z
-sha256: e146a88a7406c1e70d96372a5a38f1b53d9bccd3602f5580bcb804441c969d3b
+timestamp: 2026-08-07T17:21:48Z
+sha256: df63ee4e704e4d5e210c50e9a15e715c429d3449a1f9b41c311cd925724d56fc
 ---
 # TODO · x-basalt
 
@@ -8,6 +8,7 @@ sha256: e146a88a7406c1e70d96372a5a38f1b53d9bccd3602f5580bcb804441c969d3b
 
 ## 当前执行项
 
+- [ ] **先补 Bases 语法接地，再复跑动态 base A/B**：当前真实 chat 基线中 DQL 12/12、base 7/12；先新增独立 Bases 运行时 skill、修正 base 分页提示漂移并补全 tool-error trace，再按同模型/同场景/同预算跑 3 轮。验收目标为 base 失败≤1/12、零撞顶/零 error-storm、平均重试≤1、token≤2× DQL；若补接地后失败仍≥25%，停止“动态 base 比 DQL 更可靠”的路线假设。计划见 [`docs/plans/2026-08-08-bases-chat-grounding.md`](./docs/plans/2026-08-08-bases-chat-grounding.md)。
 - [ ] **定位 pipeline 的间歇性测试失败**：曾观察到一次 `1028 pass / 1 fail`，未记录用例名；优先复现并记录失败测试，再判断是否为 watch/debounce 时序问题。未复现前不得视为已解决。设计见 [`docs/design/pipeline-op-model.md`](./docs/design/pipeline-op-model.md)。
 
 ## 长期 backlog（待 dogfood 暴露真实需求再开）
