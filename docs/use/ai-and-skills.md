@@ -106,8 +106,6 @@ OBSIDIAN_SKILL_PATH=./team-skills x-basalt skills recall wikilink
 
 > 分工：`obsidian-base-spec` 只讲 Obsidian Markdown 与 Dataview(DQL) 文法，**不碰 Bases**——`.base` 视图文件的语法/怎么生成动态 base 由独立的 `bases` 篇负责，两篇刻意不互抄。
 
-这套分层是**召回粒度的实现方式**：`recall` 的返回单位是「整篇」而非「命中的段落」，所以让每篇足够小、且 triggers 各管一路，比切碎条目或改召回引擎都简单。总览词一律归 `summary`——1.8 KB 的入口，比一上来吞 `core` 便宜一个数量级。
-
 **兜底**：外部目录若自带同名 skill，优先使用外部版本（允许 shadow 覆盖内置）；外部目录为空/无效时，`obsidian-base-spec` 与 `core` 这两篇从内置补回，保证基础召回与「CLI 会讲自己的用法」永远可用。其余三篇在内置目录下自动加载，但不进兜底名单——用外部目录 shadow 时需自行提供。
 
 ### JSON5 文件结构（供自定义扩展参考）
