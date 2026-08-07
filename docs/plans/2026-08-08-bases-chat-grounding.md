@@ -115,4 +115,33 @@ status: active
 
 - [x] 真实 chat A/B 基线完成，差距与生成侧根因已定位。
 - [x] 本计划与量化验收/杀死条件落盘。
-- [ ] BG-1～BG-5 待执行。
+- [x] BG-1 Bases 运行时 skill（`skills-data/bases.json5`）。
+- [x] BG-2 chat/core 契约校正（base 分页漂移移除、Bases 取源到 `bases` skill）。
+- [x] BG-3 tool-error 落盘含 `{ message, code?, classification? }`（trace 归一化 + 有界预览）。
+- [x] BG-4 回归与文档（skill/trace 测试、docs 六篇、lint/typecheck/build/test 全绿）。
+- [x] BG-5 同条件 A/B 复跑 3 轮完成，结论写回下方 Evidence/Verify。
+
+## Evidence / Verify（2026-08-08 A/B 复跑结果）
+
+> 跑法：兄弟库 `../x-basalt-evals`，`node runner/run.mjs --judge --only compare/dynamic-base-ab` ×3 轮；
+> 主仓改后已 `pnpm build`（harness 调 `dist/cli.js`）；模型 `deepseek-v4-flash`（`AI_GATEWAY_MODEL`），vault/4 对问题同基线。
+> 三份 live 明细 JSON：`2026-08-07T18-35-33-422Z / 18-36-45-491Z / 23-02-57-831Z`（x-basalt-evals/reports/）。
+
+| 指标 | 基线 DQL | 基线 base | 复跑 DQL | 复跑 base | 验收门槛 |
+|---|---:|---:|---:|---:|---|
+| 正式样本 | 12 | 12 | 12 | 12 | — |
+| 通过 | 12/12 | 7/12 | **12/12** | **12/12** | ≤8.3% 失败 ✓ |
+| `taskFailureRate` | 0% | 41.7% | 0% | **0%** | ≤1/12 ✓ |
+| `avgRetries` | 0.75 | 7.17 | 0.42 | **0.00** | ≤1.0 ✓ |
+| `exhaustedRate` | 0% | 25% | 0% | **0%** | =0 ✓ |
+| `errorStormRate` | 0% | 16.7% | 0% | **0%** | =0 ✓ |
+| `avgSteps` | 4.00 | 10.58 | 3.33 | **3.00** | 改善 |
+| `avgToolCalls` | 3.08 | 13.67 | 3.42 | **3.00** | 改善 |
+| `avgTotalTokens` | 22,367 | 211,746 | 23,572 | **19,295** | ≤2×DQL（=0.82×）✓ |
+
+**结论**：接地后动态 base 从 7/12 逆转到 **12/12**，全部验收门槛达标，**未命中杀死条件**。
+base 平均重试 0/次（基线 7.17）、零撞顶/零 error-storm、平均 3 轮完成、token 0.82×DQL（基线 9.47×）——
+原「base 靠 diagnostics 反复试错」的三类错误形态（filters 写成数组 / 臆造 `{field,operator,value}` / 排序写进 order）
+在具备可机读 Bases skill 后不再出现。**“动态 base 可能比 DQL 更可靠”的路线假设维持成立，chat 无需默认回退 DQL。**
+
+> 提示：本结果仅 `deepseek-v4-flash` + 单一固定小 vault + 4 类读取问题，不宣称外推到其它模型/更大 vault（对齐原基线限制）。
