@@ -1,6 +1,6 @@
 ---
-timestamp: 2026-08-07T23:16:38Z
-sha256: 03ccaeee193e50ef2c0ff63c4febf6530643b5979b2fdf6639694c35fd995670
+timestamp: 2026-08-08T15:06:31Z
+sha256: aed070aadc9ecf82d42706e56f209014fd1c15129fff018ee825d522af69a322
 ---
 # TODO · x-basalt
 
@@ -8,7 +8,10 @@ sha256: 03ccaeee193e50ef2c0ff63c4febf6530643b5979b2fdf6639694c35fd995670
 
 ## 当前执行项
 
-- [ ] **先补 Bases 语法接地，再复跑动态 base A/B**：当前真实 chat 基线中 DQL 12/12、base 7/12；先新增独立 Bases 运行时 skill、修正 base 分页提示漂移并补全 tool-error trace，再按同模型/同场景/同预算跑 3 轮。验收目标为 base 失败≤1/12、零撞顶/零 error-storm、平均重试≤1、token≤2× DQL；若补接地后失败仍≥25%，停止“动态 base 比 DQL 更可靠”的路线假设。计划见 [`docs/plans/2026-08-08-bases-chat-grounding.md`](./docs/plans/2026-08-08-bases-chat-grounding.md)。
+> 当前无在进行中的产品主线。最近一轮「Bases 语法接地 + 动态 base A/B 复跑」已**完成并收口**：
+> base 从基线 7/12 逆转到 12/12（[计划 Evidence/Verify](./docs/plans/2026-08-08-bases-chat-grounding.md)），
+> 后续能力评估四场景 39/39、skill-before-base/source 39/39，零 base error / 零撞顶 / 零 error-storm（x-basalt-evals）。
+> 进入真实 vault dogfood 观察期；出现可复现阻断问题再立项。
 
 ## 长期 backlog（待 dogfood 暴露真实需求再开）
 
