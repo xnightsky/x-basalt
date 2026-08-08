@@ -114,14 +114,42 @@ test("根因: links 不注入 --db（该命令无此选项）", async () => {
   assert.doesNotMatch(String(out), /unknown option '--db'/);
 });
 
-// 用户显式给 --vault 时不重复注入（显式优先）
-test("根因: 用户显式 --vault 时不重复注入", async () => {
+test("会话上下文优先：忽略模型显式传入的错误 --vault/--db", async () => {
+  const wrongDir = mkdtempSync(join(tmpdir(), "xb-clitool-wrong-"));
   const out = await tool().execute!(
-    { args: ["query", 'LIST FROM ""', "--vault", dir] },
+    {
+      args: ["query", 'LIST FROM ""', "--vault", wrongDir, "--db", join(wrongDir, "missing.db")],
+    },
     {} as never,
   );
   assert.match(String(out), /"total": 2/);
-  assert.doesNotMatch(String(out), /unknown option/);
+});
+
+test("会话上下文优先：忽略 --vault=<path>/--db=<path> 形式", async () => {
+  const wrongDir = mkdtempSync(join(tmpdir(), "xb-clitool-wrong-equals-"));
+  const out = await tool().execute!(
+    {
+      args: [
+        "query",
+        'LIST FROM ""',
+        `--vault=${wrongDir}`,
+        `--db=${join(wrongDir, "missing.db")}`,
+      ],
+    },
+    {} as never,
+  );
+  assert.match(String(out), /"total": 2/);
+});
+
+test("会话上下文优先：忽略 scan 的模型 vault 位置参数", async () => {
+  const wrongDir = mkdtempSync(join(tmpdir(), "xb-clitool-wrong-scan-"));
+  writeFileSync(join(wrongDir, "outside.md"), "# Outside\n", "utf8");
+  const out = await tool().execute!(
+    { args: ["scan", wrongDir, "--dry-run", "--json"] },
+    {} as never,
+  );
+  assert.match(String(out), /"unchanged": 2/);
+  assert.doesNotMatch(String(out), /outside\.md/);
 });
 
 // CC-1c：source 入参（动态 base stdin）经 stdin 传给子进程

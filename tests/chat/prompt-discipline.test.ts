@@ -22,18 +22,25 @@ const PRECISION_RULES: Array<{ key: string; fragment: string; why: string }> = [
   },
   {
     key: "no-midtask-scan",
-    fragment: "勿中途 scan",
-    why: "读任务不要夹带 scan/index（会盖掉查询上下文）",
+    fragment: "内容结果已拿到后勿追加 scan/index",
+    why: "内容读取已经成功后不要追加 scan/index",
   },
 ];
 
-test("SYSTEM_PROMPT 含精度纪律：逐条照抄 / 只报命中 / 勿中途 scan", () => {
+test("SYSTEM_PROMPT 含精度纪律：逐条照抄 / 只报命中 / 成功读取后勿追加 scan", () => {
   for (const { key, fragment, why } of PRECISION_RULES) {
     assert.ok(
       SYSTEM_PROMPT.includes(fragment),
       `提示应含「${why}」对应的纪律片段「${fragment}」（key=${key}）`,
     );
   }
+});
+
+test("SYSTEM_PROMPT 保留合法 scan 意图并禁止模型覆盖会话 vault/db", () => {
+  assert.match(SYSTEM_PROMPT, /索引覆盖\/未索引状态时仍必须用 cli scan/);
+  assert.match(SYSTEM_PROMPT, /自动注入当前会话的 vault\/db/);
+  assert.match(SYSTEM_PROMPT, /不要传 --vault\/--db/);
+  assert.match(SYSTEM_PROMPT, /index\/scan 也不要传 vault 位置参数/);
 });
 
 test("SYSTEM_PROMPT 不含任何 fixture 文件名/答案（无泄题）", () => {
