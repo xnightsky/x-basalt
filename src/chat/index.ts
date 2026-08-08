@@ -33,13 +33,14 @@ export const SYSTEM_PROMPT =
   "你通过工具操作一个 Obsidian vault。" +
   "【工具面】你只有三个工具：cli（唯一执行口，args 传命令与参数数组，如 {args:['query','LIST FROM #x']}）、skills_recall（模糊召回规范）、skills_get（取规范全文）。vault 的一切操作（读/写/查询/批量）都经 cli 子命令完成，不存在其他工具。" +
   "【动手前必做】你现在没有 x-basalt 的用法与 DQL 规范全文——回答任何问题、调用任何查询/写命令之前，第一步先调用 skills_get 取 core（能力总览 + DQL 基础 + meta/pipeline 用法）；需要精确的 DQL 文法 / frontmatter 时 skills_get 取 obsidian-base-spec；需要 Bases（.base）的语法/怎么生成动态 .base 时 skills_get 取 bases（用 `==`/`&&`，不是 DQL 的 `=`/`AND`）。别凭记忆猜语法。" +
-  "【cli 用法】cli 的子命令：parse（解析单文件 AST）/ index（全量建库）/ scan（对比文件系统与索引，未索引计数）/ query（结构化查询，查 frontmatter/tag/link/task）/ search（全文检索正文，至少 2 字符）/ base（.base view 查询，可传 source 字段作为定义内容经 stdin 读取）/ meta（读改 frontmatter，子命令 get/set/unset/rename/normalize/apply）/ run（声明式批量写，steps 或 actions）/ links（断链检查）/ lint（规范检查）。chat 已自动注入当前会话的 vault/db，调用 cli 时不要传 --vault/--db，index/scan 也不要传 vault 位置参数或猜相对目录。" +
+  "【cli 用法】cli 的子命令：parse（读取单文件完整 Markdown body + AST）/ index（全量建库）/ scan（对比文件系统与索引，未索引计数）/ query（结构化查询，查 frontmatter/tag/link/task）/ search（全文检索正文，至少 2 字符）/ base（.base view 查询，可传 source 字段作为定义内容经 stdin 读取）/ meta（读改 frontmatter，子命令 get/set/unset/rename/normalize/apply）/ run（声明式批量写，steps 或 actions）/ links（断链检查）/ lint（规范检查）。chat 已自动注入当前会话的 vault/db，调用 cli 时不要传 --vault/--db，index/scan 也不要传 vault 位置参数或猜相对目录。" +
   "不知道具体是哪篇笔记、需要按正文内容找时用 cli search（全文检索，中文支持切词/子串召回）；已知是哪篇要看全文用 cli parse 或 cli query；查结构化字段（frontmatter/tag/link/task）用 cli query。" +
   "【计数与分页】cli 输出里 total/counts 是命中总数——数总量直接读 total，不要翻页枚举；分页参数 --offset/--size（query/search 支持，默认 size 50 上限 500、0 只回 total；base 不支持分页，用 .base 的 limit/total）。" +
   "【别擅自短路】不要仅凭问题「看起来通用」就绕过 vault 直接用通用知识作答——先用 cli search/query 试召回，命中了就基于 vault 内容回答；确实无相关笔记再用通用知识，且必须显式声明「未从 vault 召回、以下为通用知识」，不得让调用方误以为已从 vault 召回。" +
   "问「哪些/多少笔记还没被索引、索引覆盖多少、未索引数量」这类『索引覆盖状态』用 cli scan（对比文件系统与索引，counts/byDir 直接给未索引数、永不截断）；「没有 index / 未索引」指的是没被 x-basalt 索引，别误读成 frontmatter 里叫 index 的字段、也别脑补成「无 frontmatter」而去 query 瞎猜。" +
   "【列举必须逐条照抄】要列出具体条目（路径 / 文件名 / 字段值）时，只能从 cli 输出里**逐条转写原文**：不得改写、不得按命名规律推演补齐、不得为凑够声称的条数而编造。输出里没有的条目就是不存在。条目多就先翻页取全再列；实在列不全，就如实说明「只列出前 N 条、共 M 条」——**宁可承认没列全，也不要给一份看起来完整、实则掺假的清单**。" +
-  "【结果精确·只报命中的】列查询/base 结果时，**只陈述返回的行**：不要顺带点名被过滤掉、在 limit 之外、或近似但不是结果的文件（哪怕以『供参考/说明/顺带提』名义也不行）——把被排除项写进答案会把结果弄脏。命中什么就报什么，别再解释『谁没被选中』。" +
+  "【结果精确·只报命中的】列查询/base 结果时，**只陈述返回的行**：不要顺带点名被过滤掉、在 limit 之外、或近似但不是结果的文件（哪怕以『供参考/说明/顺带提』名义也不行），尤其不要为证明过滤生效而复述被排除路径。命中什么就报什么，别再解释『谁没被选中』。" +
+  "【工具编排】直接调用所需工具，不要在工具调用前输出计划、进度或中间路径；全部取证完成后只输出一次最终答案。最终答案只包含用户明确要求的结果行与字段，不要点名仅用于导航/取证的中间文件。用户规定『每行一条/每行：…』模板时，严格只输出这些数据行，不加标题、前言、解释或代码围栏。已知候选正文要读多个文件时，在同一轮并行调用 parse，不要改用 search 逐项试探，也不要为确认已成功的工具结果追加交叉验证。" +
   "【读取与索引意图区分】用户问索引覆盖/未索引状态时仍必须用 cli scan；明确要求维护索引时也可用 scan/index。除此之外，纯读取/列举任务的内容结果已拿到后勿追加 scan/index（它们会刷新索引并浪费上下文）；直接根据已有结果回答。" +
   "写命令直接改文件、无二次确认——改前先用读命令确认目标，动作要稳妥。" +
   "批量写命令（cli run）返回 changed>0 即表示已写成功且索引已刷新，直接据此作答；不要再 query/scan 复核一遍，那只是白烧步数。" +
@@ -72,7 +73,7 @@ export interface ChatOutputWriters {
   stderr: (text: string) => void;
 }
 
-/** JSON 档需跨事件累积答案；其余档也共用同一上下文以统一渲染入口。 */
+/** 机器输出档跨事件缓冲最后一步答案；full 档仍即时渲染所有文本。 */
 export interface RenderContext {
   profile: ChatOutputProfile;
   answer: string;
@@ -170,6 +171,10 @@ function renderFinish(e: LoopEvent, context: RenderContext): void {
     );
     return;
   }
+  if (context.profile !== "full" && context.answer) {
+    context.writers.stdout(context.answer);
+    context.answer = "";
+  }
   if (e.noRecallNotice) context.writers.stdout(`\n${e.noRecallNotice}\n`);
   if (e.stopReason === "exhausted") {
     context.writers.stdout(`\n${EXHAUSTED_NOTICE}\n`);
@@ -187,6 +192,7 @@ function renderFinish(e: LoopEvent, context: RenderContext): void {
  * @behavior Given quiet 或 json When 收到工具过程事件 Then stdout/stderr 均不写过程
  * @behavior Given quiet 收到 no-recall/exhausted finish When 收尾 Then 仍向 stdout 写结果限定
  * @behavior Given summary 收到工具调用 When 渲染 Then stderr 只写工具名与短目标，不写结果预览
+ * @behavior Given summary/quiet/json 的文本后仍有工具调用 When 渲染 Then 丢弃该中间导航文本，只输出最后一步答案
  */
 export function renderEvent(
   e: LoopEvent,
@@ -195,10 +201,11 @@ export function renderEvent(
   switch (e.type) {
     case "text":
       if (!e.text) break;
-      if (context.profile === "json") context.answer += e.text;
-      else context.writers.stdout(e.text);
+      if (context.profile === "full") context.writers.stdout(e.text);
+      else context.answer += e.text;
       break;
     case "tool-call": {
+      if (context.profile !== "full") context.answer = "";
       if (context.profile === "full") {
         const args = fmtInput(e.input);
         context.writers.stdout(`\n· 调用 ${e.toolName}${args ? ` ${args}` : ""} …\n`);

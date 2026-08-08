@@ -275,7 +275,7 @@ async function execCli(
 export function buildCliTool(ctx: ToolContext, safety: Safety, cliEntry?: string): Tool {
   return tool({
     description:
-      "执行 x-basalt CLI 命令的唯一入口（一条命令=一次调用）。args 是命令与参数数组（子命令 + flags + 位置参数，逐项原样传递、不要拼成字符串）。chat 已按当前会话自动注入 vault/db，args 不要传 --vault/--db，index/scan 也不要传 vault 位置参数。可用子命令：parse/index/scan/query/search/base/skills/meta/run/links/lint（watch/chat 不允许）。query 查结构化字段、search 查正文、parse 解析单文件 AST、批量写用 run、.base view 查询用 base（可传 source 字段作为 .base 定义内容经 stdin 读取，免落盘）。结果含 total/counts 计数——数总量直接读 total，不要翻页枚举。写命令会直接落盘。不知道 CLI 语法先 skills_get 取 core。",
+      "执行 x-basalt CLI 命令的唯一入口（一条命令=一次调用）。args 是命令与参数数组（子命令 + flags + 位置参数，逐项原样传递、不要拼成字符串）。chat 已按当前会话自动注入 vault/db，args 不要传 --vault/--db，index/scan 也不要传 vault 位置参数。可用子命令：parse/index/scan/query/search/base/skills/meta/run/links/lint（watch/chat 不允许）。query 查结构化字段、search 查正文、parse 返回单文件完整 Markdown body + AST、批量写用 run、.base view 查询用 base（可传 source 字段作为 .base 定义内容经 stdin 读取，免落盘）。结果含 total/counts 计数——数总量直接读 total，不要翻页枚举。写命令会直接落盘。不知道 CLI 语法先 skills_get 取 core。",
     inputSchema: jsonSchema<{ args: string[]; source?: string }>({
       type: "object",
       properties: {

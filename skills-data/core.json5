@@ -100,7 +100,7 @@
     {
       id: "parse",
       pattern: "parse <file> [--format json|yaml]",
-      description: "解析单个 .md → { frontmatter, nodes }；nodes 含 wikilink/Markdown link/tag/callout/task/highlight/blockRef/inlineField。wikilink/embed/markdownLink 节点含完整文件 line/column/raw，可用于后续 links/lint 定位；parser 保留重复链接诊断节点，indexer 写 links 表前再去重。--format 默认 json，可选 yaml。纯函数，不碰 DB。",
+      description: "解析单个 .md → { frontmatter, body, nodes }；body 是去除 frontmatter 后的完整 Markdown 正文（普通标题/段落也保留），nodes 含 wikilink/Markdown link/tag/callout/task/highlight/blockRef/inlineField。wikilink/embed/markdownLink 节点含完整文件 line/column/raw，可用于后续 links/lint 定位；parser 保留重复链接诊断节点，indexer 写 links 表前再去重。--format 默认 json，可选 yaml。纯函数，不碰 DB。",
       examples: ["x-basalt parse note.md", "x-basalt parse note.md --format yaml"],
     },
     {

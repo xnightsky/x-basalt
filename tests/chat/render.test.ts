@@ -31,6 +31,7 @@ function capture(profile: Profile, events: LoopEvent[]): Capture {
 
 test("--quiet：只输出答案与结果限定，工具过程在 stdout/stderr 都不可见", () => {
   const output = capture("quiet", [
+    { type: "text", text: "先检索一下。" },
     { type: "tool-call", toolName: "search", input: { query: "前端单元测试" } },
     { type: "tool-result", toolName: "search", output: { rows: ["很长的结果预览"] } },
     { type: "tool-error", toolName: "read_note", error: new Error("不应泄漏") },
@@ -51,6 +52,7 @@ test("--quiet：只输出答案与结果限定，工具过程在 stdout/stderr �
 
 test("非 TTY 摘要：过程只向 stderr 写工具名与短目标，答案只向 stdout 写", () => {
   const output = capture("summary", [
+    { type: "text", text: "我先查找目标文件。" },
     {
       type: "tool-call",
       toolName: "search",
@@ -68,6 +70,7 @@ test("非 TTY 摘要：过程只向 stderr 写工具名与短目标，答案只�
   assert.equal(output.stdout, "召回后的答案。");
   assert.equal(output.stderr, "· search 前端单元测试\n");
   assert.doesNotMatch(output.stderr, /rows|content|↳|完成/);
+  assert.doesNotMatch(output.stdout, /先查找/);
 });
 
 test("--quiet：exhausted 在隐藏过程时仍随答案输出", () => {
@@ -99,13 +102,28 @@ test("--json：结束后只输出一个结构化对象", () => {
 
   assert.equal(output.stderr, "");
   assert.deepEqual(JSON.parse(output.stdout), {
-    answer: "结构化答案",
+    answer: "答案",
     recalled: true,
     stopReason: "done",
     steps: 3,
     usage: { inputTokens: 12, outputTokens: 5, totalTokens: 17 },
   });
   assert.equal(output.stdout.trim().split("\n").length, 1);
+});
+
+test("full：保留工具前导航文本，维持交互式可观测性", () => {
+  const output = capture("full", [
+    { type: "text", text: "先查一下。" },
+    { type: "tool-call", toolName: "search", input: { query: "目标" } },
+    { type: "tool-result", toolName: "search", output: "命中" },
+    { type: "text", text: "最终答案。" },
+    { type: "finish", stopReason: "done", recalled: true, steps: 2 },
+  ]);
+
+  assert.match(output.stdout, /^先查一下。/);
+  assert.match(output.stdout, /最终答案。/);
+  assert.match(output.stdout, /· 调用 search/);
+  assert.match(output.stdout, /· 完成/);
 });
 
 test("--json：provider 缺少完整 usage 时输出 null，仍保持对象字段稳定", () => {

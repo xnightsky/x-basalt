@@ -42,7 +42,7 @@ tags:
 x-basalt parse <file> [--format json|yaml]
 ```
 
-解析单个 Markdown 文件，输出标准化 AST。纯函数，不操作数据库。
+解析单个 Markdown 文件，输出 `{ frontmatter, body, nodes }`：`body` 是去除 frontmatter 后的完整 Markdown 正文（包括普通标题和段落），`nodes` 是 Obsidian 专有语法的标准化 AST。纯函数，不操作数据库。
 
 | 参数/选项        | 默认                      | 说明                                                  |
 | ---------------- | ------------------------- | ----------------------------------------------------- |

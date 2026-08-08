@@ -82,6 +82,7 @@ test("根因: index 注入位置参数（非 --vault）", async () => {
 test("根因: parse 的单根 vault 主键不按 cwd 误解析", async () => {
   const out = await tool().execute!({ args: ["parse", "--format", "json", "a.md"] }, {} as never);
   assert.match(String(out), /<<VAULT_DATA T>>/);
+  assert.match(String(out), /"body": "# A\\n"/);
   // 选项可出现在文件参数前；parse 仍成功且不需要模型猜 vault 目录前缀。
   assert.doesNotMatch(String(out), /unknown option/);
 });

@@ -25,6 +25,26 @@ const PRECISION_RULES: Array<{ key: string; fragment: string; why: string }> = [
     fragment: "内容结果已拿到后勿追加 scan/index",
     why: "内容读取已经成功后不要追加 scan/index",
   },
+  {
+    key: "no-progress-narration",
+    fragment: "不要在工具调用前输出计划、进度或中间路径",
+    why: "工具链执行时不把导航文本混进最终答案",
+  },
+  {
+    key: "no-intermediate-files-in-final",
+    fragment: "不要点名仅用于导航/取证的中间文件",
+    why: "最终答案不混入未被用户要求列出的中间文件",
+  },
+  {
+    key: "strict-row-template",
+    fragment: "严格只输出这些数据行，不加标题、前言、解释或代码围栏",
+    why: "用户给出逐行格式时不额外生成会污染枚举判定的说明",
+  },
+  {
+    key: "parallel-parse",
+    fragment: "在同一轮并行调用 parse",
+    why: "高扇出正文取证应并行 parse",
+  },
 ];
 
 test("SYSTEM_PROMPT 含精度纪律：逐条照抄 / 只报命中 / 成功读取后勿追加 scan", () => {
@@ -41,6 +61,10 @@ test("SYSTEM_PROMPT 保留合法 scan 意图并禁止模型覆盖会话 vault/db
   assert.match(SYSTEM_PROMPT, /自动注入当前会话的 vault\/db/);
   assert.match(SYSTEM_PROMPT, /不要传 --vault\/--db/);
   assert.match(SYSTEM_PROMPT, /index\/scan 也不要传 vault 位置参数/);
+});
+
+test("SYSTEM_PROMPT 不以排除项路径证明过滤生效", () => {
+  assert.match(SYSTEM_PROMPT, /不要为证明过滤生效而复述被排除路径/);
 });
 
 test("SYSTEM_PROMPT 不含任何 fixture 文件名/答案（无泄题）", () => {
