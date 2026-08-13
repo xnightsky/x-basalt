@@ -31,10 +31,15 @@ function run(
   args: string[],
   opts: { cwd?: string; env?: Record<string, string> } = {},
 ): { status: number; stdout: string; stderr: string } {
+  // CLI 用例必须显式声明 X_BASALT_DIR：继承开发机的全局相对路径会把“cwd 就近配置”
+  // 测成严格 env 配置来源，旧实现的静默回退曾掩盖这项测试污染。
+  const env = { ...process.env };
+  delete env.X_BASALT_DIR;
+  Object.assign(env, opts.env);
   const r = spawnSync(process.execPath, ["--import", TSX, CLI, ...args], {
     encoding: "utf8",
     cwd: opts.cwd,
-    env: opts.env ? { ...process.env, ...opts.env } : process.env,
+    env,
   });
   return { status: r.status ?? -1, stdout: r.stdout ?? "", stderr: r.stderr ?? "" };
 }
@@ -99,6 +104,37 @@ test("X_BASALT_DIR：index 不带 --db 时库落在 $X_BASALT_DIR/index.db", () 
   const r = run(["index", vault], { env: { X_BASALT_DIR: base } });
   assert.equal(r.status, 0, r.stderr);
   assert.ok(existsSync(join(base, "index.db")), "库应落在 X_BASALT_DIR/index.db");
+});
+
+test("X_BASALT_DIR 自定义相对目录：错位配置失败，显式 vault 与正确迁移均落到定制位置", () => {
+  const proj = freshDir();
+  const vault = join(proj, "vault");
+  const customBase = ".state/custom-basalt";
+  const base = join(proj, customBase);
+  const defaultBase = join(proj, ".tmp", ".x-basalt");
+  // 隔离 HOME，避免开发机 ~/.x-basalt/config.yaml 的全局 vault 掩盖“env 基目录缺 config”。
+  const env = { X_BASALT_DIR: customBase, HOME: freshDir() };
+  mkdirSync(join(proj, ".x-basalt"), { recursive: true });
+  mkdirSync(vault, { recursive: true });
+  writeFileSync(join(vault, "Note.md"), "# Note\n");
+  writeFileSync(join(proj, ".x-basalt", "config.yaml"), "vault: ./vault\n");
+
+  const misplaced = run(["index"], { cwd: proj, env });
+  assert.equal(misplaced.status, 1, "env 基目录缺 config 时必须拒绝 cwd 的错位配置");
+  assert.match(misplaced.stderr, /需要 <vault> 参数或在配置文件中设置 vault/);
+  assert.equal(existsSync(join(base, "index.db")), false, "失败时不得生成与配置分家的 DB");
+
+  const explicit = run(["index", "./vault"], { cwd: proj, env });
+  assert.equal(explicit.status, 0, explicit.stderr);
+  assert.ok(existsSync(join(base, "index.db")), "显式 vault 仍应把 DB 写入自定义基目录");
+
+  rmSync(base, { recursive: true, force: true });
+  mkdirSync(base, { recursive: true });
+  writeFileSync(join(base, "config.yaml"), "vault: ./vault\n");
+  const configured = run(["index"], { cwd: proj, env });
+  assert.equal(configured.status, 0, configured.stderr);
+  assert.ok(existsSync(join(base, "index.db")), "正确位置的 config 与 DB 应同目录");
+  assert.equal(existsSync(defaultBase), false, "显式 env 必须覆盖全局默认 .tmp/.x-basalt");
 });
 
 test("scan 主路径：新增文件后增量重索引报告 +1", () => {

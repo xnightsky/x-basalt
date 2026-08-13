@@ -47,10 +47,8 @@ import { renderSkill, renderSkillList, renderSkills } from "./skill/render.js";
 // 本文件只做参数装配与输出格式化，不内联业务逻辑（逻辑在各层并各有单测）。
 
 // 启动时加载一次项目/全局配置；各命令以 `flag ?? config.X ?? 内置默认` 解析，免去重复传参。
-// X_BASALT_DIR 原样交给 loadConfig：它按「该目录下有没有 config.*」决定用还是回退就近发现，
-// 外部进程的无关 env（如测试子进程换了 cwd）自然落回项目配置。
-// 此处**不得**再加 existsSync 预判——BASE_DIR 无条件用同一个 env 且 indexer 会自动建目录，
-// 「目录存不存在」会被自己的副作用翻转（详见 loadConfig 注释）。
+// X_BASALT_DIR 原样交给 loadConfig：一旦设置，它同时成为项目 config 与默认 DB 的严格基目录；
+// 即便目录缺 config.* 也不回退 cwd，避免配置与索引静默分家。显式 CLI 参数仍可独立运行。
 // 配置校验错（如 pipelines 字段非法）在此终止：报带来源的错误并 exit 1，不裸抛栈（I2）；
 // 语法解析错已在 loadConfig 内 warn 降级，不会走到这里。
 let config: BasaltConfig;

@@ -35,7 +35,7 @@ tags:
 | `✗ unable to open database file`              | `--db` 指向的 SQLite 文件不存在；`query`/`scan` 不会自动建空库（`fileMustExist` 保护） | 先跑 `index <vault> --db <path>` 建库；之后 `query`/`scan` 才能打开                                                                                       |
 | `✗ 不支持的查询字段: file.day`                | 引用了子集以外的隐式字段（`file.day`/`cday`/`mday`/`link`/`etags`/`aliases` 等）       | 查阅 [DQL 查询 · 隐式字段映射](dql.md)，换用受支持字段；字段如确需要请提 Issue                                                                   |
 | `✗ DQL 语法错误 (位置 N): <原因>`             | DQL 语句不符合子集文法；`位置 N` 为字符偏移（从 0 计）                                 | 从位置 N 向前检查：多余括号、缺失引号、关键字拼错、使用了不支持的从句（如 `TASK`/`CALENDAR`/多字段 `SORT`）；详见 [DQL 查询 · 文法](dql.md)      |
-| `✗ 需要 <vault> 参数或在配置文件中设置 vault` | `index`/`watch`/`scan` 没传 vault 位置参数，且配置文件与 `X_BASALT_DIR` 均未设 `vault` | 任选一：① 命令行直接传 `<vault>`；② 配置文件写 `vault: ./my-vault`；③ 设环境变量 `X_BASALT_DIR` 指向 `.x-basalt/` 所在目录；详见 [配置](config.md) |
+| `✗ 需要 <vault> 参数或在配置文件中设置 vault` | 未传 vault；或已设置 `X_BASALT_DIR`，但把 config 错放在 cwd 的 `.x-basalt/`。env 基目录缺 `config.*` 时不会回退 cwd | 任选一：① 直接传 `<vault>`；② 把 `config.yaml` 放到 `$X_BASALT_DIR/` 并写 `vault`；③ 不使用 env 时才把配置放 cwd `.x-basalt/`；详见 [配置](config.md) |
 | `✗ 未召回到与 "…" 相关的 skill`               | 关键字未命中任何 skill 的 `name` 或 `triggers`                                         | 换用更宽泛的词（如 `wikilink`→`link`、`dataview`→`dql`）；`x-basalt skills list` 查看全部可用 skill                                                       |
 | `✗ on-change 失败：<原因>`                    | `watch` 的 `--on-change` 命令本身报错                                                  | 单独在 Shell 里跑该命令排查；确认 `{file}` 占位符拼写正确                                                                                                 |
 

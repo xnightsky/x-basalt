@@ -1,6 +1,6 @@
 ---
-timestamp: 2026-07-30T15:55:39Z
-sha256: 522cf7259beb075d86fb77a8e3a56476ec8e23278143f8ca382169a4a94672aa
+timestamp: 2026-08-13T04:32:47Z
+sha256: 664564b986dfda8ad3198ebdaae6be25fc443d3ae25e824545d5a95fa6b2333e
 type: guide
 title: 配置与基目录 · x-basalt
 description: x-basalt 配置文件查找顺序、键说明与 X_BASALT_DIR 基目录
@@ -60,7 +60,7 @@ x-basalt index
 
 `X_BASALT_DIR` 用于把 `.x-basalt` **基目录整块搬到任意位置**，设置后有两个效果：
 
-1. **项目配置来源**：从 `$X_BASALT_DIR/config.{yaml,yml,json5,json}` 读取，**替代** cwd 向上就近发现。
+1. **项目配置来源**：从 `$X_BASALT_DIR/config.{yaml,yml,json5,json}` 读取，**严格替代** cwd 向上就近发现。即使该目录不存在或缺少 `config.*`，也不会回退读取 cwd 的 `.x-basalt/config.*`；此时项目配置视为空，仍与全局配置合并。
 2. **默认索引路径**：`DEFAULT_DB` 变为 `$X_BASALT_DIR/index.db`（而非 `.x-basalt/index.db`）。
 
 ```powershell
@@ -79,7 +79,9 @@ export X_BASALT_DIR="/home/user/vault-state/.x-basalt"
 echo 'export X_BASALT_DIR="/home/user/vault-state/.x-basalt"' >> ~/.bashrc
 ```
 
-> `X_BASALT_DIR` 未设时，基目录为当前工作目录下的 `.x-basalt`（相对路径）。
+> `X_BASALT_DIR` 未设时，基目录为当前工作目录下的 `.x-basalt`（相对路径）。设为相对路径时同样相对当前工作目录解析，例如 `X_BASALT_DIR=.state/custom-basalt` 会同时读取 `.state/custom-basalt/config.yaml`、写入 `.state/custom-basalt/index.db`。
+>
+> **初始化注意**：设置了 `X_BASALT_DIR` 后，请把项目配置放进该目录；不要另在 cwd 的 `.x-basalt/` 放一份并期待回退。显式传 `<vault>` / `--db` 不受此限制，仍可在无项目配置时运行。
 
 ---
 
@@ -106,7 +108,7 @@ echo 'export X_BASALT_DIR="/home/user/vault-state/.x-basalt"' >> ~/.bashrc
 命令行 flag
     ↓（未提供时）
 配置文件 config.db
-  （来源：X_BASALT_DIR 指定的目录  OR  cwd 向上就近发现）
+  （设置 X_BASALT_DIR：只读其指定目录；未设置：cwd 向上就近发现）
   （项目配置键覆盖全局配置同名键）
     ↓（config 中也无此键时）
 内置默认：$baseDir/index.db

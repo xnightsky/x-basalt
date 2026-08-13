@@ -251,7 +251,7 @@ function loadProject(explorer: PublicExplorerSync, cwd: string): BasaltConfig {
  * 从某 `.x-basalt` 目录加载 `config.{ext}`（不向上走）；语法解析失败降级为 {}，校验错抛出（I2）。
  *
  * 返回 `undefined` 专指「该目录下没有任何 config.* 文件」，与「有文件但解析失败/内容为空」
- * 的 `{}` 区分开——调用方据此决定是否回退到就近发现（见 {@link loadConfig} 的 baseDir 语义）。
+ * 的 `{}` 区分开；显式 baseDir 缺配置时由 {@link loadConfig} 视为空项目配置，不回退 cwd。
  */
 function loadConfigDir(explorer: PublicExplorerSync, dir: string): BasaltConfig | undefined {
   for (const ext of GLOBAL_EXTS) {
@@ -270,19 +270,16 @@ function loadConfigDir(explorer: PublicExplorerSync, dir: string): BasaltConfig 
 
 /**
  * 加载并合并配置：项目配置覆盖全局配置（`<globalHome>/.x-basalt/config.{...}`）。
- * 项目配置来源：`X_BASALT_DIR` 设了**且该目录下有 config.\*** 则读它（指定基目录，替代就近发现）；
- * 否则 cwd 向上找 `.x-basalt/config.{yaml,...}`（回退扁平 `.x-basalt.{...}`）。
+ * 显式提供 `baseDir`（CLI 中即 `X_BASALT_DIR`）时，项目配置只从该目录的 `config.*` 读取；
+ * 缺文件视为空项目配置，不回退 cwd。未提供时才从 cwd 向上发现 `.x-basalt/config.*` 或扁平配置。
  * 优先级与 CLI flag（flag 最高）由调用方 `flag ?? config.X` 处理；本函数只做「文件层」合并。
  *
- * **回退判据是「有没有配置文件」，不是「目录存不存在」**——后者会被 CLI 自身的副作用翻转：
- * `DEFAULT_DB` 无条件落在 `$X_BASALT_DIR/index.db`，indexer 会自动创建该目录，于是「目录不存在
- * 故忽略此 env」的判定在第一次 `index` 之后就失效，项目 `.x-basalt/config.yaml` 被静默丢弃
- * （同一条命令同一目录第 1 次成功、第 2 次报「需要 vault」）。目录里有没有 config.\* 不受建库影响。
+ * 该严格单源语义保证 config 与默认 `index.db` 同属一个基目录；否则 cwd 配置会与
+ * `$X_BASALT_DIR/index.db` 静默分家，初始化输出看似成功却留下两套状态来源。
  *
  * @param cwd - 起始目录，默认 process.cwd()
  * @param globalHome - 全局配置所在 home，默认 homedir()（测试可注入隔离）
- * @param baseDir - 基目录（其中有 config.* 则项目配置从此目录读）；调用方如 CLI 可直接传入
- *                  `process.env.X_BASALT_DIR`，无需先判目录是否存在
+ * @param baseDir - 可选项目配置基目录；提供后严格替代 cwd 就近发现，无需预判目录是否存在
  *
  * @behavior
  * Given 设了 X_BASALT_DIR 且该目录下有 config.*
@@ -290,9 +287,9 @@ function loadConfigDir(explorer: PublicExplorerSync, dir: string): BasaltConfig 
  * Then 项目配置从 $X_BASALT_DIR/config.* 读，替代 cwd 就近发现
  *
  * @behavior
- * Given 设了 X_BASALT_DIR 但该目录不存在、或存在却无 config.*（如只被 indexer 建了 index.db）
+ * Given 设了 X_BASALT_DIR 但该目录不存在、或存在却无 config.*
  * When 加载
- * Then 回退 cwd 就近发现，项目配置不受影响
+ * Then 项目配置为空且不回退 cwd，仍与全局配置合并
  *
  * @behavior
  * Given 项目目录无配置、全局 <home>/.x-basalt/config 存在
@@ -321,9 +318,9 @@ export function loadConfig(
 ): BasaltConfig {
   const explorer = makeExplorer();
   const globalCfg = loadConfigDir(explorer, join(globalHome, ".x-basalt")) ?? {};
-  // X_BASALT_DIR 设了**且其中有 config.*** → 项目配置从该基目录读（替代 cwd 上溯发现）；
-  // 否则（未设 / 目录不存在 / 目录里只有 index.db 之类）落回 cosmiconfig 就近发现。
-  const envCfg = baseDir === undefined ? undefined : loadConfigDir(explorer, baseDir);
-  const projectCfg = envCfg ?? loadProject(explorer, cwd);
+  // 显式 baseDir 是项目配置来源边界：缺 config.* 也只表示空项目配置，不能回退 cwd，
+  // 否则 config 会来自 cwd、默认 DB 却落 baseDir，重新引入两套状态的隐性分家。
+  const projectCfg =
+    baseDir === undefined ? loadProject(explorer, cwd) : (loadConfigDir(explorer, baseDir) ?? {});
   return { ...globalCfg, ...projectCfg }; // 项目覆盖全局
 }

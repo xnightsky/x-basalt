@@ -128,36 +128,44 @@ test("X_BASALT_DIR 优先于 cwd 就近发现的配置", () => {
   assert.equal(cfg.db, "./env.db", "env 基目录配置应替代 cwd 就近发现");
 });
 
-// 回退判据必须是「基目录里有没有 config.*」，不能是「基目录存不存在」。
-// 回归点：DEFAULT_DB 无条件落在 $X_BASALT_DIR/index.db，indexer 会自动建该目录 → 用存在性做
-// 判据时，第一次 index 之后判定翻转，项目 .x-basalt/config.yaml 被静默丢弃。表现为同一条命令
-// 同一目录第 1 次成功、第 2 次报「需要 vault」——时序依赖，极难归因。
-test("X_BASALT_DIR 指向的目录存在但无 config.*：回退 cwd 就近发现", () => {
+// X_BASALT_DIR 是“整块搬移”契约：只要显式提供 baseDir，项目配置与默认 DB 就必须同源。
+// 缺 config.* 时视为项目配置为空，不得静默读取 cwd 的另一份配置，否则 config 与 index.db 会分家。
+test("X_BASALT_DIR 指向的目录存在但无 config.*：不回退 cwd 就近配置", () => {
   const base = freshDir(); // 目录存在，但只有 index.db 这类产物，没有 config.*
   writeFileSync(join(base, "index.db"), "");
   const cwd = freshDir();
   writeFileSync(join(cwd, ".x-basalt.yaml"), "vault: ./docs\n");
   const cfg = loadConfig(cwd, freshDir(), base);
-  assert.equal(cfg.vault, "./docs", "基目录无配置文件时不得吞掉项目配置");
+  assert.equal(cfg.vault, undefined, "设置 baseDir 后不得读取 cwd 配置");
 });
 
-test("X_BASALT_DIR 指向的目录不存在：回退 cwd 就近发现", () => {
+test("X_BASALT_DIR 指向的目录不存在：仍不回退 cwd 就近配置", () => {
   const cwd = freshDir();
   writeFileSync(join(cwd, ".x-basalt.yaml"), "vault: ./docs\n");
   const cfg = loadConfig(cwd, freshDir(), join(freshDir(), "nope"));
-  assert.equal(cfg.vault, "./docs");
+  assert.equal(cfg.vault, undefined, "baseDir 缺失不改变严格单源语义");
 });
 
-test("X_BASALT_DIR 的配置发现不受基目录被创建影响（时序不变性）", () => {
+test("X_BASALT_DIR 缺 config：忽略 cwd 项目配置但仍保留全局配置", () => {
+  const cwd = freshDir();
+  writeFileSync(join(cwd, ".x-basalt.yaml"), "vault: ./cwd-vault\nformat: json\n");
+  const home = writeGlobal("vault: ./global-vault\nformat: yaml\n");
+  const cfg = loadConfig(cwd, home, join(freshDir(), "nope"));
+  assert.equal(cfg.vault, "./global-vault", "严格项目来源不得禁用全局配置层");
+  assert.equal(cfg.format, "yaml");
+});
+
+test("X_BASALT_DIR 缺 config 时，基目录创建前后都保持空项目配置", () => {
   const base = join(freshDir(), "moved");
   const cwd = freshDir();
   writeFileSync(join(cwd, ".x-basalt.yaml"), "vault: ./docs\n");
-  const beforeIndex = loadConfig(cwd, freshDir(), base);
+  const home = freshDir();
+  const beforeIndex = loadConfig(cwd, home, base);
   mkdirSync(base, { recursive: true }); // 模拟 indexer 建 db 目录
   writeFileSync(join(base, "index.db"), "");
-  const afterIndex = loadConfig(cwd, freshDir(), base);
-  assert.deepEqual(afterIndex, beforeIndex, "建库这一副作用不得改变配置发现结果");
-  assert.equal(afterIndex.vault, "./docs");
+  const afterIndex = loadConfig(cwd, home, base);
+  assert.deepEqual(afterIndex, beforeIndex, "建库副作用不得改变严格配置来源");
+  assert.equal(afterIndex.vault, undefined);
 });
 
 test("畸形配置降级为不抛错（返回对象）", () => {
