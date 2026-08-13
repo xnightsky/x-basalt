@@ -1,11 +1,11 @@
 /**
- * Parser 模块入口：将 Vault 文件内容解析为标准化 ObsidianNode[]，纯函数，不触碰 fs/DB。
+ * Parser 模块入口：将 Vault 文件内容解析为正文与标准化 ObsidianNode[]，纯函数，不触碰 fs/DB。
  *
  * 上游：src/indexer（index/watch 子命令通过 VaultParser 解析每个文件内容）。
  * 下游：parseFrontmatter（./frontmatter.ts）、extractWikilinks（./wikilink.ts）；
  *       其余提取器（tag/callout/task/highlight/blockRef/inlineField）在本文件内实现并保持模块私有。
  *
- * 不变量：parser 产出的 ObsidianNode[] 是 indexer/query 对 Markdown 的唯一解析来源；
+ * 不变量：parser 产出的 body/ObsidianNode[] 是 Markdown 的标准化读取结果；
  *         indexer 不重复解析原始正文，query 不感知 ObsidianNode。
  */
 import { parseFrontmatter } from "./frontmatter.js";
@@ -266,7 +266,7 @@ function extractCallouts(lines: string[]): ObsidianNode[] {
 }
 
 /**
- * Vault 解析器：输入文件内容 → 标准化 AST。
+ * Vault 解析器：输入文件内容 → 去除 frontmatter 的正文 + 标准化 AST。
  * 纯函数，不触碰文件系统或数据库（边界见 AGENTS.md「代码与规范」）。
  *
  * 编排：parseFrontmatter → extractWikilinks → 行内 tag/callout/task/highlight/blockRef 提取。
@@ -275,14 +275,14 @@ function extractCallouts(lines: string[]): ObsidianNode[] {
  */
 export class VaultParser {
   /**
-   * 解析单文件内容为 frontmatter + ObsidianNode[]。
+   * 解析单文件内容为 frontmatter、Markdown 正文与 ObsidianNode[]。
    *
    * @param content - 文件完整内容
    *
    * @behavior
    * Given 文件含合法 frontmatter 且正文含各类 Obsidian 语法
    * When 调用 parse()
-   * Then 返回 frontmatter 键值对 + 含 wikilink/tag/callout/task/highlight/blockRef 节点的数组
+   * Then 返回 frontmatter、完整正文 + 含 wikilink/tag/callout/task/highlight/blockRef 节点的数组
    *
    * @behavior
    * Given 正文代码块或行内代码内含 #tag 或 ==text==
@@ -324,6 +324,6 @@ export class VaultParser {
       ...extractInlineFields(masked),
     ];
 
-    return { frontmatter, nodes };
+    return { frontmatter, body, nodes };
   }
 }

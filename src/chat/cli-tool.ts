@@ -55,6 +55,45 @@ const VAULT_ARG_COMMANDS = new Set(["index", "scan", "links", "lint"]);
  */
 const DB_COMMANDS = new Set(["index", "scan", "query", "search", "base", "run"]);
 
+const CONTEXT_OPTIONS = ["--vault", "--db"] as const;
+
+/**
+ * @internal
+ * Removes model-supplied vault and database selectors from chat tool arguments.
+ *
+ * @remarks
+ * The chat session's {@link ToolContext} is the authoritative scope. Allowing generated arguments to
+ * override it through options or index/scan positional roots can target a nonexistent database or a
+ * vault outside the configured session.
+ */
+function scopeCliArgs(args: string[]): string[] {
+  const stripped: string[] = [];
+  for (let i = 0; i < args.length; i++) {
+    const arg = args[i] as string;
+    if (CONTEXT_OPTIONS.some((option) => arg === option)) {
+      i++;
+      continue;
+    }
+    if (CONTEXT_OPTIONS.some((option) => arg.startsWith(`${option}=`))) continue;
+    stripped.push(arg);
+  }
+
+  const command = stripped[0];
+  if (command !== "index" && command !== "scan") return stripped;
+
+  const scoped = [command];
+  for (let i = 1; i < stripped.length; i++) {
+    const arg = stripped[i] as string;
+    if (arg === "--pipe" && stripped[i + 1] !== undefined) {
+      scoped.push(arg, stripped[i + 1] as string);
+      i++;
+      continue;
+    }
+    if (arg.startsWith("-")) scoped.push(arg);
+  }
+  return scoped;
+}
+
 /** 带值的文件型命令选项；定位位置参数时必须连同后一个 argv 一起跳过。 */
 const FILE_COMMAND_VALUE_OPTIONS = new Set(["--format", "--type", "--set"]);
 
@@ -152,22 +191,17 @@ async function execCli(
   ctx: ToolContext,
   source?: string,
 ): Promise<{ stdout: string; stderr: string }> {
-  const resolvedArgs = resolveFileArgs(args, ctx.vaultPath);
+  const resolvedArgs = resolveFileArgs(scopeCliArgs(args), ctx.vaultPath);
   const sub = resolvedArgs[0] ?? "";
-  // 用户显式给了就不注入（显式优先，与 CLI 语义一致）；多根 vault 展开为重复 --vault 或并列位置参数。
-  const userVault = resolvedArgs.filter((a) => a === "--vault");
-  const userDb = resolvedArgs.some((a) => a === "--db");
   const vaultDirs = Array.isArray(ctx.vaultPath) ? ctx.vaultPath : [ctx.vaultPath];
   const usesVaultOption = VAULT_OPTION_COMMANDS.has(sub);
   const usesVaultArg = VAULT_ARG_COMMANDS.has(sub);
-  const vaultFlags =
-    userVault.length > 0 || !(usesVaultOption || usesVaultArg)
-      ? []
-      : usesVaultOption
-        ? vaultDirs.flatMap((v) => ["--vault", v])
-        : vaultDirs; // 位置参数形态：直接并列目录（commander [vault...] variadic 收集）
-  const dbFlags =
-    userDb || ctx.dbPath === undefined || !DB_COMMANDS.has(sub) ? [] : ["--db", ctx.dbPath];
+  const vaultFlags = !(usesVaultOption || usesVaultArg)
+    ? []
+    : usesVaultOption
+      ? vaultDirs.flatMap((v) => ["--vault", v])
+      : vaultDirs; // 位置参数形态：直接并列目录（commander [vault...] variadic 收集）
+  const dbFlags = ctx.dbPath === undefined || !DB_COMMANDS.has(sub) ? [] : ["--db", ctx.dbPath];
   // cli 入口为 TS 源码时需要 --import tsx（dev 态/测试）；编译产物 .js 裸 node 即可。
   const entry = cliEntry.endsWith(".ts") ? ["--import", "tsx", cliEntry] : [cliEntry];
   const argv = [...entry, ...resolvedArgs, ...vaultFlags, ...dbFlags];
@@ -241,7 +275,7 @@ async function execCli(
 export function buildCliTool(ctx: ToolContext, safety: Safety, cliEntry?: string): Tool {
   return tool({
     description:
-      "执行 x-basalt CLI 命令的唯一入口（一条命令=一次调用）。args 是命令与参数数组（子命令 + flags + 位置参数，逐项原样传递、不要拼成字符串）。可用子命令：parse/index/scan/query/search/base/skills/meta/run/links/lint（watch/chat 不允许）。query 查结构化字段、search 查正文、parse 解析单文件 AST、批量写用 run、.base view 查询用 base（可传 source 字段作为 .base 定义内容经 stdin 读取，免落盘）。结果含 total/counts 计数——数总量直接读 total，不要翻页枚举。写命令会直接落盘。不知道 CLI 语法先 skills_get 取 core。",
+      "执行 x-basalt CLI 命令的唯一入口（一条命令=一次调用）。args 是命令与参数数组（子命令 + flags + 位置参数，逐项原样传递、不要拼成字符串）。chat 已按当前会话自动注入 vault/db，args 不要传 --vault/--db，index/scan 也不要传 vault 位置参数。可用子命令：parse/index/scan/query/search/base/skills/meta/run/links/lint（watch/chat 不允许）。query 查结构化字段、search 查正文、parse 返回单文件完整 Markdown body + AST、批量写用 run、.base view 查询用 base（可传 source 字段作为 .base 定义内容经 stdin 读取，免落盘）。结果含 total/counts 计数——数总量直接读 total，不要翻页枚举。写命令会直接落盘。不知道 CLI 语法先 skills_get 取 core。",
     inputSchema: jsonSchema<{ args: string[]; source?: string }>({
       type: "object",
       properties: {

@@ -2,7 +2,7 @@
   // 内置兜底 skill：即使外部 skill 目录为空，也能召回 Obsidian 基础规范。
   // 由 src/skill（SkillRecall）在运行时加载；triggers 用于模糊召回。
   name: "obsidian-base-spec",
-  description: "Obsidian Markdown 与 Dataview(DQL) 子集语法规范：wikilink/embed/Markdown link/frontmatter/tag/callout/task/highlight/blockRef/inline fields(key:: value) 提取规则与 DQL 文法。本篇讲 Obsidian Markdown 语法与 Dataview(DQL) 文法，不涉及 Bases（`.base` 视图文件）的语法与函数——`core` 里只有 `base` 命令的调用方式与输出契约，没有 `.base` 语法规范，本 CLI 目前没有 Bases 语法 skill。",
+  description: "Obsidian Markdown 与 Dataview(DQL) 子集语法规范：wikilink/embed/Markdown link/frontmatter/tag/callout/task/highlight/blockRef/inline fields(key:: value) 提取规则与 DQL 文法。本篇讲 Obsidian Markdown 语法与 Dataview(DQL) 文法，不涉及 Bases（`.base` 视图文件）的语法与函数——Bases 语法见独立技能 `bases`；`core` 里只有 `base` 命令的调用方式与输出契约，没有 `.base` 语法规范。",
   triggers: [
     "wikilink",
     "link",

@@ -63,7 +63,7 @@ export type ObsidianNode =
   | { type: "inlineField"; key: string; value: string; line: number };
 
 /**
- * 单文件解析结果：frontmatter 键值对 + 节点数组。
+ * 单文件解析结果：frontmatter 键值对、去除 frontmatter 后的 Markdown 正文与节点数组。
  *
  * `frontmatter.tags`（若存在）由 indexer 单独消费并写入 tags 表（in_frontmatter=1），
  * parser 不在 nodes 中重复产出 frontmatter 标签，职责单一；
@@ -71,5 +71,7 @@ export type ObsidianNode =
  */
 export interface ParsedFile {
   frontmatter: Record<string, unknown>;
+  /** 去除 frontmatter 后的原始 Markdown 正文；保留行尾与普通段落，供调用方完整读取。 */
+  body: string;
   nodes: ObsidianNode[];
 }

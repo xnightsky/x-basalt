@@ -1,6 +1,6 @@
 ---
-timestamp: 2026-08-06T23:59:45Z
-sha256: 9d42f5ab01bda01ff026073ccaa90ae83e67b6f2fb1337f963028ac1bca28924
+timestamp: 2026-08-08T15:06:31Z
+sha256: aed070aadc9ecf82d42706e56f209014fd1c15129fff018ee825d522af69a322
 ---
 # TODO · x-basalt
 
@@ -8,8 +8,10 @@ sha256: 9d42f5ab01bda01ff026073ccaa90ae83e67b6f2fb1337f963028ac1bca28924
 
 ## 当前执行项
 
-- [ ] **动态 base 的 evals 场景库 A/B**：在真实 chat + `AI_GATEWAY_API_KEY` 环境中，对比 DQL `query` 与结构化 `base` 查询的失败率、重试次数和撞顶率。stdin 与 chat `cli` 工具基座已落地；验证设计见 [`docs/history/plans/2026-08-03-bases-dynamic-stdin.md`](./docs/history/plans/2026-08-03-bases-dynamic-stdin.md) 与 [`docs/plans/2026-08-03-chat-cli-tool.md`](./docs/plans/2026-08-03-chat-cli-tool.md)。
-- [ ] **定位 pipeline 的间歇性测试失败**：曾观察到一次 `1028 pass / 1 fail`，未记录用例名；优先复现并记录失败测试，再判断是否为 watch/debounce 时序问题。未复现前不得视为已解决。设计见 [`docs/design/pipeline-op-model.md`](./docs/design/pipeline-op-model.md)。
+> 当前无在进行中的产品主线。最近一轮「Bases 语法接地 + 动态 base A/B 复跑」已**完成并收口**：
+> base 从基线 7/12 逆转到 12/12（[计划 Evidence/Verify](./docs/plans/2026-08-08-bases-chat-grounding.md)），
+> 后续能力评估四场景 39/39、skill-before-base/source 39/39，零 base error / 零撞顶 / 零 error-storm（x-basalt-evals）。
+> 进入真实 vault dogfood 观察期；出现可复现阻断问题再立项。
 
 ## 长期 backlog（待 dogfood 暴露真实需求再开）
 

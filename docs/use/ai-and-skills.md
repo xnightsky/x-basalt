@@ -89,19 +89,22 @@ OBSIDIAN_SKILL_PATH=./team-skills x-basalt skills recall wikilink
 
 也可写进配置文件（`skillPath` 键），免去每次传参，见 [configuration.md](config.md)。
 
-### 内置五篇与 triggers 分层
+### 内置六篇与 triggers 分层
 
-内置目录随包发布五篇，触发关键字**刻意不重叠**——一个关键字只召回对应那一篇，不会一次吐出多篇全文：
+内置目录随包发布六篇，触发关键字**刻意不重叠**——一个关键字只召回对应那一篇，不会一次吐出多篇全文：
 
-| 内置 skill           | 回答什么               | 触发关键字（示例）                                                  | 体量    |
-| -------------------- | ---------------------- | ------------------------------------------------------------------- | ------- |
-| `summary`            | **能干什么、该看哪篇** | `摘要` · `总览` · `能干什么` · `overview` · `capabilities`          | ~1.8 KB |
-| `core`               | 查与改**怎么用**       | `usage` · `help` · `manual` · `说明书` · `用法` · `parse` · `query` | ~17 KB  |
-| `pipe`               | 批量**怎么用**         | `批量` · `管道` · `算子` · `run` · `pipeline` · `step`              | ~5 KB   |
-| `chat`               | 自然语言路径           | `chat` · `ai` · `自然语言` · `配 key` · `ollama` · `model`          | ~4 KB   |
-| `obsidian-base-spec` | Obsidian/DQL 语法      | `wikilink` · `tag` · `callout` · `task` · `frontmatter`             | ~9 KB   |
+| 内置 skill                     | 回答什么                     | 触发关键字（示例）                                                  | 体量    |
+| ------------------------------ | ---------------------------- | ------------------------------------------------------------------- | ------- |
+| `summary`                      | **能干什么、该看哪篇**       | `摘要` · `总览` · `能干什么` · `overview` · `capabilities`          | ~1.8 KB |
+| `core`                         | 查与改**怎么用**             | `usage` · `help` · `manual` · `说明书` · `用法` · `parse` · `query` | ~17 KB  |
+| `pipe`                         | 批量**怎么用**               | `批量` · `管道` · `算子` · `run` · `pipeline` · `step`              | ~5 KB   |
+| `chat`                         | 自然语言路径                 | `chat` · `ai` · `自然语言` · `配 key` · `ollama` · `model`          | ~4 KB   |
+| `obsidian-base-spec`           | Obsidian/DQL 语法            | `wikilink` · `tag` · `callout` · `task` · `frontmatter`             | ~9 KB   |
+| `bases`                        | Bases（`.base` 视图）语法     | `bases` · `.base` · `动态 base` · `base 语法` · `base sort` · `base limits` | ~6.5 KB |
 
 这套分层是**召回粒度的实现方式**：`recall` 的返回单位是「整篇」而非「命中的段落」，所以让每篇足够小、且 triggers 各管一路，比切碎条目或改召回引擎都简单。总览词一律归 `summary`——1.8 KB 的入口，比一上来吞 `core` 便宜一个数量级。
+
+> 分工：`obsidian-base-spec` 只讲 Obsidian Markdown 与 Dataview(DQL) 文法，**不碰 Bases**——`.base` 视图文件的语法/怎么生成动态 base 由独立的 `bases` 篇负责，两篇刻意不互抄。
 
 **兜底**：外部目录若自带同名 skill，优先使用外部版本（允许 shadow 覆盖内置）；外部目录为空/无效时，`obsidian-base-spec` 与 `core` 这两篇从内置补回，保证基础召回与「CLI 会讲自己的用法」永远可用。其余三篇在内置目录下自动加载，但不进兜底名单——用外部目录 shadow 时需自行提供。
 

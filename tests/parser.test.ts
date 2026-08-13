@@ -277,9 +277,21 @@ function nodesOfType<T extends ObsidianNode["type"]>(
 }
 
 test("VaultParser.parse：透传 frontmatter，正文 wikilink 进入 nodes", () => {
-  const { frontmatter, nodes } = new VaultParser().parse("---\ntitle: T\n---\n\n正文 [[Other]]");
+  const { frontmatter, body, nodes } = new VaultParser().parse(
+    "---\ntitle: T\n---\n\n正文 [[Other]]",
+  );
   assert.equal(frontmatter.title, "T");
+  assert.equal(body, "\n正文 [[Other]]");
   assert.equal(nodesOfType(nodes, "wikilink").length, 1);
+});
+
+test("VaultParser.parse：普通标题与段落保留在 body，不依赖特殊节点", () => {
+  const { frontmatter, body, nodes } = new VaultParser().parse(
+    "---\ntype: incident\n---\n# Incident\n\nDecision code: DG-ALPHA-71\n\nMitigation owner: Mei\n",
+  );
+  assert.deepEqual(frontmatter, { type: "incident" });
+  assert.equal(body, "# Incident\n\nDecision code: DG-ALPHA-71\n\nMitigation owner: Mei\n");
+  assert.deepEqual(nodes, []);
 });
 
 test("VaultParser.parse：行内 tag——嵌套保留全名、排除 #123、去重", () => {

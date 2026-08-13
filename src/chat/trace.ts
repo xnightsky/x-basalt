@@ -7,6 +7,48 @@ import { closeSync, mkdirSync, openSync, writeSync } from "node:fs";
 import { dirname } from "node:path";
 import type { LoopEvent } from "./loop.js";
 
+/**
+ * 把 tool-error 携带的错误值归一为可 JSON 化的 `{ message, code?, classification? }`，
+ * 避免 Error 对象被 `JSON.stringify` 落成空对象，使 trace 能直接读出错误消息（BG-3）。
+ *
+ * 来源：chat 工具失败时 wrapExecute 抛出结构化 Error（message 形如
+ * `[工具失败·<cls>] <原因> <换策略建议>`，cause 为底层错误带 code）。
+ *
+ * 有界预览：错误消息全文一般不超限，但因工具错误可能把 safety 包裹内的大段 vault 内容
+ * 带进 message（如诊断里贴了长正文），故对落盘消息加 {@link ERROR_MESSAGE_MAX} 上限，
+ * 超长截断并附省略标记——避免 trace 重复记录大段 vault 内容（计划 BG-3「超长错误仍受有界预览约束」）。
+ */
+
+/** trace 落盘 tool-error 消息的最大字符数；超长截断并附省略标记。 */
+const ERROR_MESSAGE_MAX = 2000;
+
+function normalizeError(e: unknown): { message: string; code?: string; classification?: string } {
+  const raw = e instanceof Error ? e.message : typeof e === "string" ? e : safeJson(e);
+  const message =
+    raw.length <= ERROR_MESSAGE_MAX
+      ? raw
+      : `${raw.slice(0, ERROR_MESSAGE_MAX)} …（已截断，原长 ${raw.length}）`;
+  const out: { message: string; code?: string; classification?: string } = { message };
+  // code：优先取自身，其次 cause（ENOENT / SQLITE_* 等）。
+  const code =
+    (e as { code?: unknown })?.code ??
+    (e instanceof Error ? (e as { cause?: { code?: unknown } }).cause?.code : undefined);
+  if (typeof code === "string" && code) out.code = code;
+  // classification：从 `[工具失败·<cls>]` 前缀提取；没有则省略。
+  const m = /^\[工具失败·([^\]]+)\]/.exec(message);
+  if (m?.[1]) out.classification = m[1];
+  return out;
+}
+
+/** 安全 JSON 化（本层兜底，避免裸对象序列化抛错）。 */
+function safeJson(v: unknown): string {
+  try {
+    return JSON.stringify(v) ?? String(v);
+  } catch {
+    return String(v);
+  }
+}
+
 export interface TracerOptions {
   /** trace 文件完整路径（含文件名）。 */
   path: string;
@@ -131,7 +173,9 @@ export function createTracer(opts: TracerOptions): Tracer {
       } else {
         // 非 text 事件前必须先写出已累积文本，保持事件顺序。
         flushText();
-        const record = { ...event, turn };
+        const recordEvent =
+          event.type === "tool-error" ? { ...event, error: normalizeError(event.error) } : event;
+        const record = { ...recordEvent, turn };
         try {
           writeSync(fd, `${JSON.stringify(record)}\n`);
         } catch (e) {
