@@ -511,7 +511,17 @@ export function generateSql(query: DqlQuery): CompiledSql {
       addCol("file.path");
     } else {
       if (!query.withoutId) addCol("file.name");
-      for (const f of query.fields) addCol(f);
+      for (const f of query.fields) {
+        // count() 的语义依赖分组行集；无 GROUP BY 时不要退化成“未知字段”，应把调用方
+        // 引到结果元数据 total。该分支只改诊断，分组聚合仍由 compileGroupAggregate 编译。
+        if (f === "count()") {
+          throw new DqlSyntaxError(
+            "count() 仅用于 GROUP BY 聚合列；统计总数请读取查询结果的 total 字段",
+            0,
+          );
+        }
+        addCol(f);
+      }
     }
     // FLATTEN：LIST 默认追加展开列；TABLE 仅当 fields 未覆盖别名时追加 flatten.field。
     if (query.flatten) {

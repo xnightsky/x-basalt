@@ -23,6 +23,7 @@
 ### Fixed
 
 - **`X_BASALT_DIR` 缺 config 时静默回退 cwd，导致配置与 `index.db` 分家** —— 公开契约一直声明该环境变量会把 `.x-basalt` 整块搬移，但实现只在 env 目录已有 `config.*` 时才使用它，否则从 cwd 读取配置、同时把默认 DB 写到 env 目录。现改为严格单源：只要设置 env，项目配置就只从该目录读取；缺文件视为空项目配置且不回退 cwd（全局配置仍合并，显式 `<vault>` / `--db` 仍可用）。回归覆盖任意相对定制目录、错位 config 拒绝、显式 vault、正确迁移及 config/DB 同目录。
+- **两类高频 DQL 误用只返回底层泛化错误** —— 无分组 `TABLE count()` 现明确提示 `count()` 仅用于 `GROUP BY` 聚合列、总数应读结果 `total`；SQL 惯性的 `SORT BY` 现提示 DQL 写法 `SORT <field> [ASC|DESC]` 且错误位置仍指向 `BY`。两者只改诊断，不扩展查询能力。
 
 - **chat 把索引主键当 cwd 相对路径，导致 `parse` 连续失败，`meta` 甚至可能写错同名文件** —— `query` / `search` 返回的是 vault 布局主键：单根嵌套目录下为根内相对路径，多根下为 `<根目录名>/<相对路径>`；但 chat 的 CLI 壳此前只给 query/search 注入 vault，把 parse/meta 文件参数原样交给按 cwd 读写的命令。模型拿到 `file.path` 后只能反复猜测物理目录前缀，连续失败会撞 error-storm；更危险的是 cwd 下恰有同名路径时，meta 会静默写错目标。现由持有 `ToolContext` 的 chat 壳统一经既有 `VaultLayout.toAbs` 把 parse/meta 文件参数还原为绝对路径，公开 CLI 签名与索引键格式均不变；选项位于文件参数前、多根命名空间两类回归已锁定。
 

@@ -303,6 +303,25 @@ test("parser SORT：多键 + 方向", () => {
   ]);
 });
 
+test("parser SORT BY：定向提示 DQL 无需 BY，位置指向 BY", () => {
+  const dql = 'LIST FROM "" SORT BY file.path';
+  assert.throws(
+    () => parseDql(dql),
+    (error: unknown) => {
+      assert.ok(error instanceof DqlSyntaxError);
+      assert.match(error.message, /SORT <field> \[ASC\|DESC\]/);
+      assert.match(error.message, /无需 BY/);
+      assert.equal(error.pos, dql.indexOf("BY"));
+      return true;
+    },
+  );
+  assert.throws(
+    () => parseDql("LIST SORT by file.path"),
+    (error: unknown) => error instanceof DqlSyntaxError && /无需 BY/.test(error.message),
+  );
+  assert.doesNotThrow(() => parseDql("LIST SORT file.path ASC"));
+});
+
 test("parser LIMIT：数字", () => {
   assert.equal(parseDql("LIST LIMIT 10").limit, 10);
 });

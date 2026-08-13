@@ -1,6 +1,6 @@
 ---
-timestamp: 2026-08-02T06:07:37Z
-sha256: cb15149dd1466fd672e45292ff53e4c6c9203a3e8c7f568e831ec7a9e9637a93
+timestamp: 2026-08-13T04:33:17Z
+sha256: 46813bc29f10cf75868c283b1bd74f242dee279043648120f8da4bc798b20038
 type: guide
 title: 故障排查与已知限制 · x-basalt
 description: 常见错误、环境限制与排查步骤
@@ -30,14 +30,16 @@ tags:
 
 ### 1.1 运行时错误
 
-| 现象（错误输出）                              | 原因                                                                                   | 处理                                                                                                                                                      |
-| --------------------------------------------- | -------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `✗ unable to open database file`              | `--db` 指向的 SQLite 文件不存在；`query`/`scan` 不会自动建空库（`fileMustExist` 保护） | 先跑 `index <vault> --db <path>` 建库；之后 `query`/`scan` 才能打开                                                                                       |
-| `✗ 不支持的查询字段: file.day`                | 引用了子集以外的隐式字段（`file.day`/`cday`/`mday`/`link`/`etags`/`aliases` 等）       | 查阅 [DQL 查询 · 隐式字段映射](dql.md)，换用受支持字段；字段如确需要请提 Issue                                                                   |
-| `✗ DQL 语法错误 (位置 N): <原因>`             | DQL 语句不符合子集文法；`位置 N` 为字符偏移（从 0 计）                                 | 从位置 N 向前检查：多余括号、缺失引号、关键字拼错、使用了不支持的从句（如 `TASK`/`CALENDAR`/多字段 `SORT`）；详见 [DQL 查询 · 文法](dql.md)      |
-| `✗ 需要 <vault> 参数或在配置文件中设置 vault` | 未传 vault；或已设置 `X_BASALT_DIR`，但把 config 错放在 cwd 的 `.x-basalt/`。env 基目录缺 `config.*` 时不会回退 cwd | 任选一：① 直接传 `<vault>`；② 把 `config.yaml` 放到 `$X_BASALT_DIR/` 并写 `vault`；③ 不使用 env 时才把配置放 cwd `.x-basalt/`；详见 [配置](config.md) |
-| `✗ 未召回到与 "…" 相关的 skill`               | 关键字未命中任何 skill 的 `name` 或 `triggers`                                         | 换用更宽泛的词（如 `wikilink`→`link`、`dataview`→`dql`）；`x-basalt skills list` 查看全部可用 skill                                                       |
-| `✗ on-change 失败：<原因>`                    | `watch` 的 `--on-change` 命令本身报错                                                  | 单独在 Shell 里跑该命令排查；确认 `{file}` 占位符拼写正确                                                                                                 |
+| 现象（错误输出）                                                       | 原因                                                                                                                              | 处理                                                                                                                                                                      |
+| ---------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `✗ unable to open database file`                                       | `--db` 指向的 SQLite 文件不存在；`query`/`scan` 不会自动建空库（`fileMustExist` 保护）                                            | 先跑 `index <vault> --db <path>` 建库；之后 `query`/`scan` 才能打开                                                                                                       |
+| `✗ 不支持的查询字段: file.day`                                         | 引用了子集以外的隐式字段（`file.day`/`cday`/`mday`/`link`/`etags`/`aliases` 等）                                                  | 查阅 [DQL 查询 · 隐式字段映射](dql.md)，换用受支持字段；字段如确需要请提 Issue                                                                                             |
+| `✗ DQL 语法错误 (位置 N): <原因>`                                      | DQL 语句不符合子集文法；`位置 N` 为字符偏移（从 0 计）                                                                            | 从位置 N 向前检查多余括号、缺失引号、关键字拼错或不支持的从句（如 `CALENDAR`）；详见 [DQL 查询 · 文法](dql.md)                                                            |
+| `✗ … count() 仅用于 GROUP BY 聚合列；… total 字段`                    | 把分组聚合列 `count()` 当成了无分组的总数查询                                                                                    | 统计当前查询总命中数直接读返回对象的 `total`；需要分组计数时写 `TABLE count() … GROUP BY <field>`                                                                         |
+| `✗ … DQL 排序用 SORT <field> [ASC\|DESC]，无需 BY`                    | 沿用了 SQL 的 `SORT BY` 习惯；DQL 的 `SORT` 后直接接字段                                                                           | 删除 `BY`，例如 `SORT file.path ASC`；多键可写 `SORT file.folder ASC, file.name DESC`                                                                                      |
+| `✗ 需要 <vault> 参数或在配置文件中设置 vault`                          | 未传 vault；或已设置 `X_BASALT_DIR`，但把 config 错放在 cwd 的 `.x-basalt/`。env 基目录缺 `config.*` 时不会回退 cwd               | 任选一：① 直接传 `<vault>`；② 把 `config.yaml` 放到 `$X_BASALT_DIR/` 并写 `vault`；③ 不使用 env 时才把配置放 cwd `.x-basalt/`；详见 [配置](config.md)                       |
+| `✗ 未召回到与 "…" 相关的 skill`                                       | 关键字未命中任何 skill 的 `name` 或 `triggers`                                                                                     | 换用更宽泛的词（如 `wikilink`→`link`、`dataview`→`dql`）；`x-basalt skills list` 查看全部可用 skill                                                                       |
+| `✗ on-change 失败：<原因>`                                             | `watch` 的 `--on-change` 命令本身报错                                                                                              | 单独在 Shell 里跑该命令排查；确认 `{file}` 占位符拼写正确                                                                                                                 |
 
 ### 1.2 安装与全局命令
 
@@ -78,7 +80,7 @@ tags:
 | **`file.tasks` 仅显示，不可过滤** | `TABLE file.tasks` 可展示任务数组（`{status, text, due}`），但不支持 `WHERE file.tasks.status = 'x'` 等按 task 子字段过滤，属设计非目标                                                   | 用 DQL 之外的脚本层处理（取结果后在 Node/jq 里二次过滤）；详见 [DQL 查询 · 非目标](dql.md)                                                                                |
 | **`--format yaml` 极简序列化**    | `parse --format yaml` 的 YAML 输出仅供人读展示；frontmatter 日期以 ISO 串输出，非标准 YAML `!!timestamp`；不应用于机器解析                                                                | 机器消费请用 `--format json`（默认）                                                                                                                                               |
 | **`scan` mtime+size 的漏判窗口**  | 默认变更检测依赖 `mtime + size`：若文件内容改变但大小与时间戳碰巧相同（如原地覆写），会误判为未变                                                                                         | 高精度场景加 `--rehash` 按内容哈希对比；详见 [索引与同步](indexing.md)                                                                                                    |
-| **多字段 SORT、FROM 布尔组合**    | `SORT field1, field2`、`FROM #a AND "Folder"` 等超出子集文法范围，执行时报 `✗ DQL 语法错误`                                                                                               | 在结果层（JSON 输出 + jq/脚本）做二次排序与过滤；子集扩展计划见 Roadmap                                                                                                            |
+| **FROM 布尔组合**                | `FROM #a AND "Folder"` 等多来源组合超出子集文法范围，执行时报 `✗ DQL 语法错误`                                                                                                          | 拆成单一来源查询后在结果层（JSON 输出 + jq/脚本）二次合并；子集扩展计划见 Roadmap                                                                                                  |
 
 ---
 

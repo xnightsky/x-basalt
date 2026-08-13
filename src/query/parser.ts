@@ -503,6 +503,13 @@ export function parseDql(dql: string): DqlQuery {
   if (parser.errors.length > 0) {
     const e = parser.errors[0]!;
     const tok = (e as { token?: IToken }).token;
+    // === 自建实现: SQL 习惯 SORT BY 的定向引导 ===
+    // BY 在 GROUP BY 中合法，故必须同时检查前驱 token 是 SORT；仅按当前 token 判断会误伤分组语法。
+    const tokenIndex = tok ? lex.tokens.indexOf(tok) : -1;
+    const previous = tokenIndex > 0 ? lex.tokens[tokenIndex - 1] : undefined;
+    if (tok && /^by$/i.test(tok.image) && previous && /^sort$/i.test(previous.image)) {
+      throw new DqlSyntaxError("DQL 排序用 SORT <field> [ASC|DESC]，无需 BY", tok.startOffset);
+    }
     // === 自建实现: SQL 习惯 LIKE 的定向引导（对标官方 Dataview：无 LIKE 算子，用 contains 家族）===
     // 模型带 SQL 惯性会写 `name LIKE "%x%"`；LIKE 落成多余 Identifier，chevrotain 只报裸
     // "Redundant input, ... found: LIKE"，不指方向 → 模型退化成全量 LIST 兜底。识别到越界 token

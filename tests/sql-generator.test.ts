@@ -180,6 +180,18 @@ test("S2.18 GROUP BY TABLE：length(rows) / count() 聚合列", () => {
   );
 });
 
+test("S2.18 count() 无 GROUP BY：定向提示读取 total，不退化为未知字段", () => {
+  assert.throws(
+    () => generateSql(parseDql('TABLE count() FROM ""')),
+    (error: unknown) => {
+      assert.ok(error instanceof DqlSyntaxError);
+      assert.match(error.message, /count\(\) 仅用于 GROUP BY 聚合列/);
+      assert.match(error.message, /total 字段/);
+      return true;
+    },
+  );
+});
+
 test("S2.19 FLATTEN：json_each 展开 + 展开值列", () => {
   const c = generateSql(parseDql("LIST FLATTEN file.tags"));
   assert.match(c.sql, /, json_each\(.*\) AS _flat/);

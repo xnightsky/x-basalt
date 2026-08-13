@@ -307,6 +307,18 @@ test("退出码：非法 DQL 经真实库 → 退出 1 且 stderr 打印 ✗", (
   assert.match(r.stderr, /✗/);
 });
 
+test("query 误用诊断：无分组 count() 与 SORT BY 经 CLI 返回可执行引导", () => {
+  const count = run(["query", 'TABLE count() FROM ""', "--db", sharedDb]);
+  assert.equal(count.status, 1);
+  assert.match(count.stderr, /count\(\) 仅用于 GROUP BY 聚合列/);
+  assert.match(count.stderr, /total 字段/);
+
+  const sortBy = run(["query", 'LIST FROM "" SORT BY file.path', "--db", sharedDb]);
+  assert.equal(sortBy.status, 1);
+  assert.match(sortBy.stderr, /SORT <field> \[ASC\|DESC\]/);
+  assert.match(sortBy.stderr, /无需 BY/);
+});
+
 test("退出码：index 无 <vault> 且无配置 → 退出 1 且提示需要 vault", () => {
   const r = run(["index"], { cwd: freshDir() });
   assert.equal(r.status, 1);
