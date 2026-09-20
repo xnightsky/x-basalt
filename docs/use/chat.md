@@ -7,8 +7,8 @@ tags:
   - cli
   - chat
   - x-basalt
-timestamp: 2026-08-07T00:12:49Z
-sha256: 27bce4e1cb79b4377340894a927a22a2112e0b80991f0d1b3f376e4d293405c9
+timestamp: 2026-09-20T09:28:57Z
+sha256: 40ac851e556733bfda9f34ea9965a466ef7fc516849f54c033ea4935ac1b219d
 ---
 # chat 怎么玩 · x-basalt
 
@@ -82,7 +82,7 @@ x-basalt chat
   用 DQL「FOOBAR 乱写」查一下 —— 看它撞错后怎么换法自纠
 ```
 
-`<…>` 换成你库里真实文件名。`--max-steps`（默认 20）控制单轮最多几步。
+`<…>` 换成你库里真实文件名。`--max-steps`（默认 50）控制单轮最多几步。
 
 ## 6. 玩的时候重点看什么
 

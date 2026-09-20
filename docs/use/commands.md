@@ -1,6 +1,6 @@
 ---
-timestamp: 2026-08-03T16:07:02Z
-sha256: eb80117e484a34b658d8e8a3fcae072b0353700bee3478b05187d57966d997e3
+timestamp: 2026-09-20T09:28:57Z
+sha256: 540a71bee684709b458be6c9ae3ce2e6a15b7474937f98c938081666cafb22a1
 type: guide
 title: 命令参考 · x-basalt
 description: x-basalt CLI 全部子命令的参数、输出形态与示例
@@ -707,7 +707,7 @@ x-basalt chat [input] [--model <name>] [--max-steps <n>] [--vault <path>]... [--
 | ------------------ | ------------------------- | ----------------------------------------------------------------------- |
 | `[input]`          | —                         | 自然语言指令；省略且 TTY → 进 REPL；省略且有管道输入 → 读 stdin 走单发  |
 | `--model <name>`   | 配置 / `AI_GATEWAY_MODEL` | 覆盖模型名                                                              |
-| `--max-steps <n>`  | `20`                      | agentic 最大步数；**撞顶不再静默停**——单发提示、REPL 可输入「继续」续跑 |
+| `--max-steps <n>`  | `50`                      | agentic 最大步数；**撞顶不再静默停**——单发提示、REPL 可输入「继续」续跑 |
 | `--vault` / `--db` | 同其他命令（回退配置）    | 库目录 / 索引路径                                                       |
 | `-q, --quiet`      | 关                          | 单发只输出答案与 no-recall/exhausted 结果限定，完全隐藏工具过程（供 AI/脚本程序化调用，避免过程轨迹白占上下文） |
 | `--json`           | 关                          | 单发结束后输出一个结构化 JSON 对象（优先于 `--quiet`）                  |
