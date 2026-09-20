@@ -846,6 +846,10 @@ program
   .option("-q, --quiet", "单发只输出答案与 no-recall/exhausted 结果限定，完全隐藏工具过程")
   .option("--json", "单发结束后输出一个结构化 JSON 对象（优先于 --quiet）")
   .option("--trace [file]", "落盘 chat 事件到 JSONL（省略 file 则按时间戳自动命名）")
+  .option(
+    "--session [uuid]",
+    "会话落盘与续跑：裸用新建（系统生成 UUID 并打印）；带 <uuid> 严格续跑（不存在即报错）；不带则临时会话不落盘",
+  )
   .action(
     async (
       input: string | undefined,
@@ -857,6 +861,7 @@ program
         quiet?: boolean;
         json?: boolean;
         trace?: string | true;
+        session?: string | true;
       },
     ) => {
       // 防递归兜底（切 C，chat-tool-surface.md §风险）：cli 工具 spawn 的子进程带
@@ -900,13 +905,21 @@ program
         version: program.version(),
         quiet: opts.quiet,
         json: opts.json,
+        session: opts.session,
+        baseDir: BASE_DIR,
       };
       // 懒加载：只有确认有 key 后才触达 src/chat（及其 AI SDK 依赖）。
       const { runOnce, runRepl, readPipedStdin } = await import("./chat/index.js");
+      const { isSessionId } = await import("./chat/session.js");
       let prompt = input?.trim() ?? "";
       if (!prompt && !process.stdin.isTTY) prompt = await readPipedStdin();
       if (!prompt && !process.stdin.isTTY) {
-        console.error("✗ chat 未提供输入");
+        // 带合法 UUID 的续跑缺输入：文案点明「会话已定位」，避免误以为 UUID 错了（设计 §4.1 边界）。
+        console.error(
+          typeof opts.session === "string" && isSessionId(opts.session)
+            ? `✗ 会话 ${opts.session} 已定位，但未提供输入。`
+            : "✗ chat 未提供输入",
+        );
         process.exitCode = 1;
         return;
       }

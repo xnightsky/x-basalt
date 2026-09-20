@@ -35,6 +35,9 @@
     "配置 ai",
     "repl",
     "quiet",
+    "session",
+    "会话",
+    "续跑",
     "工具",
     "tool",
     "apikey",
@@ -45,12 +48,13 @@
   patterns: [
     'x-basalt chat "<自然语言>" [--quiet] [--json]  (需 AI_GATEWAY_API_KEY)',
     "x-basalt chat   # 省略参数进 REPL",
+    "x-basalt chat --session   # 新建落盘会话（打印 UUID）；--session <uuid> 严格续跑",
   ],
   rules: [
     {
       id: "invoke",
-      pattern: 'chat ["<自然语言>"] [--model <name>] [--max-steps <n>] [--db <path>] [--vault <path>] [--quiet] [--json]',
-      description: "可选 AI 子命令：用自然语言驱动既有原语，跑 plan→act→observe 循环。带参=单发翻译执行即退；省略参数=进 REPL（quit/exit/q 退出）。**被其它 AI/脚本程序化调用时加 `--quiet`（纯答案，推荐）或 `--json`（结构化），完全隐藏 plan→act→observe 过程**；因为调用方通常会把 stdout+stderr 合并进模型上下文，过程轨迹只会白占 token。人交互/REPL 才用默认完整轨迹。**免配直调**：X_BASALT_DIR 或项目配置已设 vault 时，站 repo 根直接跑即自动解析 db/vault，无需定位/读 config，也无需手传 --vault/--db（要覆盖默认才显式传）。",
+      pattern: 'chat ["<自然语言>"] [--model <name>] [--max-steps <n>] [--db <path>] [--vault <path>] [--quiet] [--json] [--session [<uuid>]]',
+      description: "可选 AI 子命令：用自然语言驱动既有原语，跑 plan→act→observe 循环。带参=单发翻译执行即退；省略参数=进 REPL（quit/exit/q 退出）。**被其它 AI/脚本程序化调用时加 `--quiet`（纯答案，推荐）或 `--json`（结构化），完全隐藏 plan→act→observe 过程**；因为调用方通常会把 stdout+stderr 合并进模型上下文，过程轨迹只会白占 token。人交互/REPL 才用默认完整轨迹。**会话落盘与续跑**：`--session` 裸用新建（系统生成 UUID、首行打印），`--session <uuid>` 严格续跑（不存在/非 UUID 即报错）；不带则临时会话不落盘。带 `--session` 的运行**返回时必带会话 id**（`--json` 档对象里有 `sessionId` 字段，脚本据此续跑）；JSONL 事件流落 `.x-basalt/sessions/chat-<uuid>.jsonl`（逐 step 追加，崩溃只丢在途 step；含 vault 原文）。`--max-steps` 是每轮预算、与续跑正交。**免配直调**：X_BASALT_DIR 或项目配置已设 vault 时，站 repo 根直接跑即自动解析 db/vault，无需定位/读 config，也无需手传 --vault/--db（要覆盖默认才显式传）。",
       examples: [
         'x-basalt chat "把 projects 下 status 为空的笔记列出来"',
         'x-basalt chat "总结 vault 里的前端测试约定" --quiet   # 供 AI/脚本调用，只回结果',

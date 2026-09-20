@@ -82,6 +82,12 @@ export interface LoopDeps {
    * 经 finish 事件的 {@link LoopEvent.noRecallNotice} 下发给渲染层。未提供 = 不启用该检测（行为不变）。
    */
   noRecallNotice?: string;
+  /**
+   * step 级钩子（会话事件流落盘用，2026-09-20）：每个 step 完成（streamText 的 onStepFinish）时
+   * 回调该步生成的 assistant/tool 消息（成对，完整步边界）。abort/错误风暴中断的在途 step 不回调，
+   * 故盘上历史恒停在完整步边界。续跑累积仍走返回值（逐 step 拼接），本钩子只做实时落盘。
+   */
+  onStep?: (messages: ModelMessage[], stepIndex: number) => void;
 }
 
 /**
@@ -113,6 +119,8 @@ export async function runLoop(messages: ModelMessage[], deps: LoopDeps): Promise
     deps.abortSignal !== undefined
       ? AbortSignal.any([deps.abortSignal, stormAbort.signal])
       : stormAbort.signal;
+  // step 级落盘钩子（可选）：onStepFinish 按步回调，崩溃只丢在途 step。
+  let stepIndex = 0;
   const result = streamText({
     model: deps.model as Parameters<typeof streamText>[0]["model"],
     system: deps.system, // 顶层系统提示；v7 禁止 system 进 messages
@@ -120,6 +128,7 @@ export async function runLoop(messages: ModelMessage[], deps: LoopDeps): Promise
     messages,
     stopWhen: stepCountIs(deps.maxSteps),
     abortSignal: combined,
+    onStepFinish: (step) => deps.onStep?.(step.response.messages as ModelMessage[], stepIndex++),
   });
   // P1「未从 vault 召回」检测：累计实质答复长度 + 是否调用过 recall 工具。
   const recallSet = new Set(deps.recallToolNames ?? []);

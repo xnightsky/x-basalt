@@ -8,6 +8,7 @@
 
 - **条级召回：`skills get <name> <id>...` 只取指定条目** —— `get`/`recall` 的返回单位一直是「整篇」，想要 `core` 里 meta 那一条就得吞下全篇。现在每条 rule 可带 `id`（`SkillRule.id`，可选），按 id 取即可：`skills get core meta` 约 2.6 KB，整篇是约 17 KB。条目按**传入顺序**输出；给了未知 id 报错并列出该 skill 全部可用 id，**不静默少给**（静默少给会让调用方以为已取全）。配套 `skills list <name>` 列出条目 id 与首行摘要，供挑完再取。这比拆篇更根本——大篇不必再为了「便宜」而被切碎。
 - **`query --json`** —— `scan`/`run`/`base`/`lint` 都有这个开关，唯独 `query` 不接受，调用方按类推写上就撞 `unknown option` 再退回裸调。`query` 的输出本就恒为 JSON，补这个 flag 纯为接口一致，不改变任何输出。
+- **`chat` 会话落盘与跨进程续跑（`--session [<uuid>]`，参考 pi 的 session 机制、默认不落盘取反）** —— 裸 `--session` 新建（系统生成 UUID），`--session <uuid>` 严格续跑（不存在/非 UUID 即报错，绝不静默开新会话）；会话以 **JSONL 事件流逐 step 追加**落盘到 `sessions/chat-<uuid>.jsonl`（崩溃/Ctrl+C/网络中断只丢在途 step，读侧容忍半截尾行、截断孤儿 tool-call）；返回时任何形态必带会话 id（`--json` 档含 `sessionId` 字段，其余打 stderr 不污染 stdout）；续跑守卫：vault/db 一致性校验、model 变更提示、error-storm 警告；REPL 横幅常驻会话 id、续跑恢复历史与「继续」提示符；`--max-steps` 每轮预算、与续跑正交。
 
 ### Changed
 

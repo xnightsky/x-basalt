@@ -8,7 +8,7 @@
 import { createInterface } from "node:readline/promises";
 import { resolve } from "node:path";
 import type { ModelMessage, ToolSet } from "ai";
-import { runLoop, type LoopEvent } from "./loop.js";
+import { runLoop, type LoopEvent, type StopReason } from "./loop.js";
 import { NO_RECALL_NOTICE, RECALL_TOOL_NAMES } from "./tools.js";
 import type { Tracer } from "./trace.js";
 
@@ -41,9 +41,10 @@ export function interpretLine(raw: string, canContinue: boolean): ReplAction {
 }
 
 /** 启动横幅（最小 TUI：一行说清这是什么 + 怎么求助/看示例/退出）。 */
-export function banner(model?: string): string {
+export function banner(model?: string, sessionId?: string): string {
   const m = model ? ` · 模型 ${model}` : "";
-  return `x-basalt chat${m}\n自然语言驱动 vault；输入 examples 看可玩示例，help 看用法，quit 退出。`;
+  const s = sessionId ? ` · 会话 ${sessionId}` : "";
+  return `x-basalt chat${m}${s}\n自然语言驱动 vault；输入 examples 看可玩示例，help 看用法，quit 退出。`;
 }
 
 /** 帮助速查（命令 + 操作）。 */
@@ -96,10 +97,27 @@ export async function runRepl(
   model: unknown,
   tools: ToolSet,
   opts: { maxSteps: number },
-  cfg: { system: string; onEvent: (e: LoopEvent) => void; model?: string; tracer?: Tracer },
+  cfg: {
+    system: string;
+    onEvent: (e: LoopEvent) => void;
+    model?: string;
+    tracer?: Tracer;
+    /** 落盘会话标识（横幅常驻 + 退出语打印路径）；无则不启用任何会话行为。 */
+    session?: { id: string; path: string };
+    /** 续跑恢复：会话快照里的历史消息（新建/临时会话不传）。 */
+    initialMessages?: ModelMessage[];
+    /** 续跑恢复：上轮 exhausted 时为 true，提示符直接给续跑变体。 */
+    initialCanContinue?: boolean;
+    /** 轮开始：追加用户消息行（会话事件流；仅 message 分支触发，「继续」不追加）。 */
+    onUserMessage?: (message: ModelMessage) => void;
+    /** step 完成：追加该步消息行（透传 runLoop 的 onStep；崩溃只丢在途 step）。 */
+    onStep?: (messages: ModelMessage[]) => void;
+    /** 轮正常收尾（done/exhausted/error-storm）：写 turn 收尾行；abort/出错轮不调。 */
+    onTurnEnd?: (stopReason: StopReason) => void;
+  },
 ): Promise<number> {
   const rl = createInterface({ input: process.stdin, output: process.stdout });
-  process.stdout.write(`${banner(cfg.model)}\n`);
+  process.stdout.write(`${banner(cfg.model, cfg.session?.id)}\n`);
   // 空闲提示符下的 Ctrl+C：优雅退出并触发 finally 打印 trace 路径；运行中 Ctrl+C 由 runLoop 的 abort 处理。
   let isRunning = false;
   let shouldQuit = false;
@@ -109,8 +127,8 @@ export async function runRepl(
     rl.close();
   });
   // system 不进 messages（v7 禁止），每轮经 runLoop 的 system 参数传；messages 只累积 user/assistant/tool。
-  let messages: ModelMessage[] = [];
-  let canContinue = false; // 上一轮是否撞顶未完成
+  let messages: ModelMessage[] = cfg.initialMessages ? [...cfg.initialMessages] : [];
+  let canContinue = cfg.initialCanContinue ?? false; // 上一轮是否撞顶未完成（含续跑恢复）
   try {
     for (;;) {
       const action = interpretLine(
@@ -130,8 +148,12 @@ export async function runRepl(
         process.stdout.write(`${examplePrompts()}\n`);
         continue;
       }
-      // message：追加新用户消息；continue：不追加，直接用现有（含上轮未完成）messages 续跑。
-      if (action.kind === "message") messages.push({ role: "user", content: action.content });
+      // message：追加新用户消息（事件流同步落盘）；continue：不追加，直接用现有（含上轮未完成）messages 续跑。
+      if (action.kind === "message") {
+        const userMessage: ModelMessage = { role: "user", content: action.content };
+        messages.push(userMessage);
+        cfg.onUserMessage?.(userMessage);
+      }
       const ac = new AbortController();
       const onSigint = (): void => ac.abort();
       process.on("SIGINT", onSigint);
@@ -142,6 +164,7 @@ export async function runRepl(
           tools,
           maxSteps: opts.maxSteps,
           onEvent: cfg.onEvent,
+          onStep: cfg.onStep,
           abortSignal: ac.signal,
           system: cfg.system,
           recallToolNames: RECALL_TOOL_NAMES,
@@ -149,6 +172,8 @@ export async function runRepl(
         });
         messages = r.messages;
         canContinue = r.stopReason === "exhausted";
+        // 事件流落盘：轮正常收尾写 turn 行；abort/出错轮不调（尾部无收尾行即中断标记）。
+        cfg.onTurnEnd?.(r.stopReason);
       } catch (e) {
         if (shouldQuit) return 130;
         // 中断/出错后不提供「继续」（上下文可能不一致），下一行须是新指令。
@@ -164,5 +189,7 @@ export async function runRepl(
     rl.close();
     cfg.tracer?.close();
     if (cfg.tracer?.isActive()) process.stdout.write(`· trace → ${resolve(cfg.tracer.path)}\n`);
+    // 退出语必带会话 id（设计硬契约：任何形态返回都能找回会话）。
+    if (cfg.session) process.stdout.write(`· 会话 ${cfg.session.id} → ${cfg.session.path}\n`);
   }
 }

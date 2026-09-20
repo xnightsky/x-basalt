@@ -7,8 +7,8 @@ tags:
   - cli
   - chat
   - x-basalt
-timestamp: 2026-09-20T09:28:57Z
-sha256: 40ac851e556733bfda9f34ea9965a466ef7fc516849f54c033ea4935ac1b219d
+timestamp: 2026-09-20T12:12:20Z
+sha256: 0f90b2de1edc489b7ef8bfe4d3e41e0155bd88b0179cdc76a3e0edaf0e5b358e
 ---
 # chat 怎么玩 · x-basalt
 
@@ -51,6 +51,14 @@ x-basalt chat
 
 进去先打 `examples` 看一屏可玩指令。
 
+**带会话落盘**（撞顶/进程退出后可跨进程续跑）：
+
+```bash
+x-basalt chat "长任务第一步" --session               # 新建：系统生成 UUID，首行打印
+x-basalt chat "接着把剩下的跑完" --session <uuid>    # 严格续跑（不存在/非法即报错）
+x-basalt chat --session <uuid>                       # 带历史进 REPL
+```
+
 ## 4. REPL 里能打什么
 
 | 输入                  | 作用                                                       |
@@ -82,13 +90,13 @@ x-basalt chat
   用 DQL「FOOBAR 乱写」查一下 —— 看它撞错后怎么换法自纠
 ```
 
-`<…>` 换成你库里真实文件名。`--max-steps`（默认 50）控制单轮最多几步。
+`<…>` 换成你库里真实文件名。`--max-steps`（默认 50）控制**单轮**最多几步——它是每轮预算、与续跑正交：续跑时可换值（如 `--session <uuid> --max-steps 100`）。
 
 ## 6. 玩的时候重点看什么
 
 - **工具调用可见**：每步打印 `· 调用 <工具> <入参>` 和 `↳ <结果预览>`——能看到它真在调 `cli`（子命令可见），而不是空口编答案。
 - **索引路径可直接复用**：`query` / `search` 返回的 `file.path` 可直接交给 `parse` / `meta`；chat 会按已配置的单根或多根 vault 自动还原物理文件，不需要也不应该猜 repo / vault 目录前缀。
-- **撞顶不静默停**：步数用满会显式提示「已达步数上限、任务可能未完成」；REPL 里打 `继续` 用现有上下文接着跑（单发则提示加大 `--max-steps`）。
+- **撞顶不静默停**：步数用满会显式提示「已达步数上限、任务可能未完成」；REPL 里打 `继续` 用现有上下文接着跑；带 `--session` 的落盘会话还能跨进程续跑——`x-basalt chat "继续" --session <uuid>`（UUID 在每轮收尾打印）；单发也可加大 `--max-steps`。
 - **失败换策略（A≠B）**：故意写错（如乱写 DQL），看它收到 `[工具失败·dql] …去 obsidian-base-spec 核对 / 换写法` 后是否**换个写法重试**，而不是对同一句硬磨。库未建会得 `[工具失败·not-found] …先建索引`。
 - **写直接落盘**：写类指令（设 status / 规范化 tags）**直接改文件**——所以务必先在测试库 / 副本上玩。
 
@@ -97,6 +105,7 @@ x-basalt chat
 - **全文检索是子串匹配，非语义搜索**：`search` 走 FTS5 + trigram，按字面子串找（查询**至少 2 个字符**，中英文皆可），不理解同义词/概念相关；且基于索引快照，新改动要先 `scan`/`index` 才搜得到。
   匹配口径**分两档**：纯 ASCII 是字面短语（多词 AND）；含中文时切 trigram 取并集 **OR 宽松召回**——只命中部分片段的笔记也会计入 `total`，完整子串命中者由 bm25 排最前。所以别把 `search` 的 `total` 当成「确实含这一串的篇数」，详见 [命令参考 `search`](commands.md#search--全文检索正文)。
 - **写无确认闸**：写动作直接改文件，靠 `Ctrl+C` 中断 + 原子写兜底，**没有逐动作确认**。别拿重要库直接玩写。
+- **会话文件含 vault 原文**：`--session` 落盘的 `.x-basalt/sessions/chat-<uuid>.jsonl`（JSONL 事件流，逐 step 追加——崩溃/Ctrl+C 只丢在途 step，已完成的进度都在盘上）保存完整对话（含 `<<VAULT_DATA>>` 包裹的工具结果原文）——已 gitignore，但请自行清理；同一会话别并行跑（行会交错串线）。不带 `--session` 的临时会话零落盘。
 - **常驻/监听不可用**：chat 工具皆一次性；不存在 watch（会挂死对话），它被系统提示禁止尝试。
 - **效果未量化**：AI 行为质量尚无场景库回归（见 [`../research/2026-06-30-chat-gap-vs-agent-browser.md`](../research/2026-06-30-chat-gap-vs-agent-browser.md) §3）。
 

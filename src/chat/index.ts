@@ -7,6 +7,15 @@ import { resolve } from "node:path";
 import { runLoop, type LoopEvent } from "./loop.js";
 import { createModel, NO_KEY_MESSAGE, resolveProvider } from "./provider.js";
 import { makeSafety } from "./safety.js";
+import {
+  checkSessionTarget,
+  createSession,
+  loadSession,
+  openSessionLog,
+  sessionPath,
+  type ChatSession,
+  type SessionLog,
+} from "./session.js";
 import { buildTools, NO_RECALL_NOTICE, RECALL_TOOL_NAMES } from "./tools.js";
 import { runRepl as repl } from "./repl.js";
 import { createTracer, type Tracer } from "./trace.js";
@@ -26,6 +35,14 @@ export interface ChatOptions {
   quiet?: boolean;
   /** 单发聚合为一个 JSON 对象；优先级高于 quiet。 */
   json?: boolean;
+  /**
+   * 会话落盘与续跑（设计 docs/design/chat-session-continue.md）：
+   * `true`（裸 --session）= 新建（系统生成 UUID）；字符串 = 严格续跑该 UUID（不存在即报错）；
+   * `undefined` = 临时会话，零落盘（默认，现状不变）。
+   */
+  session?: string | true;
+  /** 基目录（会话落盘 `<baseDir>/sessions/`）；cli.ts 传 BASE_DIR，测试可传临时目录。 */
+  baseDir?: string;
 }
 
 /** 系统提示（精简纪律 + 强制先取 core；规范细节不在此复述、靠 skills_get 取，仿 agent-browser chat）。 */
@@ -58,7 +75,7 @@ const PREVIEW_MAX = 200;
 const SHORT_TARGET_MAX = 80;
 
 const EXHAUSTED_NOTICE =
-  "⚠ 已达步数上限、任务可能未完成——REPL 中输入「继续」可接着跑；单发可重试时加大 --max-steps。";
+  "⚠ 已达步数上限、任务可能未完成——REPL 中输入「继续」可接着跑；落盘会话可用 --session <uuid> 跨进程续跑；单发也可加大 --max-steps。";
 
 /** 错误风暴护栏提示（2026-08-03）：连续工具失败达阈值强制停止。 */
 const ERROR_STORM_NOTICE =
@@ -78,6 +95,8 @@ export interface RenderContext {
   profile: ChatOutputProfile;
   answer: string;
   writers: ChatOutputWriters;
+  /** 当前落盘会话 id；json 档收尾对象带 sessionId 字段（未启用会话时省略，保持旧契约）。 */
+  sessionId?: string;
 }
 
 const PROCESS_WRITERS: ChatOutputWriters = {
@@ -167,6 +186,8 @@ function renderFinish(e: LoopEvent, context: RenderContext): void {
         stopReason: e.stopReason ?? "done",
         steps: e.steps ?? 0,
         usage: completeUsage(e.usage),
+        // 硬契约：带 --session 的运行，json 档经此字段机器可读地返回会话 id（设计 §4.1）。
+        ...(context.sessionId ? { sessionId: context.sessionId } : {}),
       })}\n`,
     );
     return;
@@ -260,7 +281,7 @@ function outputProfile(opts: ChatOptions): ChatOutputProfile {
 /** 装配 model + tools；无 key/未装依赖 → 打印指引返回 null（消费者退出非 0）。 */
 async function setup(
   opts: ChatOptions,
-): Promise<{ model: unknown; tools: ReturnType<typeof buildTools> } | null> {
+): Promise<{ model: unknown; modelName: string; tools: ReturnType<typeof buildTools> } | null> {
   const res = resolveProvider(process.env, opts.model);
   if ("error" in res) {
     console.error(NO_KEY_MESSAGE);
@@ -278,37 +299,205 @@ async function setup(
     { dbPath: opts.dbPath, vaultPath: opts.vaultPath, skillPath: opts.skillPath },
     safety,
   );
-  return { model, tools };
+  return { model, modelName: res.model, tools };
 }
 
-/** 单发：翻译→执行→输出→退出，无历史。Ctrl+C → abort 中断、退出码 130。 */
+// ===== 会话落盘与续跑（设计 docs/design/chat-session-continue.md） =====
+
+/** 会话行文案：`· 会话 <id> → <路径>`。 */
+function sessionLine(id: string, path: string): string {
+  return `· 会话 ${id} → ${path}`;
+}
+
+/**
+ * 按输出档写会话相关行：full/REPL → stdout；summary/quiet → stderr（不污染答案管道）。
+ * json 档正常收尾由 renderFinish 的 sessionId 字段承载，不打行；异常路径由调用方直接打 stderr。
+ * 导出供测试锁定全形态可见性契约（设计 T12）。
+ */
+export function writeSessionNotice(
+  profile: ChatOutputProfile,
+  writers: ChatOutputWriters,
+  text: string,
+): void {
+  (profile === "full" ? writers.stdout : writers.stderr)(`${text}\n`);
+}
+
+/** resolveChatSession 产物：就绪（新建/续跑 + 提示数据）或守卫拒绝。 */
+export type SessionResolution =
+  | {
+      ok: true;
+      session: ChatSession;
+      /** true = 载入已有快照续跑；false = 新建。 */
+      resumed: boolean;
+      path: string;
+      /** 快照模型与本次解析不同（守卫 5：提示仍允许）。 */
+      modelChanged?: { from?: string; to?: string };
+    }
+  | { ok: false; error: string };
+
+/**
+ * 解析 `--session` 选项为就绪的会话对象。
+ * 裸 `--session`（true）→ 新建（UUID 系统生成）；`<uuid>` → 严格载入 + vault/db 一致性守卫。
+ * 新建在此即落盘（空 messages），让「已创建 → 路径」的打印永远为真。
+ *
+ * @behavior Given true When 解析 Then 新建并落盘空快照
+ * @behavior Given <uuid> 不存在/非法/损坏/vault 不匹配 When 解析 Then 返回 ok:false（不静默开新会话）
+ */
+export function resolveChatSession(
+  opts: ChatOptions & { session: string | true },
+  modelName?: string,
+): SessionResolution {
+  const baseDir = opts.baseDir ?? ".x-basalt";
+  if (opts.session === true) {
+    // 新建：header 行即落盘，「已创建 → 路径」的打印因此永远为真。
+    const { session, path } = createSession(baseDir, {
+      vault: opts.vaultPath,
+      db: opts.dbPath,
+      model: modelName,
+      maxSteps: opts.maxSteps,
+    });
+    return { ok: true, session, resumed: false, path };
+  }
+  try {
+    const session = loadSession(baseDir, opts.session);
+    const targetError = checkSessionTarget(session, { vault: opts.vaultPath, db: opts.dbPath });
+    if (targetError) return { ok: false, error: targetError };
+    const modelChanged =
+      session.model && modelName && session.model !== modelName
+        ? { from: session.model, to: modelName }
+        : undefined;
+    return {
+      ok: true,
+      session,
+      resumed: true,
+      path: sessionPath(baseDir, session.id),
+      modelChanged,
+    };
+  } catch (e) {
+    return { ok: false, error: (e as Error).message };
+  }
+}
+
+/**
+ * 会话快照 → REPL 初始状态（设计 §4.4 续跑恢复缝）：历史消息 + 上轮 exhausted 或中断轮
+ * （事件流下盘上恒为完整步边界，中断恢复也一致）时给续跑提示符。
+ * 导出供测试锁定恢复语义（设计 T8/T15）。
+ */
+export function replRestoreState(session: ChatSession): {
+  initialMessages?: ModelMessage[];
+  initialCanContinue?: boolean;
+} {
+  return {
+    initialMessages: session.messages.length ? session.messages : undefined,
+    initialCanContinue:
+      session.lastStopReason === "exhausted" || session.interrupted ? true : undefined,
+  };
+}
+
+/**
+ * 会话就绪后的启动提示（新建/续跑/model 变更/error-storm 警告），按输出档选通道。
+ * 导出供测试锁定提示文案契约（设计 T10/T13）。
+ */
+export function announceSession(
+  profile: ChatOutputProfile,
+  writers: ChatOutputWriters,
+  r: Extract<SessionResolution, { ok: true }>,
+): void {
+  if (r.resumed) {
+    writeSessionNotice(
+      profile,
+      writers,
+      `· 已续会话 ${r.session.id}（${r.session.messages.length} 条消息，上轮 ${r.session.lastStopReason ?? "中断"}）`,
+    );
+    if (r.session.interrupted) {
+      writeSessionNotice(
+        profile,
+        writers,
+        "· 提示：上轮中断/崩溃于进行中，已从最近完整步恢复（事件流逐 step 落盘）。",
+      );
+    }
+    if (r.session.lastStopReason === "error-storm") {
+      writeSessionNotice(
+        profile,
+        writers,
+        "⚠ 上轮因连续工具失败被强制停止（error-storm），续跑可能重蹈死循环。",
+      );
+    }
+    if (r.modelChanged) {
+      writeSessionNotice(
+        profile,
+        writers,
+        `· 提示：会话由模型 ${r.modelChanged.from} 产出，当前使用 ${r.modelChanged.to} 续跑。`,
+      );
+    }
+  } else {
+    writeSessionNotice(profile, writers, `· 会话 ${r.session.id} 已创建 → ${r.path}`);
+  }
+}
+
+/** 单发：翻译→执行→输出→退出；带 --session 时落盘/续跑会话快照。Ctrl+C → abort 中断、退出码 130。 */
 export async function runOnce(input: string, opts: ChatOptions): Promise<number> {
   const s = await setup(opts);
   if (!s) return 1;
-  const tracer = makeTracer(opts);
   const profile = outputProfile(opts);
-  const renderContext: RenderContext = { profile, answer: "", writers: PROCESS_WRITERS };
+  // 会话解析（新建/严格续跑）；守卫失败 → 报错非 0，不开跑。
+  let session: ChatSession | undefined;
+  let sessionFile: string | undefined;
+  if (opts.session !== undefined) {
+    const r = resolveChatSession({ ...opts, session: opts.session }, s.modelName);
+    if (!r.ok) {
+      console.error(`✗ ${r.error}`);
+      return 1;
+    }
+    session = r.session;
+    sessionFile = r.path;
+    announceSession(profile, PROCESS_WRITERS, r);
+  }
+  const tracer = makeTracer(opts);
+  const renderContext: RenderContext = {
+    profile,
+    answer: "",
+    writers: PROCESS_WRITERS,
+    sessionId: session?.id,
+  };
+  // 会话事件流写口：逐 step 追加落盘，崩溃（含网络崩溃）只丢在途 step（设计 §4.2）。
+  const log: SessionLog | undefined =
+    session && sessionFile ? openSessionLog(sessionFile, session) : undefined;
   const ac = new AbortController();
   const onSigint = (): void => ac.abort();
   process.on("SIGINT", onSigint);
   // system 不进 messages（v7 禁止），经 runLoop 的 system 参数传给 streamText 顶层。
-  const messages: ModelMessage[] = [{ role: "user", content: input }];
+  // 续跑：文件重建的历史 + 追加本次 input 为新 user 消息；新建/临时：仅 input。
+  const userMessage: ModelMessage = { role: "user", content: input };
+  log?.appendUser(userMessage);
+  const messages: ModelMessage[] = [...(session?.messages ?? []), userMessage];
+  let lastSteps: number | undefined;
   try {
-    await runLoop(messages, {
+    const r = await runLoop(messages, {
       model: s.model,
       tools: s.tools,
       maxSteps: opts.maxSteps,
       onEvent: (e) => {
         renderEvent(e, renderContext);
         tracer?.sink(e, 1);
+        if (e.type === "finish") lastSteps = e.steps;
       },
+      onStep: log ? (msgs) => log.appendSteps(msgs) : undefined,
       abortSignal: ac.signal,
       system: SYSTEM_PROMPT,
       recallToolNames: RECALL_TOOL_NAMES,
       noRecallNotice: NO_RECALL_NOTICE,
     });
+    // 轮正常收尾（done/exhausted/error-storm）写 turn 行；abort/出错走 catch——
+    // 尾部无收尾行即中断标记，已完成 step 已在盘上（事件流语义）。
+    log?.endTurn(r.stopReason, lastSteps);
+    // 硬契约：返回必带会话 id。json 档已由 renderFinish 的 sessionId 字段承载，不重复打行。
+    if (session && sessionFile && profile !== "json")
+      writeSessionNotice(profile, PROCESS_WRITERS, sessionLine(session.id, sessionFile));
     return 0;
   } catch (e) {
+    // 非正常返回（中断/出错）：任何形态都向 stderr 打会话行——跑了半截时 UUID 是找回现场的唯一线索。
+    if (session && sessionFile) PROCESS_WRITERS.stderr(`${sessionLine(session.id, sessionFile)}\n`);
     if (ac.signal.aborted) {
       console.error("\n· 已中断");
       return 130;
@@ -324,11 +513,27 @@ export async function runOnce(input: string, opts: ChatOptions): Promise<number>
   }
 }
 
-/** REPL：委托 repl.ts（累积历史、SIGINT 中断当前轮）。model 名透传给横幅展示。 */
+/** REPL：委托 repl.ts（累积历史、SIGINT 中断当前轮）；带 --session 时恢复快照并按轮落盘。 */
 export async function runRepl(opts: ChatOptions): Promise<number> {
   const s = await setup(opts);
   if (!s) return 1;
+  // 会话解析（新建/严格续跑）；守卫失败 → 报错非 0，不进 REPL。REPL 是交互形态，提示走 stdout。
+  let session: ChatSession | undefined;
+  let sessionFile: string | undefined;
+  if (opts.session !== undefined) {
+    const r = resolveChatSession({ ...opts, session: opts.session }, s.modelName);
+    if (!r.ok) {
+      console.error(`✗ ${r.error}`);
+      return 1;
+    }
+    session = r.session;
+    sessionFile = r.path;
+    announceSession("full", PROCESS_WRITERS, r);
+  }
   const tracer = makeTracer(opts);
+  // 会话事件流写口（逐 step 追加；轮次跨进程延续编号）。
+  const log: SessionLog | undefined =
+    session && sessionFile ? openSessionLog(sessionFile, session) : undefined;
   let turn = 1;
   try {
     return await repl(s.model, s.tools, opts, {
@@ -340,6 +545,12 @@ export async function runRepl(opts: ChatOptions): Promise<number> {
       },
       model: opts.model,
       tracer: tracer ?? undefined,
+      session: session && sessionFile ? { id: session.id, path: sessionFile } : undefined,
+      // 续跑恢复：文件重建的历史 + 上轮 exhausted/中断时直接给续跑提示符（设计 §4.4）。
+      ...(session ? replRestoreState(session) : {}),
+      onUserMessage: log ? (m) => log.appendUser(m) : undefined,
+      onStep: log ? (msgs) => log.appendSteps(msgs) : undefined,
+      onTurnEnd: log ? (stopReason) => log.endTurn(stopReason) : undefined,
     });
   } finally {
     tracer?.close();

@@ -6,8 +6,8 @@ tags:
   - design
   - index
   - x-basalt
-timestamp: 2026-08-06T23:57:07Z
-sha256: 5c7ef99145eee9fbe886b1d53ded9c8773b27254417f259bced36d6404d10afb
+timestamp: 2026-09-20T11:09:26Z
+sha256: 38f1c5ef4090d3a84ced7fe1bab0443756bf92210c1147cfb7642c20902ac378
 ---
 # 设计文档
 
@@ -67,6 +67,7 @@ sha256: 5c7ef99145eee9fbe886b1d53ded9c8773b27254417f259bced36d6404d10afb
 | [读写机制](chat-readwrite.md) | 工具调用的读侧与受闸写侧 |
 | [skill grounding](chat-skill-grounding.md) | 怎么让模型用对 CLI |
 | [trace](chat-trace.md) | 可观测性 |
+| [会话落盘与续跑](chat-session-continue.md) | **提案·可行性已验证**：默认不落盘；`--session` 裸用新建（系统 UUID）、`--session <uuid>` 严格续跑；返回必带 session id；`--max-steps` 正交 |
 | [工具面单一真相源](chat-tool-surface.md) | **方向已拍板·待立计划**：chat 彻底切到 cli 单执行口（paths 漂移实证 + 对标 agent-browser + 防递归，含图） |
 
 ## KB compiler（lint / links）
