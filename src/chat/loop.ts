@@ -180,6 +180,11 @@ export async function runLoop(messages: ModelMessage[], deps: LoopDeps): Promise
         }
       : undefined,
   });
-  const response = await result.response;
-  return { messages: [...messages, ...(response.messages as ModelMessage[])], stopReason };
+  // === 自建实现 ===
+  // 完整历史必须逐 step 拼接：ai@7 的 `result.response.messages` 只含**最后一步**（实测：
+  // step0=assistant(tool-call)+tool(result)、step1=assistant(text) 时，final response.messages
+  // 只有 assistant(text)）。只拼 final 会让多轮/续跑丢失全部工具调用与观察——模型下轮看不到
+  // 自己查过什么（2026-09-20 session 落盘实测暴露）。
+  const stepMessages = steps.flatMap((s) => s.response.messages as ModelMessage[]);
+  return { messages: [...messages, ...stepMessages], stopReason };
 }

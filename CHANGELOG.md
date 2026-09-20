@@ -23,6 +23,7 @@
 
 ### Fixed
 
+- **chat 多轮/续跑丢失工具历史** —— `runLoop` 累积上下文时只拼了 `result.response.messages`，而 ai@7 该字段只含**最后一步**（工具调用步的 assistant/tool 消息不在其中），导致 REPL 多轮与撞顶「继续」时模型看不到自己此前查过什么。现改为逐 step 拼接 `steps[i].response.messages`，累积完整工具调用与观察；`tests/chat/session.test.ts` 以双轮组合锁定「续跑模型收到的 prompt 含历史 tool-call/tool-result 原文」。
 - **`X_BASALT_DIR` 缺 config 时静默回退 cwd，导致配置与 `index.db` 分家** —— 公开契约一直声明该环境变量会把 `.x-basalt` 整块搬移，但实现只在 env 目录已有 `config.*` 时才使用它，否则从 cwd 读取配置、同时把默认 DB 写到 env 目录。现改为严格单源：只要设置 env，项目配置就只从该目录读取；缺文件视为空项目配置且不回退 cwd（全局配置仍合并，显式 `<vault>` / `--db` 仍可用）。回归覆盖任意相对定制目录、错位 config 拒绝、显式 vault、正确迁移及 config/DB 同目录。
 - **两类高频 DQL 误用只返回底层泛化错误** —— 无分组 `TABLE count()` 现明确提示 `count()` 仅用于 `GROUP BY` 聚合列、总数应读结果 `total`；SQL 惯性的 `SORT BY` 现提示 DQL 写法 `SORT <field> [ASC|DESC]` 且错误位置仍指向 `BY`。两者只改诊断，不扩展查询能力。
 
