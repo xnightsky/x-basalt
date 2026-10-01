@@ -1,159 +1,166 @@
 ---
 type: design
 status: partial
-title: 语义/全文检索融入设计评估（FTS5 + 可选 embedding）
-description: 评估把 qmd 式检索融入 x-basalt：FTS5 全文（core、无 AI、中文 trigram）为主，embedding 向量为最小可选 AI；含借鉴取舍
+title: 全文与语义检索：当前实现、组合评估与边界
+description: FTS5 当前实现、Agent 补召回路径、QMD 过滤边界与组合对照，以及尚未实现的可选 embedding 准入条件。
 tags:
-  - spec
+  - design
   - semantic
   - retrieval
   - x-basalt
-timestamp: 2026-06-29T23:59:11Z
-sha256: c30eba5c37da36d9c7b33fab9dc9dc9bf29070772228503b2a132571bddfb448
+timestamp: 2026-10-01T13:41:15Z
+sha256: 92f8cc3c0b12f512627a6fbad82ca33e1e4dc64bf2550818548b658318875d57
 ---
+# 全文与语义检索：当前实现、组合评估与能力边界
 
-# 设计评估：语义/全文检索融入（qmd 调研）—— FTS5 为核、embedding 为可选 AI
+> 初始评估：2026-06-28；证据更新：2026-09-30。
+> 当前 FTS5 已落地；embedding/混合检索仍是待评估方案，不是开工或兼容承诺。
+> 当前实现以 [`src/indexer/index.ts`](../../src/indexer/index.ts)、[`src/query/index.ts`](../../src/query/index.ts) 和 [`tests/fts.test.ts`](../../tests/fts.test.ts) 为准；行业证据与待执行实验见[最新调研](../research/2026-09-30-agent-knowledge-industry-landscape.md)。
+> 原分层、候选接口/存储、QMD 取舍与工作量评估完整保留在[2026-06-28 历史快照](../history/decisions/2026-06-28-semantic-retrieval-integration.md)；本文更新当前事实与明确边界，不以删去旧方案代替决策。
 
-> 日期：2026-06-28 · 类型：设计评估（**非开工**，只论"将来若做，怎么做才立得住"）
-> 触发：用户问 `tobi/qmd` 借鉴价值。qmd = 本地优先的 markdown 语义检索引擎（BM25 + 向量 + LLM rerank）。
-> 关联：前端 chat 见 [`2026-06-28-cli-chat-design.md`](../history/decisions/2026-06-28-cli-chat-design.md)；本项承接 [`../../TODO.md`](../../TODO.md)「可选增强 · S3.5 FTS5 全文检索」；索引现状见 `src/indexer/schema.ts`、`src/indexer/index.ts`。
-> 外部对标：`tobi/qmd`（TypeScript，SQLite FTS5 + `sqlite-vec` + 本地 GGUF 模型）。
+## 1. 结论与定位
 
-## 0. 这份文档要回答的问题
+1. **保留无模型全文检索作为内核能力。** 当前 `search` 是 SQLite FTS5/trigram 与短词 LIKE 兜底，不需要 AI provider。[P1]
+2. **语义发现不只等于向量。** 查询扩展、同义词、目录/链接导航、摘要与向量/混合检索是不同的补召回路径；效果要比较宿主、检索和结果交付的完整系统。[S1][S2]
+3. **先验证现成检索组合，再决定是否自建 embedding。** QMD 已提供词法/向量/重排及 metadata filtering，可作为对照对象；尚未实测其中文 Vault 效果与接入成本。[S3]
+4. **候选发现与精确查询分开。** 检索用于找证据；“全部”“计数”及批量写入选择仍须遵守明确定义的查询范围、完整性、索引时效与写侧边界。向量/重排不保证穷尽概念相关。[S3][P1]
 
-> 「x-basalt 现在只能按 frontmatter/tag/link 做结构化 DQL 查询，**查不了正文内容**。qmd 那套语义检索能融入吗？哪些该抄、哪些会破坏离线身份？」
+以上延续离线内核、可选 AI 隔离的边界；不新增默认模型、服务或依赖。
 
-**结论先行（TL;DR）**
+### 1.1 分层与依赖：当前内核 / 候选增强
 
-1. **拆成两层，结论相反**：
-   - **FTS5 全文检索**（纯 SQLite、零模型、纯离线）——**该做**，它补的是 x-basalt 最大的能力空洞「查正文」，与项目身份完全一致。承接 TODO 既有的 S3.5。
-   - **embedding 向量语义**（真·"按意思找"）——**只能做成最小可选 AI**：接口后、默认关、用户自配、FTS5 兜底。语义必须有模型来源，无法绕开（见 §6）。
-2. **现在都不做**——本文是可落地性评估，不是开工计划。
-3. **qmd 的向量/GGUF/LLM-rerank/chunking 整套不照搬**——那会把 x-basalt 从"纯逻辑 CLI"变成"拖模型 + 推理运行时的东西"。只取 FTS5 这条离线线，加一个可拔的 embedding 接口（见 §7）。
-
-## 1. 设计脊梁：FTS5 是核、embedding 是最小可选 AI
-
-与 chat spec 共用同一条脊梁（[cli-chat §1](../history/decisions/2026-06-28-cli-chat-design.md)）：
-
-- **FTS5 属于 core**：SQLite 自带 FTS5，better-sqlite3 预编译二进制即含，**零新依赖、零模型、纯离线**。它和结构化 DQL 一样是确定性能力，可无条件进核心。
-- **embedding 属于可选 AI**：向量化需要一个 embedding 模型（神经网络），这是"AI"。故它必须隔离在接口后、默认关、用户显式配置；**没配 = 退化成纯 FTS5，不报错、不要求装任何东西**。
-- **能力可独立交付**：FTS5 可单独落地并长期作为最终形态；embedding 层是"哪天真有'按意思找'需求再插"的可选增强，不是 FTS5 的前提。
-
-## 2. 分层架构
-
+```mermaid
+flowchart TB
+    CALLER["用户 / chat / 外部 Agent"] --> STRUCT["结构化查询入口"]
+    CALLER --> SEARCH["search 全文入口"]
+    subgraph CORE["当前 core：无模型，独立离线可用"]
+        STRUCT --> EXACT["DQL / Bases<br/>明确定义的行集与聚合"]
+        SEARCH --> FTS["FTS5 + 短词 LIKE<br/>词面候选 / 排名 / snippet"]
+        EXACT --> DB[("派生 SQLite 索引")]
+        FTS --> DB
+        FILES[("Vault 源文件")] --> IDX["index / scan / watch"]
+        IDX -->|"事务维护事实与 FTS"| DB
+    end
+    HOST["调用方可做查询扩展 / 导航 / 候选重排<br/>不默认内嵌到索引层"] -. "多轮调用" .-> SEARCH
+    subgraph OPTIONAL["候选 optional：未实现，默认关闭"]
+        ENABLE["用户显式启用 / 自配 provider"] -.-> EMBED["EmbeddingProvider 候选接口<br/>用户自管本地或远端端点"]
+        EMBED -.-> STORE["候选存储 / 检索后端<br/>可选 sqlite-vec 或外部服务，未选定"]
+    end
+    CALLER -. "仅展示未来候选路径，不是现有命令" .-> ENABLE
+    STORE -. "候选发现，不能充当完整行集" .-> RESULT["读取原文 / 引用核验"]
+    FTS --> RESULT
+    ENABLE -. "未配置时保留现有词法能力" .-> SEARCH
+    classDef current fill:#eaf3ff,stroke:#3274b7,stroke-width:2px;
+    classDef candidate fill:#fff3df,stroke:#bc7c22,stroke-width:2px,stroke-dasharray:5 5;
+    class STRUCT,SEARCH,EXACT,FTS,DB,FILES,IDX current;
+    class ENABLE,EMBED,STORE candidate;
 ```
-检索能力
-├─ core（无 AI、纯离线、无条件）
-│   ├─ 结构化查询：DQL（已有）
-│   └─ 全文检索：FTS5 over 正文（本文 §4，承接 S3.5）
-│         ↑ chat 的 LLM 在此之上做 query expansion / HyDE / rerank（外包给调用方，§6①）
-│
-└─ optional（接口后、默认关、FTS5 兜底）
-    └─ embedding provider（§5）：向量召回"零词面重叠的概念相关"（§6②）
-          └─ 存储：sqlite-vec 扩展，仅配置后才加载
-```
 
-## 3. 现状对接（基于实查 `src/indexer/`）
+实线是当前执行/索引依赖；虚线是调用方可采用的方式或未来候选路径。FTS5 可独立长期交付，embedding 不是它的前置条件；默认无配置不加载模型或向量扩展。当前代码依据 [P1]–[P3]，旧分层与候选依据 [H1]；虚线不表示已实现自动路由或降级。
 
-- `files` 表已存 `content`（原始正文）、`frontmatter`（JSON）、`mtime`/`size`，并有 `path/name/path_key/...`。FTS5 虚表可直接 over `content`（+ `name`/`path` 便于命中文件名）。
-- 索引器写入边界单一（`insertPayload` / `deleteByPath`，均在事务内），**FTS 同步可挂在同一事务**，无需额外触发器即可强一致（也可用 SQLite 触发器，二选一，§4）。
-- 增量已成熟：`scanIter` 分批 + 断点续 + `rehash` 内容对比。FTS 重建天然搭车增量（改一个文件 → 先删后插，FTS 行随之更新）。
-- `llm-wiki` profile 已有 `sha256-body` derive（正文 sha256，检测内容漂移）——这个哈希**正好可复用**为 embedding 的"是否需重算"键（§5、§7）。
+### 1.2 明确保留的非目标
 
-## 4. FTS5 设计（core，无 AI）
+- 不内嵌本地模型推理运行时，不随产品下载/加载 GGUF 或引入 `node-llama-cpp`；用户自行运行 Ollama 等端点与产品内嵌运行时是两回事。
+- 不整套搬入 QMD 的模型、chunking、HyDE/rerank 流水线；需要切块时另评估，不因比较现成工具就增加默认运行管线。
+- 不默认开启向量，不使离线命令依赖 provider；模型调用与存储扩展必须隔离在显式启用的可选层。
+- 不为向量缓存改变核心索引的删除语义，不自动引入软删除、内容哈希 docid 或另一套 Vault 文件身份。
 
-### 4.1 schema 与同步
+这些是原评估的边界，不因本轮事实更新而撤销。新需求若要求改变，先更新设计/计划再实施；旧取舍与理由见 [H1] §7、§9。
 
-- 新增 FTS5 虚表（示意）：`CREATE VIRTUAL TABLE files_fts USING fts5(path, name, body, content='files', content_rowid='id', tokenize='trigram')`（分词见 §4.2）。
-- 用 `content=` 外部内容表模式（不重复存正文，省空间），`body` 映射 `files.content`。
-- **同步二选一**：(a) 在 `insertPayload`/`deleteByPath` 内顺手写 FTS（与现有"唯一写边界"一致，推荐）；(b) SQLite 触发器自动同步（解耦但多一层隐式逻辑）。推荐 (a)，符合 AGENTS「indexer 是唯一写边界」。
+## 2. 当前实现：FTS5 已落地
 
-### 4.2 中文分词（决定成败的一点）
+| 项 | 当前行为 | 信源 |
+| --- | --- | --- |
+| 索引 | 常规 `files_fts(path,name,content)` 表，自存副本；不是早期设想的 external-content 表 | `ensureFts()` [P1] |
+| 版本迁移 | `store_config.fts_version` 与 `FTS_VERSION` 比对；缺表/版本不符时重建并从 files 回填 | `ensureFts()` [P1] |
+| 写侧同步 | 在 indexer 的文件插入/删除边界维护 FTS，与对应索引事务配合 | `insertPayload()` / `deleteByPath()` [P1] |
+| 查询入口 | `x-basalt search`，经 `DataviewEngine.search()` 只读索引 | [P1][P2] |
+| 短词优先 | 查询整体至少 2 字符；按空白切词后，只要任一词不足 3 字符，整条查询就走已转义 LIKE 子串匹配、逐词 AND，按 path 排序、score 为 0 | `MIN_FTS_QUERY_LEN` / `TRIGRAM_LEN` / `searchLike()` [P1] |
+| 非 CJK | 所有词均至少 3 字符且不含 CJK 汉字时，各词字面短语 AND；用户输入不作为 FTS 操作符执行 | `escapeFtsPhrase()` / `search()` [P1] |
+| CJK 汉字 | 所有词均至少 3 字符且含 CJK 汉字时，重叠 trigram 并集 OR 宽松召回；部分片段命中也可入结果 | `hasCjk()` / `overlappingTrigrams()` [P1] |
+| 结果 | 排名、snippet、分页；`total` 是当前匹配规则下的行数，不是整句精确出现次数 | `search()` / `paginate()` [P1] |
+| 时效 | 只看索引快照；文件修改后需更新索引才能反映 | [P1][P2] |
 
-**FTS5 默认 `unicode61` 分词器不切 CJK**（中文无空格分隔，整段会被当一个 token，几乎搜不出）。这是中文 vault 的硬坎。评估：
+因此，早期“查不了正文”“FTS 待建”“现在都不做”的表述不再代表当前实现。DQL 与正文检索仍是不同入口，具体命令与匹配口径见[命令参考](../use/commands.md#search--全文检索正文)，本文不另造参数契约。[P2]
 
-| 方案                             | 依赖                  | 中文效果              | 离线                             |
-| -------------------------------- | --------------------- | --------------------- | -------------------------------- |
-| `unicode61`（默认）              | 无                    | ❌ 几乎不可用         | ✅                               |
-| **`trigram`（FTS5 内置三元组）** | **无**（SQLite 自带） | ✅ 子串匹配，中文可用 | ✅                               |
-| `icu` 分词器                     | 需 ICU 构建           | ✅ 好                 | ⚠️ better-sqlite3 预编译不含 ICU |
-| 外部分词（jieba 等）预切再存     | 加 npm/原生依赖       | ✅ 最好               | ✅ 但加依赖                      |
+### 中文与排序边界
 
-**推荐 `trigram`**：FTS5 内置、零依赖、纯离线，对中文做三元组子串匹配即可用，完美贴合 x-basalt"零重依赖"身份。代价是索引体积变大、不支持词级 BM25 精排（但作为"按内容找候选 + 交给 chat/用户筛"足够）。
+SQLite 的 trigram 按连续三字符建词，不是中文词级分词；不足三字符的查询不能直接依赖 trigram MATCH。当前实现用 LIKE 补短词、用 trigram OR 扩 CJK 候选，不等于解决了所有中文相关性问题。[S4][P1]
 
-**借鉴 qmd**：qmd 在 `store_config` 里存 `fts_cjk_normalized_version` 跟踪 CJK 归一化版本——这个**版本号迁移模式**值得抄：分词策略/归一化规则一旦变，靠版本号判定"需重建 FTS"，避免新旧索引混用出错。
+FTS5 仍可按 bm25 排名，但其统计单元是 tokenizer 产生的 token，不应将 trigram 排名说成中文词级 BM25，也不应断言中文词级分词一定更好。短词扫描成本、索引体积、宽松匹配的误召回与排序质量须按真实语料验证。[S4][P1]
 
-### 4.3 命令面
+## 3. Agent 参与召回：能做什么，不能承诺什么
 
-- 设想 `x-basalt query` 扩展一个全文谓词，或新增 `x-basalt search <词>`（待 §8 与 chat 的接口一并定）。本文不冻结命令形态，只确认底座可行。
+调用方可以扩展查询词、生成假想答案后抽词、按目录/链接继续探索、读取候选重排。这些路径能弥补**初始查询**缺少词面重叠的情况，不需要内核默认加载模型；它们也可能选错词、停得过早或带来额外费用。[S1][S2]
 
-## 5. 可选 embedding 层（接口后、默认关）
+必须区分：
 
-仅当用户显式配置 embedding provider 时启用：
+- **固定候选集上的重排**不能找回未进入候选集的文档。
+- **改变查询或导航路径**可能找到原先漏掉的文档；所以不能推导“零初始词面重叠只有向量能补”。
+- **向量检索**提供另一种候选发现方式，但受 embedding、切块、范围过滤和候选窗口影响，也不保证全部相关文档都被发现。[S3]
 
-- **provider 接口**：定义一个 `EmbeddingProvider`（`embed(texts) -> vectors`），实现可为 OpenAI 兼容 embeddings 端点（含本地 Ollama）。配置风格与 chat 一致（env / 配置文件），**默认空 = 不加载**。
-- **存储**：`sqlite-vec` 作为**可选加载**的 SQLite 扩展，仅在 provider 配好时 `loadExtension`；未配则连扩展都不加载，零影响。
-- **内容寻址避免重算**（借鉴 qmd 的核心工程点）：以正文哈希（复用 `sha256-body`，§3）为键存向量；文件内容未变 → 哈希不变 → **跳过重新 embedding**。这是 embedding 层唯一真正"贵"的步骤，content-hash 门控是必要优化（也是 §7 里"content-hash 该抄"的落点）。
-- **FTS5 兜底**：provider 缺失/调用失败 → 自动退回 FTS5，语义命令降级而非报错。
+《Is Grep All You Need?》在 116 个对话记忆问题上观察到检索、宿主、交付路径的交互；不是个人 Vault 的效果 oracle。不能据此宣称日常任务词法必然足够，或向量一定更好。[S2]
 
-## 6. agent-in-the-loop 召回模型与诚实边界
+## 4. QMD 的当前可借鉴点与组合风险
 
-这是把"语义"做轻的关键认知（与 chat spec 配合）：
+核查版本：`04e4dbd8245c527a88f1a8f0bda547aef9ca81fb`。[S3]
 
-- **① 大半"AI 检索步骤"可外包给 chat 的 LLM**，x-basalt 自己不跑模型：
-  - _query expansion_：让 chat 的 LLM 把"分布式一致性"扩成 `CAP / 强一致 / quorum` 等词丢给 FTS5。
-  - _HyDE_：LLM 先写假想答案，再抽词查 FTS5。
-  - _rerank_：LLM 读 FTS5 候选自己重排。
-    → qmd 用本地 LLM 干的这三件，在 x-basalt 这边由调用方（Claude Code / chat 的 provider）顺手做，**无需在引擎内嵌模型**。
-- **② 唯一不可外包 = embedding**：它是对全库的批处理，不是对话里能顺手做的事。这正是 §5 可选层存在的理由。
-- **诚实边界（FTS5 召回上限）**：agent 只能重排"FTS5 捞得到"的东西。一篇笔记若与所有查询词**零词面重叠**，FTS5 永不吐出，agent 也无从重排——**这种"概念相关但用词不沾边"的召回，只有 ② 向量能救**。所以：日常找笔记 ① 足够；要"穷尽概念相关"才需要 ②。
+| 能力 | 评估方向 | 必须保留的边界 |
+| --- | --- | --- |
+| 词法/向量/查询扩展/重排 | 作为完整端到端对照，不默认整套内嵌 | 模型运行、下载、增量更新与总成本另测 |
+| metadata filtering | 可作为候选约束，不再描述为“只有语义搜索” | `qmd.metadata` 命名空间及校验不等同普通 frontmatter schema |
+| FTS 过滤 | 比较匹配效果与候选完整性 | `searchFTS()` 先取 `limit * 10` 再筛，源码注明 best-effort completeness |
+| 向量过滤 | 按集合规模分别评估 | 小集合可精确扫描；超过 20,000 候选转受限 ANN over-fetch |
+| 内容哈希/版本号 | 借鉴失效与重建机制 | 哈希不替代模型/切块版本，不能只按正文相同跳过所有重算 |
+| 外部 CLI/SDK/MCP | 按实际宿主能力选择组合方式 | 不为接口名新增一份业务语义或不可丢弃的第二真相源 |
 
-## 7. qmd 借鉴点取舍（哪些抄、哪些不抄）
+组合前要回答：哪个系统负责扫描/更新、两套索引如何失效、检索结果路径如何映射 Vault 布局、过滤类型如何转换、未配置/失败怎样明确报告。外部检索不得被当成 DQL/Bases 全量枚举或安全写侧。[S3][P1]
 
-| qmd 能力                                         | 取舍                                     | 理由                                              |
-| ------------------------------------------------ | ---------------------------------------- | ------------------------------------------------- |
-| FTS5 全文检索                                    | ✅ **抄**（core）                        | 补"查正文"空洞，纯离线零模型                      |
-| CJK 归一化版本号（`fts_cjk_normalized_version`） | ✅ **抄**（迁移安全）                    | 分词策略变更时安全重建                            |
-| content-hash 内容寻址（避免重算）                | 🟡 **仅 embedding 层抄**                 | 对"贵"的 embedding 才划算；FTS 重算便宜不需要     |
-| `sqlite-vec` 向量存储                            | 🟡 **可选层用**                          | 接口后、默认关                                    |
-| 本地 GGUF 模型 + `node-llama-cpp`                | ❌ **不抄**                              | 拖模型 + 推理运行时，破坏离线轻量身份             |
-| HyDE / query expansion / LLM rerank              | ❌ **不内嵌**（外包给 chat 的 LLM，§6①） | 引擎内嵌模型违背身份；调用方天然是 LLM            |
-| AST-aware / smart chunking                       | ❌ **不抄**                              | 纯为 embedding 切块服务，不切块用不上             |
-| 软删除 + 内容寻址去重                            | ❌ **不抄**                              | 解决"避免重复 embedding"成本，x-basalt 硬删更简单 |
-| docid（6 位内容哈希做 ID）                       | ❌ **不抄**                              | Obsidian 原生身份（path+wikilink+block-id）已覆盖 |
+## 5. 可选 embedding 的候选方案（未实现）
 
-## 8. 与 chat spec 的接口
+**准入条件：** 在同一任务、模型与预算下，词法 + 查询扩展/导航仍有可重复漏召回；外部混合检索确有收益，但组合负担或边界不能满足需求。先做[调研 §9 的实验](../research/2026-09-30-agent-knowledge-industry-landscape.md#9-下一步实验可复现能推翻建议)，再立设计/计划。
 
-- chat（[cli-chat spec](../history/decisions/2026-06-28-cli-chat-design.md)）把"按内容找"作为一个**工具动作**调本文的检索：默认走 FTS5；若用户配了 embedding 且场景需要"穷尽概念相关"，再走向量。
-- 两份文档组合：**chat = 前端对话；本文 = 它最重要的后端检索动作**。但各自独立可落地——FTS5 不依赖 chat 也能作为 `query`/`search` 给人和外部 agent 用；chat 不依赖 embedding 也能跑结构化任务。
+若进入实现，可评估：
 
-## 9. 工作量分级 / 风险 / 不做
+- provider 隔离、用户显式启用；不使离线命令依赖模型。
+- 外部检索服务与本地 `sqlite-vec` 两种路径，不先冻结后者。
+- 失效键包含实际索引内容哈希、模型/维度、切块及归一化版本；不能把未经刷新且只覆盖正文的 frontmatter `sha256` 当全输入版本。
+- 配置缺失时保持现有词法能力；调用失败必须显式返回错误/降级信息，不能无提示切换后仍声称语义检索成功。
+- 输出区分候选相关性与完整查询口径，不把 metadata filter 或 top-k 当全量统计。
 
-**工作量**
+以上是待评估约束，不是当前 API。模型漂移、更新/删除、许可、数据出域和费用都需验收。
 
-| 部件                        | 现状                             | 工作量                                               |
-| --------------------------- | -------------------------------- | ---------------------------------------------------- |
-| FTS5 虚表 + 同步            | `files.content` 已存、写边界单一 | 小：建虚表 + 在 insert/delete 挂同步                 |
-| trigram 中文分词            | 无                               | 极小：建表参数 + 版本号                              |
-| 全文查询命令面              | `query` 已有骨架                 | 小-中：加谓词或 `search` 子命令                      |
-| embedding 接口 + sqlite-vec | 无                               | 中：provider 接口 + 可选扩展加载 + 哈希门控          |
-| 向量召回/融合               | 无                               | 中：检索 + 与 FTS 结果融合（可简单加权，不必上 RRF） |
+### 5.1 原接口 / 存储候选的保留与校准
 
-**风险**
+| 候选 | 原评估保留内容 | 当前边界 |
+| --- | --- | --- |
+| provider | `EmbeddingProvider.embed(texts) -> vectors`；OpenAI 兼容 embeddings 端点，包括用户自管 Ollama；env / 配置文件风格 | 仅候选接口，不是已导出的 API；具体配置键、批量与错误契约未冻结 |
+| 本地存储 | `sqlite-vec` 作为可选 SQLite 扩展，显式启用且配置就绪后才加载 | 保留本地候选，不自动选型或新增依赖；外部检索服务另作对照 |
+| 重算门控 | 内容寻址用于避免重复 embedding | 保留优化动机，但不能只复用 frontmatter 正文 hash；按实际输入及模型/维度/切块/归一化版本失效 |
+| 词法兜底 | 未配置保留 FTS5；原评估提出 provider 失败时自动回 FTS5 | 保留降级候选，不默默废弃；是否自动降级由实施契约确定，失败/降级必须可观察，不能称为语义成功 |
 
-- **中文分词**：trigram 索引膨胀 + 无词级精排；若日后要更好中文 BM25，再评估外部分词（届时靠 §4.2 版本号安全迁移）。
-- **embedding 漂移/成本**：靠 content-hash 门控（§5）；失败须优雅退回 FTS5。
-- **身份拉伸**：embedding 层是"可选 AI"，纪律同 [cli-chat §1](../history/decisions/2026-06-28-cli-chat-design.md)——默认关、接口隔离、无配置全功能。
+来源为 [H1] §5；完整旧表、工作量及未采纳方案均在历史快照，不在此重抄。旧文“唯一不可外包 = embedding”“只有向量能救”“穷尽概念相关”等断言仍只作历史，当前边界以 §3–5 为准。
 
-**不做**
+## 6. 与 chat / 外部宿主的关系
 
-- 不内嵌本地推理运行时；不照搬 qmd 的 GGUF/chunking/rerank；不默认开向量；不为向量改动核心索引的删除语义。
+chat 与外部 Agent 都是调用方；不将 query expansion、重排或一般会话管理默认塞入 query/indexer。当前 chat 经 `cli` 工具调用既有 `search`，不是另一套搜索引擎。[P3]
 
-## 10. 结论与触发条件
+优先保留 CLI 的参数、分页与错误语义，让宿主按需取 skills。是否加独立检索工具或 MCP 出口由具体接入需求决定；工具数量本身不是效果证明。[S1][P3]
 
-- **FTS5（core）可落地性**：高。底座（FTS5 + content 列 + 单一写边界 + trigram）全部就绪，增量集中在"建虚表 + 挂同步 + 加查询面"。**它本就是 TODO 的 S3.5，建议优先级高于 embedding 层。**
-- **embedding（可选 AI）可落地性**：中。需 provider 接口 + sqlite-vec + 哈希门控；价值集中在"零词面重叠的概念召回"，触发条件比 FTS5 严。
-- **何时做**（触发条件）：
-  1. **FTS5**：dogfood 中出现"想按正文内容找笔记"的真实需求即可立计划（与 migrate/lint 同级 backlog，但更基础）。
-  2. **embedding**：仅当 FTS5 + chat 外包（§6①）仍不够、确有"穷尽概念相关"刚需时，再评估这一可选层。
-- **现在的动作**：仅存档本评估，并把 S3.5 从"可选增强"提升为"有评估背书的 backlog"，注明"embedding = 需引入可选模型/端点，最小可选形态"。**不写实现代码。**
+## 7. 验证与停点
+
+- **已有实现证据：** FTS 建表/同步、中文/短词分支与搜索入口见源码；边界测试见 `tests/fts.test.ts`。文档更新不是本轮已跑全量测试的声明。[P1]
+- **待验证：** 真实中文语料的证据召回、查询扩展的调用成本、QMD 组合效果、索引更新与删除失效、过滤候选窗口、多宿主结果交付差异。
+- **进入实现前：** 报告证据 Recall@k、任务成功、引用真实性、初始化/更新成本与 p50/p95；完整查询和安全写另测，不混成一个平均准确率。
+- **停点：** 无端到端收益，不扩大默认依赖；外部组合已满足需求，不仅为保持全自建而复制管线。
+
+## 8. 信源
+
+- **[H1] 原评估历史快照**：[2026-06-28 语义/全文检索融入设计评估](../history/decisions/2026-06-28-semantic-retrieval-integration.md)：完整保留原分层图、接口/存储、QMD 取舍、风险/非目标与工作量；不作为当前功能或效果证明。
+- **[P1] 当前源码与边界测试**：[`src/indexer/index.ts`](../../src/indexer/index.ts)、[`src/query/index.ts`](../../src/query/index.ts)、[`tests/fts.test.ts`](../../tests/fts.test.ts)。
+- **[P2] 当前调用契约**：[命令参考 search](../use/commands.md#search--全文检索正文)。
+- **[P3] 当前 chat 工具面**：[`src/chat/tools.ts`](../../src/chat/tools.ts)、[`src/chat/cli-tool.ts`](../../src/chat/cli-tool.ts)、[工具面设计](chat-tool-surface.md)。
+- **[S1] 官方上下文工程**：[Anthropic Context engineering](https://www.anthropic.com/engineering/effective-context-engineering-for-ai-agents)、[Advanced tool use](https://www.anthropic.com/engineering/advanced-tool-use)。用于能力/职责趋势，不代表本项目实测增益。
+- **[S2] 条件化检索实验**：[Is Grep All You Need? v1](https://arxiv.org/html/2605.15184v1)，§3–5；作者实验，未独立复现。
+- **[S3] QMD 固定版本**：[README](https://github.com/tobi/qmd/blob/04e4dbd8245c527a88f1a8f0bda547aef9ca81fb/README.md)、[store.ts](https://github.com/tobi/qmd/blob/04e4dbd8245c527a88f1a8f0bda547aef9ca81fb/src/store.ts)、[metadata.ts](https://github.com/tobi/qmd/blob/04e4dbd8245c527a88f1a8f0bda547aef9ca81fb/src/metadata.ts)、[metadata-filter.ts](https://github.com/tobi/qmd/blob/04e4dbd8245c527a88f1a8f0bda547aef9ca81fb/src/metadata-filter.ts)。过滤机制为源码事实，效果仍待 A/B。
+- **[S4] SQLite 官方 FTS5 文档**：[Trigram tokenizer](https://sqlite.org/fts5.html#the_trigram_tokenizer)、[bm25](https://sqlite.org/fts5.html#the_bm25_function)。用于 tokenizer/排序机制，不代替真实中文评测。

@@ -83,7 +83,7 @@
     {
       id: "config",
       pattern: "AI_GATEWAY 配置与安全模型",
-      description: "最小可选 AI：**内核零 AI**、chat 隔离懒加载 SDK；没配 key = 本命令禁用，其余命令全功能照常（需 AI_GATEWAY_API_KEY，--model 覆盖模型）。**三个环境变量、Linux/macOS 与 Windows 各平台设法与持久化、离线本地端点（ollama 等）见 docs/use/ai-and-skills.md 第四节**，不在此重抄。安全：写动作直接落盘、无逐个确认弹窗——靠流式可观测 + Ctrl+C 中断在途 + 既有原子写（kill 不损坏文件）+ git 兜底。能力边界：当前做结构化任务（DQL/元数据/规范）与 FTS5 正文全文检索；语义向量检索未落地。",
+      description: "最小可选 AI：**内核零 AI**、chat 隔离懒加载 SDK；没配 key = 本命令禁用，其余命令全功能照常（需 AI_GATEWAY_API_KEY，--model 覆盖模型）。**三个环境变量、Linux/macOS 与 Windows 各平台设法与持久化、离线本地端点（ollama 等）见 docs/use/ai-and-skills.md 第四节**，不在此重抄。安全：无逐个确认；meta 默认落盘，run 批量写需显式 --apply，chat 壳不自动补开关。Ctrl+C 中断模型/循环，不回滚已完成写入，也不保证立即停止已启动 CLI 子进程；tmp+rename 只避免直接半写目标，不保证并发防覆盖、跨文件事务或断电持久性。先在副本验证并建立可恢复备份（信源 src/meta/index.ts、src/chat/cli-tool.ts；完整注意见 docs/use/chat.md 第七节）。能力边界：当前做结构化任务（DQL/元数据/规范）与 FTS5 正文全文检索；语义向量检索未落地。",
       examples: [
         "export AI_GATEWAY_API_KEY=...   # Linux/macOS，持久化见 docs/use/ai-and-skills.md",
         "x-basalt chat --model anthropic/claude-opus-4.8 \"...\"",

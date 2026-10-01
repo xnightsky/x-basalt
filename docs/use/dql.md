@@ -1,6 +1,6 @@
 ---
-timestamp: 2026-07-02T05:43:46Z
-sha256: 3f5cc3639055767e7745d495427e68d57b720c08c601018c5e38cd14d9485bc5
+timestamp: 2026-10-01T00:54:34Z
+sha256: 3babf3b627d28d4c6b556915b8b9f252edb0bf0dcaa60def5ea86767900ae81a
 type: guide
 title: DQL 查询指南 · x-basalt
 description: Dataview 子集 DQL 语法、隐式字段与查询示例
@@ -82,7 +82,7 @@ x-basalt query 'TABLE WITHOUT ID file.path, status FROM "Archive"'
 
 ### 3.3 TASK
 
-返回任务行（每条 `- [ ] …` 一行），FROM/WHERE 做**文件级**过滤，输出列固定为：
+返回任务行（每条任务一行）。FROM 与普通字段 WHERE 做文件级过滤；`completed` 在 TASK 中有完成状态特判（x/X 为完成）。输出列固定为：
 
 | 列            | 含义                                                           |
 | ------------- | -------------------------------------------------------------- |
@@ -92,14 +92,16 @@ x-basalt query 'TABLE WITHOUT ID file.path, status FROM "Archive"'
 | `file.path`   | 来源文件路径                                                   |
 
 ```bash
-x-basalt query 'TASK FROM #todo WHERE status = "x"'
-# 所有已完成任务（file 含 #todo 的文件下）
+x-basalt query 'TASK FROM #todo WHERE completed = true'
+# #todo 文件下的已完成任务
 
 x-basalt query "TASK LIMIT 20"
 # 全库前 20 条任务
 ```
 
-> TASK 不接字段列表（`TASK f1, f2` 报错）；task 内部字段级过滤（如"只看 due < today 的任务"）为后续版本特性。
+> TASK 不接字段列表。普通 `status` / `due` 仍是笔记属性，不是输出的 `task.status` / `task.due`；需要完成状态时用 `completed = true/false` 或 `!completed`（取消等非 x/X 状态也计入未完成）。任务到期日等字段过滤仍未实现。
+>
+> **当前执行缺口**：TASK 的 `SORT` / `GROUP BY` / `FLATTEN` 虽可解析，但生成 SQL 时未消费，不能据此排序、分组或展开；`LIMIT` 不是“最近 N 条”的保证。源码与实跑见[局部调研 §5](../research/2026-10-01-dql-bases-compatibility-local-audit.md#5-本轮可复现对照)、`src/query/sql-generator.ts`；尚未修复。
 
 ---
 
@@ -523,14 +525,16 @@ x-basalt query 'LIST WITHOUT ID FROM #area SORT file.name ASC'
 ### 14.2 TASK 查询
 
 ```bash
-# 全库未完成任务
-x-basalt query 'TASK WHERE status = " "'
+# 全库非 x/X 状态任务（包括取消等状态）
+x-basalt query 'TASK WHERE !completed'
 
-# #todo 下有 due 且 due 已过期的任务
-x-basalt query 'TASK FROM #todo WHERE due != null AND due < date(today)'
+# #todo 文件下的已完成任务
+x-basalt query 'TASK FROM #todo WHERE completed = true'
 
-# 最近 20 条已完成任务
-x-basalt query 'TASK WHERE status = "x" SORT file.mtime DESC LIMIT 20'
+# 最多 20 条已完成任务；当前不保证“最近”顺序
+x-basalt query 'TASK WHERE completed = true LIMIT 20'
+
+# task.due 可从结果读取，但任务到期日过滤尚未实现；边界见 §3.3
 ```
 
 ### 14.3 FROM 三种来源

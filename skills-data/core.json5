@@ -122,7 +122,7 @@
     {
       id: "query",
       pattern: "query <dql> [--db <path>] [--offset <n>] [--size <n>] [--json] [--vault <path>]",
-      description: '执行 DQL 子集 → 参数化 SQL → JSON { type, columns, total, offset, size, returned, hasMore, rows }；聚合字段已解析为数组。total=命中总数（独立 COUNT，不随分页变）——**数总量直接读 total，别 LIST 全量再数**。--offset/--size 在引擎层分页（不改 DQL 文法，外层包 LIMIT/OFFSET）：不传 size=全量返回（向后兼容），翻页 offset+=size，hasMore 标示还有更多。--db 只读打开；--vault 接受但不使用。文法：LIST|TABLE <fields> FROM (#tag|[[link]]|"folder") WHERE <cond> GROUP BY <field> SORT <field> ASC|DESC LIMIT <n>。输出恒为 JSON；`--json` 可显式写（与 scan/run/base/lint 的开关对齐），不改变结果。',
+      description: '执行 DQL 子集 → 参数化 SQL → JSON { type, columns, total, offset, size, returned, hasMore, rows }；聚合字段已解析为数组。total=命中总数（独立 COUNT，不随分页变）——**数总量直接读 total，别 LIST 全量再数**。--offset/--size 在引擎层分页（不改 DQL 文法，外层包 LIMIT/OFFSET）：不传 size=全量返回（向后兼容），翻页 offset+=size，hasMore 标示还有更多。--db 只读打开；--vault 接受但不使用。文法含 LIST|TABLE <fields>|TASK；FROM (#tag|[[link]]|"folder")、WHERE、GROUP BY、SORT、LIMIT 在各自子集内使用。TASK 可用 completed=true/false 或 !completed；普通 status/due 是笔记属性，不是任务状态/到期日；当前 TASK 的 SORT/GROUP BY/FLATTEN 虽可解析但未执行，不能用于“最近 N 条”等保证（源码 src/query/sql-generator.ts，完整边界 docs/use/dql.md §3.3）。输出恒为 JSON；`--json` 可显式写（与 scan/run/base/lint 的开关对齐），不改变结果。',
       examples: [
         "x-basalt query \"LIST FROM #project WHERE status = 'active' SORT file.mtime DESC LIMIT 10\" --db ./index.db",
         "x-basalt query 'LIST FROM \"\"' --size 50 --offset 0 --db ./index.db   # 分页：每页 50，读 total 知总量",
@@ -173,7 +173,7 @@
     {
       id: "meta",
       pattern: "meta (get|set|unset|rename|normalize) <file> ...",
-      description: "读/改单文件 frontmatter（元数据头），唯一写侧命令。get [key] 读（缺省读全部，缺失键输出 null）；set <key> <value> 增改（存在则原位更新、否则追加）；unset <key> 删；rename <old> <new> 改键名（保位置/值，源缺失或目标已存在则报错）；normalize 归一。写只动 frontmatter、正文逐字节不动；YAML 往返保留键序与注释、需引号的值（如 [[链接]]）自动加引号；原子写；--dry-run 只打印将写入内容不落盘。set --type string|number|boolean|null|list|auto（默认 auto 保守推断，不识别 yes/no/on/off 避免 Norway 陷阱）。normalize 默认 ON：tags/aliases/cssclasses 列表化（tags/cssclasses 标量按空白/逗号拆、aliases 不拆）、tags 去 #、去重、单数键 tag/alias/cssclass→复数键迁移；opt-in --sort-keys 排序顶层键。非法 YAML 的写操作拒绝执行、文件不变。幂等。仅顶层扁平键。",
+      description: "读/改单文件 frontmatter（元数据头），唯一写侧命令。get [key] 读（缺省读全部，缺失键输出 null）；set <key> <value> 增改（存在则原位更新、否则追加）；unset <key> 删；rename <old> <new> 改键名（保位置/值，源缺失或目标已存在则报错）；normalize 归一。写只动 frontmatter、正文逐字节不动；YAML 往返保留键序与注释、需引号的值（如 [[链接]]）自动加引号；同目录临时文件+rename，避免直接半写目标；**不保证并发防覆盖、跨文件事务或断电持久性**（当前无版本前置条件/锁，源码 src/meta/index.ts），先备份并避免与 Sync/其他写者并发；--dry-run 只打印将写入内容不落盘。set --type string|number|boolean|null|list|auto（默认 auto 保守推断，不识别 yes/no/on/off 避免 Norway 陷阱）。normalize 默认 ON：tags/aliases/cssclasses 列表化（tags/cssclasses 标量按空白/逗号拆、aliases 不拆）、tags 去 #、去重、单数键 tag/alias/cssclass→复数键迁移；opt-in --sort-keys 排序顶层键。非法 YAML 的写操作拒绝执行、文件不变。幂等。仅顶层扁平键。",
       examples: [
         "x-basalt meta get note.md",
         "x-basalt meta set note.md status active",
@@ -187,7 +187,7 @@
     {
       id: "profile",
       pattern: "meta profile (list|show <name>) / meta apply <profile> <file> [--set k=v]...",
-      description: "元数据策略（profile）= 一套现成约定（模板+规范）。x-basalt 只「告知」、不调 LLM——你（AI）读规范后自己决定补什么。内置 3 套：pkm-note(Obsidian,第一推荐)、llm-wiki(OKF)、ssg-blog(SSG)。用法：先 `meta profile show <name>` 读该约定的字段/必填/语义/可额外补什么；再 `meta apply <profile> <file>` —— 机械补 created/modified/pubDate/timestamp/sha256（按文件时间/正文）+ 你用 `--set key=value`(可重复) 补语义字段（type/title/description/tags…）和额外字段。--set 按 profile 字段类型转值（list 自动按逗号拆）、且**显式覆盖**已有值；apply 收尾自动 normalize（产出既合规又齐全）。报告 filled/overridden/仍缺。典型流程：apply 看“仍缺”→ profile show 读规范 → 读文档内容 → apply --set 补齐。",
+      description: "元数据策略（profile）= 一套现成约定（模板+规范）。x-basalt 只「告知」、不调 LLM——你（AI）读规范后自己决定补什么。内置 3 套：pkm-note(Obsidian,第一推荐)、llm-wiki(OKF v0.1，未迁移 v0.2)、ssg-blog(SSG)。用法：先 `meta profile show <name>` 读该约定的字段/必填/语义/可额外补什么；再 `meta apply <profile> <file>` —— 机械补 created/modified/pubDate/timestamp/sha256（按文件时间/正文）+ 你用 `--set key=value`(可重复) 补语义字段（type/title/description/tags…）和额外字段。--set 按 profile 字段类型转值（list 自动按逗号拆）、且**显式覆盖**已有值；apply 收尾自动 normalize（产出既合规又齐全）。报告 filled/overridden/仍缺。典型流程：apply 看“仍缺”→ profile show 读规范 → 读文档内容 → apply --set 补齐。",
       examples: [
         "x-basalt meta profile list",
         "x-basalt meta profile show pkm-note",

@@ -1,24 +1,24 @@
 ---
 type: design
 title: CLI chat（读+写）可落地实现设计
-description: x-basalt CLI chat 首版实现设计：Vercel ai SDK 适配 AI_GATEWAY_*、读+写工具面（含编排器一次性批量）、逐动作确认安全闸、最小可选 AI 隔离纪律、pi 四段交接
+description: CLI chat 初版设计记录、当前单 CLI 工具面指路与写安全边界：无逐动作确认，原子替换不等于并发防覆盖或中断回滚。
 tags:
   - spec
   - chat
   - ai
   - design
   - x-basalt
-timestamp: 2026-07-30T23:06:26Z
-sha256: f1a9b7162f2210b6aa8b14181a781001560a421b45527d49883ffada973ae043
+timestamp: 2026-09-30T23:58:24Z
+sha256: 7e312bfc3257945f5b40f047ef38690fa20d3976621764565ceaf94fd02700b8
 ---
 
 # 设计：CLI chat（读+写，自然语言驱动 vault）—— 可落地实现设计
 
-> 日期：2026-06-30 · 类型：实现设计（specs/，**开工前的架构契约**，非评估）
+> 初版设计：2026-06-30；当前工具面已由[单 CLI 工具设计](chat-tool-surface.md)及 [`src/chat/tools.ts`](../../src/chat/tools.ts) 取代。下文初版工具表/交接段保留设计背景，不作为当前工具清单。2026-09-30 复核写安全边界。
 > 父文档（先读）：评估 [`2026-06-28-cli-chat-design.md`](../history/decisions/2026-06-28-cli-chat-design.md)——本文是它触发条件成熟后的「怎么建」。
 > 关联：编排器 [`2026-06-29-change-orchestration-design.md`](change-orchestration.md)（写动作批量地基）；检索后端 [`2026-06-28-semantic-retrieval-integration.md`](semantic-retrieval.md)（FTS5，本轮推后）；许可证闸 [`../guides/dependency-license-policy.md`](dependency-license-policy.md)；AI/技能定位 [`../guides/ai-and-skills.md`](../use/ai-and-skills.md)。
-> 决策摘要：AI 客户端选 **Vercel `ai` SDK**（与 `AI_GATEWAY_*` 契约原生一致）；写动作**直接执行**（用户主动进入 chat = 知情同意，无确认闸；靠 Ctrl+C/SIGINT 中断 + 原子写兜底）；范围 = 读+写（含编排器一次性批量），仅排除常驻 watch。
-> **设计变更（2026-06-30，用户拍板推翻原方案）**：原 §6/§7 的「写动作逐动作确认 [y/N]」是设计缺陷——用户既然主动开 chat，逐个确认是多余摩擦。改为写动作直接落盘；终止能力靠 **Ctrl+C/SIGINT → AbortController** 中断在途模型调用与循环，既有**原子写**（tmp+rename）保证 kill 中途不损坏文件。`confirm.ts` 删除。下文 §5/§6/§7/§11 已据此更新。
+> 决策摘要：AI 客户端选 **Vercel `ai` SDK**（与 `AI_GATEWAY_*` 契约原生一致）；写动作**直接执行**（用户主动进入 chat = 知情同意，无确认闸；以 Ctrl+C/SIGINT 中断模型/循环、以原子替换避免直接半写目标；不保证撤销已启动或完成的写入）；范围 = 读+写（含编排器一次性批量），仅排除常驻 watch。
+> **设计变更（2026-06-30，用户拍板推翻原方案）**：原 §6/§7 的「写动作逐动作确认 [y/N]」是设计缺陷——用户既然主动开 chat，逐个确认是多余摩擦。改为写动作直接落盘；终止能力靠 **Ctrl+C/SIGINT → AbortController** 中断在途模型调用与循环，既有临时文件 + rename 避免直接半写目标，但不保证并发防覆盖、断电持久性或中断回滚（[`src/meta/index.ts`](../../src/meta/index.ts)）。`confirm.ts` 删除。下文 §5/§6/§7/§11 已据此更新。
 
 ## 0. 本文回答的问题
 
@@ -26,7 +26,7 @@ sha256: f1a9b7162f2210b6aa8b14181a781001560a421b45527d49883ffada973ae043
 
 **与父文档评估的两处范围调整（用户拍板）**：
 
-1. **不止只读**：父文档 §9 建议「只读先行、写动作等信任建立后再开」；本轮**读+写同做**——LLM 可驱动单文件写（`src/meta`）与一次性批量写（`src/orchestrator`），靠 §5 逐动作确认闸兜底。
+1. **不止只读**：父文档 §9 建议「只读先行、写动作等信任建立后再开」；本轮**读+写同做**——LLM 可驱动单文件写（`src/meta`）与一次性批量写（`src/orchestrator`），写动作无逐个确认，当前安全边界见 §7。
 2. **唯一排除常驻 watch**：编排器的一次性 `runScan`/`runManual` 进工具面；`orch.watch` 常驻 daemon 不暴露给 chat。
 
 ## 1. 设计脊梁：最小可选 AI（不可协商，承接父文档 §1）
@@ -91,7 +91,7 @@ src/chat/
 
 ## 5. 工具面 + 落地路径（段②）
 
-工具 schema 用 `jsonSchema()`（**不引入 zod**）。读工具带 `execute` 直调既有原语；写工具的 `execute` 先 `confirm` 再落盘。
+以下工具表是迁移前的设计记录，不再作为当前 schema。当前 `buildTools()` 只装配 `cli` / `skills_recall` / `skills_get`，vault 操作经 CLI 分发；没有 `confirm`。依据：[`src/chat/tools.ts`](../../src/chat/tools.ts)、[`src/chat/cli-tool.ts`](../../src/chat/cli-tool.ts)。
 
 ### 5.1 读工具（带 execute，结果经 safety 截断+边界包裹后喂回）
 
@@ -116,7 +116,7 @@ src/chat/
 
 - **单文件 vs 批量两路并存（用户拍板）**：模型按任务选——「改这个文件」走 `meta_*`；「对一批笔记做 X」走 `pipeline_run`（编排器）。
 - **`pipeline_run` 链两种写法（2026-07-30 对齐 CLI）**：`steps`（一元素一完整算子 spec、不切分，支持 query/search/base/filter/lint 等算子与 `{{row.x}}` 插值）存在时优先于 `actions`（七个经典动作），两者至少其一——全缺在工具层即报 invalid，不静默跑空链；返回值带 `steps[]` 逐步行数流水（行在哪一步被滤掉一眼定位）。
-- **直接落盘、无确认**：写工具 `execute` 直接以非 dry-run 调原语落盘并返回结果摘要。安全性靠 ① 既有**原子写**（tmp+rename，kill 中途不损坏文件）② 用户可 **Ctrl+C 中断**在途循环 ③ git 是用户兜底。不再先 dry-run 预览再确认。
+- **直接落盘、无确认**：写工具 `execute` 直接以非 dry-run 调原语落盘并返回结果摘要。当前临时文件 + rename 避免直接半写目标；Ctrl+C 中断模型/循环，不回滚已完成写入，也不保证即时停止已启动的 CLI 子进程；git/备份须由用户实际建立，产品不自动提供。依据：[`src/meta/index.ts`](../../src/meta/index.ts)、[`src/chat/loop.ts`](../../src/chat/loop.ts)、[`src/chat/cli-tool.ts`](../../src/chat/cli-tool.ts)。不再先 dry-run 预览再确认。
 
 ### 5.3 接口契约草案
 
@@ -163,7 +163,7 @@ async function runRepl(opts): Promise<number>;
 
 - **驱动**：`streamText({ model, tools, stopWhen: stepCountIs(N), abortSignal })`——SDK 自动多步：读写工具均有 `execute` 自动跑并喂回（写工具直接落盘，无确认阻塞）。
 - **流式回显**（父文档 §3）：`streamText` 的 text-delta + tool-call 事件经 `onEvent` 渲染——让用户**实时看清**它正对 vault 做什么（这是无确认闸下的可观测兜底：看到不对就 Ctrl+C）。
-- **可中断**：`abortSignal` 接 SIGINT；Ctrl+C → 中断在途模型调用与循环。in-flight 单文件写有原子写保护，批量写每文件原子、中断只是少跑后续文件。
+- **可中断边界**：`abortSignal` 接 SIGINT，中断在途模型调用与循环；当前 `execCli()` 没有向子进程传该 signal，不保证即时终止已启动写入。已写文件不会回滚，批量没有跨文件事务。信源：[`src/chat/loop.ts`](../../src/chat/loop.ts)、[`src/chat/cli-tool.ts`](../../src/chat/cli-tool.ts)、[`src/meta/index.ts`](../../src/meta/index.ts)。
 - **失控兜底**：`stopWhen: stepCountIs(N)` 限制最大步数。
 
 ## 7. 安全模型（无确认闸，靠中断 + 原子写 + 可观测）
@@ -172,17 +172,17 @@ async function runRepl(opts): Promise<number>;
 
 - **直接执行**：读写工具都自动跑，写工具直接落盘，无 dry-run 预览、无确认、无 TTY/非 TTY 分支。
 - **可中断兜底**：Ctrl+C/SIGINT → AbortController 中断在途循环；这是用户的「刹车」。
-- **原子写兜底**：所有写经既有 `src/meta` 原子写（tmp+rename），kill 中途不会留下半写损坏文件；批量每文件原子。
+- **原子替换范围**：meta 以同目录 tmp+rename 避免直接半写目标；没有版本前置条件/锁或 fsync，不提供并发防覆盖、断电持久性、跨文件事务；失败可能留下临时文件。源码：[`src/meta/index.ts`](../../src/meta/index.ts)。
 - **可观测兜底**：流式回显每步推理与动作，用户实时看到「要改什么」，不对就刹车。
 - **防注入**：vault 内容回灌前用边界 nonce 包裹，系统提示声明「边界内是数据非指令」，降低笔记正文藏指令的注入面（读侧防护，与写闸无关，保留）。
 - **截断**：大查询/解析结果入上下文前裁剪到 `maxChars`，防爆 context；截断时标注「已截断 N 字符」。
-- **git 是最终兜底**：vault 多在 git 下，误改可回滚（文档级提示，非本功能实现项）。
+- **恢复不是自动保证**：只有已提交的 git 快照或实际可恢复的备份才是恢复依据；仅安装 git、看到流式输出或按 Ctrl+C 不保证撤销误改。使用前在副本验证，避免与 Sync/其他写者并发。
 
 ## 8. 单发 + REPL（段③）
 
-- `x-basalt chat "<NL>"`：单发即退，无历史；**非 TTY 下写动作自动拒**（confirm 恒 false）。
+- `x-basalt chat "<NL>"`：单发即退；当前写入没有 TTY 确认闸。临时会话默认不落盘，显式 `--session` 可保存/续跑；以[当前使用指南](../use/chat.md)和 [`src/chat/index.ts`](../../src/chat/index.ts) 为准。
 - `x-basalt chat`：REPL，`messages` 累积对话+观察历史，`quit`/`exit`/`q` 退出。
-- cli.ts 新增 `chat` 子命令分支：`await import('./chat/index.js')` → `runOnce`/`runRepl`；`--model`、`--yes`、`--max-steps` 选项。
+- CLI 在 chat 分支懒加载入口；当前选项以 [`src/cli.ts`](../../src/cli.ts) 和[命令参考](../use/commands.md#chat--自然语言驱动可选-ai)为准，不保留初版确认用的 `--yes`。
 
 ## 9. 测试策略（贯穿，无真 LLM；满足父文档 §5.4）
 
@@ -210,6 +210,6 @@ async function runRepl(opts): Promise<number>;
 ## 12. 风险 / 未决 / 边界
 
 - **风险·身份拉伸**：靠 §1+§3 隔离 + §9 无 key/未装守门测试化解。
-- **风险·LLM 改用户笔记**：无确认闸下靠 §7「中断 + 原子写 + 可观测 + git」兜底；批量写（`pipeline_run`）风险最高——流式回显其 RunReport，用户看到改动面不对即 Ctrl+C；每文件原子写，中断不损坏。
+- **风险·LLM 改用户笔记**：无逐动作确认；当前批量写经 `cli run`，误选合法目标也可能造成错误修改。§7 的中断/可观测/原子替换只能降低部分风险，不保证回滚或无数据损失；先在副本验证，备份与恢复由用户负责。
 - **未决·本地端点 tool-calling**：Ollama 等本地模型对 tool-calling 支持随模型而异，属用户自选端点的能力边界，非本设计保证项。
 - **不做**：不把 x-basalt 变通用 agent 框架；不内置多 agent/工作流编排；不默认联网；不绑定单一云厂商；不做常驻 watch chat。

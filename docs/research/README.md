@@ -6,8 +6,8 @@ tags:
   - research
   - docs
   - x-basalt
-timestamp: 2026-08-07T00:12:49Z
-sha256: 0b9e31953b41b9b6408fd79ed61305cdc373392f6234b84c7df5f5904d63387b
+timestamp: 2026-10-01T01:03:03Z
+sha256: 0e37ad6940c366f141f54c8b5195aa0ef8ba491f56651e380949e7373a0718e1
 ---
 # 当前调研
 
@@ -15,6 +15,8 @@ sha256: 0b9e31953b41b9b6408fd79ed61305cdc373392f6234b84c7df5f5904d63387b
 
 | 文档 | 作用 |
 | --- | --- |
+| [DQL / Bases 双路线局部深度调研](2026-10-01-dql-bases-compatibility-local-audit.md) | 官方正文入口/API 与模型限制、本项目 stdin/source、任务/inline/展开/公式/附件对照；记录公式解析器与 TASK 子句执行缺口，给出条件化兼容建议。 |
+| [Agent 知识工具业界调研：定位与架构取舍](2026-09-30-agent-knowledge-industry-landscape.md) | 固定源码与官方信源，比较无头竞品、词法/语义/图检索、Agent 宿主与知识维护；列出证据边界、文档校正及待执行 A/B 协议。 |
 | [业界现成库逐模块普查](2026-06-26-libraries-survey.md) | parser / indexer / query 的库选型比较与许可证核查线索。 |
 | [元数据策略 profile 调研](2026-06-28-metadata-profiles-research.md) | Obsidian、OKF 与 SSG 元数据字段的比较依据。 |
 | [chat 对标 agent-browser](2026-06-30-chat-gap-vs-agent-browser.md) | chat 效果、重试、撞顶与场景库量化的对照基线。 |

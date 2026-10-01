@@ -6,6 +6,8 @@ tags:
   - spec
   - meta
   - x-basalt
+timestamp: 2026-10-01T01:58:49Z
+sha256: e8ebf086ab56d23780caef0b7a309818566f71b9d2dc830329920ed4aebd20f6
 ---
 
 # 归档标准（specs）
@@ -32,4 +34,5 @@ tags:
 |--------|---------|---------|
 | `2026-06-25-x-basalt-design.md` | 2026-07-22 | 初始架构设计，已被实际演进取代 |
 | `2026-06-28-cli-chat-design.md` | 2026-07-22 | 被 `cli-chat-readwrite-design.md` 取代 |
+| [2026-06-28-semantic-retrieval-integration.md](2026-06-28-semantic-retrieval-integration.md) | 2026-10-01 | 保留原分层图、embedding 接口/存储、QMD 取舍与工作量评估；当前事实由 `design/semantic-retrieval.md` 更新 |
 | `2026-06-30-chat-eval-scenario-library-design.md` | 2026-07-22 | 场景库已迁至兄弟私有仓 |

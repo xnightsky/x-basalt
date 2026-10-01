@@ -6,8 +6,8 @@ tags:
   - architecture
   - overview
   - x-basalt
-timestamp: 2026-07-29T04:31:35Z
-sha256: 929605e17393c2f1efc9af68e50a3a1e15f50f82e4c3b27a37359c8f02e19e29
+timestamp: 2026-10-01T01:03:03Z
+sha256: 5ed6b77f37193d6ceffac76159566d05c6593b6dfecb608de281e36c1c2599dd
 ---
 
 # x-basalt 架构总览
@@ -20,8 +20,14 @@ sha256: 929605e17393c2f1efc9af68e50a3a1e15f50f82e4c3b27a37359c8f02e19e29
 ## 1. 一句话定位
 
 x-basalt 是**零依赖 Obsidian GUI / 运行时**的 Vault 命令行工具：直接通过文件系统把 Obsidian Markdown
-解析为 AST、写入单文件 SQLite 索引、用 Dataview(DQL) 子集查询、按 profile 读改 frontmatter 元数据，并能召回规范 skill。
-所有能力都不依赖 Obsidian App、不引入 `obsidian` 包、不启动浏览器。
+解析为 AST、写入单文件 SQLite 索引、执行 Dataview(DQL) 子集与 Bases 查询、全文检索正文、按 profile 读改 frontmatter 元数据，并能召回规范 skill。
+这些内核能力不依赖 Obsidian App、不引入 `obsidian` 包、不启动浏览器；可选 chat 是独立调用方，不是查询或写侧的前提。实现依据：[`src/query/index.ts`](../../src/query/index.ts)、[`src/base/engine.ts`](../../src/base/engine.ts)、[`src/chat/cli-tool.ts`](../../src/chat/cli-tool.ts)。
+
+### 1.1 定位复核（2026-09-30）
+
+- **已核实的外部变化**：无头 Vault/Bases 已有直接对照对象，不能仅凭“无需 App”推导独有优势；见固定版本的 [headless-vault-kit](https://github.com/angelsaez/headless-vault-kit/blob/f158bd8e8236efabb96505eea701cc204fe42b37/README.md) 与 [basecli](https://github.com/hobbs/basecli/blob/ebf409d798c637c86430739f13e1e6b585c5e22c/LIMITATIONS.md)。
+- **职责边界不变**：文件是源数据，SQLite 是派生事实索引；精确查询、候选检索、Agent 会话与持久综合知识不能混为一个状态层。当前表结构见 [`src/indexer/schema.ts`](../../src/indexer/schema.ts)，知识维护对照见[调研 §5.3–5.4](../research/2026-09-30-agent-knowledge-industry-landscape.md#5-决定路线的技术分水岭)。
+- **投入建议，尚未定案**：优先比较“外部宿主 + 既有 CLI/skills”与当前 chat；是否扩大检索/长期知识维护以端到端证据决定。不删现有模块、不引入第二真相源。依据为 [Anthropic 上下文工程](https://www.anthropic.com/engineering/effective-context-engineering-for-ai-agents)与[待执行实验协议](../research/2026-09-30-agent-knowledge-industry-landscape.md#9-下一步实验可复现能推翻建议)，不是已证明的效果优势。
 
 ## 2. 设计约束（决定架构形状的硬边界）
 
@@ -38,11 +44,14 @@ x-basalt 是**零依赖 Obsidian GUI / 运行时**的 Vault 命令行工具：�
 
 ## 3. 分层与依赖
 
-七个一级单元，单向依赖、职责互不重叠。CLI 在顶层装配，各库层只做自己的事：
+下图展示内核主路径与可选 chat 调用方，不是全部一级模块清单。CLI 在顶层装配，各库层只做自己的事；当前路径依据本节引用的源码：
 
 ```mermaid
 flowchart TD
-    user([终端用户 / AI Agent]) --> cli["cli.ts（commander 入口）"]
+    user([终端用户 / 外部 Agent]) --> cli["cli.ts（commander 入口）"]
+    llm([可选模型 provider]) --> chat["chat/ 调用方<br/>会话 + 工具循环，不定义业务语义"]
+    chat --> bridge["cli-tool.ts<br/>argv 数组 / 无 shell / allowlist"]
+    bridge --> cli
 
     cli --> parser["parser/ 解析层"]
     cli --> indexer["indexer/ 索引层（唯一写 SQLite）"]
@@ -59,24 +68,32 @@ flowchart TD
     query --> utils
     base --> utils
 
-    indexer -- 写 --> db[("SQLite 单文件<br/>.x-basalt/index.db")]
+    indexer -- 事务写入 / 可重建 --> db[("派生事实索引 · SQLite<br/>.x-basalt/index.db")]
     query -- 只读 --> db
     base -- 只读 --> db
-    parser -. 只读内容 .-> md[(".md 文件")]
+    parser -. 处理传入内容 .-> md[("源数据 · Vault .md 文件")]
     indexer -. 只读内容 .-> md
     base -. 只读 .-> basef[(".base / .obsidian/types.json")]
     meta -- 原子读改写 --> md
     skill --> skfiles[("skills-data/*.json5")]
 
-    classDef store fill:#eef,stroke:#88a;
+    classDef store fill:#eef,stroke:#88a,stroke-width:2px;
+    classDef optional fill:#fff3df,stroke:#bc7c22,stroke-width:2px;
     class db,md,basef,skfiles store;
+    class llm,chat,bridge optional;
+
+    knowledge["持久综合知识维护 · 尚未实现<br/>来源 / 主张 / 结论 / 失效重审"]
+    md -. 候选职责，非当前流水线 .-> knowledge
+    classDef candidate fill:#f5f5f5,stroke:#888,stroke-width:2px,stroke-dasharray:5 5;
+    class knowledge candidate;
 ```
 
 要点：
 
 - **parser 不碰 fs/DB**（纯函数）；**query 不读 .md、只读 DB**；**indexer 是唯一写 DB 的层**；**meta 是唯一写 .md 的层**；**base 只读不写**（不写 vault、不写 DB、无 `eval`/动态代码，SQL 全参数化）。
 - `utils/path.ts` 是 parser/indexer/query/base 共用的「连接键真相源」——写入侧与查询侧必须调用同一套 `linkKey`/`pathKey`，否则链接漏命中。
-- base 与 query **互不依赖**（Bases 表达式与 DQL 是两套独立 token/AST）；base 复用 indexer 既有表（files/tags/links），不改其语义（md-only 数据集）。
+- base 与 query **互不依赖**（Bases 表达式与 DQL 是两套独立 token/AST）；base 复用 indexer 表，默认 md-only；显式 all-files 时合并附件数据集，不改 DQL 语义。依据：[`src/base/source.ts`](../../src/base/source.ts)。
+- 查询定义与执行模型分开：DQL 接字符串；Bases 既可读 `.base`，也可通过 stdin/API source 即席执行，无需先落查询文件、不委托官方 App。任务/inline/行展开与类型化公式仍互补，入口、模型、已知执行缺口与保留建议见[局部调研](../research/2026-10-01-dql-bases-compatibility-local-audit.md)。
 - meta 与 parser/indexer/query **解耦**：写元数据不经过索引，索引也不依赖 meta。
 
 ## 4. 读侧数据流：解析 → 索引 → 查询
@@ -121,7 +138,7 @@ flowchart LR
 - **防注入**：所有用户输入值走 `?` 占位符绑定；唯一内联是经白名单正则 `^[A-Za-z0-9_]+$` 校验过的 frontmatter 字段名。
 - **隐式字段实时 JOIN**：`file.inlinks/outlinks/tags/tasks` 无物化视图，每次查询从 links/tags/tasks 表 JOIN 计算（硬约束 #6）。
 - **路径感知（S3.2）**：qualified 链接（含 `/`）按 `path_key` 精确匹配，bare 链接按 `name_key` basename 回退，消除同名异目录串味。
-- **越界即报错**：子集外语法 / 不支持字段 → 抛带源串偏移位置的 `DqlSyntaxError`，绝不返回误导性空结果。
+- **子集拒绝边界**：多数未支持语法/字段抛带源串偏移的 `DqlSyntaxError`；但当前 TASK 的 SORT/GROUP BY/FLATTEN 解析后未消费，不能宣称所有子集越界均明确拒绝。已记录待修复，见[局部调研 R09](../research/2026-10-01-dql-bases-compatibility-local-audit.md#52-两个应独立修复的执行缺口)。
 - **真值语义对标官方**：WHERE 原子含裸字段真值 `truthy`（`WHERE field`）与一元 `!`（`not(truthy)`）；`generateSql` 用 `json_type` CASE 复刻官方 `Values.isTruthy()`（null/0/空串/空数组/空对象/false 皆 falsy），与显式 `= null`/`!= null`（`IS [NOT] NULL`）语义分离。见 [`../specs/2026-07-01-dql-truthiness-existence-design.md`](dql-truthiness.md)。
 
 ## 6. 写侧数据流：meta 元数据往返
@@ -138,7 +155,7 @@ flowchart LR
     diff -- 是 --> atomic["atomicWrite<br/>(临时文件 + rename)"]
 ```
 
-不变量：唯一写 `.md` 的层；非法 YAML 拒写；原子写避免半写损坏；无变化不落盘（不制造虚假 mtime）。
+不变量：唯一写 `.md` 的层；非法 YAML 拒写；同目录临时文件 + rename 避免直接半写目标；无变化不落盘（不制造虚假 mtime）。当前 `editMeta`/`applyProfile` 没有版本前置条件或锁，不能保证并发防覆盖、跨文件事务或断电持久性；`Ctrl+C` 不回滚已完成写入。源码依据：[`src/meta/index.ts`](../../src/meta/index.ts)。
 `apply` 中**归一在机械预填之后**执行；profile **只告知不补语义**——机械字段（created/modified/sha256）顺手 top-up，
 语义字段（type/title/tags…）由消费者读 `meta profile show` 的规范后经 `--set`/`meta set` 自行补。
 
@@ -373,7 +390,7 @@ readBaseRows ──→ filter 逐行（truthy 判定，行级错误跳过）
   │             投影序列化（行级错误 cell → null，不崩）
   │                   │
   │                   ▼
-  │             groupBy 分桶（P2b：list 键扇出）
+  │             groupBy 分桶（list 为整组键，不扇出）
   │                   │
   │                   ▼
   │             summaries 汇总（内置 15 名 / 自定义）
@@ -381,6 +398,8 @@ readBaseRows ──→ filter 逐行（truthy 判定，行级错误跳过）
   ▼                   ▼
 BaseQueryResult { conformance, base, view, columns, total, rows, groups?, summaries?, diagnostics }
 ```
+
+流水线与整组列表键依据：[`src/base/engine.ts`](../../src/base/engine.ts)；官方差分与取舍见[校正账本 §5.8](bases-vs-official.md#58-⑦-分组内容与行序跟内容组序行序不跟2026-08-03-定案)。
 
 ### 13.4 10 道安全预算防线
 

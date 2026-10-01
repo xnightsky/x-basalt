@@ -1,6 +1,6 @@
 ---
-timestamp: 2026-09-20T12:12:20Z
-sha256: f3ba665bd4bade605007c18278e91dbb160662b657c6f07b9e21bf11463099a2
+timestamp: 2026-09-30T23:53:31Z
+sha256: bbdd8bd9bd55ba891da306547004410208e3f7ae9e7b67f62293ffa081a42048
 type: guide
 title: 命令参考 · x-basalt
 description: x-basalt CLI 全部子命令的参数、输出形态与示例
@@ -425,7 +425,7 @@ x-basalt meta profile show <name> [--format json|yaml]
 x-basalt meta apply <profile> <file> [--set key=value]... [--refresh-derived] [--dry-run]
 ```
 
-读取与改造单个 `.md` 的 **frontmatter（元数据头 / Obsidian Properties）**。这是 x-basalt 唯一的**写侧**命令：写操作只动 frontmatter，**正文逐字节不动**；用 [`yaml`](https://eemeli.org/yaml/) Document 往返，保留键顺序、注释（尽力）、并对需要引号的值（如 `[[链接]]`）自动加引号产出合法 YAML。写入为**原子写**（临时文件 + rename），失败不留半成品。
+读取与改造单个 `.md` 的 **frontmatter（元数据头 / Obsidian Properties）**。这是 x-basalt 唯一的**写侧**命令：写操作只动 frontmatter，**正文逐字节不动**；用 [`yaml`](https://eemeli.org/yaml/) Document 往返，保留键顺序、注释（尽力）、并对需要引号的值（如 `[[链接]]`）自动加引号产出合法 YAML。写入用同目录临时文件 + rename，避免直接半写目标；当前无版本前置条件/锁或 fsync，不保证并发防覆盖、跨文件事务或断电持久性，失败也可能留下临时文件。先在副本验证、建立可恢复备份，避免与 Sync/其他写者并发。信源：[`src/meta/index.ts`](../../src/meta/index.ts)。
 
 | 子命令                                 | 说明                                                                                                             |
 | -------------------------------------- | ---------------------------------------------------------------------------------------------------------------- |
@@ -473,8 +473,10 @@ x-basalt meta apply <profile> <file> [--set key=value]... [--refresh-derived] [-
 | profile                    | 来源                           | 机械预填的字段                              | 需消费者补的（语义）                                  |
 | -------------------------- | ------------------------------ | ------------------------------------------- | ----------------------------------------------------- |
 | **`pkm-note`**（第一推荐） | Obsidian Properties + 社区惯例 | `created`(birthtime) / `modified`(mtime)    | tags / aliases / cssclasses / status                  |
-| `llm-wiki`                 | Google OKF v0.1                | `timestamp`(mtime) / `sha256`(正文hash)     | type(必填) / title / description / resource / tags    |
+| `llm-wiki`                 | Google OKF v0.1（未迁移 v0.2） | `timestamp`(mtime) / `sha256`(正文hash)     | type(必填) / title / description / resource / tags    |
 | `ssg-blog`                 | Astro / Hugo / Jekyll 等 SSG   | `pubDate`(birthtime) / `updatedDate`(mtime) | title(必填) / description(必填) / draft / tags / slug |
+
+**版本边界**：实际 profile 定义见 [`src/meta/profiles.ts`](../../src/meta/profiles.ts)。上游 [OKF v0.2 SPEC §13](https://github.com/GoogleCloudPlatform/open-knowledge-format/blob/ad30107c31c06aec8a7d5636e0d1058118604e6f/SPEC.md)已替换 `timestamp` 与正文 Citations 的表达并提供旧文档 fallback；当前 profile 不自动生成完整来源/验证/生命周期信息，也不自动维护综合知识。已有文档继续按 v0.1 策略使用，不因本次调研自动迁移。
 
 `meta apply <profile> <file>` 做两件事：
 
@@ -699,7 +701,7 @@ pipelines:
 x-basalt chat [input] [--model <name>] [--max-steps <n>] [--vault <path>]... [--db <path>] [-q|--quiet] [--json] [--trace [file]] [--session [<uuid>]]
 ```
 
-用自然语言驱动 vault：给 `[input]` 走**单发**（翻译→执行→输出→退出），省略则进 **REPL**（多轮、累积上下文）。底层工具面已收编为**单一 `cli` 工具**（切 C，2026-07-30 拍板）——模型只拿一个执行口，`args` 数组直传 CLI 子命令（query / parse / scan / meta / run / base …），外加 `skills_recall` / `skills_get` 两个规范召回元工具；**写动作直接落盘**（无确认闸，靠 `Ctrl+C` 中断 + 原子写兜底）。watch / chat 子命令被 allowlist 排除（常驻/递归，双保险拒绝）。
+用自然语言驱动 vault：给 `[input]` 走**单发**（翻译→执行→输出→退出），省略则进 **REPL**（多轮、累积上下文）。底层工具面已收编为**单一 `cli` 工具**（切 C，2026-07-30 拍板）——模型只拿一个执行口，`args` 数组直传 CLI 子命令（query / parse / scan / meta / run / base …），外加 `skills_recall` / `skills_get` 两个规范召回元工具；**写无逐动作确认**：meta 默认落盘，run 批量写需 `--apply`；中断不回滚且不保证即时停止已启动子进程，原子替换不等于并发防覆盖，详见[chat 安全边界](chat.md#7-当前限制--注意)及上述 meta 源码。watch / chat 子命令被 allowlist 排除（常驻/递归，双保险拒绝）。
 
 > **可选 AI**：需 `AI_GATEWAY_API_KEY`（兼容 `AI_GATEWAY_*`）；**无 key 时本命令友好退出、不影响其他命令**。内核零 AI，仅本命令懒加载 `ai` SDK。
 

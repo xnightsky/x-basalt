@@ -7,8 +7,8 @@ tags:
   - cli
   - chat
   - x-basalt
-timestamp: 2026-09-20T12:12:20Z
-sha256: 0f90b2de1edc489b7ef8bfe4d3e41e0155bd88b0179cdc76a3e0edaf0e5b358e
+timestamp: 2026-09-30T23:53:31Z
+sha256: d191d66093815684d8c067715e5ded5f1b6861d73e88a9e697349f1676f2cf36
 ---
 # chat 怎么玩 · x-basalt
 
@@ -104,7 +104,7 @@ x-basalt chat --session <uuid>                       # 带历史进 REPL
 
 - **全文检索是子串匹配，非语义搜索**：`search` 走 FTS5 + trigram，按字面子串找（查询**至少 2 个字符**，中英文皆可），不理解同义词/概念相关；且基于索引快照，新改动要先 `scan`/`index` 才搜得到。
   匹配口径**分两档**：纯 ASCII 是字面短语（多词 AND）；含中文时切 trigram 取并集 **OR 宽松召回**——只命中部分片段的笔记也会计入 `total`，完整子串命中者由 bm25 排最前。所以别把 `search` 的 `total` 当成「确实含这一串的篇数」，详见 [命令参考 `search`](commands.md#search--全文检索正文)。
-- **写无确认闸**：写动作直接改文件，靠 `Ctrl+C` 中断 + 原子写兜底，**没有逐动作确认**。别拿重要库直接玩写。
+- **写无确认闸，不等于可自动恢复**：`meta` 写操作默认落盘，`run` 批量写需显式 `--apply`，chat 壳不自动补开关。Ctrl+C 中断模型/循环，不回滚已完成写入，也不保证立即终止已启动 CLI 子进程；临时文件 + rename 只避免直接半写目标，不保证并发防覆盖、跨文件事务或断电持久性。先在副本验证，建立可恢复备份，避免与 Sync/其他写者并发。信源：[`src/chat/cli-tool.ts`](../../src/chat/cli-tool.ts)、[`src/chat/loop.ts`](../../src/chat/loop.ts)、[`src/meta/index.ts`](../../src/meta/index.ts)。
 - **会话文件含 vault 原文**：`--session` 落盘的 `.x-basalt/sessions/chat-<uuid>.jsonl`（JSONL 事件流，逐 step 追加——崩溃/Ctrl+C 只丢在途 step，已完成的进度都在盘上）保存完整对话（含 `<<VAULT_DATA>>` 包裹的工具结果原文）——已 gitignore，但请自行清理；同一会话别并行跑（行会交错串线）。不带 `--session` 的临时会话零落盘。
 - **常驻/监听不可用**：chat 工具皆一次性；不存在 watch（会挂死对话），它被系统提示禁止尝试。
 - **效果未量化**：AI 行为质量尚无场景库回归（见 [`../research/2026-06-30-chat-gap-vs-agent-browser.md`](../research/2026-06-30-chat-gap-vs-agent-browser.md) §3）。

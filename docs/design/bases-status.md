@@ -7,8 +7,8 @@ tags:
   - bases
   - testing
   - x-basalt
-timestamp: 2026-08-03T00:48:56Z
-sha256: 52432ecc079999bfff6214b64b7479527df7ca8476edf0cc5f7dc3e35f341561
+timestamp: 2026-10-01T01:03:03Z
+sha256: 41c6b237c623b5fc24130dfa422feb91cc1907971dc35890e635731406eb8525
 ---
 # Bases 实现状态追踪
 
@@ -16,13 +16,19 @@ sha256: 52432ecc079999bfff6214b64b7479527df7ca8476edf0cc5f7dc3e35f341561
 > 状态图例：✅ 已实现（标日期）｜📋 已建计划（标计划链接）｜🔜 待开计划（标阶段与前置条件）｜⏸ 暂缓（标触发条件）｜❌ 不做（标理由）。
 > 更新纪律：翻状态必须同时更新对应计划/场景矩阵；声称 ✅ 的项必须有可追溯测试编号。
 
+## 2026-10-01 局部复核
+
+当前已有文件/stdin/API source 输入与显式 context；定义无需先落 `.base`。本轮 321 项定向测试及同库入口/能力对照见[局部调研](../research/2026-10-01-dql-bases-compatibility-local-audit.md)。**新发现、未修复**：公式体的 `file()` / `link.asFile()` 未接文件解析器，不能由行级函数支持外推；详见该报告 R08。函数计数不等于每个求值语境都已验证。
+
+本表的当前条目按已落地校正更新；下方 2026-07 的实施明细保留为历史过程，不覆盖后来的语义决定。
+
 ## 总览
 
 | 阶段 | 内容 | 状态 |
 | ---- | ---- | ---- |
 | P0 | document / schema / diagnostic | ✅ 2026-07-26（[计划](../history/plans/2026-07-26-bases-p0-document-schema.md)） |
 | P1 | Markdown query vertical slice（独立 AST/evaluator） | ✅ 2026-07-26（[计划](../history/plans/2026-07-26-bases-p1-markdown-query.md)） |
-| P1 oracle | 官方差分（争议语义冻结） | ✅ 2026-07-28 **取证完成**（Obsidian 1.12.7，26 view 全部两次一致，19 一致 / 7 分歧）；**校正第一批（①②④）✅ 已落地**，余 ⑦⑧⑨㉗ 待决策，见 [runbook §5](bases-oracle-runbook.md)。同日上午的「⏸ 暂缓」决策已被推翻，理由见 runbook §0.1 |
+| P1 oracle | 官方差分（争议语义冻结） | ✅ 2026-07-28 **取证完成**（Obsidian 1.12.7，26 view 全部两次一致，19 一致 / 7 分歧）；**校正第一批（①②④）✅ 已落地**，⑦⑧ 后续校正已落地、部分超集保留 boundary，当前取舍见 [vs-official §5](bases-vs-official.md)。同日上午的「⏸ 暂缓」决策已被推翻，理由见 runbook §0.1 |
 | P2a | formulas 核心（typed values + 算术 + 依赖图/cycle + clock） | ✅ 2026-07-27（[计划](../history/plans/2026-07-27-bases-p2a-formulas.md)） |
 | P2b | types.json / list 高阶 / groupBy / summaries | ✅ 2026-07-27（[计划](../history/plans/2026-07-27-bases-p2b-types-list-group-summary.md)） |
 | P3 | all-files / context / 嵌入 | 🔀 P3a 附件数据集 ✅ 2026-07-27（[计划](../history/plans/2026-07-27-bases-p3-attachments.md)）；context ✅ 2026-07-28（覆盖率片六 CTX-001）；嵌入形态 ❌ 不做 + 诊断（CTX-002/003） |
@@ -85,9 +91,9 @@ sha256: 52432ecc079999bfff6214b64b7479527df7ca8476edf0cc5f7dc3e35f341561
 > 同日上午曾判「⏸ 整体暂缓、不再排期」，当天下午被推翻——官方 CLI 的 `eval` 能读到 Bases 算好的行集，
 > 取证可脚本化、不需要人逐个点。误判复盘见 [runbook §0.1](bases-oracle-runbook.md)。
 > **2026-07-28 校正轮**：结论明确的第一批三条（① equality / ② sort 空值位 / ④ 空 filter 数组）已落实现 + 回归用例；
-> 余下四条（⑦⑧⑨㉗）需先出决策。⏳ 表示待校正，逐条取舍见 [runbook §5](bases-oracle-runbook.md) 与 [vs-official §5](bases-vs-official.md)。
+> ⑦⑧ 的后续校正已落地；本表按日期保留观察与取舍，旧观察不是当前实现描述。逐条决定见 [runbook §5](bases-oracle-runbook.md) 与 [vs-official §5](bases-vs-official.md)。
 > **2026-08-02/03 round-2**（Obsidian 1.13.4，38 + 49 view 两次一致）：⑩..㉖ 全部出判定——
-> ㉓⑮㉖⑧(a) ✅ 已修/已落地、⑦ 官方不扇出待拍板、⑬⑯⑱⑳⑪⑰ 落
+> ㉓⑮㉖⑧(a) ✅ 已修/已落地、⑦ 已于 2026-08-03 跟整列表键内容/组序、顶层行序保留 boundary；⑬⑯⑱⑳⑪⑰ 落
 > documented boundary。判定明细见 [runbook §4.11](bases-oracle-runbook.md)。
 
 | 争议语义 | 场景编号 | 官方结论 | 状态 |
@@ -110,7 +116,7 @@ sha256: 52432ecc079999bfff6214b64b7479527df7ca8476edf0cc5f7dc3e35f341561
 
 > 取证方式与三个会静默出错的坑见 [runbook §0.2](bases-oracle-runbook.md)。原始观察数据由取证侧留档（不入本仓：机器生成、体量大，且与 §4 的人读结论重复存放必然漂移）。
 > **⑩..㉖ 已全部有 fixture view 并完成 round-2 取证**（34 个 filter 上下文 view，见 runbook §4.11）；
-> 剩余实现见 TODO「oracle round-2 收尾实现」。
+> 原 round-2 收尾已结束；尚未确认的 oracle 项仍逐项保留。2026-10-01 新复现的执行缺口见根 TODO 与局部调研，不自动进入修复实施。
 > 校正清单 `rg -n "oracle" tests/base-evaluator.test.ts tests/base-engine.test.ts`。
 
 ## 4. P2 typed formulas / group / summary（P2a ✅ / P2b ✅ 2026-07-27）
@@ -130,8 +136,8 @@ sha256: 52432ecc079999bfff6214b64b7479527df7ca8476edf0cc5f7dc3e35f341561
 | 公式运行时类型错误行级诊断 | BASE-FORM-005 | ✅ 2026-07-27（P2a；行级 warning + cell null，不误伤他行） |
 | `today`/`now`（clock 注入） | BASE-FORM-006 | ✅ 2026-07-27（P2a；同 clock 两次 query 字节一致） |
 | list filter/map/reduce（value/index/acc 隐式作用域） | BASE-LIST-001 / BASE-SEC-005 | ✅ 2026-07-27（P2b；lazy 分派 + 作用域栈，flat/sort/unique/join 同批；迭代/collection/callDepth 预算） |
-| groupBy 标量 / 列表/tag | BASE-GROUP-001/002 | GROUP-001 ✅ 2026-07-27（P2b；`groups` 增量字段，组序方向 + 组内稳定）；**GROUP-002 ✅ 2026-07-28**（覆盖率片五：list 键扇出、link 标量键；语义仍属暂定口径待 oracle，但已不再拒绝） |
-| 默认汇总 / custom summary values | BASE-SUM-001/002 | SUM-001 ✅ 2026-07-27（P2b；15 内置）；SUM-002 ✅ 2026-07-28 收口（`values` 作用域 + **组级汇总 `groups[].summaries`**）；**计算集 ✅ 2026-07-29 改为 limit 后**（oracle⑧(b) 跟官方，原「limit 前全量」已翻，breaking）；空值剔除（⑧(a)）/越权口径仍为暂定，待 oracle |
+| groupBy 标量 / 列表/tag | BASE-GROUP-001/002 | GROUP-001 ✅ 2026-07-27（P2b；`groups` 增量字段，组序方向 + 组内稳定）；**GROUP-002 ✅ 2026-08-03 校正**（整列表键成组、不扇出；空列表键为 `[]`，link 标量键可用；顶层行序为 boundary，本轮 R04 复现） |
+| 默认汇总 / custom summary values | BASE-SUM-001/002 | SUM-001 ✅ 2026-07-27（P2b；15 内置）；SUM-002 ✅ 2026-07-28 收口（`values` 作用域 + **组级汇总 `groups[].summaries`**）；**计算集 ✅ 2026-07-29 改为 limit 后**（oracle⑧(b) 跟官方，原「limit 前全量」已翻，breaking）；**空值 ✅ 2026-08-03 校正**（values 含 null/MISSING，mean 计分母；自定义汇总禁止行外状态，本轮相关测试通过） |
 | regex（若支持必须 ReDoS 防护 + 长度预算） | BASE-SEC-004 | ✅ 2026-07-28（覆盖率片四：`string.matches(pattern)` + 三层防护；见 §6 片四明细） |
 
 ## 5. P3 all-files / context（P3a 附件数据集 ✅ 2026-07-27）
@@ -190,7 +196,9 @@ sha256: 52432ecc079999bfff6214b64b7479527df7ca8476edf0cc5f7dc3e35f341561
 | 自定义汇总 `values` 作用域内 `this.*` 仍拒绝 | SUM-002 延伸 | ✅ 2026-07-28（该语境有意不注入 contextRow，与 note/file/`file()` 同一「禁访问行外状态」原则） |
 | 入口形态检查（CTX-002/003 的诊断落点） | BASE-CTX-002/003 | ✅ 2026-07-28（**在读文件之前**按路径形态判定：带 `#` → 指向 `--view`；非 `.base` 扩展名 → 指向「单独存成 .base」。专项用例断言指向不存在的 `.md` 时仍给形态诊断而非 ENOENT/invalid-yaml） |
 
-### 片五明细 ✅ 2026-07-28（GROUP-002 + SUM-002 收口）
+### 片五明细 ✅ 2026-07-28（历史过程；当前见 §3/§4）
+
+> 下面的扇出与空列表口径已于 2026-08-03 被整列表键、不扇出取代；保留当时实现过程，不作为当前支持说明。
 
 > 测试：`tests/base-group-summary.test.ts`（+4 用例，共 22）。fixture `group-list.base` 由「拒绝场景」改写为扇出/link/空 list 五个 view。
 
@@ -215,7 +223,9 @@ sha256: 52432ecc079999bfff6214b64b7479527df7ca8476edf0cc5f7dc3e35f341561
 | 防护③：有界编译缓存（上限 64，超限整表清空） | 设计 §12 延伸 | ✅ 2026-07-28（逐行匹配不重复编译；不做无界增长——沿用 review 批次「解析缓存无界」的教训） |
 | 新 rule `base/invalid-regex`（非法/不安全一律行级诊断） | 设计 §11 | ✅ 2026-07-28（**与 DQL 侧 `regexmatch` 策略有意不同**：那边非法正则降级为「不匹配」且不报错，Bases 侧硬约束是不静默忽略） |
 
-### 片二明细 ✅ 2026-07-28
+### 片二明细 ✅ 2026-07-28（历史过程）
+
+> `date.time()` 已于 2026-08-03 从 duration 改为 `HH:mm:ss` 字符串，month 为 31d；当前口径与本轮已跑测试见 §3 和局部调研，下表保留首次实现时的选择。
 
 > 测试：`tests/base-functions-date.test.ts`（11 用例）。**快照口径变化**：`date()`/`duration()` 晚于 2026-07-22 冻结快照，本片显式采纳，语法 §1.1 漂移记录已同步（`%` 取模仍不采纳）。
 

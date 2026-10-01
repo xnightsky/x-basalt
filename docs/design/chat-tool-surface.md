@@ -1,18 +1,18 @@
 ---
 type: design
 title: chat 工具面架构：单一真相源评估（对标 agent-browser）
-description: chat 为什么不该手工维护第二张工具表面：paths 漂移 bug 实证 + agent-browser chat/dashboard 单执行口与 argv 分发机制（图）+ 彻底切 C 决策（cli 单工具、工具名额预算、防递归 allowlist）
+description: 当前 chat 单 CLI 工具面、迁移背景与宿主职责对照：argv、allowlist、路径还原及业务单一真相源；投入建议附信源。
 tags:
   - design
   - chat
   - agent-browser
   - architecture
-timestamp: 2026-08-07T00:12:49Z
-sha256: ed13b17077dfa2dd28dde407f6c055bf1e5d88bf3ad1c2f02a4374ca211fbf7b
+timestamp: 2026-09-30T23:53:31Z
+sha256: 33aca83b1b723c2aaa290b68183b602e53c95ea5e59775c47bdc3304faf1257b
 ---
 # chat 工具面架构：单一真相源评估（对标 agent-browser）
 
-> 日期：2026-07-30 · 类型：**设计评估（提案·待拍板）**，不是开工契约。
+> 初始讨论：2026-07-30；当前单 CLI 工具面已实现，2026-09-30 补充职责与投入边界。
 > **实现状态：✅ 已落地（2026-08-03，计划 [2026-08-03-chat-cli-tool.md](../plans/2026-08-03-chat-cli-tool.md)）**——`src/chat/cli-tool.ts` 单工具 + `tools.ts` 收编为 { cli, skills_recall, skills_get } + `X_BASALT_CHAT_CHILD` 防递归。
 > 触发：chat 审查实锤 `pipeline_run` 的 `paths` 参数静默失效（`src/chat/tools.ts:467` 把模型给的路径 `toAbs` 成绝对路径，喂给匹配**相对主键**的 glob 路由过滤 `src/orchestrator/route.ts:53`，永不命中）——根因不是某行代码写错，而是 chat 手工维护着第二张能力表面，语义靠人肉对齐 CLI，必漂移。
 > 关联：[chat 读写机制](chat-readwrite.md)、[chat skill grounding](chat-skill-grounding.md)、对标调研 [`../research/2026-06-30-chat-gap-vs-agent-browser.md`](../research/2026-06-30-chat-gap-vs-agent-browser.md)。
@@ -23,7 +23,7 @@ sha256: ed13b17077dfa2dd28dde407f6c055bf1e5d88bf3ad1c2f02a4374ca211fbf7b
 
 **结论先行**：方向对（agent-browser 就是这么做的），但落地的关键不在「执行 CLI」，而在两条纪律——**工具 schema 与 CLI 一处定义**、**模型永远不拼 shell 字符串（参数走数组）**。满足这两条，win/unix 差异结构性消失；不满足，skill 文档会退化成 shell 引用手册。
 
-## 1. 现状：chat 是手工维护的第二张能力表面
+## 1. 迁移前的问题：chat 曾手工维护第二张能力表面
 
 ```mermaid
 flowchart TD
@@ -123,10 +123,36 @@ flowchart TD
 
 后续扩展口（非本轮）：AI-native 新工具（语义检索等，§3 准入规则第二条）以独立工具加入，与 `cli` 工具并存——工具面只有「1 个 CLI 执行口 + N 个 AI-native 能力」，N 的每个都要过「CLI 不该长这个」的审查。
 
-## 5. 未决 / 风险
+## 5. 当前边界与风险（2026-09-30 复核）
 
-- **未决**：方向已拍板（彻底切），实现契约（allowlist 清单、写命令自动补 `--apply`、契约统一的分项验收）待立计划时细化。
+- **已实现，不再待立项**：`buildTools` 装配 `cli`、`skills_recall`、`skills_get`，CLI 壳以 argv 数组分发、排除 watch/chat；路径还原与参数注入以 [`src/chat/tools.ts`](../../src/chat/tools.ts) / [`src/chat/cli-tool.ts`](../../src/chat/cli-tool.ts) 为准。§1 与 §4 保留迁移前问题及执行记录，不代表仍有两套工具面。
 - **风险·能力暴露面扩大（含递归调用 chat）**：`cli` 工具让模型触达全部子命令，allowlist 必须排除两类：① 常驻/交互类（`watch` 永不返回、挂死对话——系统提示现行禁令要变成壳层硬约束）；② **`chat` 自身**（否则模型可 `chat` 套 `chat` 起嵌套 AI loop）。防递归对照 agent-browser：它**没有**深度计数器，靠的是结构性排除——chat 会话的 LLM 只拿到一个 `agent_browser` 工具（`CHAT_TOOLS` 单工具、typed、无 shell），而 `chat` 命令在 `main.rs` 顶层分发、不走普通命令路径，`batch` 也不能嵌 `chat`。即「能起新 AI loop 的入口根本不进模型词表」。x-basalt 同理用 allowlist 结构性排除 `chat`，另加一道便宜加固：工具壳 spawn 时注入 `X_BASALT_CHAT_CHILD=1` 环境变量，chat 启动检测到即拒——兜住 allowlist 误配/被绕。
-- **风险·写无确认闸叠加 CLI 默认 dry-run**：CLI 的 `run` 默认 dry-run、`--apply` 才落盘，与 chat「写直接落盘」纪律相反——`cli` 工具壳对写命令自动补 `--apply`（与 chat 现行安全模型一致），此点需在实现契约里写死。
+- **写入开关遵循 CLI**：`meta` 写动作默认落盘，`run` 的批量写需显式 `--apply`；当前 `execCli()` 不自动补该开关。模型调用与人调用走同一命令语义，不能因没有确认弹窗就假设所有批量调用都已写入。信源：[`src/cli.ts`](../../src/cli.ts)、[`src/chat/cli-tool.ts`](../../src/chat/cli-tool.ts)。
 - **风险·性能**：每步一次 spawn 冷启动（node + SQLite 打开），20 步 loop 多出数秒——可接受，但场景库回归时顺带记录耗时变化。
-- **已核实 / 未核实**：agent-browser 机制经 deepwiki 两源交叉确认（dashboard 面板、tools() 三面共享、argv 分发），未直读其源码；其迭代快，落地前按版本号再核一次。
+- **已核实 / 未核实**：原 agent-browser 对照经 deepwiki 两源交叉确认，未直读对应版本源码；只作为当时设计背景，不据此证明当前实现优劣。当前项目机制以本仓源码为准。
+
+## 6. 宿主投入与接口纪律（2026-09-30）
+
+**保持已实现的薄壳，不把调查中的宿主能力当成新增实现要求。** Anthropic 的 [Context engineering](https://www.anthropic.com/engineering/effective-context-engineering-for-ai-agents) 与 [Advanced tool use](https://www.anthropic.com/engineering/advanced-tool-use)说明按需上下文/工具发现已有现成路线；[Is Grep All You Need? v1](https://arxiv.org/html/2605.15184v1)提示效果仍取决于模型、宿主和交付方式。它们支持先比较外部宿主的建议，不支持“通用宿主必然更省或更准”。
+
+```mermaid
+flowchart LR
+    U["用户任务"] --> H{"调用方"}
+    H --> LOCAL["当前 chat<br/>可选模型 / 会话 / 有界循环"]
+    H --> EXT["外部 Agent<br/>自有权限与上下文管理"]
+    LOCAL --> WRAP["cli-tool.ts<br/>argv / 无 shell / allowlist / 路径还原"]
+    WRAP --> CLI["同一 CLI 业务入口<br/>参数校验 / 执行 / 输出"]
+    EXT --> CLI
+    SK["运行时 skills<br/>按需取规范，不替代参数校验"] -.-> LOCAL
+    SK -.-> EXT
+    CLI --> CORE["确定性内核<br/>DQL / Bases / FTS / meta"]
+    CORE --> DATA[("文件 + 派生 SQLite")]
+    LOCAL -. 待量化对照 .-> EVAL["任务成功 / 证据 / 费用 / 失败模型"]
+    EXT -. 待量化对照 .-> EVAL
+    classDef core fill:#eaf3ff,stroke:#3274b7,stroke-width:2px;
+    classDef compare fill:#fff3df,stroke:#bc7c22,stroke-width:2px,stroke-dasharray:5 5;
+    class CLI,CORE,DATA core;
+    class EVAL compare;
+```
+
+图中 chat 路径依据上述本仓源码，外部路径表示 CLI 可供调用，不代表所有宿主已集成或通过验收。比较协议见[最新调研 §9](../research/2026-09-30-agent-knowledge-industry-landscape.md#9-下一步实验可复现能推翻建议)。新增 MCP/工具 schema 应共享业务语义；[MCP Tools 规范](https://modelcontextprotocol.io/specification/2025-11-25/server/tools)的发现/annotations 不替代权限执行。保留封闭工具面、明确部署体验的理由可以成立，但须实测而非由工具数量推出质量。

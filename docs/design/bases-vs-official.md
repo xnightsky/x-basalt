@@ -1,14 +1,14 @@
 ---
 type: design
 title: Bases · 官方怎么做 / 我们怎么做
-description: 官方 Obsidian CLI 的架构与五个实测坑、x-basalt 无头实现的流水线与六个关键决策、能达到的效果，以及 oracle 校正账本（逐条「跟官方 / 不跟官方」及理由）
+description: 官方与第三方无头 Bases 执行路径、x-basalt conformance 边界与既有 oracle 校正账本；行业变化附固定信源。
 tags:
   - design
   - bases
   - architecture
   - x-basalt
-timestamp: 2026-08-03T00:48:56Z
-sha256: ee3f9dd894edb7a8d933be468a19de9ac2a4e1b8defe2df4c2459f704f07137c
+timestamp: 2026-10-01T01:03:03Z
+sha256: c4a9dfeea88c68c3a4abef690cdf734817b867afb2d01e0cff1c4f1940313334
 ---
 # Bases · 官方怎么做 / 我们怎么做
 
@@ -20,9 +20,9 @@ sha256: ee3f9dd894edb7a8d933be468a19de9ac2a4e1b8defe2df4c2459f704f07137c
 
 ## 0. 一分钟版本
 
-Obsidian **Bases** 是官方内建的「把笔记当数据库查」的功能。查询不写在代码里，而是写成一个 `.base` 文件（纯 YAML）——里面声明"筛哪些笔记、显示哪几列、怎么排序分组"。
+Obsidian **Bases** 是官方内建的「把笔记当数据库查」的功能。查询定义是 YAML——可以保存在 `.base`，也可内嵌 Markdown `base` 代码块；其中声明“筛哪些文件、显示哪些列、怎么排序分组”。官方专用 CLI 的文件/视图入口与本项目正文入口不是同一回事，见[局部调研](../research/2026-10-01-dql-bases-compatibility-local-audit.md)。
 
-同一个 `.base`，有三条路可以跑出结果：
+同一个 `.base`，下图比较官方 GUI、官方 CLI 与 x-basalt 三条执行路径；它不是独立实现的完整清单：
 
 ```mermaid
 flowchart LR
@@ -31,23 +31,43 @@ flowchart LR
     B --> G["① Obsidian GUI<br/>人眼看表格"]
     B --> C["② 官方 CLI<br/>obsidian base:query"]
     B --> X["③ x-basalt<br/>x-basalt base"]
+    B --> T["④ 第三方独立实现<br/>basecli / headless-vault-kit"]
 
     G --> GE["Obsidian 本体引擎"]
     C --> GE
-    X --> XE["x-basalt 自己的<br/>解析 + 索引 + 求值"]
+    X --> XE["x-basalt 自建引擎<br/>SQLite + 独立 AST + 预算求值"]
+    T --> TE["第三方自建引擎<br/>各自声明子集 / 类型 / 诊断边界"]
 
     GE --> NEED["⚠ 必须有 Obsidian App 在运行"]
-    XE --> FREE["✓ 无 GUI / 无 Electron<br/>可进 CI、服务器、AI agent"]
+    XE --> FREE["✓ 独立无头执行<br/>CI / 服务器 / AI Agent"]
+    TE --> FREE
+    XE --> CONTRACT["版本化 conformance<br/>rows / total / diagnostics"]
+    GE -. 受控取证 / 指定版本 .-> ORACLE["语义 oracle<br/>不作为产品运行时依赖"]
+    ORACLE -. 差分校正 .-> XE
+    TE -. 共同子集，尚未实测 .-> COMPARE["兼容 / 完整性 / 部署成本对照"]
+    XE -. 待执行 .-> COMPARE
 
+    style TE fill:#1a3a2a,stroke:#8a8,color:#fff
+    style CONTRACT fill:#1a3a4a,stroke:#8aa,color:#fff
+    style ORACLE fill:#4a3a1a,stroke:#a88,color:#fff
+    style COMPARE fill:#333,stroke:#aaa,color:#fff,stroke-dasharray:5 5
     style GE fill:#4a3a1a,stroke:#a88,color:#fff
     style XE fill:#1a3a2a,stroke:#8a8,color:#fff
     style NEED fill:#4a1a1a,stroke:#a88,color:#fff
     style FREE fill:#1a3a4a,stroke:#8aa,color:#fff
 ```
 
-①②走的是**同一个引擎**——官方 CLI 只是给运行中的 App 发遥控指令。真正独立的实现只有③。
+①②走的是**同一个引擎**——官方 CLI 控制桌面 App；③④各为独立实现。图中实线表示公开执行路径，虚线表示语义校正或待执行对照；第三方路径的来源与限制见 §0.1。官方 CLI 的 App 依赖见[固定版本官方帮助](https://github.com/obsidianmd/obsidian-help/blob/9cf8c2913e56830e75c13f33ba198d7e70b6d9ef/en/Extending%20Obsidian/Obsidian%20CLI.md)。
 
-**一句话结论**：官方 CLI 是最权威的**语义裁判**（它就是引擎本身），但不是可用的**运行时**（离不开 GUI 进程）。x-basalt 存在的全部理由，就是把 Bases 查询从 GUI 里解放出来——代价是语义要自己对齐。
+**一句话结论**：官方 App 引擎是受控语义对照来源，但官方 CLI 不符合本项目的无头运行时约束。x-basalt 提供独立的查询、诊断与版本化边界；是否更适合实际任务，应通过兼容性与运维对照验证，不能仅凭无 GUI 推导优势。
+
+### 0.1 业界对照更新（2026-09-30）
+
+- **官方 Headless 不等于官方 Bases 无头引擎**：公开 Services 列 Sync/Publish，并明确区别于控制桌面 App 的 CLI；目前没有据此证实其提供 Bases/DQL 执行。信源：[固定版本 Headless 官方帮助](https://github.com/obsidianmd/obsidian-help/blob/9cf8c2913e56830e75c13f33ba198d7e70b6d9ef/en/Extending%20Obsidian/Obsidian%20Headless.md)。
+- **已有第三方独立实现**：`basecli` 提供只读 Bases、公式/分组/汇总，但声明不读属性类型配置、存在日期推断等偏差；见[README](https://github.com/hobbs/basecli/blob/ebf409d798c637c86430739f13e1e6b585c5e22c/README.md)与[LIMITATIONS](https://github.com/hobbs/basecli/blob/ebf409d798c637c86430739f13e1e6b585c5e22c/LIMITATIONS.md)。`headless-vault-kit` 提供 SQLite Vault 索引、Bases/DQL 子集与 MCP，成熟度限制由作者明确登记；见[README](https://github.com/angelsaez/headless-vault-kit/blob/f158bd8e8236efabb96505eea701cc204fe42b37/README.md)与[ROADMAP](https://github.com/angelsaez/headless-vault-kit/blob/f158bd8e8236efabb96505eea701cc204fe42b37/docs/ROADMAP.md)。
+- **尚未实测等价性**：上述工具应加入共同支持子集的差分对照，不因此替换本项目 oracle 或声称已完整兼容。评估协议见[最新调研 §9](../research/2026-09-30-agent-knowledge-industry-landscape.md#9-下一步实验可复现能推翻建议)。
+
+下文 2026-07/08 的本机读数保留为版本化观察，不视为对当前所有官方版本的保证。
 
 ---
 
@@ -81,7 +101,7 @@ views:
         direction: ASC
 ```
 
-官方定位很明确：Bases 是**内建核心插件**，用来接替社区插件 Dataview。区别在于 Dataview 写的是类 SQL 的查询语句（DQL），Bases 写的是结构化 YAML——后者更适合被工具读写，也更适合 GUI 编辑器生成。
+官方定位是**内建核心插件**，用于数据库式文件/属性视图；本轮未取得“接替 Dataview”的明确官方宣言，不能据此决定削减 DQL。DQL 与 Bases 分别使用文本查询和 YAML 定义，但差异不止序列化：任务行、inline fields、行展开与类型化公式各有职责。信源：[官方介绍](https://github.com/obsidianmd/obsidian-help/blob/9cf8c2913e56830e75c13f33ba198d7e70b6d9ef/en/Bases/Introduction%20to%20Bases.md)、[局部能力矩阵](../research/2026-10-01-dql-bases-compatibility-local-audit.md#4-双路线各补什么不要把上游-dql-能力算到本项目头上)。
 
 `.base` 既可以是独立文件，也可以嵌在 Markdown 的代码块里。
 
@@ -193,7 +213,7 @@ Windows 上 `obsidian` 解析到安装目录的 `Obsidian.com`（控制台桩）
 flowchart LR
     Q{"我要在哪跑<br/>Bases 查询？"}
     Q -->|"本机、Obsidian 开着、<br/>只想拿一次读数"| O["官方 CLI ✓<br/>结果就是标准答案"]
-    Q -->|"CI / 服务器 / 无人值守 /<br/>AI agent 自动调用"| N["官方 CLI ✗<br/>→ 必须自己实现"]
+    Q -->|"CI / 服务器 / 无人值守 /<br/>AI agent 自动调用"| N["官方 CLI 不符合本项目约束<br/>→ 选择独立实现"]
     O --> ORA["最佳用途：<b>oracle</b><br/>拿它的输出去校验自己的实现"]
 
     style O fill:#1a3a2a,stroke:#8a8,color:#fff
@@ -213,7 +233,7 @@ flowchart LR
 
 ```mermaid
 flowchart TB
-    F[".base 文件"] --> P1["① 文档层<br/>YAML 解析 + schema 校验<br/>（views/filters/order/sort 结构）"]
+    F[".base 文件 / stdin / API source<br/>即时定义无需落盘"] --> P1["① 文档层<br/>YAML 解析 + schema 校验<br/>（views/filters/order/sort 结构）"]
     P1 --> P2["② planner<br/>选 view + 合并 global/view filter"]
     P2 --> P3["③ source<br/>从 SQLite 索引读候选行<br/>（固定只读 SQL）"]
     P3 --> P4["④ evaluator<br/>表达式 AST 逐行内存求值<br/>（带操作数预算）"]
@@ -226,6 +246,8 @@ flowchart TB
     style P4 fill:#1a3a2a,stroke:#8a8,color:#fff
     style OUT fill:#1a3a4a,stroke:#8aa,color:#fff
 ```
+
+输入事实：`src/cli.ts` 的 `-` / `--stdin` 与 `src/base/engine.ts` 的 `source` 已实现，同内容与文件模式等价；它们直接调用自建内核，不委托官方 App，见 `tests/base-cli.test.ts` 与[本轮 R01](../research/2026-10-01-dql-bases-compatibility-local-audit.md#5-本轮可复现对照)。
 
 要点：**SQLite 只负责"取哪些候选行"，所有 Bases 语义都在内存求值层。** 因为 Bases 的类型系统（Date/Link/List/duration）和 truthiness 规则跟 SQL 的不一样，硬塞进 SQL 会在边界上失真。
 
@@ -307,25 +329,27 @@ x-basalt base tests/fixtures/bases/oracle/views/truthiness.base \
 | P2a | formulas：类型化值 + 算术 + 依赖图 + 循环检测 + `today`/`now` | ✅ |
 | P2b | `types.json` / 列表高阶函数 / groupBy / summaries | ✅ |
 | P3a | 附件数据集（all-files 模式：图片/PDF/canvas 也作为行） | ✅ |
-| **P1 oracle** | 与官方比对，冻结争议语义 | ✅ 2026-07-28 取证完成（26 view，19 一致 / 7 分歧）+ 第一批 ①②④ 校正落地；余 ⑧ 待实现，⑦⑨㉗ 落 boundary（§5） |
-| P3 余项 | embedded code block / `contextFile` / `this` | 🔜 未开 |
+| **P1 oracle** | 与指定版本比对，冻结争议语义 | ✅ 2026-07/08 取证与校正记录见 §5；⑦ 分组内容/组序、⑧ 汇总已跟，顶层行序与部分超集保留 boundary；不是本轮重跑 |
+| 显式 context | `contextFile` / `this.*` | ✅ 已实现；本轮 context 测试通过 |
+| 定义输入 | 文件 / stdin / API source | ✅ 已实现；本轮入口等价验证通过 |
+| 内嵌提取 | Markdown base 块 / embed 路径 | 不直接提取；正文可经 source/stdin 传入 |
 
-892 个测试全绿，四门（typecheck / lint / format / test）全过。
+上文阶段测试数是当时记录，不是本轮全量验证。2026-10-01 局部测试与新发现的公式/TASK 执行缺口见[局部调研 §5–7](../research/2026-10-01-dql-bases-compatibility-local-audit.md#5-本轮可复现对照)，不宣称全部语境完整兼容。
 
 ---
 
 ## 3. 能达到什么效果
 
-### 3.1 官方做不到、这里能做的三件事
+### 3.1 官方桌面 CLI 与独立实现的部署差异（历史观察）
 
 | 场景 | 官方 CLI | x-basalt |
 |---|---|---|
 | CI 里把 `.base` 当查询跑，结果不对就红 | ✗ 需要 GUI 进程 | ✓ `x-basalt base` 退出码即断言 |
 | 服务器/容器里定时导出报表 | ✗ | ✓ 纯 Node，无 Electron |
 | AI agent 直接调用拿结构化数据 | △ 能跑但会被弹窗挂死 | ✓ 稳定 JSON 契约，可编排 |
-| 一次查询里跑 22 个 view 做差分 | ✗ 必须串行、要人盯着 | ✓ 脚本批量 |
-| 同样输入拿到同样输出 | ✗ 不保证（§1.5 坑五） | ✓ 字节稳定（同 DB + base + clock 重跑全等） |
-| 拿到 **100% 正确**的官方语义 | ✓ 它就是标准答案 | ✗ 需 oracle 校正 |
+| 多 view 做差分 | `base:query` 路径有本机观察限制；受控 `eval` 路径已可脚本化（§1.5） | ✓ 脚本批量 |
+| 同样输入拿到同样输出 | 原命令受 UI/异步状态影响；受控取证等待收敛后曾两次一致 | ✓ 字节稳定（同 DB + base + clock 重跑全等） |
+| 对齐官方语义 | 官方 App 引擎是指定版本的语义对照，仍需控制取证状态 | 需 oracle 校正并声明差异 |
 
 最后一行是诚实的短板，也正是 §3.3 要讲的。
 
@@ -375,7 +399,7 @@ oracle 判官方相反（两个 view 都命中全部 12 行），2026-07-28 已�
 | ⑤ | date 与 datetime 跨精度比较 | 严格 ISO 推断，统一 epoch 比较 —— ✅ 行集与官方一致 |
 | ⑥ | frontmatter 里的 `[[wikilink]]` | 转成 Link 值，路径感知相等 —— ✅ 行集与官方一致 |
 | ⑦ | 声明类型与实际值冲突 | 行级 warning，按运行时类型参与 —— ⏸ 无 fixture view，本轮未取证 |
-| ⑧ | groupBy 用 list/link 当键 | ~~拒绝~~ → 已改为**扇出**（2026-07-28 覆盖率片五）；顶层行序与官方的分歧**决定不跟**，见 §5.3 |
+| ⑧ | groupBy 用 list/link 当键 | 2026-07-28 曾改扇出，2026-08-03 已跟官方改为**整列表键、不扇出**；顶层行序保留 boundary，见 §5.8；本轮 R04 复现 |
 | ⑨ | `"2026-01-01" + " 备注"` 是拼接还是日期运算 | 原命题不成立——官方 `+` 根本不拼接字符串；**决定保留本仓的拼接超集**，见 §5.5 |
 
 > ✅ **第 ② 项已于 2026-07-28 校正**（曾是文档与实现不一致的活样本）
@@ -568,7 +592,9 @@ obsidian base:query format=json                  # 查当前 base
   （如 `list(1, 2, null).mean()`），确认是 M1 再动手。取证已脚本化，这一条的成本近零。
   在此之前 (a) 维持现状并保留本条记录——**不靠猜把一个通用函数的语义改掉**。
 
-### 5.5 ⑨ `+` 的字符串拼接：不跟（保留超集 + documented boundary）
+### 5.5 ⑨ `+` 的字符串拼接：历史差分决定（保留超集 + documented boundary）
+
+> **2026-10-01 证据校准**：固定官方语法示例已使用 `price.toFixed(2) + " dollars"`，与下述 2026-07/08 的静默空读数存在版本/观察范围差异。旧读数保留，不能继续外推“官方根本不拼接”。尚未重跑当前 App；本仓继续保留字符串拼接，不因旧差分删除能力。信源：[固定官方语法](https://github.com/obsidianmd/obsidian-help/blob/9cf8c2913e56830e75c13f33ba198d7e70b6d9ef/en/Bases/Bases%20syntax.md)。
 
 **官方读数**：`label + " 备注"`（string + string）→ **空**，无错误。即官方的 `+` **根本不做字符串拼接**。
 x-basalt 正常拼接为 `"报告 备注"`。（原命题「拼接语境下是否做日期推断」因此不成立——见 [runbook §4.9](bases-oracle-runbook.md)。）
@@ -634,7 +660,7 @@ null/MISSING 时直接给「空值在后」的定序，方向只作用于两侧�
 - `group-by-list-prop`：两组 = `[1,2,3]`（CaseF）+ `null`（11 行）；
 - 顶层行序随分组键重排（3 个 DIFF 同源）；DESC 组序空值恒最后（㉓）。
 
-本仓 GROUP-002 暂定口径是**扇出**（一行进其每个元素的组）——与官方相反。
+本仓 GROUP-002 的原暂定口径曾是**扇出**（一行进其每个元素的组）——已于下述 2026-08-03 校正，不是当前行为。
 
 **2026-08-03 决策：跟内容、不跟行序。**
 

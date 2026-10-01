@@ -2,7 +2,7 @@
 
 > 纯 Node.js CLI 工具：**零依赖 Obsidian GUI / 运行时**，直接通过文件系统 API 操作 Vault 目录，实现 Obsidian 规范的解析、索引、Dataview 子集查询与 Skill 召回。
 
-不引入 `obsidian` npm 包、不调用 `obsidian://` URI、不读取 `app.metadataCache`。所有索引与隐式字段（反向链接等）由自建 SQLite 在查询期实时计算。
+不引入 `obsidian` npm 包、不调用 `obsidian://` URI、不读取 `app.metadataCache`。文件数据由自建索引器写入 SQLite；隐式字段（反向链接等）在查询期实时计算，不依赖外部缓存。实现信源：[`src/indexer/schema.ts`](./src/indexer/schema.ts)、[`src/query/sql-generator.ts`](./src/query/sql-generator.ts)。
 
 ## 能做什么
 
@@ -46,10 +46,16 @@ x-basalt skills get obsidian-base-spec                      # 召回语法规范
 **[`docs/use/`](./docs/use/README.md)** 按「我想做什么」索引全部用法：
 
 - [安装与运行](./docs/use/install.md) · [命令参考](./docs/use/commands.md) · [索引与同步](./docs/use/indexing.md) · [配置与基目录](./docs/use/config.md)
-- 查笔记：[DQL 指南](./docs/use/dql.md)（`LIST FROM #tag WHERE …`） · [Bases 指南](./docs/use/bases.md)（官方 `.base` 文件，含教程与语法速查）
+- 查笔记：[DQL 指南](./docs/use/dql.md)（`LIST FROM #tag WHERE …`） · [Bases 指南](./docs/use/bases.md)（兼容 `.base` 定义，支持文件或 stdin 即席查询）
 - [Obsidian 语法](./docs/use/obsidian-syntax.md) · [与 AI 协作](./docs/use/ai-and-skills.md) · [chat 怎么玩](./docs/use/chat.md) · [故障排查](./docs/use/troubleshooting.md)
 
 想知道内部怎么设计的 → **[`docs/design/`](./docs/design/README.md)**；想查历史决策 → **[`docs/history/`](./docs/history/README.md)**。
+
+核对同类工具、检索/宿主/知识维护的适配性 → [业界调研与信源](./docs/research/2026-09-30-agent-knowledge-industry-landscape.md)。独立无头运行是部署边界，不是独有能力或效果优越性的证明。
+
+DQL / Bases 为什么仍保留两路、官方入口与本项目即时输入有什么不同 → [局部深度调研](./docs/research/2026-10-01-dql-bases-compatibility-local-audit.md)。TASK 子句与公式文件查找仍有已复现缺口，见报告 R08/R09；本轮只校正说明，不修执行代码。
+
+**写入边界**：meta 使用同目录临时文件 + rename，避免直接半写目标；当前没有并发版本前置条件/锁，不保证并发防覆盖、跨文件事务或断电持久性。chat 无逐动作确认，Ctrl+C 不回滚已写文件，也不保证立即停止已启动 CLI 子进程。先在副本验证并建立可恢复备份。信源：[`src/meta/index.ts`](./src/meta/index.ts)、[`src/chat/cli-tool.ts`](./src/chat/cli-tool.ts)、[使用指南](./docs/use/chat.md#7-当前限制--注意)。
 
 ## 开发
 

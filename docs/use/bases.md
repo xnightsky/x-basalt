@@ -6,8 +6,8 @@ tags:
   - guide
   - bases
   - x-basalt
-timestamp: 2026-07-28T08:33:04Z
-sha256: e647dacc5f713a62db18f87add95bfa1b516e8e31ab883f1cb5f8859a6127d51
+timestamp: 2026-10-01T01:07:44Z
+sha256: 354e843c161df24223fed49fe96dc16657d95d6857a66e4410ef8e9a1038db7f
 ---
 # Bases · 用 `.base` 无头查询你的 vault
 
@@ -48,6 +48,8 @@ Bases 仍在快速演进（1.9 early access 期间已发生 snake_case → camel
 升级快照时需专项对齐上表，并同步 [语法真相源](../design/bases-syntax.md) 与[实现状态追踪](../design/bases-status.md)。**逐项实现状态与诊断编号以语法真相源为准**；本文是面向使用者的完整覆盖清单与示例，两者标注同一个官方快照日期，升级时必须同步两处。
 
 ---
+
+**2026-10-01 局部复核**：`base -` / `--stdin` 与 API `source` 已支持即时定义，无需先写 `.base`；DQL 的任务行、inline fields、行展开与 Bases 的类型化公式仍有不同职责。官方入口/公开 API 与本轮复现见[局部调研](../research/2026-10-01-dql-bases-compatibility-local-audit.md)。下文只校正当前能力说明，不升级官方兼容快照。
 
 ## 1. Bases 是什么
 
@@ -116,7 +118,7 @@ ORDER BY due ASC LIMIT 20;
 
 **① 没有 schema。** 数据库的表事先定义好每列什么类型；这里没有——每篇笔记的 frontmatter 想写什么就写什么，同一个键在这篇是数字、在那篇可能是字符串。所以类型是**运行时看着值猜的**，某篇笔记没这个属性时投影成 `null` 而不是报错。「属性不存在」和「属性写了 `null`」是两回事（[§3.8](#38-值与类型语义)），这类边角语义全都长在「没有 schema」这个缺口上。
 
-**② 没有 JOIN。** SQL 能把两张表连起来查，Bases 不能——它永远是**单表**。笔记之间的链接关系只能用 `file.hasLink("X")` 这种谓词试探「这篇有没有指向 X」，没法真的把两篇笔记的属性拼到一行里。要做关系查询，这里做不到。
+**② 没有通用关系 JOIN 算子，但可以读取关联文件。** 官方公开 `file(path)`、`link.asFile()` 与 `file.properties`，不应把文件行模型说成完全不能跨文件读属性。当前本项目筛选里可查相关文件属性；公式体未接文件解析器，会产生 warning + null，尚未修复。官方契约与本轮复现见[局部调研 §4–5](../research/2026-10-01-dql-bases-compatibility-local-audit.md#4-双路线各补什么不要把上游-dql-能力算到本项目头上)。
 
 **③ 表达式不是 SQL 表达式，是方法链。** 写的是 `file.hasTag("项目")`、`tags.filter(value != "草稿").join(", ")`、`(due - today()) / 1day`——面向对象的调用风格，还有 duration 字面量（`1day`）和链接类型。别把 SQL 的 `=`、`AND`、`LIKE` 写进来（会报 `base/expression-syntax`）。
 
@@ -131,10 +133,10 @@ ORDER BY due ASC LIMIT 20;
 | | Bases（本文） | Dataview / DQL（[另见](dql.md)） |
 | --- | --- | --- |
 | 出身 | Obsidian **官方核心功能** | 社区插件 |
-| 查询写在哪 | 独立的 `.base` YAML 文件 | 笔记里的 ```` ```dataview ```` 代码块 |
+| 查询定义/入口 | 官方支持 `.base` 或 Markdown `base` 块；本项目文件/stdin/API source | 官方支持 `dataview` 块/插件字符串 API；本项目 `query` 字符串 |
 | 长什么样 | `status == "进行中" && priority < 3` | `LIST WHERE status = "进行中"` |
 | 运算符 | `==` `!=` `&&` `\|\|` `!` | `=` `!=` `AND` `OR` `NOT` |
-| 数据来源 | **只认 frontmatter** | frontmatter + inline fields（`key:: value`） |
+| note 属性来源 | frontmatter；另有 file/formula 属性 | frontmatter + inline fields（`key:: value`） |
 | x-basalt 命令 | `x-basalt base` | `x-basalt query` |
 
 **两者语法不通用**，别把 DQL 的 `=`/`AND` 写进 `.base`（会报 `base/expression-syntax`）。Dataview 的 inline fields（`key:: value`）也不会成为 Bases 属性——这是官方 Bases 的限制，不是 x-basalt 的取舍。
@@ -149,14 +151,14 @@ Obsidian 自己渲染 `.base` 需要开着 App。x-basalt 提供的是**无头�
 
 **这是最容易踩坑的一点，动手前务必读完。**
 
-Obsidian 是**常驻进程**：App 启动时把整个 vault 扫进内存缓存，之后靠文件系统监听实时更新，所以它任何时候看到的都是最新的——代价是必须一直开着。
+Obsidian App 维护索引并随文件变化更新，但不能保证任何读取时刻都已收敛；官方 `file.backlinks` / `file.properties` 还声明不随 Vault 变化自动刷新结果。见[固定 Bases 语法](https://github.com/obsidianmd/obsidian-help/blob/9cf8c2913e56830e75c13f33ba198d7e70b6d9ef/en/Bases/Bases%20syntax.md)。对照时需控制更新/重算状态，不能把常驻等同瞬时最新。
 
 x-basalt 没有常驻进程，于是把「读文件」和「查询」拆成了**两个时刻**：
 
 ```text
 笔记 (.md) ──► x-basalt index ──► 解析 → SQLite 索引 ──┐
                                                         ├──► 查询结果
-.base 文件 ──► 查询时直接读，不经索引 ──────────────────┘
+.base 文件 / stdin 定义 ──► 查询时解析，不经索引 ────────┘
 ```
 
 由此产生一条**必须记住的规则**：
@@ -185,9 +187,9 @@ x-basalt base views/项目.base --vault ./v
 | `x-basalt scan <vault>` | 增量：diff 文件系统 vs 索引，只重扫变了的 | **日常默认**，人或 AI 按需触发 |
 | `x-basalt watch <vault>` | 常驻监听，真正实时 | 需要实时；但这就退回「要一直开着」了 |
 
-换来的三件事：查询只读索引所以快（万篇量级毫秒内）、无常驻进程所以能进 CI / 容器 / cron / AI agent、快照可复现所以**同一个索引重跑结果逐字节一致**。
+换来的是明确的索引快照与独立无头执行入口，可用于 CI / 容器 / cron / AI agent。本轮没有万篇性能实测，不能用部署方式证明查询快；**字节复现需同时固定定义、数据、类型/context、conformance 与 clock**，仅同一个索引不够（`now()` / `today()` 默认受当前时间影响，API 可注入 clock；见 `src/base/engine.ts`）。
 
-> ⚠️ **拿官方读数做对照时**：官方 `base:query` 读的是活的内存缓存永远最新，我们读快照。所以改完 fixture 必须**先 `x-basalt index` 再比对**，否则会把「索引过期」误判成「语义不一致」，白折腾一轮。详见 [oracle 操作手册](../design/bases-oracle-runbook.md)。
+> ⚠️ **拿官方读数做对照时**：官方 `base:query` 依赖 App 的缓存/重算状态，我们读索引快照；两边都需明确数据版本，不能假设官方读取永远已收敛。所以改完 fixture 必须**先 `x-basalt index` 再比对**，否则会把「索引过期」误判成「语义不一致」，白折腾一轮。详见 [oracle 操作手册](../design/bases-oracle-runbook.md)。
 
 ---
 
@@ -457,7 +459,7 @@ views:
 | `order` | string 数组 | **投影列清单**（不是排序）。缺省 `["file.name"]`；每项须是字符串 property-ref |
 | `sort` | `{ property, direction }` 数组 | 多键排序，按数组顺序；`direction` 仅 `ASC`/`DESC`（缺省 `ASC`） |
 | `limit` | 非负整数 | 截断行数；`total` 仍是 limit 前的行数 |
-| `groupBy` | `{ property, direction }` | 分组键（标量）；结果增加 `groups` 字段。list/tag 等多值键暂拒绝 |
+| `groupBy` | `{ property, direction }` | 单个分组键；支持标量和整列表键，不扇出；结果增加 `groups` 字段 |
 | `summaries` | map `<property-ref> → <汇总名>` | 列汇总（[§3.7](#37-formulas-与-summaries)） |
 
 未列出的 view 内 key → warning（不影响已支持字段）；`formulas` 写在 view 内 → 报错（官方只在顶层）。
@@ -481,14 +483,14 @@ filters:
 
 - `and` 全部满足；`or` 任一满足；`not` 是「**不满足其中任何一项**」（= `NOT(a OR b …)`）。
 - 一个对象只能有一个键（`and`/`or`/`not` 三选一），值必须是数组。
-- **空数组（`and: []`）直接报错**——官方语义未确认，不猜。
+- **空数组已有确定语义**：`and: []` = 真、`or: []` = 假、`not: []` = 真（既有 oracle 校正；`tests/base-engine.test.ts`）。
 - 嵌套深度有上限（超限报 `base/execution-budget`）。
 
 ### 3.4 字面量与运算符
 
 **字面量**：`null`、`true`/`false`、数字（整数/小数，无科学计数法）、字符串（单/双引号，支持 `\"` `\\` `\n` `\t` 转义）、list（`[a, b, c]`）、**duration**（`1day`、`2weeks`、`1.5hours`）。
 
-duration 单位（单复数均可）：`millisecond` `second` `minute` `hour` `day` `week` `month` `year`。约定 `month` = 30 天、`year` = 365 天。
+duration 单位（单复数均可）：`millisecond` `second` `minute` `hour` `day` `week` `month` `year`。约定 `month` = 31 天、`year` = 365 天（既有 oracle 校正；`tests/base-values-date.test.ts`）。
 
 **运算符优先级（低 → 高）**：
 
@@ -597,7 +599,7 @@ duration 单位（单复数均可）：`millisecond` `second` `minute` `hour` `d
 | 签名 | 返回 | 说明 |
 | --- | --- | --- |
 | `d.format(fmt)` | string | 见下方格式串说明 |
-| `d.time()` | duration | 当日 UTC 零点起的时长——可比较可运算（`d.time() < 12hours`）；要字符串用 `format("HH:mm")`。date 精度的值恒为 0 |
+| `d.time()` | string | 返回 UTC `HH:mm:ss`；date 精度返回 `"00:00:00"`（既有 oracle 校正；`tests/base-functions-date.test.ts`） |
 | `d.relative()` | string | 相对当前时刻的人读串：`3 days ago` / `in 2 hours` / `just now`。**固定英文**，不随语言变（官方那套是本地化的，不是稳定输出） |
 | `d.isEmpty()` | boolean | 恒 `false` |
 
@@ -630,7 +632,7 @@ duration 单位（单复数均可）：`millisecond` `second` `minute` `hour` `d
 | `l.sort()` | list | 升序；混合不可比类型报错；null/missing 排最后 |
 | `l.unique()` | list | typed equality 去重，保留首现 |
 | `l.join(sep?)` | string | 元素只许 string/number/boolean；`sep` 缺省 `""` |
-| `l.mean()` | number | 元素须全为 number；**空列表报错**（均值无定义） |
+| `l.mean()` | number/null | number 元素计入分子，所有元素（含 null/missing/非 number）计入分母；全非 number 返回 null，**空列表报错**（`src/base/functions.ts`、`tests/base-group-summary.test.ts`） |
 | `l.reverse()` | list | 返回新列表，不改原属性 |
 | `l.slice(start, end?)` | list | 同 `s.slice`：负索引 / 越界钳制 |
 
@@ -667,7 +669,7 @@ duration 单位（单复数均可）：`millisecond` `second` `minute` `hour` `d
 
 类型不匹配的值被跳过；全部跳过（或计算集为空）→ 结果 `null`。
 
-也可以在**顶层 `summaries`** 自定义，用隐式变量 `values`（该列的跨行值列表，已剔除 null/missing）：
+也可以在**顶层 `summaries`** 自定义，用隐式变量 `values`（该列 limit 后的跨行值列表，包含 null/missing；它们在 `.mean()` 中计入分母）：
 
 ```yaml
 summaries:
@@ -716,7 +718,7 @@ frontmatter 里整串恰为一个 wikilink 的字符串（`"[[目标]]"` / `"[[�
 | `cards` / `list` / `map` view、插件 view | `base/unsupported-feature` / `base/unsupported-view-type` |
 | Dataview inline fields（`key:: value`） | 不进入 Bases 属性（官方 Bases 即如此） |
 | 附件（图片/PDF/`.base`）作为行 | 默认不支持：markdown 模式每次查询恒发 `base/markdown-only-dataset` 声明；`--conformance bases-all-files-2026-07` 可开启附件为行，见[§6.2](#62-all-files-模式附件并入数据集) |
-| 嵌入式 ```` ```base ```` 代码块、`![[View.base#Name]]` | 首期只支持独立 `.base` 文件 |
+| 嵌入式 ```` ```base ```` 代码块、`![[View.base#Name]]` | 不直接提取 Markdown 块或 embed 引用；可把 YAML 定义作为 stdin/source 传入 |
 | 渲染 table/cards 布局 | 查询内核不渲染 |
 
 ---
@@ -730,12 +732,13 @@ frontmatter 里整串恰为一个 wikilink 的字符串（`"[[目标]]"` / `"[[�
 ## 4. 怎么跑
 
 ```text
-x-basalt base <file.base> [--view <name>] [--vault <path...>] [--db <path>] [--format json|yaml] [--conformance <id>] [--context-file <path>]
+x-basalt base [file.base|-] [--stdin] [--view <name>] [--vault <path...>] [--db <path>] [--format json|yaml] [--conformance <id>] [--context-file <path>]
 ```
 
 | 参数/选项 | 默认 | 说明 |
 | --- | --- | --- |
-| `<file.base>` | 必填 | vault 内 `.base` 路径（vault 相对或绝对）；越出 vault 在读取前拒绝 |
+| `[file.base|-]` | 文件模式需路径 | vault 内 `.base` 路径；`-` 改从 stdin 读定义，不写查询文件。文件模式越界在读取前拒绝 |
+| `--stdin` | false | 从 stdin 读完整 YAML 定义；与文件参数同给时 CLI 以 stdin 为准；TTY 无管道输入报错，不挂起 |
 | `--view <name>` | `views[0]` | 指定 view；不存在报 `base/view-not-found`（error，`suggestions` 列可用名） |
 | `--vault <path>` | 配置 `vault` | 可重复传多个（多根 vault） |
 | `--context-file <path>` | 无 | `this.*` 的上下文文件（vault 内路径；写法同 `file(path)`：完整路径 / 去扩展名 / 文件名）。不传则 `.base` 里的 `this.*` 报诊断；传了却找不到该文件 → error + 空结果 |
@@ -749,6 +752,14 @@ x-basalt base views/projects.base --vault ./my-vault        # 默认 view（view
 x-basalt base views/projects.base --view Active --vault ./my-vault
 x-basalt base views/projects.base --conformance bases-all-files-2026-07 --vault ./my-vault   # all-files：附件也作为行
 ```
+
+**即时查询无需落盘**：
+
+```bash
+printf '%s\n' 'filters: status == "active"' 'views:' '  - type: table' '    name: Active' '    order: [file.path, status]' | x-basalt base - --vault ./sample-vault --db ./sample-index.db
+```
+
+`--stdin` 与 `-` 等价，输出 `base: "<stdin>"`；API 的 `source` 与 `basePath` 必须恰其一（API 双给报错，与 CLI 的选源规则不同）。原文、选源及同内容等价见 `src/cli.ts`、`src/base/engine.ts`、`tests/base-cli.test.ts`；本轮同构库实跑见[局部调研 §5](../research/2026-10-01-dql-bases-compatibility-local-audit.md#5-本轮可复现对照)。
 
 **退出码**：`diagnostics` 含任一 `error` 级 → 仍输出完整 JSON（`rows` 为空）并以 **1** 退出；仅 warning/info → **0**。CI 里可直接当 `.base` 校验器用。
 
@@ -773,12 +784,12 @@ x-basalt base views/projects.base --conformance bases-all-files-2026-07 --vault 
 | 字段 | 语义 |
 | --- | --- |
 | `conformance` | 回传**实际生效**的数据集口径：`bases-markdown-2026-07`（缺省，仅 Markdown）或 `bases-all-files-2026-07`（附件并入为行，见 [§3.2](#62-all-files-模式附件并入数据集)）；all-files 遇旧库降级时回传 markdown |
-| `base` | `.base` 的 vault 相对 POSIX 路径（见下方多根说明） |
+| `base` | 文件模式为 vault 相对 POSIX 路径；stdin/source 模式为虚拟名 `<stdin>` |
 | `view` | 实际执行的 view 名 |
 | `columns` | view 的 `order` 原文（缺省 `["file.name"]`） |
 | `total` | **filter 后、limit 前**的行数（`rows.length <= limit`） |
 | `rows` | 行数组，key 为列原文 |
-| `groups` | 仅 view 配了 `groupBy` 时出现：`[{ key, rows, summaries? }]`；顶层 `rows` 仍是平铺全部行。**分组键是 list 时会扇出**——一行进入它每个元素的组，所以各组行数之和可能**大于** `rows.length`（要「每行恰好一次」请用顶层 `rows`） |
+| `groups` | 仅 view 配了 `groupBy` 时出现：`[{ key, rows, summaries? }]`；顶层 `rows` 仍是平铺全部行。**list 分组键按整列表成组，不扇出**：一行恰好一组；空列表是 `[]` 键，缺失是 null 键（`tests/base-group-summary.test.ts`；本轮 R04 复现） |
 | `summaries` | 仅 view 配了 `summaries` 时出现；**按 limit 后的行计算**（与官方一致）。同时配了 `groupBy` 时，每个组另有 `groups[].summaries`，计算集是该组 limit 后的行——与顶层同口径 |
 | `diagnostics` | 全量诊断（文档层 → planner → 引擎级 → 行级，顺序固定） |
 
@@ -821,12 +832,16 @@ missing/null/空串/0/false/空列表的 truthiness（六形态全假，与实�
 | 差异 | 本仓行为 | 官方 | 为什么不跟 |
 | --- | --- | --- | --- |
 | groupBy 时的顶层 `rows` 顺序 | 恒 `file.path` 稳定序 | 随分组键变动 | 保字节稳定契约；分组次序在独立的 `groups` 字段里，不丢信息 |
-| `+` 拼接字符串 | 正常拼接（`"a" + "b"` → `"ab"`） | **不拼接**，string+string 也得空 | 官方那里是静默的空（没实现的洞），砍掉纯亏 |
+| `+` 拼接字符串 | 正常拼接（`"a" + "b"` → `"ab"`） | 旧 oracle 曾为空；当前官方语法示例已含拼接，本轮未实跑新版 | 保留能力；旧读数不能外推“官方不拼接”，见局部调研 §2 |
 | 默认数据集 | 只有 `.md` 是行（恒发 `markdown-only-dataset` warning） | `.base` 文件自身也是行 | 差异不静默；要对齐加 `--conformance bases-all-files-2026-07` 即可 |
 
 以下实现已落地，语义仍待官方串行 oracle 校正，校正后可能调整：
 
-date vs datetime 跨精度比较（暂定统一 epoch）；frontmatter wikilink → Link（暂定机制）；types.json 声明冲突口径（暂定行级 warning）；自定义 summary 的 `values` 是否含空值（暂定剔除，**官方计入分母，已决定跟官方但待前置取证**；另一维度「按 limit 后计算」已于 2026-07-29 跟官方落地）。
+date vs datetime 跨精度比较（暂定统一 epoch）；frontmatter wikilink → Link（暂定机制）；types.json 声明冲突口径（暂定行级 warning）。
+
+自定义 summary 的 `values` 已含空值，`.mean()` 计分母；按 limit 后计算（既有 2026-08-03 校正，本轮对应测试通过）。这部分是已校正项，不属于前列待 oracle 项。
+
+**本轮发现的执行缺口**：`file()` / `link.asFile()` 不可由行级支持外推到公式体；公式体未传文件解析器，会产生 warning + null，尚未修复。使用前检查 `diagnostics`，不把退出 0 等同所有 cell 正确；复现及源码位置见[局部调研 §5.2](../research/2026-10-01-dql-bases-compatibility-local-audit.md#52-两个应独立修复的执行缺口)。
 
 逐项状态见[实现状态追踪](../design/bases-status.md)，观察与校正流程见 [oracle 操作手册](../design/bases-oracle-runbook.md)。
 

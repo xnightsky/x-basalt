@@ -1,6 +1,6 @@
 ---
-timestamp: 2026-08-07T00:12:49Z
-sha256: 509e6fcf78b35d2be8c0f8410a368497a4f5cf01df8f905caa9ed310a94fcf19
+timestamp: 2026-09-30T23:48:39Z
+sha256: 779001ac2ea9d7d80b44a0227b9868107e1ac2e9f107572ddf20142bdc339f65
 type: spec
 title: meta 子集冻结 · frontmatter 写侧
 description: meta 命令 frontmatter 写侧 Phase 1-3 子集冻结规格
@@ -67,6 +67,8 @@ opt-in：`--sort-keys` 顶层键字母序排序（可能动空行，默认 OFF�
 | `llm-wiki`             | Google OKF v0.1（Draft 2026-05） | `timestamp`(mtime) / `sha256`(正文hash)            | type(required) / title / description / resource / tags        |
 | `ssg-blog`             | Astro/Hugo/Jekyll 等 SSG         | `pubDate`(birthtime) / `updatedDate`(mtime)        | title(required) / description(required) / draft / tags / slug |
 
+**上游版本边界（2026-09-30）**：当前 `llm-wiki` 仍以 v0.1 为来源，见 [`src/meta/profiles.ts`](../../src/meta/profiles.ts)，不宣称完整实现 OKF v0.2。上游 v0.2 新增来源/验证/生命周期与计算凭证，并在 §13 明示 `timestamp` → `generated.at`、正文 Citations → `sources` 的破坏性替换及旧文档 fallback；见[固定版本 SPEC §12–13](https://github.com/GoogleCloudPlatform/open-knowledge-format/blob/ad30107c31c06aec8a7d5636e0d1058118604e6f/SPEC.md)。本次不迁移 profile 或现有文档；若升级，先确定版本、消费者与迁移口径。字段表达不等于自动知识维护。
+
 `meta apply <profile> <file>` 两层语义：
 
 - **机械预填 = 补缺**：仅当机械字段缺失时按 fs 信息填（日期写 **ISO 字符串**，绝不数值时间戳；birthtime 不可靠回退 mtime；sha256 仅算正文）；已有不动。
@@ -81,7 +83,7 @@ opt-in：`--sort-keys` 顶层键字母序排序（可能动空行，默认 OFF�
 - 用 `yaml`(eemeli) Document API 序列化：保留键顺序；**注释尽力保留**（不保证——`yaml` trailing-comment 已知 bug、排序类操作可能改空白）；需引号的值（如 `[[X]]`）自动加引号产出合法 YAML；关闭折行（`lineWidth:0`）。
 - 无 frontmatter 文件 `set` → 顶部新建 `---…---`，原文整体作正文。
 - **幂等**：同一改动连跑两次，第二次「无变化」、字节稳定。
-- **原子写**：同目录临时文件 + rename；无字节变化不写盘。
+- **原子替换边界**：同目录临时文件 + rename；无字节变化不写盘，避免直接半写目标。当前没有版本前置条件/锁或 fsync，不保证并发防覆盖、跨文件事务或断电持久性；写失败也可能留下临时文件。依据：[`editMeta` / `applyProfile` / `atomicWrite`](../../src/meta/index.ts)。
 - **非法 YAML 防护**：frontmatter 解析有错时，写操作**拒绝执行并 ✗ 报错**、文件不变。
 
 ## 非目标（不做，留后续阶段）
