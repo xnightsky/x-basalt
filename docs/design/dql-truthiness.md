@@ -1,5 +1,5 @@
 ---
-timestamp: 2026-07-01T06:48:10Z
+timestamp: 2026-10-02T08:14:40Z
 type: spec
 title: DQL 真值/存在性语义补正设计（unary `!` + 裸字段真值 → isTruthy）
 description: 把 x-basalt DQL 子集缺失的一元 `!` 与裸字段真值判断补齐为对标官方 Dataview 的 isTruthy 语义，并厘清与 `= null`/`!= null` 的语义分工；含文法/AST/SQL 设计、真相源 rebase 地图与实施/测试计划
@@ -9,13 +9,14 @@ tags:
   - truthy
   - dataview
   - x-basalt
+sha256: 9ddb0051959390863c05e7983855978b840d1502344abf0f15ee9d9db029d73c
 ---
 
 # DQL 真值/存在性语义补正设计（unary `!` + 裸字段真值 → isTruthy）
 
 > 日期：2026-07-01 · 类型：语义补正设计（先于代码）
 > 父冻结规格：[`2026-06-27-dql-subset-frozen.md`](dql-subset.md)（本设计对其 #10 行做修订、并新增 #25/#26）
-> 关联能力对标：[`../research/2026-06-30-feature-gap-vs-dataview-obsidian.md`](../history/research/2026-06-30-feature-gap-vs-dataview-obsidian.md)（本项为该轮 deep-research 的**盲区补录**）
+> 关联能力对标：[`../research/2026-06-30-feature-gap-vs-dataview-obsidian.md`](../archive/research/2026-06-30-feature-gap-vs-dataview-obsidian.md)（本项为该轮 deep-research 的**盲区补录**）
 > 真相源纪律：本设计冻结后，按 §7 rebase 地图同步 `skills-def/biz-dql-subset/SKILL.md` + `skills-data/obsidian-base-spec.json5` + research/architecture/plan/coverage，并 `pnpm run skills:install` 重装。
 
 ## 1. 触发（dogfood 实况）

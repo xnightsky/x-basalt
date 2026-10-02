@@ -6,8 +6,8 @@ tags:
   - plan
   - execution
 status: completed
-timestamp: 2026-10-02T00:54:03Z
-sha256: cf7d63aee34a88c75e360ef9954aa731358c51eadd65afa19839816b28c4df3d
+timestamp: 2026-10-02T08:13:30Z
+sha256: b144320e318d5ffccc9f801d438aac522fa29bf18060ca383d934c82b7d2faff
 ---
 # TODO 顺序清理计划
 
@@ -91,7 +91,7 @@ sha256: cf7d63aee34a88c75e360ef9954aa731358c51eadd65afa19839816b28c4df3d
 ### 8. Bases grounding 计划状态核对
 
 - [x] 对照 bases skill、SYSTEM_PROMPT、trace normalizeError、对应回归和已构建 base --help；当前测试已覆盖改动，独立断言取源/分页通过。历史最终汇总的 39/39 与原 A/B 分开核对，不混分母，也不遗漏 1 次非 base query 错误。
-- [x] [旧计划](../history/plans/2026-08-08-bases-chat-grounding.md)按原 Progress 同步历史 checklist，标 completed 并归档；归档三问与未定位历史 raw JSON 的证据缺口显式留档，相关研究/归档索引链接同步。归档不是重新认证历史分数。
+- [x] [旧计划](../archive/plans/2026-08-08-bases-chat-grounding.md)按原 Progress 同步历史 checklist，标 completed 并归档；归档三问与未定位历史 raw JSON 的证据缺口显式留档，相关研究/归档索引链接同步。归档不是重新认证历史分数。
 - 状态校准：本轮八项包含调查、评估与归档；completed 仅表示这些执行项结束，不表示模型问题或长期功能全做完。根 TODO 保留未完成项，本计划保留已完成记录及证据边界。此前删除根 TODO 的操作已撤销。
 
 ## 未完成事项入口

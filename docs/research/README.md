@@ -6,8 +6,8 @@ tags:
   - research
   - docs
   - x-basalt
-timestamp: 2026-10-01T17:18:13Z
-sha256: 6a24e412aee4231d6d1c66fe3439cae8bd82f3a38e8a865ab55debe90209a6bd
+timestamp: 2026-10-02T08:13:30Z
+sha256: df63ba79a82d491fdf4171aad350878cfe9e2e10c72a3ffe5b4c2f11d695911e
 ---
 # 当前调研
 
@@ -33,6 +33,6 @@ sha256: 6a24e412aee4231d6d1c66fe3439cae8bd82f3a38e8a865ab55debe90209a6bd
 | 外部资料、现状核查、能力差距与尚待判断的问题 | `research/` |
 | 已确认的模块职责、行为契约和实现决定 | [`../design/`](../design/README.md) |
 | 可供用户执行的命令、示例和故障处理 | [`../use/`](../use/README.md) |
-| 已被新结论取代的调研、决策与执行计划 | [`../history/`](../history/README.md) |
+| 已被新结论取代的调研、决策与执行计划 | [`../archive/`](../archive/README.md) |
 
 调研结论若变成需要长期遵守的实现规则，应在 `design/` 落下对应设计，而不是用调研文档替代设计。

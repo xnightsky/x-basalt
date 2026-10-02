@@ -8,15 +8,15 @@ tags:
   - semantic
   - retrieval
   - x-basalt
-timestamp: 2026-10-01T13:41:15Z
-sha256: 92f8cc3c0b12f512627a6fbad82ca33e1e4dc64bf2550818548b658318875d57
+timestamp: 2026-10-02T08:14:40Z
+sha256: 068fb5fdb716147739b00147130b120f30a97bd116c4b29739058f693b449945
 ---
 # 全文与语义检索：当前实现、组合评估与能力边界
 
 > 初始评估：2026-06-28；证据更新：2026-09-30。
 > 当前 FTS5 已落地；embedding/混合检索仍是待评估方案，不是开工或兼容承诺。
 > 当前实现以 [`src/indexer/index.ts`](../../src/indexer/index.ts)、[`src/query/index.ts`](../../src/query/index.ts) 和 [`tests/fts.test.ts`](../../tests/fts.test.ts) 为准；行业证据与待执行实验见[最新调研](../research/2026-09-30-agent-knowledge-industry-landscape.md)。
-> 原分层、候选接口/存储、QMD 取舍与工作量评估完整保留在[2026-06-28 历史快照](../history/decisions/2026-06-28-semantic-retrieval-integration.md)；本文更新当前事实与明确边界，不以删去旧方案代替决策。
+> 原分层、候选接口/存储、QMD 取舍与工作量评估完整保留在[2026-06-28 历史快照](../archive/decisions/2026-06-28-semantic-retrieval-integration.md)；本文更新当前事实与明确边界，不以删去旧方案代替决策。
 
 ## 1. 结论与定位
 
@@ -156,7 +156,7 @@ chat 与外部 Agent 都是调用方；不将 query expansion、重排或一般�
 
 ## 8. 信源
 
-- **[H1] 原评估历史快照**：[2026-06-28 语义/全文检索融入设计评估](../history/decisions/2026-06-28-semantic-retrieval-integration.md)：完整保留原分层图、接口/存储、QMD 取舍、风险/非目标与工作量；不作为当前功能或效果证明。
+- **[H1] 原评估历史快照**：[2026-06-28 语义/全文检索融入设计评估](../archive/decisions/2026-06-28-semantic-retrieval-integration.md)：完整保留原分层图、接口/存储、QMD 取舍、风险/非目标与工作量；不作为当前功能或效果证明。
 - **[P1] 当前源码与边界测试**：[`src/indexer/index.ts`](../../src/indexer/index.ts)、[`src/query/index.ts`](../../src/query/index.ts)、[`tests/fts.test.ts`](../../tests/fts.test.ts)。
 - **[P2] 当前调用契约**：[命令参考 search](../use/commands.md#search--全文检索正文)。
 - **[P3] 当前 chat 工具面**：[`src/chat/tools.ts`](../../src/chat/tools.ts)、[`src/chat/cli-tool.ts`](../../src/chat/cli-tool.ts)、[工具面设计](chat-tool-surface.md)。

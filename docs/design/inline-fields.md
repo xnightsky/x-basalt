@@ -10,16 +10,16 @@ tags:
   - indexer
   - query
   - x-basalt
-timestamp: 2026-08-07T00:12:49Z
-sha256: 4dff97724be2e3268396da4f16731a5435cd3548cafb752b5c8c203061290bf0
+timestamp: 2026-10-02T08:14:40Z
+sha256: 99932088c7af8acd7f415f1382128678c7815b6f08eb27c23ca861cd83b3cdc0
 ---
 # inline fields（`key:: value`）设计规格：三形态文法 · `inline_fields` 数据模型 · 字段解析语义
 
 > 日期：2026-07-02 · 类型：数据模型 + DQL 子集边界设计（先于代码）
 > 状态：**已冻结（2026-07-02 拍板：D1–D5 均取推荐默认）**。
 > 父冻结规格：[`2026-06-27-dql-subset-frozen.md`](dql-subset.md)（本 spec 冻结后新增条目 #28）。
-> 关联调研：[`../research/2026-06-30-feature-gap-vs-dataview-obsidian.md`](../history/research/2026-06-30-feature-gap-vs-dataview-obsidian.md) §A（deep-research 3-0 确认「元数据采集层最关键缺口」）。
-> 实现计划（分阶段切口 + 验收）：[`../plans/2026-07-02-inline-fields.md`](../history/plans/2026-07-02-inline-fields.md)。边界分工：**是什么/为什么/决定什么/规范化产物在本 spec；怎么做/改哪些文件/验收在 plan**——与 [`2026-07-01-dql-truthiness-existence-design.md`](dql-truthiness.md)「先 spec 后实现」先例一致。
+> 关联调研：[`../research/2026-06-30-feature-gap-vs-dataview-obsidian.md`](../archive/research/2026-06-30-feature-gap-vs-dataview-obsidian.md) §A（deep-research 3-0 确认「元数据采集层最关键缺口」）。
+> 实现计划（分阶段切口 + 验收）：[`../plans/2026-07-02-inline-fields.md`](../archive/plans/2026-07-02-inline-fields.md)。边界分工：**是什么/为什么/决定什么/规范化产物在本 spec；怎么做/改哪些文件/验收在 plan**——与 [`2026-07-01-dql-truthiness-existence-design.md`](dql-truthiness.md)「先 spec 后实现」先例一致。
 
 ## 1. inline fields 是什么（背景与动机）
 

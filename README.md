@@ -51,7 +51,7 @@ x-basalt skills get obsidian-base-spec                      # 召回语法规范
 
 外部 AI 先用 `x-basalt skills get summary` 发现能力，默认直接调用 CLI；用户明确要求委托时再取 `skills get chat`。自然语言任务本身不等于委托。入口策略见 [与 AI 协作](./docs/use/ai-and-skills.md)。
 
-想知道内部怎么设计的 → **[`docs/design/`](./docs/design/README.md)**；想查历史决策 → **[`docs/history/`](./docs/history/README.md)**。
+想知道内部怎么设计的 → **[`docs/design/`](./docs/design/README.md)**；想查归档计划、调研与决策 → **[`docs/archive/`](./docs/archive/README.md)**。
 
 核对同类工具、检索/宿主/知识维护的适配性 → [业界调研与信源](./docs/research/2026-09-30-agent-knowledge-industry-landscape.md)。独立无头运行是部署边界，不是独有能力或效果优越性的证明。
 

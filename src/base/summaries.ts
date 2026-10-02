@@ -14,7 +14,7 @@
  *
  * 上游：planner.ts（名字集合核验）/ engine.ts（求值接线）。
  * 设计真相源：docs/design/bases-engine.md §13；
- * 计划：docs/history/plans/2026-07-27-bases-p2b-types-list-group-summary.md 片三 #10。
+ * 计划：docs/archive/plans/2026-07-27-bases-p2b-types-list-group-summary.md 片三 #10。
  */
 
 import { MISSING, createDurationValue, isDateValue, typedEqual, type BaseValue } from "./values.js";

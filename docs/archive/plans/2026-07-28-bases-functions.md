@@ -8,8 +8,8 @@ tags:
   - bases
   - functions
   - x-basalt
-timestamp: 2026-08-06T23:58:46Z
-sha256: 8bb5b0fb0135960f29d6b29d0ccc7b6331dc16d523da51802d56c2e4b0c44af7
+timestamp: 2026-10-02T08:13:30Z
+sha256: 33e1f7cee3f7d7c0715429fc5b8deddcfbc3eda0388560fe60a06dd75ed623b3
 ---
 # 计划：Bases 函数覆盖率（51% → ~90%）
 
@@ -98,7 +98,7 @@ sha256: 8bb5b0fb0135960f29d6b29d0ccc7b6331dc16d523da51802d56c2e4b0c44af7
 3. 更新 `docs/use/bases.md` §3.6 函数全表；
 4. 提交在 **main 分支**，提交信息不带任何小尾巴。
 
-全部做完后本文件 `git mv` 进 `docs/history/plans/`，frontmatter `status` 改 `done`。
+全部做完后本文件 `git mv` 进 `docs/archive/plans/`，frontmatter `status` 改 `done`。
 
 ## Evidence
 

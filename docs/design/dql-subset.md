@@ -1,6 +1,6 @@
 ---
-timestamp: 2026-10-01T18:03:48Z
-sha256: 09d172c908e53a3f1417ba2d20bec1af3a83b161f49a94e576ec5bfead1ccb75
+timestamp: 2026-10-02T08:14:40Z
+sha256: 368a0f1cb09e02e559f459a41329d98c270b30c3cc5dfe7d7f6fc5903a7c4c93
 type: spec
 title: 扩展后 DQL 目标子集冻结（S2.2a）
 description: x-basalt 支持的 DQL 子集文法冻结规格
@@ -12,8 +12,8 @@ tags:
 # 扩展后 DQL 目标子集冻结（S2.2a）
 
 > 日期：2026-06-27 · 类型：子集边界冻结（S2.2a 产出，先于代码）
-> 父计划：[`../plans/2026-06-26-dql-kernel-steps.md`](../history/plans/2026-06-26-dql-kernel-steps.md) S2.2a/S2.2b
-> 工具决策：[`2026-06-27-dql-grammar-tool-decision.md`](../history/decisions/2026-06-27-dql-grammar-tool-decision.md)（chevrotain）
+> 父计划：[`../plans/2026-06-26-dql-kernel-steps.md`](../archive/plans/2026-06-26-dql-kernel-steps.md) S2.2a/S2.2b
+> 工具决策：[`2026-06-27-dql-grammar-tool-decision.md`](../archive/decisions/2026-06-27-dql-grammar-tool-decision.md)（chevrotain）
 > 真相源：本表冻结后由 **S2.2b** 同步写入 `skills-def/dev/biz-dql-subset/SKILL.md` + research §3，并对齐 `tests/query.test.ts` 断言。
 
 ## 决策来源
@@ -100,9 +100,9 @@ TASK GROUP BY/FLATTEN、TASK 的 completed/task.* 排序、`FROM` and/or 多源�
 
 > **2026-07-01 修订**：一元 `!` 与裸字段真值（`isTruthy`）此前被遗漏（既非纳入亦未列非目标），现补入为 #25/#26；`= null`/`!= null`（#10）重定位为显式 null 比较。完整设计见 [`2026-07-01-dql-truthiness-existence-design.md`](dql-truthiness.md)。
 >
-> **2026-07-02 修订**：`file.frontmatter` 此前不在隐式字段清单、查询即报「不支持的查询字段」，现补入为 #27（顶层键存在性 + 选列）。完整设计见 [`2026-07-01-dql-truthiness-existence-design.md`](dql-truthiness.md) §11、[`2026-07-02-deterministic-eval-gaps.md`](../history/plans/2026-07-02-deterministic-eval-gaps.md)。
+> **2026-07-02 修订**：`file.frontmatter` 此前不在隐式字段清单、查询即报「不支持的查询字段」，现补入为 #27（顶层键存在性 + 选列）。完整设计见 [`2026-07-01-dql-truthiness-existence-design.md`](dql-truthiness.md) §11、[`2026-07-02-deterministic-eval-gaps.md`](../archive/plans/2026-07-02-deterministic-eval-gaps.md)。
 >
-> **2026-07-02 修订（#28）**：新增 inline fields（`key:: value`）解析/索引/查询三层落地，与 frontmatter 合并为同一字段命名空间（feature-gap 调研列为「元数据采集层最关键缺口」）。设计与 D1–D5 决策见 [`2026-07-02-inline-fields-design.md`](inline-fields.md)，实现计划 [`../plans/2026-07-02-inline-fields.md`](../history/plans/2026-07-02-inline-fields.md)。
+> **2026-07-02 修订（#28）**：新增 inline fields（`key:: value`）解析/索引/查询三层落地，与 frontmatter 合并为同一字段命名空间（feature-gap 调研列为「元数据采集层最关键缺口」）。设计与 D1–D5 决策见 [`2026-07-02-inline-fields-design.md`](inline-fields.md)，实现计划 [`../plans/2026-07-02-inline-fields.md`](../archive/plans/2026-07-02-inline-fields.md)。
 
 ## S2.2b 衔接（防分叉纪律）
 

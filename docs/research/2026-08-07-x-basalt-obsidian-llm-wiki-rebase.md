@@ -8,8 +8,8 @@ tags:
   - obsidian
   - llm-wiki
   - compatibility
-timestamp: 2026-08-07T00:02:37Z
-sha256: 61040ea75942ebdc68748eb459d7c48466d3403db3423abc9dff54ecf26a8b6b
+timestamp: 2026-10-02T08:13:30Z
+sha256: 6c370165861ff8fda3ed249df989410728fbff8c506f787bf5baf22496373e8e
 ---
 # x-basalt、Obsidian 与 LLM Wiki：能力差距与边界 rebase
 
@@ -17,7 +17,7 @@ sha256: 61040ea75942ebdc68748eb459d7c48466d3403db3423abc9dff54ecf26a8b6b
 >
 > 文档边界：本文是外部能力对照与仓库现状核查，**不是**实现设计、路线图或兼容承诺；当前实现仍以 `src/`、`docs/design/` 与测试为准。
 >
-> rebase 基线：[`2026-06-30-feature-gap-vs-dataview-obsidian.md`](../history/research/2026-06-30-feature-gap-vs-dataview-obsidian.md)。旧文保留当时证据与判断；本文按当前代码、当前设计状态和官方一手资料重新排布结论，并把 LLM Wiki 纳入同一比较框架。
+> rebase 基线：[`2026-06-30-feature-gap-vs-dataview-obsidian.md`](../archive/research/2026-06-30-feature-gap-vs-dataview-obsidian.md)。旧文保留当时证据与判断；本文按当前代码、当前设计状态和官方一手资料重新排布结论，并把 LLM Wiki 纳入同一比较框架。
 
 ## 0. 一句话结论
 
@@ -190,7 +190,7 @@ Karpathy 的原始模式要求 LLM 把新资料整合进一个持续更新的知
 
 - `src/indexer/schema.ts`：当前 SQLite 保存的表与“结构事实、非语义综合”的界线。
 - `docs/use/obsidian-syntax.md`、`docs/design/dql-subset.md`、`docs/design/bases-status.md`、`docs/design/meta-subset.md`、`docs/use/chat.md`：当前已支持能力、已知近似与明确不做。
-- 旧基线：[`2026-06-30-feature-gap-vs-dataview-obsidian.md`](../history/research/2026-06-30-feature-gap-vs-dataview-obsidian.md)。
+- 旧基线：[`2026-06-30-feature-gap-vs-dataview-obsidian.md`](../archive/research/2026-06-30-feature-gap-vs-dataview-obsidian.md)。
 
 ### 限制
 

@@ -1,6 +1,6 @@
 ---
-timestamp: 2026-08-07T00:12:49Z
-sha256: b93fb594ab5a2574d9971e152c6aa2be90408e4bda433d8f1f386d5f0603d2d1
+timestamp: 2026-10-02T08:14:40Z
+sha256: 621651a190bfea6a8922144268f5b597aaf495a74069b04ec351eafcdb8c3ac4
 type: guide
 title: 指南：第三方库许可证与选型避坑
 description: 引入第三方库前的许可证白名单与选型检查清单
@@ -14,7 +14,7 @@ tags:
 
 > 日期：2026-06-26 · 类型：操作指南（选库时召回）
 > 用途：每次引入第三方库前的**许可证避坑依据**。先过这份清单，再决定能不能 `import`。
-> 关联：依赖决策 [`../specs/2026-06-26-deps-build-vs-buy.md`](../history/decisions/2026-06-26-deps-build-vs-buy.md)、库普查 [`../research/2026-06-26-libraries-survey.md`](../research/2026-06-26-libraries-survey.md)
+> 关联：依赖决策 [`../specs/2026-06-26-deps-build-vs-buy.md`](../archive/decisions/2026-06-26-deps-build-vs-buy.md)、库普查 [`../research/2026-06-26-libraries-survey.md`](../research/2026-06-26-libraries-survey.md)
 > 免责：以下为工程惯例理解，非正式法律意见；关键依赖如需商用分发，以正式法律意见为准。
 
 ## 0. 一句话结论
@@ -56,7 +56,7 @@ GPL-3.0 这类 copyleft 的核心机制一句话：**义务由「分发」触发
 2. **license 字段缺失 / "UNLICENSED" / 自定义**：一律 ❌，除非 repo LICENSE 明确是宽松证且有把握。
 3. **看传递依赖**：该库自己的依赖里有没有 GPL/AGPL（传染会穿透依赖链）。可用 `npm ls` / `pnpm licenses list` 或 `license-checker` 类工具扫。
 4. **拿不准就不 `import`**：可改为子进程 CLI 调用（独立程序边界），或自建，或换宽松证替代。
-5. **记录**：选用/否决的许可证理由写进 [`../specs/2026-06-26-deps-build-vs-buy.md`](../history/decisions/2026-06-26-deps-build-vs-buy.md) 的依赖矩阵。
+5. **记录**：选用/否决的许可证理由写进 [`../specs/2026-06-26-deps-build-vs-buy.md`](../archive/decisions/2026-06-26-deps-build-vs-buy.md) 的依赖矩阵。
 
 ## 5. 本项目已命中的具体案例
 

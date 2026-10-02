@@ -7,8 +7,8 @@ tags:
   - bases
   - testing
   - x-basalt
-timestamp: 2026-10-01T17:33:08Z
-sha256: 5495db89aaa7999336d5c3315218437c1b2cef3d0a157ec9ed56d4d3b0f67626
+timestamp: 2026-10-02T08:15:23Z
+sha256: c2a9c0d750f1e653b3b4c9b4eb7c7c4d38d86bc4b580b67ddcc874973166049d
 ---
 # Bases 实现状态追踪
 
@@ -26,14 +26,14 @@ sha256: 5495db89aaa7999336d5c3315218437c1b2cef3d0a157ec9ed56d4d3b0f67626
 
 | 阶段 | 内容 | 状态 |
 | ---- | ---- | ---- |
-| P0 | document / schema / diagnostic | ✅ 2026-07-26（[计划](../history/plans/2026-07-26-bases-p0-document-schema.md)） |
-| P1 | Markdown query vertical slice（独立 AST/evaluator） | ✅ 2026-07-26（[计划](../history/plans/2026-07-26-bases-p1-markdown-query.md)） |
+| P0 | document / schema / diagnostic | ✅ 2026-07-26（[计划](../archive/plans/2026-07-26-bases-p0-document-schema.md)） |
+| P1 | Markdown query vertical slice（独立 AST/evaluator） | ✅ 2026-07-26（[计划](../archive/plans/2026-07-26-bases-p1-markdown-query.md)） |
 | P1 oracle | 官方差分（争议语义冻结） | ✅ 2026-07-28 **取证完成**（Obsidian 1.12.7，26 view 全部两次一致，19 一致 / 7 分歧）；**校正第一批（①②④）✅ 已落地**，⑦⑧ 后续校正已落地、部分超集保留 boundary，当前取舍见 [vs-official §5](bases-vs-official.md)。同日上午的「⏸ 暂缓」决策已被推翻，理由见 runbook §0.1 |
-| P2a | formulas 核心（typed values + 算术 + 依赖图/cycle + clock） | ✅ 2026-07-27（[计划](../history/plans/2026-07-27-bases-p2a-formulas.md)） |
-| P2b | types.json / list 高阶 / groupBy / summaries | ✅ 2026-07-27（[计划](../history/plans/2026-07-27-bases-p2b-types-list-group-summary.md)） |
-| P3 | all-files / context / 嵌入 | 🔀 P3a 附件数据集 ✅ 2026-07-27（[计划](../history/plans/2026-07-27-bases-p3-attachments.md)）；context ✅ 2026-07-28（覆盖率片六 CTX-001）；嵌入形态 ❌ 不做 + 诊断（CTX-002/003） |
-| review 修复 | P0..P2b 收口后的评审修复（静默失败 + 资源模型） | ✅ 2026-07-27（[计划](../history/plans/2026-07-27-bases-code-review-fixes.md)） |
-| 函数覆盖率 | 叶子函数补齐（六片） | ✅ 2026-07-28 六片全部落地（[计划](../history/plans/2026-07-28-bases-functions.md)）：注册表条目 **35 → 68**，其中 63 条可执行、5 条为白名单内显式拒绝（4 渲染类 + `random`）。四门全绿（test **880**，基线 820） |
+| P2a | formulas 核心（typed values + 算术 + 依赖图/cycle + clock） | ✅ 2026-07-27（[计划](../archive/plans/2026-07-27-bases-p2a-formulas.md)） |
+| P2b | types.json / list 高阶 / groupBy / summaries | ✅ 2026-07-27（[计划](../archive/plans/2026-07-27-bases-p2b-types-list-group-summary.md)） |
+| P3 | all-files / context / 嵌入 | 🔀 P3a 附件数据集 ✅ 2026-07-27（[计划](../archive/plans/2026-07-27-bases-p3-attachments.md)）；context ✅ 2026-07-28（覆盖率片六 CTX-001）；嵌入形态 ❌ 不做 + 诊断（CTX-002/003） |
+| review 修复 | P0..P2b 收口后的评审修复（静默失败 + 资源模型） | ✅ 2026-07-27（[计划](../archive/plans/2026-07-27-bases-code-review-fixes.md)） |
+| 函数覆盖率 | 叶子函数补齐（六片） | ✅ 2026-07-28 六片全部落地（[计划](../archive/plans/2026-07-28-bases-functions.md)）：注册表条目 **35 → 68**，其中 63 条可执行、5 条为白名单内显式拒绝（4 渲染类 + `random`）。四门全绿（test **880**，基线 820） |
 
 ## 1. 文档层（P0）✅ 2026-07-26
 
@@ -55,7 +55,7 @@ sha256: 5495db89aaa7999336d5c3315218437c1b2cef3d0a157ec9ed56d4d3b0f67626
 
 ## 2. 查询主路径（P1）✅ 2026-07-26
 
-> 计划：[`../plans/2026-07-26-bases-p1-markdown-query.md`](../history/plans/2026-07-26-bases-p1-markdown-query.md)。测试追溯：文法层 `tests/base-expression.test.ts`、求值层 `tests/base-evaluator.test.ts`、端到端 `tests/base-engine.test.ts`，用例注释均标场景编号。
+> 计划：[`../plans/2026-07-26-bases-p1-markdown-query.md`](../archive/plans/2026-07-26-bases-p1-markdown-query.md)。测试追溯：文法层 `tests/base-expression.test.ts`、求值层 `tests/base-evaluator.test.ts`、端到端 `tests/base-engine.test.ts`，用例注释均标场景编号。
 
 | 项 | 场景编号 | 状态 |
 | ---- | ---- | ---- |
@@ -83,7 +83,7 @@ sha256: 5495db89aaa7999336d5c3315218437c1b2cef3d0a157ec9ed56d4d3b0f67626
 | 恶意属性名入 JSON path/SQL | BASE-SEC-009 | ✅ 2026-07-26（属性名不进 SQL，own-property 白名单） |
 | 结果字节稳定（同 DB+Base+clock 重跑） | 矩阵 §9 P1 门 | ✅ 2026-07-26（两次 `JSON.stringify(query())` 全等专项用例） |
 | 1/100/10,000 篇基准（只记录不承诺） | 矩阵 §9 P1 门 | ✅ 2026-07-26（query 11ms/4ms/68ms，数值见计划「验证结论」，无需 SQL 下推） |
-| CLI 薄出口（`base` 命令）+ guides 补 Bases 章节 | 设计 §15（API 先于 CLI） | ✅ 2026-07-27（[计划](../history/plans/2026-07-27-bases-cli-export.md)；`x-basalt base` + `guides/querying-bases.md`，tests/base-cli.test.ts 7 用例） |
+| CLI 薄出口（`base` 命令）+ guides 补 Bases 章节 | 设计 §15（API 先于 CLI） | ✅ 2026-07-27（[计划](../archive/plans/2026-07-27-bases-cli-export.md)；`x-basalt base` + `guides/querying-bases.md`，tests/base-cli.test.ts 7 用例） |
 
 ## 3. P1 前置 oracle ✅ 取证完成 / 第一二批校正 ✅ 已落地（round-2 判定已出）
 
@@ -121,7 +121,7 @@ sha256: 5495db89aaa7999336d5c3315218437c1b2cef3d0a157ec9ed56d4d3b0f67626
 
 ## 4. P2 typed formulas / group / summary（P2a ✅ / P2b ✅ 2026-07-27）
 
-> P2a 计划：[`../plans/2026-07-27-bases-p2a-formulas.md`](../history/plans/2026-07-27-bases-p2a-formulas.md)；P2b 计划：[`../plans/2026-07-27-bases-p2b-types-list-group-summary.md`](../history/plans/2026-07-27-bases-p2b-types-list-group-summary.md)。
+> P2a 计划：[`../plans/2026-07-27-bases-p2a-formulas.md`](../archive/plans/2026-07-27-bases-p2a-formulas.md)；P2b 计划：[`../plans/2026-07-27-bases-p2b-types-list-group-summary.md`](../archive/plans/2026-07-27-bases-p2b-types-list-group-summary.md)。
 > 测试：`tests/base-formula.test.ts`、`tests/base-values-date.test.ts`（P2a）；`tests/base-list-hof.test.ts`、`tests/base-typeschema.test.ts`、`tests/base-group-summary.test.ts`（P2b）。
 
 | 项 | 场景编号 | 状态 |
@@ -145,7 +145,7 @@ sha256: 5495db89aaa7999336d5c3315218437c1b2cef3d0a157ec9ed56d4d3b0f67626
 
 | 项 | 场景编号 | 状态 |
 | ---- | ---- | ---- |
-| 附件作为行（图片/PDF/Canvas/.base） | BASE-ALL-001 | ✅ 2026-07-27（[P3a 计划](../history/plans/2026-07-27-bases-p3-attachments.md)：独立 `vault_entries` 表 + indexer 六条写入路径 + all-files 数据源 + CLI `--conformance`；「DQL 不变」证明 11①③④ 与跨表 path 唯一性 12 全部落成测试） |
+| 附件作为行（图片/PDF/Canvas/.base） | BASE-ALL-001 | ✅ 2026-07-27（[P3a 计划](../archive/plans/2026-07-27-bases-p3-attachments.md)：独立 `vault_entries` 表 + indexer 六条写入路径 + all-files 数据源 + CLI `--conformance`；「DQL 不变」证明 11①③④ 与跨表 path 唯一性 12 全部落成测试） |
 | 附件 links/backlinks/embeds | BASE-ALL-002 | ✅ 2026-07-27（P3a 满足线：附件行出链恒 `[]`、不伪造内容链接；附件作为链接 target 的命中关系可查询（笔记行 `file.links` 含原始 target，embed `![[img.png]]` 计入 links 表 is_embed=1）——暂定口径待 oracle） |
 | 独立 `.base` 的 `this`（显式 contextFile） | BASE-CTX-001 | ✅ 2026-07-28（覆盖率片六；`this.file.*` / `this.<属性>` / 裸 `this`，公式体内可用；解析口径同 `file(path)`；给了却解析不到 → error + 空结果） |
 | Markdown `base` code block | BASE-CTX-002 | ❌ 不做（用户 2026-07-28 拍板）+ ✅ 诊断已落地：入口形态检查（**读文件之前**按路径形态判定，避免被 YAML 解析失败掩盖）报 `base/unsupported-feature`，消息含替代写法「把查询定义单独存成 .base 文件」 |
@@ -153,7 +153,7 @@ sha256: 5495db89aaa7999336d5c3315218437c1b2cef3d0a157ec9ed56d4d3b0f67626
 | sidebar/active-file 语义（禁环境隐式状态） | BASE-CTX-004 | ❌ 不做（同上）+ ✅ 由「不给 `contextFile` 即报 `base/dynamic-context-required`」覆盖——隐式环境状态不可重复、不可测，一律不猜 |
 | 插件 view/function | BASE-PLUGIN-001 | ⏸ 默认拒绝；显式注册纯函数扩展需真实需求再议 |
 
-## 6. 函数覆盖率补齐 ✅ 2026-07-28（六片全部落地，[计划](../history/plans/2026-07-28-bases-functions.md)）
+## 6. 函数覆盖率补齐 ✅ 2026-07-28（六片全部落地，[计划](../archive/plans/2026-07-28-bases-functions.md)）
 
 > 缺口全在**叶子函数**：注册表 / 名字真相源 / 运行时分派三处骨架已成型，补函数 = 扩表 + 扩分派组 + 补用例。
 > 每片完成后本表翻标（日期 + 测试文件）。

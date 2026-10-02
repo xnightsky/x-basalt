@@ -1,19 +1,19 @@
 ---
 type: guide
-title: 归档标准 —— 什么情况下 spec 应移入 archived/
-description: 定义 docs/specs/archived/ 的准入标准和维护规范
+title: 归档标准 —— 什么情况下设计应移入 archive/decisions/
+description: 定义 docs/archive/decisions/ 的准入标准和维护规范
 tags:
   - spec
   - meta
   - x-basalt
-timestamp: 2026-10-01T01:58:49Z
-sha256: e8ebf086ab56d23780caef0b7a309818566f71b9d2dc830329920ed4aebd20f6
+timestamp: 2026-10-02T08:11:40Z
+sha256: 4d34d27220ca2832981382c61db6ee8628f64713a77f2850f871029ccc445601
 ---
 
-# 归档标准（specs）
+# 归档标准（设计与决策）
 
-> 归档 = 从 `docs/specs/` 移入 `docs/specs/archived/`。**不是删除**。
-> 目的是让 `docs/specs/` 保持可用的设计参考，archive 作为历史决策的"可查集"。
+> 归档 = 从 `docs/design/` 移入 `docs/archive/decisions/`。**不是删除**。
+> 目的是让 `docs/design/` 保持当前设计参考，集中归档保留原决策与证据。
 
 ## 归档条件（满足任一即可）
 
@@ -26,7 +26,7 @@ sha256: e8ebf086ab56d23780caef0b7a309818566f71b9d2dc830329920ed4aebd20f6
 
 - 真相源 / 冻结规范（`dql-subset-frozen`、`meta-subset-frozen` 等）
 - 活跃功能的当前设计文档
-- 一次性但仍有参考价值的决策记录（按需——可存 archived 也可留原位，标注 `status: decision`）
+- 一次性但仍有参考价值的决策记录（按需——可存 `docs/archive/decisions/` 也可留原位，标注 `status: decision`）
 
 ## 索引
 

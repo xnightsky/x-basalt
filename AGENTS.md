@@ -67,7 +67,7 @@ src/cli.ts    commander 入口
 skills-data/   产品运行时 Skill 数据（SkillRecall 加载，含 obsidian-base-spec.json5）
 skills-def/   开发期 AI 召回 skill 源码：cli/（消费侧入口，装宿主全局）+ dev/（biz-* 开发侧，装本仓）（见「Skills 真相源」）
 tests/        Node 原生测试 + fixtures/sample-vault
-docs/         research / specs / plans / guides / architecture / testing（见 docs/README.md）
+docs/         use / research / design / plans / archive（归档集中管理，见 docs/README.md）
 ```
 
 ## 常用命令

@@ -25,7 +25,7 @@
  * 上游：src/base/document.ts（selectView）、src/base/parser.ts（parseBaseExpression）。
  * 下游：P1 engine.ts 消费计划做 filter/sort/投影求值。
  * 设计真相源：docs/design/bases-engine.md §5/§6/§11；
- * 计划：docs/history/plans/2026-07-26-bases-p1-markdown-query.md「关键取舍」#2。
+ * 计划：docs/archive/plans/2026-07-26-bases-p1-markdown-query.md「关键取舍」#2。
  */
 
 import type { BasaltDiagnostic } from "../diagnostic.js";

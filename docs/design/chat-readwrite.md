@@ -8,14 +8,14 @@ tags:
   - ai
   - design
   - x-basalt
-timestamp: 2026-09-30T23:58:24Z
-sha256: 7e312bfc3257945f5b40f047ef38690fa20d3976621764565ceaf94fd02700b8
+timestamp: 2026-10-02T08:14:40Z
+sha256: ca5dc7db4ed1ec348976677c2d801f9141f7807fa04e737648fde6fae3f1ac2d
 ---
 
 # 设计：CLI chat（读+写，自然语言驱动 vault）—— 可落地实现设计
 
 > 初版设计：2026-06-30；当前工具面已由[单 CLI 工具设计](chat-tool-surface.md)及 [`src/chat/tools.ts`](../../src/chat/tools.ts) 取代。下文初版工具表/交接段保留设计背景，不作为当前工具清单。2026-09-30 复核写安全边界。
-> 父文档（先读）：评估 [`2026-06-28-cli-chat-design.md`](../history/decisions/2026-06-28-cli-chat-design.md)——本文是它触发条件成熟后的「怎么建」。
+> 父文档（先读）：评估 [`2026-06-28-cli-chat-design.md`](../archive/decisions/2026-06-28-cli-chat-design.md)——本文是它触发条件成熟后的「怎么建」。
 > 关联：编排器 [`2026-06-29-change-orchestration-design.md`](change-orchestration.md)（写动作批量地基）；检索后端 [`2026-06-28-semantic-retrieval-integration.md`](semantic-retrieval.md)（FTS5，本轮推后）；许可证闸 [`../guides/dependency-license-policy.md`](dependency-license-policy.md)；AI/技能定位 [`../guides/ai-and-skills.md`](../use/ai-and-skills.md)。
 > 决策摘要：AI 客户端选 **Vercel `ai` SDK**（与 `AI_GATEWAY_*` 契约原生一致）；写动作**直接执行**（用户主动进入 chat = 知情同意，无确认闸；以 Ctrl+C/SIGINT 中断模型/循环、以原子替换避免直接半写目标；不保证撤销已启动或完成的写入）；范围 = 读+写（含编排器一次性批量），仅排除常驻 watch。
 > **设计变更（2026-06-30，用户拍板推翻原方案）**：原 §6/§7 的「写动作逐动作确认 [y/N]」是设计缺陷——用户既然主动开 chat，逐个确认是多余摩擦。改为写动作直接落盘；终止能力靠 **Ctrl+C/SIGINT → AbortController** 中断在途模型调用与循环，既有临时文件 + rename 避免直接半写目标，但不保证并发防覆盖、断电持久性或中断回滚（[`src/meta/index.ts`](../../src/meta/index.ts)）。`confirm.ts` 删除。下文 §5/§6/§7/§11 已据此更新。

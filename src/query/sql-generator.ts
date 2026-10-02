@@ -106,7 +106,7 @@ const INLINK_MATCH =
  * 无 `---` 与空 `---\n---` 都归一存字面 `'{}'`（索引层已丢失二者区别，见 parser/frontmatter.ts）。
  * 「有/无 frontmatter」在此 schema 下只能定义为「有/无任意顶层键」，故用 json_each 计数子查询
  * 兜底表达 `file.frontmatter` 的存在性（对治场景库 messy/no-index-count 坐实的缺口：
- * DQL 曾无法表达"完全没有 frontmatter"，见 docs/history/plans/2026-07-02-deterministic-eval-gaps.md）。
+ * DQL 曾无法表达"完全没有 frontmatter"，见 docs/archive/plans/2026-07-02-deterministic-eval-gaps.md）。
  */
 const FM_KEY_COUNT = "(SELECT COUNT(*) FROM json_each(f.frontmatter))";
 

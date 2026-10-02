@@ -8,14 +8,14 @@ tags:
   - trace
   - cli
   - x-basalt
-timestamp: 2026-07-02T07:40:56Z
-sha256: e9b36585bc6c4da7ee37af8a6c5e3d6f7a19f942ed75e64faee0a262076c88a1
+timestamp: 2026-10-02T08:14:40Z
+sha256: b8ff9537fb78822dadbda971e0ba2ea00005e0f16cbdd2756632665599d32d6a
 ---
 # chat `--trace` 落盘机制设计：给 `LoopEvent` 流加一个零干扰的 JSONL sink
 
 > 日期：2026-07-02 · 类型：实现设计（已冻结，按本 spec 落码）
 > 状态：**已冻结**
-> 关联：[`2026-06-28-cli-chat-design.md`](../history/decisions/2026-06-28-cli-chat-design.md)（chat 总体设计）、[`2026-06-30-cli-chat-readwrite-design.md`](chat-readwrite.md)（chat 读写模式）
+> 关联：[`2026-06-28-cli-chat-design.md`](../archive/decisions/2026-06-28-cli-chat-design.md)（chat 总体设计）、[`2026-06-30-cli-chat-readwrite-design.md`](chat-readwrite.md)（chat 读写模式）
 
 ## 1. 动机
 

@@ -3,14 +3,14 @@ type: design
 title: 语义/全文检索融入设计评估（2026-06-28 历史快照）
 description: 保留原 core/optional 分层、embedding 接口与存储、QMD 取舍、工作量和非目标；旧能力断言不代表当前事实。
 tags:
-  - history
+  - archive
   - design
   - semantic
   - retrieval
   - x-basalt
 status: archived
 superseded_by: ../../design/semantic-retrieval.md
-timestamp: 2026-10-01T01:58:12Z
+timestamp: 2026-10-01T02:00:41Z
 sha256: 0d4d5aeffddf388e5efc050d261352a2ddcb10cd25e60547af338a27407816c3
 ---
 > **历史快照，已被后续设计取代。** 原评估日期：2026-06-28；归档于本轮删除审计后的文档修复。

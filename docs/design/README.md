@@ -6,14 +6,14 @@ tags:
   - design
   - index
   - x-basalt
-timestamp: 2026-10-01T18:12:15Z
-sha256: 234adc979176a214fc3ebd948b7acf56c03104879266d68398855528a5cccaaa
+timestamp: 2026-10-02T08:14:40Z
+sha256: 1e9c88ed44cfd9d185f6f7cfb916a6f098ea82625921e310f3f90f4b22828992
 ---
 # 设计文档
 
 **当前有效的设计与规范。** 这里的每一份都描述"现在的代码是怎么回事"，和 `src/` 必须能互相验证——对不上就是文档坏了，改文档或改代码，不能沉默。
 
-已被取代的旧设计在 [`../history/decisions/`](../history/decisions/README.md)，不在这里。
+已被取代的旧设计在 [`../archive/decisions/`](../archive/decisions/README.md)，不在这里。
 
 ## 全局
 
@@ -80,4 +80,4 @@ sha256: 234adc979176a214fc3ebd948b7acf56c03104879266d68398855528a5cccaaa
 
 ---
 
-**维护规则**：命令签名 / DQL 子集 / 数据模型 / 配置项变化时，同步对应设计文档、[`../use/`](../use/README.md) 对应章节、自我说明书（`skills-data/x-basalt.json5`）。大改动记入本目录；被取代的移入 `../history/decisions/` 并标 `superseded_by`。
+**维护规则**：命令签名 / DQL 子集 / 数据模型 / 配置项变化时，同步对应设计文档、[`../use/`](../use/README.md) 对应章节、自我说明书（`skills-data/x-basalt.json5`）。大改动记入本目录；被取代的移入 `../archive/decisions/` 并标 `superseded_by`。

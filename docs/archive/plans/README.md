@@ -1,18 +1,18 @@
 ---
 type: guide
-title: 归档标准 —— 什么情况下 plan 应移入 history/plans/
-description: 定义 docs/history/plans/ 的准入标准和维护规范，确保归档行为有据可依、不丢失上下文
+title: 归档标准 —— 什么情况下 plan 应移入 archive/plans/
+description: 定义 docs/archive/plans/ 的准入标准和维护规范，确保归档行为有据可依、不丢失上下文
 tags:
   - plan
   - meta
   - x-basalt
-timestamp: 2026-10-01T18:20:57Z
-sha256: 5ffc7707a2965543b7fb29f0451ace1dcaf6099a6ebd3ce771e6d0a76d69bd96
+timestamp: 2026-10-02T08:11:40Z
+sha256: 4ea9b03f617c1507bed7d899be123f6b9ba842f675c9083b1fa9d2c683b32709
 ---
 
 # 归档标准
 
-> 归档 = 从 `docs/plans/` 移入 `docs/history/plans/`。**不是删除**，文件仍在仓库中、git history 完整。
+> 归档 = 从 `docs/plans/` 移入 `docs/archive/plans/`。**不是删除**，文件仍在仓库中、Git 历史完整。
 > 归档的目的是让 `docs/plans/` 保持活跃 plan 的"可见集"，archive 作为历史决策的"可查集"。
 
 ---
@@ -67,7 +67,7 @@ sha256: 5ffc7707a2965543b7fb29f0451ace1dcaf6099a6ebd3ce771e6d0a76d69bd96
 
 ```bash
 # 归档一个 plan：
-git mv docs/plans/<name>.md docs/history/plans/<name>.md
+git mv docs/plans/<name>.md docs/archive/plans/<name>.md
 
 # 归档前必须做：
 # 1. 对照三问 checklist
