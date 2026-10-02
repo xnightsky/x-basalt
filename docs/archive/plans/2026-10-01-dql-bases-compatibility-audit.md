@@ -9,8 +9,8 @@ tags:
   - bases
   - x-basalt
 status: done
-timestamp: 2026-10-01T18:20:57Z
-sha256: afbd07bed136555f816063f939762c5eecef607820e7d488e354bfc3dfbbb588
+timestamp: 2026-10-02T12:14:45Z
+sha256: e2ec507f5cd5dfe5112a596ca7dfb0a6cb015132c4df68340ffba6041817d47a
 ---
 # DQL / Bases 兼容范围局部调研
 
@@ -51,7 +51,7 @@ sha256: afbd07bed136555f816063f939762c5eecef607820e7d488e354bfc3dfbbb588
 ## Evidence
 
 - 当前入口：[`src/cli.ts`](../../../src/cli.ts)、[`src/base/engine.ts`](../../../src/base/engine.ts)、[`tests/base-stdin.test.ts`](../../../tests/base-stdin.test.ts)。
-- DQL 边界：[`dql-subset`](../../design/dql-subset.md)、[`src/query/`](../../../src/query/)。
+- DQL 边界：[`dql-subset`](../../design/dql-subset.md)、[`src/query/`](../../../src/query)。
 - Bases 历史差分：[`bases-vs-official`](../../design/bases-vs-official.md)、[`bases-status`](../../design/bases-status.md)、[语法接地 A/B](2026-08-08-bases-chat-grounding.md)。已有小样本结果不替代本轮任务能力分析。
 - [局部报告](../../research/2026-10-01-dql-bases-compatibility-local-audit.md)：O1–O10 固定一手信源、P1–P9 项目证据、R01–R09 对照及未知项。
 - 定向验证：`node --import tsx --test tests/{base-stdin,base-document,base-engine,base-cli,base-context,base-group-summary,base-functions-date,base-functions-link,base-list-hof,base-values-date,base-vault-entries,vault-entries-dql-proof,query,query-parser,sql-generator}.test.ts`：321/321；CLI 入口/模型探针 8 项及 TASK AST→SQL 检查 1 项。

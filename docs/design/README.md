@@ -6,12 +6,12 @@ tags:
   - design
   - index
   - x-basalt
-timestamp: 2026-10-02T08:14:40Z
-sha256: 1e9c88ed44cfd9d185f6f7cfb916a6f098ea82625921e310f3f90f4b22828992
+timestamp: 2026-10-02T12:14:45Z
+sha256: 84aa9f90b83ba752029ed00d3ffbf82beb3b480595704e0a49d66602b5d40093
 ---
 # 设计文档
 
-**当前有效的设计与规范。** 这里的每一份都描述"现在的代码是怎么回事"，和 `src/` 必须能互相验证——对不上就是文档坏了，改文档或改代码，不能沉默。
+**当前维护的设计与规范，也保留明确标注的未实现提案。** 已实现契约必须与 `src/` 互相验证；提案不作为现有能力。历史过程集中归档，活跃文档保留当前规则、有效决策理由及溯源。
 
 已被取代的旧设计在 [`../archive/decisions/`](../archive/decisions/README.md)，不在这里。
 
@@ -32,7 +32,7 @@ sha256: 1e9c88ed44cfd9d185f6f7cfb916a6f098ea82625921e310f3f90f4b22828992
 | [语法规范](bases-syntax.md) | 规范级语法口径（实现状态与诊断编号以此为准） |
 | [实现状态追踪](bases-status.md) | living 文档：逐项做没做 + 测试编号 |
 | [场景矩阵](bases-scenarios.md) | 验收编号体系（`BASE-XXX-NNN`） |
-| [oracle 操作手册](bases-oracle-runbook.md) | 拿官方读数校正 9 项暂定语义的流程 |
+| [oracle 操作手册](bases-oracle-runbook.md) | 指定版本取证、重跑条件与红线；旧观察另留归档 |
 | [附件数据集决策](bases-vault-entries.md) | `vault_entries` 表为什么独立于 `files` |
 
 > 使用者视角的 Bases 文档在 [`../use/bases.md`](../use/bases.md)——是什么、教程、语法速查、命令、报错，一份读完就会用。
@@ -59,17 +59,17 @@ sha256: 1e9c88ed44cfd9d185f6f7cfb916a6f098ea82625921e310f3f90f4b22828992
 | [meta 子集](meta-subset.md) | frontmatter 读写的冻结范围 |
 | [变更编排](change-orchestration.md) | `run` 管道的设计 |
 | [内置 pipeline 改造](pipeline-op-model.md) | **已落地**：统一算子模型（Row 流动单位、单签名算子、调度可换）；含当前边界与回归口径 |
-| [多平台 shell 管道](shell-pipe-portability.md) | **提案·未实现**：接外部工具的跨平台 stdin/stdout 契约（含 Windows 实测证据）；依赖上一条 |
+| [多平台 shell 管道](shell-pipe-portability.md) | **增强提案·未实现**：现有文本 `run --stdin` 之外的格式嗅探、ASCII JSON 与跨平台验收 |
 
 ## chat（可选 AI）
 
 | | |
 | --- | --- |
-| [读写机制](chat-readwrite.md) | 工具调用的读侧与受闸写侧 |
+| [读写机制](chat-readwrite.md) | 可选 AI 隔离、无逐动作确认的写侧及安全边界 |
 | [skill grounding](chat-skill-grounding.md) | 怎么让模型用对 CLI |
 | [trace](chat-trace.md) | 可观测性 |
-| [会话落盘与续跑](chat-session-continue.md) | **提案·可行性已验证**：默认不落盘；`--session` 裸用新建（系统 UUID）、`--session <uuid>` 严格续跑；返回必带 session id；`--max-steps` 正交 |
-| [工具面单一真相源](chat-tool-surface.md) | **方向已拍板·待立计划**：chat 彻底切到 cli 单执行口（paths 漂移实证 + 对标 agent-browser + 防递归，含图） |
+| [会话落盘与续跑](chat-session-continue.md) | **已落地**：默认不落盘；UUID 新建/严格续跑；JSONL 逐 step 追加、返回 id、显式恢复守卫 |
+| [工具面单一真相源](chat-tool-surface.md) | **已落地**：cli 单执行口、argv 无 shell、主键路径还原、防递归及写后验收边界 |
 
 ## KB compiler（lint / links）
 
@@ -80,4 +80,4 @@ sha256: 1e9c88ed44cfd9d185f6f7cfb916a6f098ea82625921e310f3f90f4b22828992
 
 ---
 
-**维护规则**：命令签名 / DQL 子集 / 数据模型 / 配置项变化时，同步对应设计文档、[`../use/`](../use/README.md) 对应章节、自我说明书（`skills-data/x-basalt.json5`）。大改动记入本目录；被取代的移入 `../archive/decisions/` 并标 `superseded_by`。
+**维护规则**：命令签名 / DQL 子集 / 数据模型 / 配置项变化时，同步对应设计文档、[`../use/`](../use/README.md) 对应章节、运行时对应篇（`skills-data/core.json5`、`pipe.json5`、`chat.json5` 等）。大改动记入本目录；被取代的移入 `../archive/decisions/` 并标 `superseded_by`。

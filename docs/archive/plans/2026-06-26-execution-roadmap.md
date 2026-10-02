@@ -1,6 +1,6 @@
 ---
-timestamp: 2026-08-07T00:12:49Z
-sha256: fe90169ea61457ab77a101cfa0dfca004ae82da62b059479462d7f903c9f27c5
+timestamp: 2026-10-02T12:14:45Z
+sha256: c4795e7b56e087785f5be05a59203e144c517d94dca6c62ea827de65732af797
 type: plan
 title: 可执行路线图：全模块收口 + 做深内核
 description: x-basalt 全模块收口与 DQL 内核做深的可执行路线图
@@ -12,7 +12,7 @@ tags:
 # 可执行路线图：全模块收口 + 做深内核（x-basalt → 可信 1.0）
 
 > 日期：2026-06-26 · 类型：大型执行计划（跨全部 5 个一级模块）
-> 依据：生态定位 [`../../research/2026-06-26-libraries-survey.md`](../../research/2026-06-26-libraries-survey.md)、体检 [`../2026-06-26-audit.md`](../2026-06-26-audit.md)、覆盖矩阵 [`../decisions/2026-06-26-coverage-matrix.md`](../decisions/2026-06-26-coverage-matrix.md)、依赖决策 [`../decisions/2026-06-26-deps-build-vs-buy.md`](../decisions/2026-06-26-deps-build-vs-buy.md)、许可证政策 [`../../design/dependency-license-policy.md`](../../design/dependency-license-policy.md)
+> 依据：生态定位 [`../../research/2026-06-26-libraries-survey.md`](../research/2026-06-26-libraries-survey.md)、体检 [`../2026-06-26-audit.md`](../2026-06-26-audit.md)、覆盖矩阵 [`../decisions/2026-06-26-coverage-matrix.md`](../decisions/2026-06-26-coverage-matrix.md)、依赖决策 [`../decisions/2026-06-26-deps-build-vs-buy.md`](../decisions/2026-06-26-deps-build-vs-buy.md)、许可证政策 [`../../design/dependency-license-policy.md`](../../design/dependency-license-policy.md)
 
 ## 为什么这么做（一句话依据）
 

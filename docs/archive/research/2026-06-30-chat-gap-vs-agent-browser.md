@@ -7,8 +7,8 @@ tags:
   - chat
   - agent-browser
   - gap-analysis
-timestamp: 2026-08-01T19:58:37Z
-sha256: e31b6b87fb608a9b37f55532f1d1843b3f4f2d27c6ac789a6fb7d51492936623
+timestamp: 2026-10-02T11:30:42Z
+sha256: 4538313d59df9eac0f4e207ca8d74623ae201ba994651ff264bac23ca17bd99d
 ---
 
 # chat 对标 agent-browser — 能力差距诊断与改进方向
@@ -17,6 +17,8 @@ sha256: e31b6b87fb608a9b37f55532f1d1843b3f4f2d27c6ac789a6fb7d51492936623
 > 触发：dogfood 观察期实测 `x-basalt chat` 暴露三痛点 —— ①操作失败概率高 ②轮询到上限就停 ③需要项目外的素材/场景库。
 > 方法：直读 `src/chat/*` 源码 + 用 deepwiki 扒对标库 `vercel-labs/agent-browser`（chat 设计的原始对标，见 `docs/specs/2026-06-28-cli-chat-design.md`）。
 > 配套：功能覆盖侧（对标 Dataview/Obsidian 的解析/查询 gap）由另一篇 deep-research 调研单独落地，本篇只管 chat。
+
+> **归档说明（2026-10-02）**：以下工具名、步数与失效观察是初版基线。错误处理、有界循环/REPL 续跑、单 CLI 工具面、FTS 与可选会话已由[当前工具面](../../design/chat-tool-surface.md)、[会话设计](../../design/chat-session-continue.md)及源码接替，不追认旧优先级。场景库的选址/格式与实际模型效果仍需独立决策；活跃入口是工具面 §6、[待执行对照协议](../../research/2026-09-30-agent-knowledge-industry-landscape.md)及根 TODO 的模型/证据关注，不自动创建外部评估工程或认证旧分数。
 
 ## 1. x-basalt chat 现状基线
 
@@ -80,7 +82,7 @@ sha256: e31b6b87fb608a9b37f55532f1d1843b3f4f2d27c6ac789a6fb7d51492936623
 **为什么正好解你的三痛点**：有了场景库，「操作失败率」「撞顶率」从主观体感变成**可量化、可回归**的指标 —— 改了重试/步数/工具后，跑一遍场景库就知道有没有变好。
 
 **待定（本篇不决，留给后续 brainstorm/spec）**：
-1. 放哪 —— 新建兄弟私有仓还是并入已有 `../x-kb` / `../x-promptkit`；
+1. 放哪 —— 新建独立评估工作区还是复用已有外部工作区（具体位置不在公开仓登记）；
 2. 格式 —— 照搬 TS `EvalCase`，还是用 YAML（与项目内已装的 `recall-queue.schema.yaml` / recall-author/eval 体系对齐）；
 3. 与项目内 `.recall` 评估体系的关系（复用还是另起）；
 4. 场景从哪来 —— 沉淀真实 dogfood 转录。

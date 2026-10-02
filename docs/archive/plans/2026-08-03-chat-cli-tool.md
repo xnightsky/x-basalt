@@ -7,14 +7,15 @@ tags:
   - chat
   - cli-tool
   - architecture
-timestamp: 2026-08-06T23:59:45Z
-sha256: 8a2e930aad278ce1b6267cb955fc7a491c71f6cee5037a9509543a184c9f86e2
+timestamp: 2026-10-02T10:33:54Z
+sha256: 0c4fc1d604ef2131e348bea8d7bde44c452eb96ec980036155f11745dbf2b921
+status: completed
 ---
 # chat 工具面彻底切 C（cli 单工具 + 动态 base 走 stdin）
 
 > **For agentic workers:** 用 TDD（先 red 后 green）逐子步实现；步骤用 `- [ ]` 跟踪。
 > 日期：2026-08-03 · 主题：chat 工具面从「15 个手写工具」收编为「单一 cli 工具」，动态 base 经 `base -` 子命令接入
-> 真相源（设计）：[`docs/design/chat-tool-surface.md`](../design/chat-tool-surface.md)（2026-07-30 拍板「彻底切 C」）
+> 真相源（设计）：[`docs/design/chat-tool-surface.md`](../../design/chat-tool-surface.md)（2026-07-30 拍板「彻底切 C」）
 > 触发：用户拍板动态 base 第二步走「按切 C 走 cli 工具」（2026-08-03 提问答复）
 
 **Goal:** 执行 2026-07-30 已拍板的「彻底切 C」架构决策：chat 的工具面从手工维护的第二表面（15 个工具，语义靠人肉对齐 CLI、`paths` 静默失效 bug 已实证）收编为**单一 `cli` 工具**——`execFile(node, [cli.js, ...args])`、参数走数组、子命令 allowlist、`--vault/--db` 由工具壳注入、输出过 safety、防递归（allowlist 排除 `chat` + `X_BASALT_CHAT_CHILD` 环境变量兜底）。**动态 base（本仓已完成第一步 stdin 入参）经 `cli base -` 子命令自然接入 chat**——工具壳把结构化入参转成 argv，source 走 stdin。

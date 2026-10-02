@@ -8,13 +8,13 @@ tags:
   - dql
   - bases
   - x-basalt
-timestamp: 2026-10-02T00:20:03Z
-sha256: 3112d3f6c6fa3efb487afc3c2e00f4cc06e823214e7386de512a019f6a19b7da
+timestamp: 2026-10-02T12:14:45Z
+sha256: c9a61ce4c7a4d4a353c55daca41c0bfcd44f0cec6d04a9f13e256dd404ad8ec1
 ---
 # DQL / Bases 兼容投入账本
 
 > 状态：2026-10-01 决策与当前边界；不是完整上游兼容承诺，也不是未列特性的实施授权。
-> 依据：[局部取证快照](../research/2026-10-01-dql-bases-compatibility-local-audit.md)、[最小切口选型](../research/2026-10-01-minimal-slice-reuse-assessment.md)、[顺序执行记录](../plans/2026-10-01-todo-sequential-cleanup.md)。
+> 依据：[局部取证快照](../research/2026-10-01-dql-bases-compatibility-local-audit.md)、[最小切口选型](../archive/research/2026-10-01-minimal-slice-reuse-assessment.md)、[顺序执行记录](../archive/plans/2026-10-01-todo-sequential-cleanup.md)。
 
 ## 1. 目标版本与证据规则
 
@@ -45,10 +45,10 @@ sha256: 3112d3f6c6fa3efb487afc3c2e00f4cc06e823214e7386de512a019f6a19b7da
 ## 3. 投入顺序与停点
 
 1. **先守已承诺语义**：本轮 R08/R09 已修。后续真实可复现错误先锁独立 RED，再最小修复；不把执行遗漏解释成缺检索或能力不足。
-2. **执行验收纪律独立优先**：当前仍有真实二次执行遗漏、外层答案范围违约，以及写后不复核系统提示与显式验收冲突。未来切口先条件化提示/锁过程义务，对照原始 trace；不是本轮两个确定性引擎修复的顺带承诺。
+2. **执行验收纪律独立优先**：写后节流与显式验收的提示冲突已于 2026-10-02 在[独立切口](../archive/plans/2026-10-02-chat-write-verification.md)修正；旧/新各三题均满足过程义务，未证明成功率提升或历史失败因果。模型漏执行风险、外层答案范围违约、trace 关联标识及证据缺口继续保留根 TODO。当前须锁定真实第二次 run、独立回执与输出范围，不以终态 truth 替代过程验收。
 3. **按实际任务补领域能力**：任务 emoji/状态/到期日字段、TASK 组树、default/数组高阶/聚合、FROM 多源、inline 强类型等需新计划、错误/安全矩阵和输出契约；没有需求频率/收益证据时保持未实现，不默认追平上游。
 4. **再投资宿主体验/未知语义**：embedded base、动态活动上下文、日期本地化、其他 oracle 未决项需单列快照/输入/版本。无有效读数即停在 unknown，不用“有意差异”掩盖证据缺失。
-5. **最后考虑替换基础设施**：Kysely/第三方引擎/embedding/MCP 只有测出当前方案瓶颈、收益和适配失败边界才准入；本轮不增依赖。[选型](../research/2026-10-01-minimal-slice-reuse-assessment.md)未运行竞品，basecli 独立许可证文本仍是集成停点。
+5. **最后考虑替换基础设施**：Kysely/第三方引擎/embedding/MCP 只有测出当前方案瓶颈、收益和适配失败边界才准入；本轮不增依赖。[选型](../archive/research/2026-10-01-minimal-slice-reuse-assessment.md)未运行竞品，basecli 独立许可证文本仍是集成停点。
 
 任何升级先写清：目标任务、版本/快照、数据集、类型/路径/空值/排序规则、诊断/退出码、安全预算、逐项用例和迁移风险；公共契约改动同步教程/skill/CHANGELOG。重大兼容语义或数据集默认值变化先决定是否需要新 conformance，不静默重写旧口径。
 

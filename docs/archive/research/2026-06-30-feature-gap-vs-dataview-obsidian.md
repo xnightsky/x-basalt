@@ -8,8 +8,8 @@ tags:
   - dataview
   - obsidian
   - coverage
-timestamp: 2026-08-07T00:12:49Z
-sha256: e567122a58bcd4fb1e60e76b9abad290685e7434f4a5a2dd59c4b89c624a188b
+timestamp: 2026-10-02T12:14:45Z
+sha256: 7fc2941a0258897c3efa57a29ccdcb1ac91cc8ba2e6126a0d05ac3b25344b6e3
 superseded_by: ../../research/2026-08-07-x-basalt-obsidian-llm-wiki-rebase.md
 ---
 
@@ -18,7 +18,7 @@ superseded_by: ../../research/2026-08-07-x-basalt-obsidian-llm-wiki-rebase.md
 > 日期：2026-06-30。状态：调研落地，差距清单 + 优先级建议。
 > 触发：dogfood 期评估「对标官方还差多少」，从官方完整能力集**反向 diff**（不止项目自认为的子集口径）。
 > 方法：deep-research harness — 5 搜索角度 / 23 源（多为 Dataview 官方文档 primary）/ 105 claim 抽取 / 25 验证 / **22 确认、3 否定**。
-> 配套：chat 侧差距见 [`2026-06-30-chat-gap-vs-agent-browser.md`](../../research/2026-06-30-chat-gap-vs-agent-browser.md)；既有覆盖口径见 [`../specs/2026-06-26-coverage-matrix.md`](../decisions/2026-06-26-coverage-matrix.md)。
+> 配套：chat 侧差距见 [`2026-06-30-chat-gap-vs-agent-browser.md`](2026-06-30-chat-gap-vs-agent-browser.md)；既有覆盖口径见 [`../specs/2026-06-26-coverage-matrix.md`](../decisions/2026-06-26-coverage-matrix.md)。
 
 > **Rebase（2026-08-07）**：本文保留为当时的 Dataview / Obsidian 调研快照；当前实现已补齐 inline fields、FTS5、真值判断与无头 Bases 主路径，且新的比较已纳入 LLM Wiki 的索引优先架构口径。查当前差距与明确边界请读 [`2026-08-07-x-basalt-obsidian-llm-wiki-rebase.md`](../../research/2026-08-07-x-basalt-obsidian-llm-wiki-rebase.md)。
 

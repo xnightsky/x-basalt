@@ -1,6 +1,6 @@
 ---
-timestamp: 2026-09-30T23:48:39Z
-sha256: 779001ac2ea9d7d80b44a0227b9868107e1ac2e9f107572ddf20142bdc339f65
+timestamp: 2026-10-02T12:14:45Z
+sha256: 22a44ce72afbae481040bd1663c32d357f226b4f5b91f15b92a42225c83f8538
 type: spec
 title: meta 子集冻结 · frontmatter 写侧
 description: meta 命令 frontmatter 写侧 Phase 1-3 子集冻结规格
@@ -28,7 +28,7 @@ meta rename <file> <oldKey> <newKey> [--dry-run]
 meta normalize <file> [--sort-keys] [--dry-run]              # Phase 2
 meta profile list                                            # Phase 3
 meta profile show <name> [--format json|yaml]               # Phase 3
-meta apply <profile> <file> [--set key=value]... [--dry-run] # Phase 3
+meta apply <profile> <file> [--set key=value]... [--refresh-derived] [--dry-run] # Phase 3
 ```
 
 ## 语义（冻结）
@@ -72,6 +72,7 @@ opt-in：`--sort-keys` 顶层键字母序排序（可能动空行，默认 OFF�
 `meta apply <profile> <file>` 两层语义：
 
 - **机械预填 = 补缺**：仅当机械字段缺失时按 fs 信息填（日期写 **ISO 字符串**，绝不数值时间戳；birthtime 不可靠回退 mtime；sha256 仅算正文）；已有不动。
+- **`--refresh-derived` = 刷新可变机械字段**：重算 timestamp/modified/updatedDate/sha256，不动 created/pubDate；正文改动后刷新派生值，不能只补缺而保留旧 hash。
 - **`--set key=value`（可重复）= 显式权威覆盖**：始终写入——覆盖文件已有值与机械预填；值按 profile 声明字段类型转（list 拆逗号、number/bool 保守 auto；profile 外的额外 key 用 auto）。apply 内 `--set` 先写、机械层只补 `--set` 没给的缺。
 - 报告 `{ filled, overridden, present, missing(required/recommended/optional) }`；没补的字段不出现（保持干净）。幂等、只动 frontmatter、非法 YAML 拒写、未知 profile 报错列可用名。
 
@@ -89,9 +90,9 @@ opt-in：`--sort-keys` 顶层键字母序排序（可能动空行，默认 OFF�
 ## 非目标（不做，留后续阶段）
 
 - 嵌套键路径（`a.b`）、inline Dataview 字段（`key:: v`）。
-- 批量 / 跨 vault 操作。
+- meta 层自身不承担跨文件事务或批量调度；批量由已实现的 orchestrator 调现有写侧能力。
 - normalize 的高风险/不确定项：**类型强制**、**日期格式统一**（调研：格式不确定）、删空键、空行规整。
-- 派生 derive、schema 校验 lint、迁移 migrate。
-- 读取 `.obsidian/types.json` / 复现 Obsidian 类型语义（调研：types.json 不全、靠猜测，不可依赖）。
+- 不做任意派生表达式或独立 migrate 命令；固定机械字段 derive/profile/apply 已实现，metadata profile lint 已由[KB compiler](kb-compiler.md)读侧承载，不能再总括为非目标。
+- meta 写侧不以 `.obsidian/types.json` 作为隐式强制转换依据；Bases 的可选只读类型提示是另一层边界，不等于 meta 不变量改变。
 
-> 维护：命令签名 / `--type` / 往返规则变化时，同步本文、`docs/use/commands.md`、`docs/use/README.md`、自我说明书 skill（`skills-data/x-basalt.json5`）与上述测试，确保互相验证。
+> 维护：命令签名 / `--type` / 往返规则变化时，同步本文、`docs/use/commands.md`、`docs/use/README.md`、自我说明书 skill（`skills-data/core.json5`）与上述测试，确保互相验证。

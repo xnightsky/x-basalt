@@ -1,6 +1,6 @@
 ---
-timestamp: 2026-08-07T00:12:49Z
-sha256: b243b38fc288156f602d5732ae575da568621c5f8598874d47e3e42628d91fef
+timestamp: 2026-10-02T12:14:45Z
+sha256: 5bad8915048ecdf56e7cdc768545b4990dece10ba7a78d1fe5c1a66670658c2a
 type: plan
 title: 阶段 1/3/4 下钻：解析组装 · 索引 · skill/CLI · 原子子步
 description: parser/indexer/skill+CLI 模块的原子实现子步
@@ -14,7 +14,7 @@ tags:
 > 最后同步：2026-07-22（checklist 更新到代码实际状态）
 > 日期：2026-06-26 · 父计划：[`2026-06-26-execution-roadmap.md`](2026-06-26-execution-roadmap.md) 阶段 1/3/4
 > 真相源：parser→`skills-def/biz-obsidian-spec/SKILL.md`；DQL→另见 [`2026-06-26-dql-kernel-steps.md`](2026-06-26-dql-kernel-steps.md)
-> 依据：体检 [`../testing/2026-06-26-audit.md`](../2026-06-26-audit.md)（编号 P*/I*/C*/L*）、库普查 [`../../research/2026-06-26-libraries-survey.md`](../../research/2026-06-26-libraries-survey.md)
+> 依据：体检 [`../testing/2026-06-26-audit.md`](../2026-06-26-audit.md)（编号 P*/I*/C*/L*）、库普查 [`../../research/2026-06-26-libraries-survey.md`](../research/2026-06-26-libraries-survey.md)
 
 ## 子步格式
 

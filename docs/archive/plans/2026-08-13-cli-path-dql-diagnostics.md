@@ -8,8 +8,9 @@ tags:
   - config
   - dql
   - diagnostics
-timestamp: 2026-08-13T04:37:41Z
-sha256: 50690b09f2d8d1fab2303eddc6832267a749614548ba0a7c3074068355a41bfb
+timestamp: 2026-10-02T10:33:56Z
+sha256: 06795eed27b5312e6391c10f260b00ed3edafff110f19fd7b37fbd573886f25f
+status: completed
 ---
 # CLI 配置单源与 DQL 诊断修复 Implementation Plan
 
@@ -210,7 +211,7 @@ Expected: 定向诊断、位置与合法排序全部通过。
 ```bash
 x-basalt meta apply llm-wiki docs/use/config.md --refresh-derived
 x-basalt meta apply llm-wiki docs/use/troubleshooting.md --refresh-derived
-x-basalt meta apply llm-wiki docs/plans/2026-08-13-cli-path-dql-diagnostics.md --refresh-derived
+x-basalt meta apply llm-wiki docs/archive/plans/2026-08-13-cli-path-dql-diagnostics.md --refresh-derived
 ```
 
 - [x] **Step 3: 运行最小充分验证**

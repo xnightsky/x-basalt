@@ -9,13 +9,15 @@ tags:
   - links
   - profile
   - ci
-timestamp: 2026-07-28T05:27:03Z
-sha256: 3e045c6f4fed647539b65ae4700d5d726ab07c01c9a632280b94b47399f752d5
+timestamp: 2026-10-02T11:30:42Z
+sha256: bbce4518d04b8fce0e6aacfa33524c7193364f6e1980769afe12c4da0b1ca1a6
 ---
 # Markdown knowledge base compiler：lint / links / profile 深度调研
 
 > 日期：2026-07-09
 > 状态：调研结论，供后续 spec / plan 取舍使用
+
+> **归档说明（2026-10-02）**：本次调研的定位、links、统一诊断与 profile 校验已由[KB compiler 设计](../../design/kb-compiler.md)接替；早期 BasaltIssue 名称、示例 CLI 和路线顺序不是当前契约。heading/block 精确校验、CI/baseline/SARIF、rewrite/fix 与 schema 高阶仍保留在该设计 §3.4 / §8.3 / §12 及根 TODO；未因已有 links/lint 命令而验收这些后置项。
 
 ## 结论
 
@@ -183,8 +185,8 @@ links check 是一组规则，专门检查链接目标。
 
 第一版应覆盖：
 
-- Markdown 相对链接：`[text](../a.md)`
-- Markdown 图片：`![alt](../a.png)`
+- Markdown 相对链接：`[text](../../a.md)`
+- Markdown 图片：`![alt](../../a.png)`
 - Obsidian wikilink：`[[Note]]`
 - Obsidian embed：`![[asset.png]]`
 - 反斜杠路径提示：`..\a.md`

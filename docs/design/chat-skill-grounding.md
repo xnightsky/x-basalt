@@ -1,100 +1,68 @@
 ---
 type: design
 title: chat 技能接地（skill grounding）设计 v2
-description: x-basalt chat（可选 AI 子命令）如何可靠让模型召回 DQL/frontmatter/CLI 规范：对齐 agent-browser 的系统提示词强制先取 core（模型驱动+强框、无门控）+ requiredSkills 软提示 + 两层内部 skill（core / obsidian-base-spec），含决策记录与可靠性兜底阶梯
+description: 当前模型驱动的 core 基线与按需专项技能，无代码门控或全量预载；旧软提示表和改名记录已归档，不保证模型遵循。
 tags:
   - design
   - chat
   - ai
   - skill
   - x-basalt
-timestamp: 2026-07-30T23:06:12Z
-sha256: bc0e29a4434b9a6816b10cf412eba6db8d2a47d18538f7dd28e264c2d1172abd
+timestamp: 2026-10-02T12:14:45Z
+sha256: 8383644d9b6fc92db7c2d6994c7a0663a95e4d8aa6c9701ad2f3915fa3fb06cd
 ---
 # chat 技能接地（skill grounding）设计 — v2
 
-> 状态：已定稿，落地中。日期：2026-06-30。
+> 状态：当前模型驱动 grounding 已实现；初期观察与改名步骤已归档，不作为可靠性保证。依据：`src/chat/index.ts` 的 SYSTEM_PROMPT、`tools.ts` 与运行时技能数据。
 > 范围：`x-basalt chat`（可选 AI 子命令）如何可靠地让模型拿到 DQL/frontmatter/CLI 规范。
-> 不涉及：`skills-def/*/SKILL.md`（那是给外部 AI 驱动 CLI 的发现 stub，与本设计无关、保持不动）。
+> 不改外部入口与开发侧安装产物；二者的分组与路由由 skills-router 维护。
 
 ## 1. 问题
 
-`chat` 的模型（尤其弱模型如 `deepseek-v4-flash`）**不会稳定地自行召回规范**：
-
-- 原始转录：模型调了 `skills_recall` 但关键词没命中（recall 是 Fuse 模糊匹配，多词/中文常召不回）→ floundered。
-- 加 `skills_get` + 一条"必须先 skills_get"的提示后：**时灵时不灵**——一次先调了，另一次直接 query 跳过。
-
-根因是 **grounding 不确定**，不是模型没能力。但反向的"启动全量注入所有 skill"（v1，把 obsidian-base-spec + x-basalt 共 14.5KB 全塞进 system）又把 chat 用不上的大块 CLI 手册也灌进去，浪费上下文。
-
-## 2. 参考：agent-browser 怎么做的（两源对齐）
-
-- **二进制抠出的 chat 系统提示词**（`agent-browser-win32-x64.exe` rodata）：短纪律 + 结尾 *"The following skill references describe agent-browser capabilities… Use them…"*，运行时拼接的是**短发现 stub**（"Before running any command, `skills get core`"），**不是 core 全文**。
-- **deepwiki**：core **不自动注入**；模型被期望自己调 `agent-browser skills get core`（evals `context-footprint.ts` 即测此行为）；专项技能（electron/slack/…）**模型驱动按需** `skills get <name>`，由 core 里 "When to load another skill" 段引导；**无依赖声明、无门控**。
-
-→ **agent-browser = 系统提示词里一条强力"先 `skills get core`"指令（stub）让模型自取 core；深/专项技能模型按需自取；无门控。** 之所以连 flash 都听，靠的是这条指令**显眼、强框**（"你还没有用法全文，动手前先取"），而非全文注入。
+本节历史内容已归档，见[原章节](../archive/decisions/2026-06-30-chat-grounding-record.md#1-问题)。当前规则与剩余边界见本文有效章节。
 
 ## 3. v2 设计
 
-照 agent-browser 对齐，四点：
+当前规则：模型先取基线，再按任务取专项规范；不设代码门控，也不启动全量注入。
 
 ### 3.1 系统提示词强制先取 `core`（模型驱动 + 强框，无门控）
 `SYSTEM_PROMPT` 里放一条**显眼、stub 式**的强指令：
 > 【动手前必做】你现在没有 x-basalt 的用法与 DQL 规范全文——回答任何问题、调用任何查询/写工具之前，**第一步先 `skills_get({name:"core"})`**（能力总览 + DQL 基础 + meta/pipeline）。需要精确 DQL 文法 / frontmatter 规则时再 `skills_get({name:"obsidian-base-spec"})`。别凭记忆猜语法。
 
 ### 3.2 `requiredSkills` 软提示，**不做强门控**
-每个工具的 `description` 里点名它依赖的深规范（纯引导、不拦截）：
-| 工具 | 提示指向 |
-|---|---|
-| `query` | 构造 DQL 不确定文法 → `obsidian-base-spec` |
-| `meta_set` / `meta_normalize` | 值类型/归一规则 → `obsidian-base-spec` |
-| `meta_apply` | profile 语义 → `core` |
-| `pipeline_run` | where=DQL → `obsidian-base-spec`；actions/steps 算子语义 → `core` |
-| `parse`/`scan`/`meta_get`/`meta_unset`/`meta_rename` | 无（入参平凡） |
+
+当前没有旧 `query/meta_*/pipeline_run` 工具依赖表，Vault 操作只有 `cli` 执行口。工具描述与 SYSTEM_PROMPT 指路，不验证模型已加载规范。旧表见[归档](../archive/decisions/2026-06-30-chat-grounding-record.md#32-requiredskills-软提示不做强门控)。
 
 ### 3.3 两层内部 skill（`skills-data/*.json5`，运行时 SkillRecall 读）
-- **`core`**（由 `x-basalt.json5` 改名）：强制基线 = 能力总览 + DQL 基础 + meta/pipeline 用法。
-- **`obsidian-base-spec`**：深层 DQL/frontmatter 语法，按需取。
+
+“两层”是基线/专项的策略，不是仅有两篇文件：chat 首取 `core`，DQL/frontmatter 按需取 `obsidian-base-spec`，Bases 按需取 `bases`；其余分工通过 `skills list` 与 `skills get summary` 发现，正文不在这里复制。外部 AI 默认直接 CLI 的入口另见 `skills-def/cli/x-basalt/SKILL.md`，不能与 chat 首取 core 混为一条策略。
 
 ### 3.4 撤掉 v1 的启动全量注入
-删掉 `buildSystem`/`GROUNDING_SKILLS`/启动 banner，`setup` 回到 `{model,tools}`，`runOnce/runRepl` 用 `SYSTEM_PROMPT`。`skills_get` 工具保留（取 core / obsidian-base-spec / 复读）。
+
+本节历史内容已归档，见[原章节](../archive/decisions/2026-06-30-chat-grounding-record.md#34-撤掉-v1-的启动全量注入)。当前规则与剩余边界见本文有效章节。
 
 ## 4. 为什么不选另两档（决策记录）
 
 | 档 | 谁加载 | 确定性 | 取舍 | 结论 |
 |---|---|---|---|---|
-| A 纯提示（本设计采用 §3.1+§3.2） | AI | 强框下高、但非绝对 | 0 成本、最 agentic、对齐 agent-browser | **采用** |
+| A 纯提示（当前采用） | AI | 不保证遵循，可跳过 | 无宿主强制预载，取 skill 仍有往返与上下文成本 | **采用** |
 | C 门控（工具拒绝执行直到 skill 载入） | AI | ✓ 代码强制 | 首用多一次往返、可能空转 | 否（用户定：不做强门控） |
 | B engine 注入（v1） | engine 强喂 | ✓ | 0 往返但非 agentic、灌无关 token | 仅作最终兜底 |
 
-**调研佐证**：progressive disclosure / lazy skills 是行业主线（Claude Code / Semantic Kernel / OpenAI），但激活普遍**模型驱动**；"工具声明 requiredSkills + 确定性预载"尚无成熟轮子（微软 agent-framework ADR-0021 明确把依赖/auto-load 列为 future work；OpenAI Agents SDK issue #2906 仍是 feature request）。故 requiredSkills 走**软提示**、不自造门控机制。
+**2026-06-30 原调研背景（不是本轮新核查）**：progressive disclosure / lazy skills 是行业主线（Claude Code / Semantic Kernel / OpenAI），但激活普遍**模型驱动**；"工具声明 requiredSkills + 确定性预载"尚无成熟轮子（微软 agent-framework ADR-0021 明确把依赖/auto-load 列为 future work；OpenAI Agents SDK issue #2906 仍是 feature request）。故 requiredSkills 走**软提示**、不自造门控机制。
 
 ## 5. 可靠性风险与兜底阶梯
 
-§3.1 是模型驱动 → **可被跳过**。早先失败是因为提示弱、埋在长 prompt；v2 靠**强框**（agent-browser 实证连 flash 都听）。若 flash 仍偶尔跳过：
+§3.1 是模型驱动，**可被跳过**；初期观察不足以证明单一失败原因或所有模型的遵循能力。若实际反复失败，可评估以下候选，不自动执行：
 1. 把 §3.1 框得更强 / 置于 prompt 最前；
 2. 退而上 **C 门控**（每挡 N 次降级把规范塞进门控响应）；
 3. 最终退回 **B engine 注入**。
-**先以 A 实测，不行再沿阶梯下探。**
+当前保持 A；改变“不做门控/全量注入”的既有取舍须另行确认与独立验收。历史 Bases A/B 的原始证据缺口仍在根 TODO，不因提示存在就重新认证旧分数。
 
 ## 6. 落地 blast radius（改名 `x-basalt`→`core` 的牵连）
 
-`x-basalt` 作为 **skill 名**的引用（≠ CLI 二进制名 `x-basalt`、≠ 配置目录 `.x-basalt/`、≠ cosmiconfig 名）：
-- `skills-data/x-basalt.json5` → `core.json5`：`name:"x-basalt"`→`"core"`、自引用 `skills get x-basalt`→`skills get core`、triggers 加 `"core"`（保留 `"x-basalt"` 兼容召回）、注释。
-- `src/skill/loader.ts:40` `ALWAYS_AVAILABLE = ["obsidian-base-spec","x-basalt"]` → `[…,"core"]`（+ 注释 37/91）。
-- `tests/skill.test.ts:73/84/134` 断言 `name === "x-basalt"` / `includes("x-basalt")` → `"core"`。
-- `src/chat/index.ts`：撤注入（`"x-basalt"` 随 `GROUNDING_SKILLS` 删除）+ §3.1 指令。
-- `src/chat/tools.ts`：`skills_get` 描述 `x-basalt(CLI 用法)`→`core(…)` + §3.2 软提示。
-
-**保持不动**：`x-basalt parse/query/…` 等 CLI 用法示例、`src/cli.ts .name("x-basalt")`、`src/config.ts cosmiconfigSync("x-basalt")`、`.x-basalt/` 配置目录、`skills-def/x-basalt/SKILL.md`。
-
-⚠️ **CLI 表面变更**：`x-basalt skills get x-basalt` → `x-basalt skills get core`（recall 仍能按触发词 `x-basalt` 召回，但精确 `get` 名变了）。
-
-## 7. 测试
-
-- `tests/skill.test.ts`：改名后 builtin 含 `core`（usage/help/watch/说明书 仍召回）。
-- typecheck + build 通过。
-- chat 实跑 `如何查询 type research 文档`：观察模型**第一步是否调 `skills_get({name:"core"})`**（A 档是否生效的关键证据）；再看是否写对 DQL。
+本节历史内容已归档，见[原章节](../archive/decisions/2026-06-30-chat-grounding-record.md#6-落地-blast-radius改名-x-basaltcore-的牵连)。当前规则与剩余边界见本文有效章节。
 
 ## 8. 与外部 skill 的边界（务必不混）
 - `skills-data/*.json5`（**内部**）：chat 运行时知识库（本设计对象）。
-- `skills-def/*/SKILL.md`（**外部**）：装到全局 skills 注册表、给 Claude Code 等 AI **驱动 x-basalt CLI** 用的发现 stub。**本设计不动它。**
+- `skills-def/cli/<name>/SKILL.md` 是消费侧入口，安装到宿主全局；`skills-def/dev/<name>/SKILL.md` 是本仓开发侧规范，安装到项目。本文不改这些源文件与安装产物。

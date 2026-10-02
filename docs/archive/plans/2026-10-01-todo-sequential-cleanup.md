@@ -6,16 +6,20 @@ tags:
   - plan
   - execution
 status: completed
-timestamp: 2026-10-02T08:13:30Z
-sha256: b144320e318d5ffccc9f801d438aac522fa29bf18060ca383d934c82b7d2faff
+timestamp: 2026-10-02T11:30:42Z
+sha256: 2fec6ccc54541d0e8032f318c9d11e7c35ba83b9d63a75d9605d1ae257bf5f72
 ---
 # TODO 顺序清理计划
 
 > 用户授权：按根 TODO 顺序自主执行；复现使用新合成长难句基线，不冒充历史原任务。当前只处理「待办」八项；长期项先保留其条件化需求，不默默全量扩建。无需每步确认，但遇不可逆、安全敏感或无证据可决策的停点仍停下。
 
+## 归档后的当前入口（2026-10-02）
+
+原八项执行范围已结束；下文的“当前仍未修复”“不归档”和授权表述均是原阶段快照，不是新任务的执行或 Git 授权。写后提示冲突已由[独立切口](2026-10-02-chat-write-verification.md)修正，小样本未证明成功率提升；外层答案范围、trace 关联标识及历史 grounding 原始证据缺口仍保留在根 [TODO](../../../TODO.md)。当前 R08/R09 和投入顺序由[兼容账本](../../design/query-compatibility-ledger.md)承载；§3 的过程义务/非目标继续作为取证依据，不因归档消失。
+
 ## Goal / Spec
 
-按原根 TODO 的八项顺序收口（本文件记录本轮执行；未完成事项继续保留在根 [TODO.md](../../TODO.md)）：先复现并定位，再调查能力发现与入口分流，确定下一轮切口与选型，修复已知的 Bases 公式文件解析和 TASK 子句执行缺口，建立边界账本并核对旧计划归档。依据 [业界讨论](../research/2026-09-30-agent-knowledge-industry-landscape.md#94-后续讨论与待办背景2026-09-302026-10-01)、[双路线审计](../research/2026-10-01-dql-bases-compatibility-local-audit.md) 与现有实现契约。
+按原根 TODO 的八项顺序收口（本文件记录本轮执行；未完成事项继续保留在根 [TODO.md](../../../TODO.md)）：先复现并定位，再调查能力发现与入口分流，确定下一轮切口与选型，修复已知的 Bases 公式文件解析和 TASK 子句执行缺口，建立边界账本并核对旧计划归档。依据 [业界讨论](../../research/2026-09-30-agent-knowledge-industry-landscape.md#94-后续讨论与待办背景2026-09-302026-10-01)、[双路线审计](../../research/2026-10-01-dql-bases-compatibility-local-audit.md) 与现有实现契约。
 
 ## Constraints / Non-goals
 
@@ -85,18 +89,18 @@ sha256: b144320e318d5ffccc9f801d438aac522fa29bf18060ca383d934c82b7d2faff
 
 ### 7. DQL/Bases 投入账本
 
-- [x] [兼容投入账本](../design/query-compatibility-ledger.md)建立 DQL 冻结修订与两个 Bases conformance、四类状态和逐层投入/证据停点；不宣布全面兼容。
+- [x] [兼容投入账本](../../design/query-compatibility-ledger.md)建立 DQL 冻结修订与两个 Bases conformance、四类状态和逐层投入/证据停点；不宣布全面兼容。
 - [x] R08/R09 的确定性通过与模型义务/旧 oracle/竞品许可未知分别记账；升级按真实需求 + 独立验收准入，不自动扩建长期功能。
 
 ### 8. Bases grounding 计划状态核对
 
 - [x] 对照 bases skill、SYSTEM_PROMPT、trace normalizeError、对应回归和已构建 base --help；当前测试已覆盖改动，独立断言取源/分页通过。历史最终汇总的 39/39 与原 A/B 分开核对，不混分母，也不遗漏 1 次非 base query 错误。
-- [x] [旧计划](../archive/plans/2026-08-08-bases-chat-grounding.md)按原 Progress 同步历史 checklist，标 completed 并归档；归档三问与未定位历史 raw JSON 的证据缺口显式留档，相关研究/归档索引链接同步。归档不是重新认证历史分数。
+- [x] [旧计划](2026-08-08-bases-chat-grounding.md)按原 Progress 同步历史 checklist，标 completed 并归档；归档三问与未定位历史 raw JSON 的证据缺口显式留档，相关研究/归档索引链接同步。归档不是重新认证历史分数。
 - 状态校准：本轮八项包含调查、评估与归档；completed 仅表示这些执行项结束，不表示模型问题或长期功能全做完。根 TODO 保留未完成项，本计划保留已完成记录及证据边界。此前删除根 TODO 的操作已撤销。
 
 ## 未完成事项入口
 
-长期积压、持续关注与已发现未修复问题统一保留在根 [TODO.md](../../TODO.md)置顶，本计划不再复制或接管该清单。调查结束不等于问题修复；模型验收纪律的既有切口见 §3。
+长期积压、持续关注与已发现未修复问题统一保留在根 [TODO.md](../../../TODO.md)置顶，本计划不再复制或接管该清单。调查结束不等于问题修复；模型验收纪律的既有切口见 §3。
 
 ## 待办状态校准（2026-10-01）
 

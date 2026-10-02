@@ -7,8 +7,8 @@ tags:
   - cli
   - chat
   - x-basalt
-timestamp: 2026-10-02T06:49:35Z
-sha256: 1ca91529385617b9c4206379419fc808633d0c7a56623f8f06f3fa722dd593fa
+timestamp: 2026-10-02T12:14:45Z
+sha256: 7c6de2faf91891a689d746b03af76e7c00bea773c241e364bb403a4e9326b1bf
 ---
 # chat 怎么玩 · x-basalt
 
@@ -111,7 +111,7 @@ x-basalt chat --session <uuid>                       # 带历史进 REPL
 
 检查 `dryRun`、`failed`、`changed` 和 `reindexed`，不只看 `changed>0`：dry-run 不代表 Markdown 已写入，部分失败不能说全部成功，索引刷新依回执与配置判断。只有第二次成功回执 `changed=0` 才能报告本次验证无新增改动；未执行、失败或撞顶须如实说明。
 
-这是**提示纪律而非宿主强制验收器**。本轮同一模型的旧／新提示各三题均满足上述执行义务，没有证明成功率提升；测试条件、原始证据位置与未验证边界见[执行记录](../plans/2026-10-02-chat-write-verification.md)。
+这是**提示纪律而非宿主强制验收器**。本轮同一模型的旧／新提示各三题均满足上述执行义务，没有证明成功率提升；测试条件、原始证据位置与未验证边界见[执行记录](../archive/plans/2026-10-02-chat-write-verification.md)。
 
 ## 7. 当前限制 / 注意
 
@@ -120,7 +120,7 @@ x-basalt chat --session <uuid>                       # 带历史进 REPL
 - **写无确认闸，不等于可自动恢复**：`meta` 写操作默认落盘，`run` 批量写需显式 `--apply`，chat 壳不自动补开关。Ctrl+C 中断模型/循环，不回滚已完成写入，也不保证立即终止已启动 CLI 子进程；临时文件 + rename 只避免直接半写目标，不保证并发防覆盖、跨文件事务或断电持久性。先在副本验证，建立可恢复备份，避免与 Sync/其他写者并发。信源：[`src/chat/cli-tool.ts`](../../src/chat/cli-tool.ts)、[`src/chat/loop.ts`](../../src/chat/loop.ts)、[`src/meta/index.ts`](../../src/meta/index.ts)。
 - **会话文件含 vault 原文**：`--session` 落盘的 `.x-basalt/sessions/chat-<uuid>.jsonl`（JSONL 事件流，逐 step 追加——崩溃/Ctrl+C 只丢在途 step，已完成的进度都在盘上）保存完整对话（含 `<<VAULT_DATA>>` 包裹的工具结果原文）——已 gitignore，但请自行清理；同一会话别并行跑（行会交错串线）。不带 `--session` 的临时会话零落盘。
 - **常驻/监听不可用**：chat 工具皆一次性；不存在 watch（会挂死对话），它被系统提示禁止尝试。
-- **效果未量化**：AI 行为质量尚无场景库回归（见 [`../research/2026-06-30-chat-gap-vs-agent-browser.md`](../research/2026-06-30-chat-gap-vs-agent-browser.md) §3）。
+- **效果未量化**：AI 行为质量尚无场景库回归（见 [`../research/2026-06-30-chat-gap-vs-agent-browser.md`](../archive/research/2026-06-30-chat-gap-vs-agent-browser.md) §3）。
 
 ## 8. 没 key 怎么办
 

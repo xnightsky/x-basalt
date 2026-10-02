@@ -6,18 +6,18 @@ tags:
   - todo
   - attention
   - x-basalt
-timestamp: 2026-10-02T08:13:30Z
-sha256: 769037d59745bf6c0ac021b11b09dfa4783fdafa4fe9db05609addfeed361209
+timestamp: 2026-10-02T12:14:45Z
+sha256: 1daad2c45f588cfd8621a82d67f56fba7ebd45db719817d023c90ba3d2893b6f
 ---
 # TODO · x-basalt
 
-本文件是未完成事项与用户关注项的置顶入口，会话启动时先读。关注可以只是持续观察，不必已经进入实施；不因某轮收口将它们迁走或隐藏。“待办/关注”不等于实施授权或正在执行。已完成的调查、R08/R09 修复与旧计划核对见[本轮执行记录](docs/plans/2026-10-01-todo-sequential-cleanup.md)，不等于模型问题和长期功能全部解决。
+本文件是未完成事项与用户关注项的置顶入口，会话启动时先读。关注可以只是持续观察，不必已经进入实施；不因某轮收口将它们迁走或隐藏。“待办/关注”不等于实施授权或正在执行。已完成的调查、R08/R09 修复与旧计划核对见[本轮执行记录](docs/archive/plans/2026-10-01-todo-sequential-cleanup.md)，不等于模型问题和长期功能全部解决。
 
 ## 已发现问题与验证状态（已完成项保留）
 
-- [x] **本切口已完成（2026-10-02）**：修正 chat 写后节流与用户显式复核/再次执行要求的冲突，并覆盖“真实执行第二次 run”而非用 query=0 冒充幂等证据。相关回归 124/124；同一模型旧／新各三题的执行义务均通过，不证明成功率提升或历史失败因果，模型漏执行／输出范围风险仍保留。（[本轮验收与边界](docs/plans/2026-10-02-chat-write-verification.md)）（[独立切口与验收](docs/plans/2026-10-01-todo-sequential-cleanup.md#3-下一轮切口--验收--非目标)、[系统提示](src/chat/index.ts)）
-- [ ] 修复外部 AI 最终答案追加排除路径的范围违约；内层 chat 与外层转述分别验收，不以目标路径/总数正确代替输出义务。（[已观察结果](docs/plans/2026-10-01-todo-sequential-cleanup.md#2-外部-ai-能力发现与入口分流)、[入口策略](docs/design/chat-tool-surface.md)）
-- [ ] 为 trace 补齐可关联工具调用/结果/错误的标识，验证并发同名调用与乱序结果的准确归属。（[可观测性风险](docs/plans/2026-10-01-todo-sequential-cleanup.md#decisions--progress)、[trace](src/chat/trace.ts)）
+- [x] **本切口已完成（2026-10-02）**：修正 chat 写后节流与用户显式复核/再次执行要求的冲突，并覆盖“真实执行第二次 run”而非用 query=0 冒充幂等证据。相关回归 124/124；同一模型旧／新各三题的执行义务均通过，不证明成功率提升或历史失败因果，模型漏执行／输出范围风险仍保留。（[本轮验收与边界](docs/archive/plans/2026-10-02-chat-write-verification.md)）（[独立切口与验收](docs/archive/plans/2026-10-01-todo-sequential-cleanup.md#3-下一轮切口--验收--非目标)、[系统提示](src/chat/index.ts)）
+- [ ] 修复外部 AI 最终答案追加排除路径的范围违约；内层 chat 与外层转述分别验收，不以目标路径/总数正确代替输出义务。（[已观察结果](docs/archive/plans/2026-10-01-todo-sequential-cleanup.md#2-外部-ai-能力发现与入口分流)、[入口策略](docs/design/chat-tool-surface.md)）
+- [ ] 为 trace 补齐可关联工具调用/结果/错误的标识，验证并发同名调用与乱序结果的准确归属。（[可观测性风险](docs/archive/plans/2026-10-01-todo-sequential-cleanup.md#decisions--progress)、[trace](src/chat/trace.ts)）
 - [ ] 核对或补齐历史 Bases grounding 原始评测证据；原始 JSON 未定位期间，历史汇总只作已报告结果，不重新认证旧分数。（[归档核对与证据缺口](docs/archive/plans/2026-08-08-bases-chat-grounding.md#收口核对2026-10-01)）
 
 ## 长期待办与关注项（原条目保留，未实施）
@@ -29,4 +29,4 @@ sha256: 769037d59745bf6c0ac021b11b09dfa4783fdafa4fe9db05609addfeed361209
 - [ ] 完善跨平台 shell 管道的 stdin/stdout 契约。（[传输设计与验收矩阵](docs/design/shell-pipe-portability.md)）
 - [ ] 按实际需求扩展元数据 profile。（[当前 profile 设计](docs/design/meta-subset.md)、[profile 调研](docs/research/2026-06-28-metadata-profiles-research.md)）
 - [ ] 评估 embedding 语义检索的准入条件与集成方案。（[准入与候选方案](docs/design/semantic-retrieval.md#5-可选-embedding-的候选方案未实现)）
-- [ ] 评估使用 Kysely 收编 DQL→SQL。（[选型调研](docs/research/2026-06-26-libraries-survey.md#2-索引层-indexer)、[当前 SQL 生成器](src/query/sql-generator.ts)）
+- [ ] 评估使用 Kysely 收编 DQL→SQL。（[选型调研](docs/archive/research/2026-06-26-libraries-survey.md#2-索引层-indexer)、[当前 SQL 生成器](src/query/sql-generator.ts)）

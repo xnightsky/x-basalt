@@ -7,12 +7,14 @@ tags:
   - libraries
   - base
   - query
-timestamp: 2026-10-01T17:17:23Z
-sha256: e707850698e8e5e0352fcd422a42c12e8725835030ce0ab38fa8f76962659e09
+timestamp: 2026-10-02T11:30:42Z
+sha256: 7aad8b0f329720c11090735f0e3ac9b0eb8b3747ee8834c45fbe51ac754990bd
 ---
 # 最小修复切口的复用与库选型评估
 
 > 日期：2026-10-01；对应根 TODO 第四项。范围以 [顺序清理计划第三项](../plans/2026-10-01-todo-sequential-cleanup.md#3-下一轮切口--验收--非目标) 为准，不重新做全行业普查，也不把评估等同安装或兼容实跑。
+
+> **归档说明（2026-10-02）**：对应 R08/R09 最小修复已结束，保留当时接线缺口与固定版本选型证据，不再作为待实施项。当前能力见[兼容账本](../../design/query-compatibility-ledger.md)；Kysely 长期评估仍在根 TODO，basecli 独立 LICENSE / 完整分发许可、跨语言适配和性能等停点继续受[准入政策](../../design/dependency-license-policy.md)与兼容账本 §3 约束，归档不是安装授权。
 
 ## 结论 / 目的
 
@@ -52,11 +54,11 @@ sha256: e707850698e8e5e0352fcd422a42c12e8725835030ce0ab38fa8f76962659e09
 
 ### 本仓与安装包
 
-- [P1] [`src/base/engine.ts`](../../src/base/engine.ts)：公式 accessor 与 rowEvalContext 装配。
-- [P2] [`src/base/source.ts`](../../src/base/source.ts)：createFileResolver 的行集/匹配/歧义契约。
-- [P3] [`src/query/sql-generator.ts`](../../src/query/sql-generator.ts)、[`parser.ts`](../../src/query/parser.ts)：TASK 提前返回与现有 SORT/词法位置。
-- [P4] [`src/chat/loop.ts`](../../src/chat/loop.ts)、[`trace.ts`](../../src/chat/trace.ts)：SDK 事件输出与 trace；[`tests/`](../../tests/)：Node 原生回归。
-- [P5] [`package.json`](../../package.json)、[`pnpm-lock.yaml`](../../pnpm-lock.yaml)、[许可策略](../design/dependency-license-policy.md)。安装包核验文件：`chevrotain/package.json` 与 `LICENSE.txt`、`better-sqlite3/package.json` 与 `LICENSE`、`yaml/package.json` 与 `LICENSE`，均位于 node_modules。
+- [P1] [`src/base/engine.ts`](../../../src/base/engine.ts)：公式 accessor 与 rowEvalContext 装配。
+- [P2] [`src/base/source.ts`](../../../src/base/source.ts)：createFileResolver 的行集/匹配/歧义契约。
+- [P3] [`src/query/sql-generator.ts`](../../../src/query/sql-generator.ts)、[`parser.ts`](../../../src/query/parser.ts)：TASK 提前返回与现有 SORT/词法位置。
+- [P4] [`src/chat/loop.ts`](../../../src/chat/loop.ts)、[`trace.ts`](../../../src/chat/trace.ts)：SDK 事件输出与 trace；[`tests/`](../../../tests)：Node 原生回归。
+- [P5] [`package.json`](../../../package.json)、[`pnpm-lock.yaml`](../../../pnpm-lock.yaml)、[许可策略](../../design/dependency-license-policy.md)。安装包核验文件：`chevrotain/package.json` 与 `LICENSE.txt`、`better-sqlite3/package.json` 与 `LICENSE`、`yaml/package.json` 与 `LICENSE`，均位于 node_modules。
 
 ### 固定外部源码
 

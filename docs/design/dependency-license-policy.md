@@ -1,6 +1,6 @@
 ---
-timestamp: 2026-10-02T08:14:40Z
-sha256: 621651a190bfea6a8922144268f5b597aaf495a74069b04ec351eafcdb8c3ac4
+timestamp: 2026-10-02T12:14:45Z
+sha256: becbb85b4479bd8029431847b8ff14e9dd7a3d96a7e4441c12fec71be2423ee7
 type: guide
 title: 指南：第三方库许可证与选型避坑
 description: 引入第三方库前的许可证白名单与选型检查清单
@@ -14,7 +14,7 @@ tags:
 
 > 日期：2026-06-26 · 类型：操作指南（选库时召回）
 > 用途：每次引入第三方库前的**许可证避坑依据**。先过这份清单，再决定能不能 `import`。
-> 关联：依赖决策 [`../specs/2026-06-26-deps-build-vs-buy.md`](../archive/decisions/2026-06-26-deps-build-vs-buy.md)、库普查 [`../research/2026-06-26-libraries-survey.md`](../research/2026-06-26-libraries-survey.md)
+> 关联：依赖决策 [`../specs/2026-06-26-deps-build-vs-buy.md`](../archive/decisions/2026-06-26-deps-build-vs-buy.md)、库普查 [`../research/2026-06-26-libraries-survey.md`](../archive/research/2026-06-26-libraries-survey.md)
 > 免责：以下为工程惯例理解，非正式法律意见；关键依赖如需商用分发，以正式法律意见为准。
 
 ## 0. 一句话结论

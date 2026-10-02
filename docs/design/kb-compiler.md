@@ -9,14 +9,14 @@ tags:
   - links
   - parser
   - x-basalt
-timestamp: 2026-08-07T00:12:49Z
-sha256: 8b30a7ac812a4405ff412f127b2b3262e35bb50115eec09fed7e7399f21d8c71
+timestamp: 2026-10-02T12:14:45Z
+sha256: c1338930121a69a032e6cf7fbd4f0be350cf114b2ad0b12b406df5b9715cfe11
 ---
 
 # KB compiler / lint / links 设计规格
 
 > 日期：2026-07-09 · 类型：parser 定位契约 + links/lint/profile 分层设计
-> 状态：P0 parser 定位契约 + P1 links check/suggest + P2 统一诊断契约（`BasaltDiagnostic`）与 lint 壳 已落地；P3 metadata profile lint 分两阶段（§8）**均已落地**：P3a 内置校验（见 `../plans/2026-07-22-kb-compiler-p3a-profile-lint.md`）、P3b 自定义 config profile（`profiles.<name>` + `extends` + enum，见 `../plans/2026-07-22-kb-compiler-p3b-config-profile.md`）。关联调研：[`../research/2026-07-09-markdown-kb-compiler-lint-links-research.md`](../research/2026-07-09-markdown-kb-compiler-lint-links-research.md)。
+> 状态：P0 parser 定位契约 + P1 links check/suggest + P2 统一诊断契约（`BasaltDiagnostic`）与 lint 壳 已落地；P3 metadata profile lint 分两阶段（§8）**均已落地**：P3a 内置校验（见 `../plans/2026-07-22-kb-compiler-p3a-profile-lint.md`）、P3b 自定义 config profile（`profiles.<name>` + `extends` + enum，见 `../plans/2026-07-22-kb-compiler-p3b-config-profile.md`）。关联调研：[`../research/2026-07-09-markdown-kb-compiler-lint-links-research.md`](../archive/research/2026-07-09-markdown-kb-compiler-lint-links-research.md)。
 
 ## 1. 结论
 

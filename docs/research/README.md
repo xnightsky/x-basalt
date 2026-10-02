@@ -6,8 +6,8 @@ tags:
   - research
   - docs
   - x-basalt
-timestamp: 2026-10-02T08:13:30Z
-sha256: df63ba79a82d491fdf4171aad350878cfe9e2e10c72a3ffe5b4c2f11d695911e
+timestamp: 2026-10-02T12:14:45Z
+sha256: b2e706359e237bf0316c8869b06d43843f538f69dbb1202dab41cf5d8d7280fa
 ---
 # 当前调研
 
@@ -15,16 +15,13 @@ sha256: df63ba79a82d491fdf4171aad350878cfe9e2e10c72a3ffe5b4c2f11d695911e
 
 | 文档 | 作用 |
 | --- | --- |
-| [DQL / Bases 双路线局部深度调研](2026-10-01-dql-bases-compatibility-local-audit.md) | 官方正文入口/API 与模型限制、本项目 stdin/source、任务/inline/展开/公式/附件对照；记录公式解析器与 TASK 子句执行缺口，给出条件化兼容建议。 |
+| [DQL / Bases 双路线局部深度调研](2026-10-01-dql-bases-compatibility-local-audit.md) | 官方正文入口/API 与模型限制、本项目 stdin/source、任务/inline/展开/公式/附件对照；保留 R08/R09 发现时证据（随后已修），并给出条件化兼容建议，不把旧探针结果当未修复现状。 |
 | [Agent 知识工具业界调研：定位与架构取舍](2026-09-30-agent-knowledge-industry-landscape.md) | 固定源码与官方信源，比较无头竞品、词法/语义/图检索、Agent 宿主与知识维护；列出证据边界、文档校正及待执行 A/B 协议。 |
-| [最小修复切口复用与库选型](2026-10-01-minimal-slice-reuse-assessment.md) | R08/R09 的局部复用决策、现有包许可与外部候选适配/成本/失败边界；本轮不增依赖。 |
-| [业界现成库逐模块普查](2026-06-26-libraries-survey.md) | parser / indexer / query 的库选型比较与许可证核查线索。 |
 | [元数据策略 profile 调研](2026-06-28-metadata-profiles-research.md) | Obsidian、OKF 与 SSG 元数据字段的比较依据。 |
-| [chat 对标 agent-browser](2026-06-30-chat-gap-vs-agent-browser.md) | chat 效果、重试、撞顶与场景库量化的对照基线。 |
 | [inline fields 采用度与前景](2026-07-02-inline-fields-adoption-outlook.md) | 存量兼容与未来投入边界的生态证据。 |
-| [KB compiler 深度调研](2026-07-09-markdown-kb-compiler-lint-links-research.md) | lint、links、profile 与诊断能力的外部比较。 |
-| [Obsidian Bases 无头引擎调研](2026-07-22-obsidian-bases-headless-engine-research.md) | 官方 Bases 与无 GUI 查询能力的持续对照。 |
 | [x-basalt、Obsidian 与 LLM Wiki：能力差距与边界 rebase](2026-08-07-x-basalt-obsidian-llm-wiki-rebase.md) | 以当前实现为基线，对照 Obsidian 与 LLM Wiki，并明确 SQLite index cache 替代 wiki 层后的能力边界。 |
+
+早期库普查、chat/KB compiler/Bases 立项调研与已结束 R08/R09 选型已转入[归档调研](../archive/README.md#调研背景)。有效规则由对应设计接替，Kysely、模型对照、未知 oracle 与许可停点继续保留活跃入口；归档不关闭这些义务。
 
 ## 与其他目录的边界
 

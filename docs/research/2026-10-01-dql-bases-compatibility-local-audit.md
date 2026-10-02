@@ -8,14 +8,14 @@ tags:
   - bases
   - compatibility
   - x-basalt
-timestamp: 2026-10-02T08:13:30Z
-sha256: 1e21fc9147c4a862b8c8df9a6f241945be09b87f959a6851709983da55d72e36
+timestamp: 2026-10-02T12:14:45Z
+sha256: c02a63ea1cfecc0bf0178f43dbce434deabf3a757b5ba28000defe5d30e569f9
 ---
 # DQL / Bases 局部深度调研：双路线的必要性与兼容边界
 
 > 核查日期：2026-10-01 UTC；项目基线：x-basalt 0.10.0 / `0a508dd6883d3ea61d90efa9af359bd5daedc8f2`。
 > 这是调研与建议，不是删改模块、升级兼容快照或功能实施授权。
-> 后续实施状态（2026-10-01）：R08 已由[顺序清理计划](../plans/2026-10-01-todo-sequential-cleanup.md#5-bases-公式-file--asfile)修复，公式关联读取新增 16 项回归；R09 已执行 TASK 文件级排序，分组/展开明确拒绝，新增 18 项回归（[冻结表](../design/dql-subset.md#r09-task-子句回归矩阵)）。下文保留原取证基线的表格、代码定位与失败读数，不用后续结果改写历史探针。
+> 后续实施状态（2026-10-01）：R08 已由[顺序清理计划](../archive/plans/2026-10-01-todo-sequential-cleanup.md#5-bases-公式-file--asfile)修复，公式关联读取新增 16 项回归；R09 已执行 TASK 文件级排序，分组/展开明确拒绝，新增 18 项回归（[冻结表](../design/dql-subset.md#r09-task-子句回归矩阵)）。下文保留原取证基线的表格、代码定位与失败读数，不用后续结果改写历史探针。
 > 上游：[业界调研](2026-09-30-agent-knowledge-industry-landscape.md)、[本轮已归档计划](../archive/plans/2026-10-01-dql-bases-compatibility-audit.md)。
 
 ## 1. 结论先行
@@ -188,6 +188,6 @@ printf '%s\n' 'filters: status == "active"' 'views:' '  - type: table' '    name
 - **[P4]** [`src/base/source.ts`](../../src/base/source.ts)、[`values.ts`](../../src/base/values.ts)、[`tests/base-group-summary.test.ts`](../../tests/base-group-summary.test.ts)、[`tests/vault-entries-dql-proof.test.ts`](../../tests/vault-entries-dql-proof.test.ts)：独立值模型、整列表键分组、附件隔离。
 - **[P5]** [oracle runbook](../design/bases-oracle-runbook.md)、[校正账本](../design/bases-vs-official.md)：指定版本观察，不代表本轮重跑。
 - **[P6]** [DQL 子集冻结](../design/dql-subset.md)：2026-06 的立项与扩展范围；历史描述不替代当前源码。
-- **[P7]** [Bases 立项调研](2026-07-22-obsidian-bases-headless-engine-research.md)、[引擎边界](../design/bases-engine.md)：2026-07 的格式/类型/无头目标与禁止耦合约束。
+- **[P7]** [Bases 立项调研](../archive/research/2026-07-22-obsidian-bases-headless-engine-research.md)、[引擎边界](../design/bases-engine.md)：2026-07 的格式/类型/无头目标与禁止耦合约束。
 - **[P8]** [动态 Bases stdin 计划](../archive/plans/2026-08-03-bases-dynamic-stdin.md)：查询定义作为入参的历史动机与实现证据。
 - **[P9]** [grounding A/B](../archive/plans/2026-08-08-bases-chat-grounding.md)：特定小库/模型的旧结果，不外推复杂任务能力。

@@ -1,18 +1,19 @@
 ---
 type: plan
 title: chat 会话落盘与续跑 执行计划
-description: 按设计契约 docs/design/chat-session-continue.md 落地 --session 新建/续跑：session 存储层、CLI/入口/REPL 接线、T1-T14 测试矩阵、消费侧文档同步；已收口，Evidence 1188/1188 全绿
+description: 会话落盘与续跑的执行切口、JSONL 逐 step 校正、T1–T15 验收与历史质量门记录。
 tags:
   - plan
   - chat
   - session
   - x-basalt
-timestamp: 2026-09-20T12:14:51Z
-sha256: d98d2e42d3b26f691f3e90693fc617170b645ffd83ab43f4c099739564a6e613
+timestamp: 2026-10-02T10:34:01Z
+sha256: b0cc1597480d37545e631b728c1af7c9d698c4d737e5bb7d26b8a815bc9f3ba9
+status: completed
 ---
 # 计划：chat 会话落盘与续跑（2026-09-20）
 
-> 设计契约（先读）：[`../design/chat-session-continue.md`](../design/chat-session-continue.md)——CLI 契约、落盘格式、守卫、风险、非目标全部以它为准；本文只列执行切口与验收记录。
+> 设计契约（先读）：[`../design/chat-session-continue.md`](../../design/chat-session-continue.md)——CLI 契约、落盘格式、守卫、风险、非目标全部以它为准；本文只列执行切口与验收记录。
 
 ## 目标
 

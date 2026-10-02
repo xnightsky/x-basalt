@@ -7,16 +7,17 @@ tags:
   - orchestrator
   - pipeline
   - cli
-timestamp: 2026-10-02T08:13:30Z
-sha256: 322c8c07c360bf1ce2bdc14d7fe3326069f6290a260e05dddf91d702f7ee79fa
+timestamp: 2026-10-02T12:23:26Z
+sha256: f6c02cc2ce7ea542c5406b11557013644ea316adbff83386cb624dcd3799d8f7
+status: completed
 ---
 
 # 统一算子模型片四：声明式步骤列表（steps/step）
 
 > **For agentic workers:** 用 TDD（先 red 后 green）逐子步实现；步骤用 `- [ ]` 跟踪。
 > 日期：2026-07-30 · 主题：统一算子模型片四 · 配置面
-> 真相源（设计）：[`../design/pipeline-op-model.md`](../design/pipeline-op-model.md) §9 片四 + D12
-> 前序：[`2026-07-30-pipe-closure.md`](../archive/plans/2026-07-30-pipe-closure.md)（参数面收口）、TODO「统一算子模型」
+> 真相源（设计）：[`../design/pipeline-op-model.md`](../../design/pipeline-op-model.md) §9 片四 + D12
+> 前序：[`2026-07-30-pipe-closure.md`](2026-07-30-pipe-closure.md)（参数面收口）、TODO「统一算子模型」
 
 **Goal:** `--pipe` 获得无分隔符的算子链表达方式：配置段 `pipelines.<name>.steps: string[]`
 （一元素一算子 spec）+ CLI 可重复 `--pipe step=<spec>`（按出现顺序成链）。
@@ -57,7 +58,13 @@ sha256: 322c8c07c360bf1ce2bdc14d7fe3326069f6290a260e05dddf91d702f7ee79fa
 - [x] **S4-6 文档同步**：spec §8.1 表补 steps 行、`docs/use` 命令文档、`skills-data/core.json5`、
   CHANGELOG、TODO 勾除片四（含 §12 两条回写项一并处理——诊断键名「已定」回写 +
   多根 path 归一显式断言，若在片四边界内）。
-- [ ] **S4-7 四门验证 + 收口**：typecheck / lint / format / 受影响测试全绿；文档元数据自举。
+- [x] **S4-7 四门验证 + 收口**：typecheck / lint / format / 受影响测试全绿；文档元数据自举。
+
+> 此项原记录未勾选；本轮依据 2026-10-02 实际运行的 typecheck / lint / format:check / build 与片四相关测试 70/70 补记，并刷新文档元数据。原验收判据保留，不追认 2026-07-30 已完成质量门。
+
+## 归档核对（2026-10-02）
+
+当前 `steps` / `step=`、链覆盖与 `actions` 兼容由[算子设计](../../design/pipeline-op-model.md) D12 承载。实际运行 `pnpm run typecheck`、`pnpm run lint`、`pnpm run format:check`、`pnpm run build` 及 `node --import tsx --test tests/orchestrator-params.test.ts tests/orchestrator-config.test.ts tests/orchestrator-contract.test.ts tests/orchestrator-cli.test.ts`，70/70 通过；本轮不改代码，不补做跨平台 shell 或历史模型实验。
 
 ## 验收
 

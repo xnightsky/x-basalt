@@ -1,33 +1,32 @@
 ---
 type: design
 title: CLI chat（读+写）可落地实现设计
-description: CLI chat 初版设计记录、当前单 CLI 工具面指路与写安全边界：无逐动作确认，原子替换不等于并发防覆盖或中断回滚。
+description: 当前可选 AI 隔离、provider、循环与写安全边界；单 CLI 工具面共享现有开关，初版范围和交接过程另留归档。
 tags:
   - spec
   - chat
   - ai
   - design
   - x-basalt
-timestamp: 2026-10-02T08:14:40Z
-sha256: ca5dc7db4ed1ec348976677c2d801f9141f7807fa04e737648fde6fae3f1ac2d
+timestamp: 2026-10-02T12:17:29Z
+sha256: d75e222423be163b54114a3f3fcabec33e412d092959821ee831d97a86b49b98
 ---
 
 # 设计：CLI chat（读+写，自然语言驱动 vault）—— 可落地实现设计
 
-> 初版设计：2026-06-30；当前工具面已由[单 CLI 工具设计](chat-tool-surface.md)及 [`src/chat/tools.ts`](../../src/chat/tools.ts) 取代。下文初版工具表/交接段保留设计背景，不作为当前工具清单。2026-09-30 复核写安全边界。
+> 当前实现以[单 CLI 工具设计](chat-tool-surface.md)及 [`src/chat/tools.ts`](../../src/chat/tools.ts) 为准；初版范围、工具表和交接记录已集中归档。本文维护可选 AI 隔离、循环与写安全边界。
 > 父文档（先读）：评估 [`2026-06-28-cli-chat-design.md`](../archive/decisions/2026-06-28-cli-chat-design.md)——本文是它触发条件成熟后的「怎么建」。
-> 关联：编排器 [`2026-06-29-change-orchestration-design.md`](change-orchestration.md)（写动作批量地基）；检索后端 [`2026-06-28-semantic-retrieval-integration.md`](semantic-retrieval.md)（FTS5，本轮推后）；许可证闸 [`../guides/dependency-license-policy.md`](dependency-license-policy.md)；AI/技能定位 [`../guides/ai-and-skills.md`](../use/ai-and-skills.md)。
-> 决策摘要：AI 客户端选 **Vercel `ai` SDK**（与 `AI_GATEWAY_*` 契约原生一致）；写动作**直接执行**（用户主动进入 chat = 知情同意，无确认闸；以 Ctrl+C/SIGINT 中断模型/循环、以原子替换避免直接半写目标；不保证撤销已启动或完成的写入）；范围 = 读+写（含编排器一次性批量），仅排除常驻 watch。
-> **设计变更（2026-06-30，用户拍板推翻原方案）**：原 §6/§7 的「写动作逐动作确认 [y/N]」是设计缺陷——用户既然主动开 chat，逐个确认是多余摩擦。改为写动作直接落盘；终止能力靠 **Ctrl+C/SIGINT → AbortController** 中断在途模型调用与循环，既有临时文件 + rename 避免直接半写目标，但不保证并发防覆盖、断电持久性或中断回滚（[`src/meta/index.ts`](../../src/meta/index.ts)）。`confirm.ts` 删除。下文 §5/§6/§7/§11 已据此更新。
+> 关联：编排器 [`2026-06-29-change-orchestration-design.md`](change-orchestration.md)（写动作批量地基）；检索后端 [`2026-06-28-semantic-retrieval-integration.md`](semantic-retrieval.md)（FTS5 已实现，embedding 仍待评估）；许可证闸 [`../guides/dependency-license-policy.md`](dependency-license-policy.md)；AI/技能定位 [`../guides/ai-and-skills.md`](../use/ai-and-skills.md)。
+> 无逐动作确认闸，但写入仍遵循 CLI：单篇 `meta` 默认写，批量 `run` 需显式 `--apply`。Ctrl+C 中断模型/循环，不保证终止已启动子进程或回滚已写文件；原子替换不提供并发防覆盖、跨文件事务或断电持久性。
 
 ## 0. 本文回答的问题
 
-评估文档（父文档）论证了「能做、怎么不破坏离线身份」。本文把它收敛为**可交接的实现契约**：模块边界、接口签名、工具面 schema、安全闸落点、测试守门、pi 分段。
+本文维护当前可选 AI 的边界与安全纪律；工具 schema、文件路径还原和子命令准入以 `chat-tool-surface.md` 与源码为准，不再维护第二张工具表。
 
 **与父文档评估的两处范围调整（用户拍板）**：
 
 1. **不止只读**：父文档 §9 建议「只读先行、写动作等信任建立后再开」；本轮**读+写同做**——LLM 可驱动单文件写（`src/meta`）与一次性批量写（`src/orchestrator`），写动作无逐个确认，当前安全边界见 §7。
-2. **唯一排除常驻 watch**：编排器的一次性 `runScan`/`runManual` 进工具面；`orch.watch` 常驻 daemon 不暴露给 chat。
+2. **排除常驻与递归**：`watch` 和 `chat` 不进入 CLI 工具 allowlist；一次性操作仍按原 CLI 参数与写开关执行。
 
 ## 1. 设计脊梁：最小可选 AI（不可协商，承接父文档 §1）
 
@@ -40,29 +39,7 @@ sha256: ca5dc7db4ed1ec348976677c2d801f9141f7807fa04e737648fde6fae3f1ac2d
 
 ## 2. 范围
 
-| 维度      | 本轮做                                                                         | 本轮不做                                    |
-| --------- | ------------------------------------------------------------------------------ | ------------------------------------------- |
-| 读        | query(DQL) / parse / scan / meta get / skills recall                           | ——                                          |
-| 写·单文件 | meta set / unset / rename / normalize / apply                                  | ——                                          |
-| 写·批量   | 编排器**一次性** runScan / runManual（apply/set/unset/rename/normalize/index） | `orch.watch` 常驻 daemon                    |
-| 形态      | 单发 `chat "<NL>"` + REPL `chat`                                               | ——                                          |
-| 检索      | 结构化任务（DQL/meta/scan/skill）                                              | FTS5「按正文找」（推后，依赖检索后端 spec） |
-| 出口      | 自驱 chat                                                                      | MCP 出口（另议）                            |
-
-## 3. 模块布局（全部隔离在 `src/chat/`，懒加载）
-
-```
-src/chat/
-  index.ts     入口：runOnce(input, opts) / runRepl(opts)；cli.ts 仅在 chat 分支 await import('./chat/index.js')
-  provider.ts  解析 AI_GATEWAY_* + --model → LanguageModel；动态 import ai/gateway/openai-compatible；无 key → 友好退出
-  tools.ts     工具面：读工具(带 execute 调既有原语) + 写工具(execute 直接落盘，无确认)；schema 用 jsonSchema()
-  loop.ts      agentic 驱动：streamText + stopWhen(stepCountIs) + abortSignal（可中断）；流式回显推理+每步动作；装配 messages 往返
-  safety.ts    回灌内容边界 nonce 包裹 + observe 结果截断
-  repl.ts      readline REPL：累积对话+观察历史，quit/exit/q 退出；SIGINT→中断当前轮
-```
-
-- **核心命令分支完全不触达 `src/chat/`**：`src/cli.ts` 仅在 `chat` 子命令 `await import`，其余命令零改动。
-- **依赖懒加载**：`ai` / `@ai-sdk/gateway` / `@ai-sdk/openai-compatible` 列 `optionalDependencies`；`provider.ts` 内 `await import('ai')`，缺失 → 报「装 X 启用 chat」退出，不抛栈。
+当前读写、检索与批量能力通过 `cli` 调现有子命令，另有 `skills_get` / `skills_recall` 元工具；临时会话默认不落盘，可显式保存/续跑。初版范围与模块布局见[归档](../archive/decisions/2026-06-30-chat-readwrite-record.md#2-范围)。
 
 ## 4. provider 与配置（段①）
 
@@ -71,10 +48,10 @@ src/chat/
 | 来源（优先级高→低）                    | 落到 SDK                                                                         | 默认                          |
 | -------------------------------------- | -------------------------------------------------------------------------------- | ----------------------------- |
 | `--model <name>` ＞ `AI_GATEWAY_MODEL` | `model`                                                                          | `anthropic/claude-sonnet-4.6` |
-| `AI_GATEWAY_API_KEY`（必填，无则禁用） | `createGateway({ apiKey })`                                                      | 无（缺 = 禁用）               |
-| `AI_GATEWAY_URL`（可选）               | `createGateway({ baseURL })` ／ 本地端点用 `createOpenAICompatible({ baseURL })` | Vercel AI Gateway 默认        |
+| `AI_GATEWAY_API_KEY`（必填，无则禁用） | `createOpenAICompatible({ apiKey })` | 无（缺 = 禁用） |
+| `AI_GATEWAY_URL`（可选） | `createOpenAICompatible({ baseURL })` | `https://ai-gateway.vercel.sh/v1` |
 
-> 已核实：`AI_GATEWAY_API_KEY` 是 Vercel Gateway 原生环境变量，与 agent-browser/父文档 §7 逐字一致；`createGateway({ apiKey, baseURL })` 支持自定义 baseURL。来源：ai-sdk.dev Gateway provider 文档 + Vercel AI Gateway 鉴权文档。
+当前 `src/chat/provider.ts` 始终使用 OpenAI 兼容客户端的 `chatModel`，不是 `createGateway` 私有协议；自定义端点的 tool-calling 能力由用户所选模型决定。
 
 ### 4.2 无 key 行为（隔离纪律工程兑现）
 
@@ -87,77 +64,11 @@ src/chat/
 
 ### 4.3 许可证闸（清单项，不预设通过）
 
-`ai` / `@ai-sdk/gateway` / `@ai-sdk/openai-compatible` 预期 Apache-2.0。**加入 `optionalDependencies` 前**逐包核对 `docs/design/dependency-license-policy.md`（仅 MIT/Apache-2.0/ISC/BSD），命中即换方案。核验结论写回 research/ 或本文附注。
+当前可选依赖为 `ai` / `@ai-sdk/openai-compatible`，以 `package.json` 为准。新增或升级依赖前按[许可证政策](dependency-license-policy.md)核对安装包与完整分发边界，不把初版预期当作本轮许可审计。
 
 ## 5. 工具面 + 落地路径（段②）
 
-以下工具表是迁移前的设计记录，不再作为当前 schema。当前 `buildTools()` 只装配 `cli` / `skills_recall` / `skills_get`，vault 操作经 CLI 分发；没有 `confirm`。依据：[`src/chat/tools.ts`](../../src/chat/tools.ts)、[`src/chat/cli-tool.ts`](../../src/chat/cli-tool.ts)。
-
-### 5.1 读工具（带 execute，结果经 safety 截断+边界包裹后喂回）
-
-| tool            | input schema                     | 落地                                             |
-| --------------- | -------------------------------- | ------------------------------------------------ |
-| `query`         | `{ dql: string }`                | `new DataviewEngine(dbPath).query(dql)`          |
-| `parse`         | `{ file: string }`               | `new VaultParser().parse(read(file))`            |
-| `scan`          | `{ rehash?: boolean }`           | `indexer.scan({ rehash, dryRun:true })` 差异报告 |
-| `meta_get`      | `{ file: string, key?: string }` | `readMeta(file, key)`                            |
-| `skills_recall` | `{ keyword: string }`            | `new SkillRecall(...).recall(keyword)`           |
-
-### 5.2 写工具（execute 直接落盘，无确认闸）
-
-| tool             | input schema                                                     | 落地（直接以非 dry-run 跑既有原语，原子写）              |
-| ---------------- | ---------------------------------------------------------------- | -------------------------------------------------------- |
-| `meta_set`       | `{ file, key, value, type? }`                                    | `editMeta(file, d=>setMeta(d,key,coerce(value,type)))`   |
-| `meta_unset`     | `{ file, key }`                                                  | `editMeta(file, d=>unsetMeta(d,key))`                    |
-| `meta_rename`    | `{ file, oldKey, newKey }`                                       | `editMeta(file, d=>renameMeta(d,oldKey,newKey))`         |
-| `meta_normalize` | `{ file, sortKeys? }`                                            | `editMeta(file, d=>normalizeDoc(d,{sortKeys}))`          |
-| `meta_apply`     | `{ profile, file, sets?, refreshDerived? }`                      | `applyProfile(file, profile, {sets,refreshDerived})`     |
-| `pipeline_run`   | `{ actions?: string[], steps?: string[], where?, paths?, ifExists?, concurrency? }` | `Orchestrator.runManual({where}) ／ runScan()`，**批量** |
-
-- **单文件 vs 批量两路并存（用户拍板）**：模型按任务选——「改这个文件」走 `meta_*`；「对一批笔记做 X」走 `pipeline_run`（编排器）。
-- **`pipeline_run` 链两种写法（2026-07-30 对齐 CLI）**：`steps`（一元素一完整算子 spec、不切分，支持 query/search/base/filter/lint 等算子与 `{{row.x}}` 插值）存在时优先于 `actions`（七个经典动作），两者至少其一——全缺在工具层即报 invalid，不静默跑空链；返回值带 `steps[]` 逐步行数流水（行在哪一步被滤掉一眼定位）。
-- **直接落盘、无确认**：写工具 `execute` 直接以非 dry-run 调原语落盘并返回结果摘要。当前临时文件 + rename 避免直接半写目标；Ctrl+C 中断模型/循环，不回滚已完成写入，也不保证即时停止已启动的 CLI 子进程；git/备份须由用户实际建立，产品不自动提供。依据：[`src/meta/index.ts`](../../src/meta/index.ts)、[`src/chat/loop.ts`](../../src/chat/loop.ts)、[`src/chat/cli-tool.ts`](../../src/chat/cli-tool.ts)。不再先 dry-run 预览再确认。
-
-### 5.3 接口契约草案
-
-```ts
-// provider.ts
-interface ProviderConfig {
-  apiKey: string;
-  model: string;
-  baseURL?: string;
-}
-function resolveProvider(env, modelFlag?: string): ProviderConfig | { error: "no-key" };
-async function createModel(cfg: ProviderConfig): Promise<LanguageModel>; // 动态 import
-
-// tools.ts（写工具直接落盘，无 confirm 入参）
-interface ToolContext {
-  dbPath: string;
-  vaultPath: string;
-}
-function buildTools(ctx: ToolContext, safety: Safety): ToolSet;
-
-// safety.ts
-interface Safety {
-  wrap(content: string): string;
-  truncate(content: string): string;
-}
-function makeSafety(opts: { nonce: string; maxChars: number }): Safety;
-
-// loop.ts（abortSignal 支持 Ctrl+C 中断）
-interface LoopDeps {
-  model: LanguageModel;
-  tools: ToolSet;
-  maxSteps: number;
-  onEvent(e): void;
-  abortSignal?: AbortSignal;
-}
-async function runLoop(messages: Message[], deps: LoopDeps): Promise<Message[]>;
-
-// index.ts
-async function runOnce(input: string, opts): Promise<number>; // 返回 exit code
-async function runRepl(opts): Promise<number>;
-```
+本节历史内容已归档，见[原章节](../archive/decisions/2026-06-30-chat-readwrite-record.md#5-工具面--落地路径段②)。当前规则与剩余边界见本文有效章节。
 
 ## 6. agentic 循环（段②）
 
@@ -170,7 +81,7 @@ async function runRepl(opts): Promise<number>;
 
 > 设计变更：去掉「写动作逐动作确认」。用户主动开 chat = 知情同意，逐个 [y/N] 是多余摩擦。代之以：
 
-- **直接执行**：读写工具都自动跑，写工具直接落盘，无 dry-run 预览、无确认、无 TTY/非 TTY 分支。
+- **无逐动作确认**：工具自动执行，但不绕过 CLI 的 dry-run 与显式 `--apply`。`meta` 默认写；`run` 默认 dry-run，工具壳不会自动补 `--apply`。
 - **可中断兜底**：Ctrl+C/SIGINT → AbortController 中断在途循环；这是用户的「刹车」。
 - **原子替换范围**：meta 以同目录 tmp+rename 避免直接半写目标；没有版本前置条件/锁或 fsync，不提供并发防覆盖、断电持久性、跨文件事务；失败可能留下临时文件。源码：[`src/meta/index.ts`](../../src/meta/index.ts)。
 - **可观测兜底**：流式回显每步推理与动作，用户实时看到「要改什么」，不对就刹车。
@@ -196,16 +107,7 @@ async function runRepl(opts): Promise<number>;
 
 ## 11. pi 交接分段
 
-每段独立跑受影响边界的 `lint`+`typecheck`+`test`、`git diff` 逐文件复核（不轻信 pi 自报）、提交在 main。
-
-| 段  | 内容                                                                                 | 产出                            | 验收                                                                 |
-| --- | ------------------------------------------------------------------------------------ | ------------------------------- | -------------------------------------------------------------------- |
-| ①   | provider 适配 + 配置加载 + no-key 行为 + optionalDeps 接线 + 许可证核验              | `provider.ts`、package.json     | 有 key 能拿到 model；无 key 友好退出；核心命令不受 optionalDeps 影响 |
-| ②   | 防注入/截断 safety（叶子，无 SDK 依赖）                                              | `safety.ts`                     | 边界包裹+截断生效                                                    |
-| ③   | 工具面 schema（写工具直接落盘）+ agentic 循环（abortSignal）+ mock-provider 循环测试 | `tools.ts`、`loop.ts`           | Mock 模型跑通多步读+写；写工具直接落盘；中断生效                     |
-| ④   | 单发 + REPL + cli.ts chat 分支 + SIGINT→abort + 隔离守门                             | `index.ts`、`repl.ts`、`cli.ts` | 单发翻译执行退出；REPL 累积历史；Ctrl+C 中断；无 key 友好退出        |
-
-> 变更：已删除原「确认闸」段。`confirm.ts` 不存在；写工具不接 `ConfirmFn`。`safety.ts` 提前为段②叶子。
+本节历史内容已归档，见[原章节](../archive/decisions/2026-06-30-chat-readwrite-record.md#11-pi-交接分段)。当前规则与剩余边界见本文有效章节。
 
 ## 12. 风险 / 未决 / 边界
 

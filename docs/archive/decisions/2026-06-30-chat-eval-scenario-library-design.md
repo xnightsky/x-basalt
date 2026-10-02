@@ -7,15 +7,15 @@ tags:
   - chat
   - evals
   - scenario-library
-timestamp: 2026-08-07T00:12:49Z
-sha256: d5b80f30b5a096747b23e800e49e5c5d12f5de7139f5965609b5fc43d010121b
+timestamp: 2026-10-02T12:34:26Z
+sha256: bb7779d89ea1f7c1bc407bff5cf12e770b4d915826a548e30e708096b4938177
 ---
 
 # chat 评估 / 场景库设计草案（对标 agent-browser evals）
 
 > 日期：2026-06-30。状态：**设计草案 — 选址/格式待用户拍板**，本篇不实现。
 > 触发：dogfood 实测 chat 痛点（操作失败率高 / 轮询撞顶停），且「需要的场景太多，不可能堆在项目仓库里」。
-> 对标：`vercel-labs/agent-browser` 的 `evals/` 体系（详见 [`../../research/2026-06-30-chat-gap-vs-agent-browser.md`](../../research/2026-06-30-chat-gap-vs-agent-browser.md) §3）。
+> 对标：`vercel-labs/agent-browser` 的 `evals/` 体系（详见 [`../../research/2026-06-30-chat-gap-vs-agent-browser.md`](../research/2026-06-30-chat-gap-vs-agent-browser.md) §3）。
 
 ## 1. 目的与定位
 
@@ -37,8 +37,8 @@ sha256: d5b80f30b5a096747b23e800e49e5c5d12f5de7139f5965609b5fc43d010121b
 | 候选 | 说明 |
 |---|---|
 | **A. 新建兄弟私有仓**（倾向） | 专用、边界清晰、独立 git，与主仓解耦 |
-| B. 并入 `../x-kb` | 复用既有知识库工作区 |
-| C. 并入 `../x-promptkit` | 若 promptkit 已是 prompt/eval 基建则收编 |
+| B. 复用既有知识工作区 | 复用已有资料组织；具体位置不在公开仓登记 |
+| C. 复用既有提示词/评估工作区 | 若已有 prompt/eval 基建则收编；具体位置不在公开仓登记 |
 
 ### 3.2 格式（待定）
 
@@ -77,7 +77,7 @@ sha256: d5b80f30b5a096747b23e800e49e5c5d12f5de7139f5965609b5fc43d010121b
 
 ## 5. 与 chat 改进的闭环
 
-场景库是「体检仪」：chat 改进（[chat gap 篇](../../research/2026-06-30-chat-gap-vs-agent-browser.md) 的 P0 重试 / 撞顶续作 / P1 新工具）→ 跑场景库 → 看失败率/撞顶率指标动没动 → 决定下一步。无场景库则改进无从验证。
+场景库是「体检仪」：chat 改进（[chat gap 篇](../research/2026-06-30-chat-gap-vs-agent-browser.md) 的 P0 重试 / 撞顶续作 / P1 新工具）→ 跑场景库 → 看失败率/撞顶率指标动没动 → 决定下一步。无场景库则改进无从验证。
 
 ## 6. 待定项汇总 + 下一步
 

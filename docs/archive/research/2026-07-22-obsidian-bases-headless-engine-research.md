@@ -8,16 +8,18 @@ tags:
   - bases
   - headless
   - query-engine
-timestamp: 2026-08-07T00:12:49Z
-sha256: 4ca06437e8eb18d46e3c420bd1aa2ff7b571abe585103f404b502888b1c8ed77
+timestamp: 2026-10-02T11:30:42Z
+sha256: a1412b634465d6542c474f3817cd9f934250e6e86e2c96ab6d4b323f66c6e9f4
 ---
 
 # Obsidian Bases 无头执行引擎调研
 
 > 日期：2026-07-22
 > 口径：官方公开文档以本日快照为准；社区实现只作可行性与风险线索。
-> 关联场景：[`../testing/2026-07-22-bases-scenario-matrix.md`](../design/bases-scenarios.md)
-> 目标规范：[`../specs/2026-07-22-bases-headless-engine-design.md`](../design/bases-engine.md)
+> 关联场景：[`../testing/2026-07-22-bases-scenario-matrix.md`](../../design/bases-scenarios.md)
+> 目标规范：[`../specs/2026-07-22-bases-headless-engine-design.md`](../../design/bases-engine.md)
+
+> **归档说明（2026-10-02）**：立项调研已由[引擎设计](../../design/bases-engine.md)、[当前状态](../../design/bases-status.md)与[oracle 方法](../../design/bases-oracle-runbook.md)接替。旧未决项 1/3/5 已有显式数据集、空值/排序和自有结果契约；类型声明细节、路径歧义与 Link 专项仍未整体冻结，继续留在状态表 BASE-TYPE-004/005/006、附件链接暂定项及兼容账本，不把历史“无头可行”当完整官方兼容证明。
 
 ## 1. 结论
 

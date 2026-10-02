@@ -8,8 +8,8 @@ tags:
   - obsidian
   - syntax
   - x-basalt
-timestamp: 2026-07-28T08:34:36Z
-sha256: 865b04284e08622d41115a0afc421a257dd602b21da7388e5d4f26d0b8adcc15
+timestamp: 2026-10-02T12:16:36Z
+sha256: 8c58184cceec147ec4f3e459f64d3e486c92f4b792655798df049bc63054936e
 ---
 # Bases 语法参考（x-basalt 口径）
 
@@ -30,7 +30,7 @@ sha256: 865b04284e08622d41115a0afc421a257dd602b21da7388e5d4f26d0b8adcc15
 | `properties` | map                     | 属性显示配置（§2.2）       | 【P0 ✅ 结构记录】                |
 | `views`      | array（必填、非空）     | 视图列表（§2）             | 【P0 ✅ 结构校验】                |
 | `formulas`   | map                     | 派生属性定义（§6）         | 【P2a ✅ 执行】（依赖图拓扑 + 循环诊断 + clock 注入） |
-| `summaries`  | map                     | 自定义汇总（`values` 隐式作用域） | 【P2b ✅ 执行】（SUM-002：计算集 ✅ 2026-07-29 已跟官方改为 **limit 后**；空值仍剔除，**官方计入分母、已决定跟但待前置取证**，见 [vs-official §5.4](bases-vs-official.md)） |
+| `summaries` | map | 自定义汇总（`values` 隐式作用域） | 【P2b ✅】计算集为 limit 后行集；`values` 保留 null/MISSING，mean 计入分母（2026-08-03 校正，见 [vs-official §5.9](bases-vs-official.md)） |
 | 未知顶层 key | 任意                    | 向前兼容：warning + 原值保留，不影响已知字段 | 【P0 ✅】       |
 
 诊断口径：`views` 缺失/空 → `base/view-required`；未知顶层 key → warning。
@@ -73,7 +73,7 @@ views:
 | `order`   | 【P0 ✅ 结构记录】【P1 ✅ 投影】                                 |
 | `sort`    | 【P0 ✅ 结构记录（direction 仅 ASC/DESC）】【P1 ✅ 执行】        |
 | `limit`   | 【P0 ✅ 校验非负整数】【P1 ✅ 执行】                             |
-| `groupBy` | 【P2b ✅ 标量键】【2026-07-28 ✅ list/link 键，GROUP-002】`{ property, direction }`；**list 键扇出**（一行进入其每个元素的组，行内元素先去重、空 list 视同 MISSING 键），link 为标量键（路径感知相等，组序按归一 path）。扇出使「组内行数之和 ≥ rows.length」，顶层 rows 仍平铺一份且**恒为 `file.path` 稳定序**——官方顶层行序随分组键变动，本仓 2026-07-28 决定**不跟**（documented boundary，见 [vs-official §5.3](bases-vs-official.md)）。扇出本身仍是暂定口径 |
+| `groupBy` | 【P2b ✅】【2026-08-03 GROUP-002 校正】`{ property, direction }`；list 是整列表键，不扇出、不先去重，空列表是 `[]` 组，不是 MISSING；link 是路径感知标量键。内容/组序跟 round-2 取舍，顶层行序保留 boundary，见 [vs-official §5.8](bases-vs-official.md) |
 | `summaries` | 【P2b ✅】view 级 `<property-ref> → 15 内置汇总名/顶层自定义名`（未知名报 `base/unknown-function`）；【2026-07-28 ✅ SUM-002 收口】与 groupBy 同现时另产 `groups[].summaries`，**计算集 = 该组 limit 后的行**；【2026-07-29 ⑧(b)】顶层计算集同改为 **limit 后**，两者统一 |
 
 view 选择规则：未指定取 `views[0]`（默认 view）；指定不存在报 `base/view-not-found`（suggestions 列可用名）。【P0 ✅】
@@ -166,9 +166,9 @@ note property 来自 Markdown frontmatter；file property 对所有受支持文�
 | 杂项   | `random`                                                                            | 【2026-07-28 ❌ 白名单内显式拒绝：`base/unsupported-feature`「与字节稳定保证冲突」。用户拍板不注入种子、不放弃字节稳定——「同一输入必得同一输出」是本引擎核心契约】 |
 
 
-语义要点：`if()` lazy branch（只计算被选择分支）【P1 ✅ 暂定 lazy 实现，待 oracle 校正】；list 成员比较用 typed equality；`number()` 转换失败行为【P1 ✅ 冻结为行级类型错误】。
+语义要点：`if()` lazy branch（只计算被选择分支）【P1 ✅，2026-07-28 oracle ③ 确认】；list 成员比较用 typed equality；`number()` 转换失败行为【P1 ✅ 冻结为行级类型错误】。
 
-片二 date 组的自建口径（暂定，待 oracle）：`format` 只做**与语言无关的数字 token**（`YYYY YY MM M DD D HH H mm m ss s`，全部按 UTC），分词按**同字符最长游程**（moment 真实语法，`MMMM` 是独立 token 而非 `MM`×2），本地化 token（`MMMM`/`dddd`/`A`/`Z`）与未实现 token 一律报错、不静默给一种语言，字面文本用 `[方括号]` 转义；`time()` 返回**当日 UTC 零点起的 duration**（可比较可算术，要字符串用 `format("HH:mm")`），date 精度恒为 0；`relative()` 用**固定英文**固定阶梯（`3 days ago` / `in 2 hours` / `just now`，month=30day、year=365day 与值域约定同源），时间源恒为注入 clock——官方该函数输出随界面语言变，本就不是稳定 schema，不复刻。
+date 组当前口径（未列为 oracle 已验证的细节仍按暂定边界阅读；首次实现见[归档](../archive/decisions/2026-07-28-bases-implementation-record.md#语法表校准前片段不再是当前口径)）：`format` 只做**与语言无关的数字 token**（`YYYY YY MM M DD D HH H mm m ss s`，全部按 UTC），分词按**同字符最长游程**（moment 真实语法，`MMMM` 是独立 token 而非 `MM`×2），本地化 token（`MMMM`/`dddd`/`A`/`Z`）与未实现 token 一律报错、不静默给一种语言，字面文本用 `[方括号]` 转义；`time()` 返回当日 UTC 的 **`HH:mm:ss` 字符串**，date 精度返回 `00:00:00`（2026-08-03 oracle ⑮ 校正）；`relative()` 用**固定英文**固定阶梯（`3 days ago` / `in 2 hours` / `just now`，month=31day、year=365day，与当前值域固定约定同源（oracle ㉖ 校正，不做自然日历月运算）），时间源恒为注入 clock——官方该函数输出随界面语言变，本就不是稳定 schema，不复刻。
 
 2026-07-28 覆盖率片一的自建口径（官方未定义，标注待 oracle）：`replace` 为**字面子串全局替换**（非 regex；替换文本内 `$&` 不展开；空子串报错）；`slice`（string/list）负索引与越界钳制沿用 JS 语义；`reverse`（string）按 code point 反转（不拆代理对，字素簇仍会拆）；`title` 为「按空白切词 + 词首大写 + 词余小写」；`repeat`/`replace`/`split` 的产物规模受 `maxCollectionItems` 约束（string 计字符数），`repeat` 在**分配之前**预检。
 
@@ -206,7 +206,7 @@ formulas:
 
 ## 7. 数据集与动态上下文边界
 
-- **数据集**：官方默认包含 vault 全部文件；x-basalt 首期只含 Markdown 笔记，查询恒附 `base/markdown-only-dataset` conformance warning，附件不作为行。【P1 ✅：BASE-DATA-001/002】all-files（附件行、附件 links/backlinks）【P3，先独立 indexer schema 决策，证明不改既有 DQL `.md` 数据集】。
+- **数据集**：默认 `bases-markdown-2026-07` 只含 Markdown，附 `base/markdown-only-dataset` warning；显式 `bases-all-files-2026-07` 已支持 `files ∪ vault_entries`（BASE-ALL-001/002），附件 note 字段缺失、出链不伪造。旧库缺表时降为 Markdown 并报告实际 conformance 与诊断；既有 DQL `.md` 数据集不变。
 - **`this`**：官方随 GUI 宿主变化（独立打开=Base 文件；嵌入 note/Canvas=嵌入者；sidebar=当前活动文件）——那种隐式环境状态不可重复、不可测，x-basalt **不做**（BASE-CTX-004 ❌）。取而代之：**显式 `contextFile` 参数**（CLI `--context-file`），在当前查询行集内解析（口径同 `file(path)`：完整路径 / 去扩展名忽略大小写 / bare basename）；`this.file.*` 取上下文行 file 字段、`this.<属性>` 取其 note 属性、裸 `this` 为其 note 对象；公式体内同样可用，自定义汇总的 `values` 作用域仍拒绝（禁访问行外状态）。给了却解析不到 → `base/dynamic-context-required`（error）+ 空结果，不静默当没给。【2026-07-28 ✅ BASE-CTX-001】
 - **嵌入 `base` code block**（BASE-CTX-002）与 **`![[View.base#Name]]` embed**（BASE-CTX-003）：【2026-07-28 ❌ 不做】两者本质是「在 Obsidian 界面里渲染」的形态，无头执行拿不到宿主上下文、产物无消费方（用户拍板）。但**不静默**：入口形态检查（读文件之前，按路径形态判定）报 `base/unsupported-feature`，消息说清不做的理由与替代写法（`#锚点` → 改用 `--view`；非 `.base` 扩展名 → 把查询定义单独存成 `.base`）。
 
@@ -214,7 +214,7 @@ formulas:
 
 Bases 在 1.9 early access 期间多次破坏性变更（snake_case → camelCase、表达式改方法链、属性引用改 `note["…"]`、新增 `properties` 段），且 `.base` 无 schema version 字段。x-basalt 对策：
 
-- 以「官方文档快照日期 + conformance id（`bases-markdown-2026-07`）」标版本；
+- 以官方文档快照日期 + 实际生效 conformance（`bases-markdown-2026-07` / `bases-all-files-2026-07`）标版本；
 - 未知函数/字段/顶层结构一律报诊断，不静默忽略、不静默迁移（旧 snake_case 函数报 `base/unknown-function`）；
 - 测试保留历史破坏性语法作为明确拒绝用例；
 - 函数表数据驱动：新增实现只扩表白名单与用例，不放宽任意调用。

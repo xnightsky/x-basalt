@@ -8,15 +8,15 @@ tags:
   - bases
   - headless
   - query-engine
-timestamp: 2026-10-01T17:33:08Z
-sha256: 1d6d376651be38a05a20c5ad8871f161690ec483170860db4383a7b462322f3c
+timestamp: 2026-10-02T12:14:45Z
+sha256: e728f5ca137aca0c9291cf6eec7271d311c5dd1f18dad1080ee7658e77fd44b4
 ---
 
 # Obsidian Bases 无头执行引擎设计
 
 > 日期：2026-07-22
 > 状态：实现前设计冻结；P1 之外的阶段仍需独立计划。
-> 调研：[`../research/2026-07-22-obsidian-bases-headless-engine-research.md`](../research/2026-07-22-obsidian-bases-headless-engine-research.md)
+> 调研：[`../research/2026-07-22-obsidian-bases-headless-engine-research.md`](../archive/research/2026-07-22-obsidian-bases-headless-engine-research.md)
 > 验收矩阵：[`../testing/2026-07-22-bases-scenario-matrix.md`](bases-scenarios.md)
 
 ## 1. 产品契约

@@ -7,14 +7,14 @@ tags:
   - chat
   - bases
   - evaluation
-timestamp: 2026-10-01T18:18:12Z
-sha256: 3a59df261a8a45743d9bce04208d8819a2226fddc6bd4b2387b3f13c82b05b41
+timestamp: 2026-10-02T12:14:45Z
+sha256: 1f206d573779637ef7e9821f861296ebb169a9941559eec68740f3e99df4f9c4
 status: completed
 ---
 # Bases chat 语法接地与 A/B 复跑计划
 
 > 日期：2026-08-08 · 状态：completed（历史实施范围；2026-10-01 核对）
-> 上游计划：[`2026-08-03-chat-cli-tool.md`](../../plans/2026-08-03-chat-cli-tool.md)
+> 上游计划：[`2026-08-03-chat-cli-tool.md`](2026-08-03-chat-cli-tool.md)
 > 触发：真实 chat A/B 已完成；动态 base 的生成可靠性、重试成本与步数预算显著落后于 DQL。
 
 ## Goal
