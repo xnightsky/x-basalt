@@ -6,8 +6,8 @@ tags:
   - docs
   - index
   - x-basalt
-timestamp: 2026-10-02T08:43:38Z
-sha256: 038fb8db91dea16211e1bbb65da8b0b59a8a90d643b2f5c7bb6ce0bef1c3aeae
+timestamp: 2026-10-02T08:44:53Z
+sha256: 8f1662e45fb504ecf2f4d4bb2d6b0e24c4431950047069ef972cc455f36ced9d
 ---
 # x-basalt 文档
 
@@ -41,6 +41,7 @@ sha256: 038fb8db91dea16211e1bbb65da8b0b59a8a90d643b2f5c7bb6ce0bef1c3aeae
 
 ## 维护规则
 
+- AI / Superpowers 生成文档的任务分级、临时稿与正式落点见根 [`AGENTS.ai.md`](../AGENTS.ai.md)；不按生成工具另建文档树。
 - 改了行为，同步改 `design/` 对应文档和 `use/` 对应章节；小改动也要同步，不静默覆盖原规则。
 - 外部对照、能力边界和选型证据写入 `research/`；结论一旦成为当前实现契约或决策，再写入 `design/`。
 - 满足归档条件的文档统一移进 `archive/`，按 `decisions/`、`plans/`、`research/` 分类；不在各业务目录内另设归档目录，**不删文件**。被接替的设计标 `superseded_by`。
