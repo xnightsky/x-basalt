@@ -1,6 +1,6 @@
 ---
-timestamp: 2026-10-01T00:54:34Z
-sha256: 3babf3b627d28d4c6b556915b8b9f252edb0bf0dcaa60def5ea86767900ae81a
+timestamp: 2026-10-01T18:02:41Z
+sha256: a75c01bec16059e036f22feda29dcd205688789e5ab7b6f62b78afb8710b137e
 type: guide
 title: DQL 查询指南 · x-basalt
 description: Dataview 子集 DQL 语法、隐式字段与查询示例
@@ -14,7 +14,7 @@ tags:
 
 > 上级索引：[使用指南](README.md) · 同级：[安装](install.md) · [命令参考](commands.md) · [索引与同步](indexing.md) · [配置文件](config.md) · [Obsidian 语法](obsidian-syntax.md) · [AI 与 Skill](ai-and-skills.md) · [故障排查](troubleshooting.md)
 >
-> 真相源：`src/query/parser.ts`、`src/query/sql-generator.ts`、`src/query/ast.ts`、`.claude/skills/biz-dql-subset/SKILL.md`、`docs/specs/2026-06-27-dql-subset-frozen.md`。
+> 真相源：`src/query/parser.ts`、`src/query/sql-generator.ts`、`src/query/ast.ts`、`skills-def/dev/biz-dql-subset/SKILL.md`、`docs/design/dql-subset.md`。
 
 ---
 
@@ -49,6 +49,8 @@ DQL 字符串
 [SORT <field> [ASC|DESC] (, <field> [ASC|DESC])*]
 [LIMIT <n>]
 ```
+
+TASK 只采用 FROM/WHERE/SORT/LIMIT；GROUP BY/FLATTEN 仅 LIST/TABLE 支持（§3.3）。
 
 **子句顺序固定**（解析器强约束）；关键字**大小写不敏感**（`list`/`LIST`/`List` 均可）。
 
@@ -101,7 +103,9 @@ x-basalt query "TASK LIMIT 20"
 
 > TASK 不接字段列表。普通 `status` / `due` 仍是笔记属性，不是输出的 `task.status` / `task.due`；需要完成状态时用 `completed = true/false` 或 `!completed`（取消等非 x/X 状态也计入未完成）。任务到期日等字段过滤仍未实现。
 >
-> **当前执行缺口**：TASK 的 `SORT` / `GROUP BY` / `FLATTEN` 虽可解析，但生成 SQL 时未消费，不能据此排序、分组或展开；`LIMIT` 不是“最近 N 条”的保证。源码与实跑见[局部调研 §5](../research/2026-10-01-dql-bases-compatibility-local-audit.md#5-本轮可复现对照)、`src/query/sql-generator.ts`；尚未修复。
+> **R09 已修复（2026-10-01）**：TASK 的文件级标量 `SORT` 已执行，先按多键排序，再 LIMIT；平键追加 file.path ASC、任务源码行 ASC，同一文件内任务保持源码顺序。未显式 SORT 不承诺“最近”或跨重建稳定序。frontmatter/inline 使用既有文件字段映射，inline 仍是 TEXT 字典序；SQLite null 排序为 ASC 在前、DESC 在后，不沿用 Bases 的 null-last。
+>
+> **明确拒绝**：TASK GROUP BY/FLATTEN 在 parser 报 DqlSyntaxError（pos 指向子句），generator 同时防守手工 AST（无源串时 pos=0）；CLI 退出 1，不返回裸任务伪结果。TASK SORT completed、task.status/task.due 等任务字段也不支持；completed 只保留 WHERE 特判。聚合/未知排序列按通用校验拒绝。回归编号与源码见 [冻结表 R09](../design/dql-subset.md#r09-task-子句回归矩阵)。
 
 ---
 
@@ -371,7 +375,7 @@ x-basalt query 'LIST WHERE rating > "4"'           # 字典序比较，见下警
 
 ## 8. GROUP BY
 
-按表达式分组，非分组列聚合为 `rows` 数组（对齐 Dataview 「分组后行列表」语义）。
+仅 LIST/TABLE 支持（TASK 明确拒绝）。按表达式分组，非分组列聚合为 `rows` 数组（对齐 Dataview 「分组后行列表」语义）。
 
 ```
 GROUP BY <field>
@@ -406,7 +410,7 @@ x-basalt query 'TABLE length(rows) FROM "" GROUP BY file.folder'  # 各文件夹
 
 ## 9. FLATTEN
 
-把数组字段展开为多行（笛卡尔展开），每个元素对应一行。
+仅 LIST/TABLE 支持（TASK 明确拒绝）。把数组字段展开为多行（笛卡尔展开），每个元素对应一行。
 
 ```
 FLATTEN <arrayField>
@@ -430,7 +434,7 @@ x-basalt query 'TABLE file.outlinks FLATTEN file.outlinks WHERE startswith(file.
 SORT <field> [ASC|DESC] (, <field> [ASC|DESC])*
 ```
 
-- 默认 `ASC`；多键按数组顺序生成 `ORDER BY`。
+- 默认 `ASC`；多键按数组顺序生成 `ORDER BY`。TASK 采用同一文件字段校验，额外稳定 tie-break 见 §3.3；不能按任务 completed/status/due 排序。
 - 聚合 JSON 列（`file.tags`/`file.inlinks`/`file.outlinks`/`file.tasks`）**不能排序**（报 `DqlSyntaxError`）。
 - frontmatter 日期字段按 ISO 字典序比较，`SORT due ASC` 即按日期升序。
 
@@ -493,6 +497,8 @@ x-basalt query 'LIST FROM ""' --size 50 --offset 50    # 第 2 页（hasMore=fal
 | 特性                                       | 说明                                  |
 | ------------------------------------------ | ------------------------------------- |
 | `FROM A AND B` / `FROM A OR B`             | 多来源组合，不支持                    |
+| TASK GROUP BY / FLATTEN                    | 没有任务分组/展开结果契约，明确拒绝 |
+| TASK SORT completed / task.*              | 仅文件级排序；不把任务字段偷换为笔记属性 |
 | `CALENDAR`                                 | 日历视图，不支持                      |
 | DataviewJS（` ```dataviewjs ` 块）         | 需运行时执行任意 JS，安全问题，不支持 |
 | 未知字段（如 `file.day`、`file.aliases`）  | 报 `DqlSyntaxError: 不支持的查询字段` |
@@ -531,8 +537,11 @@ x-basalt query 'TASK WHERE !completed'
 # #todo 文件下的已完成任务
 x-basalt query 'TASK FROM #todo WHERE completed = true'
 
-# 最多 20 条已完成任务；当前不保证“最近”顺序
+# 最多 20 条已完成任务；无排序不保证“最近”顺序
 x-basalt query 'TASK WHERE completed = true LIMIT 20'
+
+# 按来源文件修改时间选取任务，不是按任务自身修改时间
+x-basalt query 'TASK WHERE !completed SORT file.mtime DESC, file.path ASC LIMIT 20'
 
 # task.due 可从结果读取，但任务到期日过滤尚未实现；边界见 §3.3
 ```

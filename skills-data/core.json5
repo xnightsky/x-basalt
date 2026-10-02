@@ -122,7 +122,7 @@
     {
       id: "query",
       pattern: "query <dql> [--db <path>] [--offset <n>] [--size <n>] [--json] [--vault <path>]",
-      description: '执行 DQL 子集 → 参数化 SQL → JSON { type, columns, total, offset, size, returned, hasMore, rows }；聚合字段已解析为数组。total=命中总数（独立 COUNT，不随分页变）——**数总量直接读 total，别 LIST 全量再数**。--offset/--size 在引擎层分页（不改 DQL 文法，外层包 LIMIT/OFFSET）：不传 size=全量返回（向后兼容），翻页 offset+=size，hasMore 标示还有更多。--db 只读打开；--vault 接受但不使用。文法含 LIST|TABLE <fields>|TASK；FROM (#tag|[[link]]|"folder")、WHERE、GROUP BY、SORT、LIMIT 在各自子集内使用。TASK 可用 completed=true/false 或 !completed；普通 status/due 是笔记属性，不是任务状态/到期日；当前 TASK 的 SORT/GROUP BY/FLATTEN 虽可解析但未执行，不能用于“最近 N 条”等保证（源码 src/query/sql-generator.ts，完整边界 docs/use/dql.md §3.3）。输出恒为 JSON；`--json` 可显式写（与 scan/run/base/lint 的开关对齐），不改变结果。',
+      description: '执行 DQL 子集 → 参数化 SQL → JSON { type, columns, total, offset, size, returned, hasMore, rows }；聚合字段已解析为数组。total=命中总数（独立 COUNT，不随分页变）——**数总量直接读 total，别 LIST 全量再数**。--offset/--size 在引擎层分页（不改 DQL 文法，外层包 LIMIT/OFFSET）：不传 size=全量返回（向后兼容），翻页 offset+=size，hasMore 标示还有更多。--db 只读打开；--vault 接受但不使用。文法含 LIST|TABLE <fields>|TASK；FROM (#tag|[[link]]|"folder")、WHERE、GROUP BY、SORT、LIMIT 在各自子集内使用。TASK 可用 completed=true/false 或 !completed；普通 status/due 是笔记属性，不是任务状态/到期日；TASK 已支持文件级标量多键 SORT，先排序再 LIMIT，平键按 file.path/源码行升序；按 file.mtime 是来源文件新近度，不是任务时间。TASK GROUP BY/FLATTEN、SORT completed/task.* 明确报错（完整边界 docs/use/dql.md §3.3）。输出恒为 JSON；`--json` 可显式写（与 scan/run/base/lint 的开关对齐），不改变结果。',
       examples: [
         "x-basalt query \"LIST FROM #project WHERE status = 'active' SORT file.mtime DESC LIMIT 10\" --db ./index.db",
         "x-basalt query 'LIST FROM \"\"' --size 50 --offset 0 --db ./index.db   # 分页：每页 50，读 total 知总量",

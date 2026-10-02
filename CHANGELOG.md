@@ -6,6 +6,7 @@
 
 ### Fixed
 
+- **DQL TASK 子句（行为收紧）**：文件级多键 SORT 真实执行并先于 LIMIT，平键按路径/任务源码行；GROUP BY/FLATTEN 从静默忽略改为带位置报错（CLI 退出 1）。任务级 SORT completed/task.* 仍明确不支持，普通 status/due 仍是笔记属性；新增 18 项实际索引/分页/CLI/安全回归。共享文件列映射改为 Map，避免 constructor 等属性误命中原型成员；手工 AST 的排序方向也校验。
 - **Bases 公式关联读取**：`file()` / `link.asFile()` 不再因漏文件解析器返回 warning + null。行表达式与公式共用求值依赖，保留逐行缓存、原始诊断、查询预算和 custom summary 行外禁令；新增 16 项真实索引/CLI 回归。
 - 校正消费侧 skill 与能力摘要：外部 AI 默认直接调用 CLI，显式委托再走 chat；移除过期的“15 个工具”说明，工具面以运行时 chat 说明书为准。仅校正文档与技能数据，不声称消除了默认委托问题或改善模型成功率。
 

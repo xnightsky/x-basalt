@@ -1,6 +1,8 @@
 import { linkKey, pathKey } from "../utils/path.js";
 import type { CompareOp, DqlQuery, QueryType, ScalarFn, WhereExpr } from "./ast.js";
 import { DqlSyntaxError } from "./errors.js";
+import { compileOrderBy } from "./order-by.js";
+import { compileTaskSql } from "./task-sql.js";
 
 // === 自建实现: DQL AST → 参数化 SQL（隐式字段经 links/tags/tasks 表 JOIN 实时计算）===
 //
@@ -60,15 +62,16 @@ function flattenColumnAliases(field: string): string[] {
 }
 
 /** files 表直接列字段映射。 */
-const FILE_COLUMNS: Record<string, string> = {
-  "file.name": "f.name",
-  "file.path": "f.path",
-  "file.folder": "f.folder",
-  "file.extension": "f.extension",
-  "file.size": "f.size",
-  "file.mtime": "f.mtime",
-  "file.ctime": "f.ctime",
-};
+// 私有映射不继承原型；constructor 等合法属性名不能被误当成内置 SQL 列。
+const FILE_COLUMNS = new Map<string, string>([
+  ["file.name", "f.name"],
+  ["file.path", "f.path"],
+  ["file.folder", "f.folder"],
+  ["file.extension", "f.extension"],
+  ["file.size", "f.size"],
+  ["file.mtime", "f.mtime"],
+  ["file.ctime", "f.ctime"],
+]);
 
 /** 把 [[link]] / 含锚点/别名的链接文本归约为 target 主体（去 [[ ]]、锚点 #、别名 |）。 */
 function stripLink(s: string): string {
@@ -128,7 +131,7 @@ function inlineFieldSql(field: string): string {
  * @throws {DqlSyntaxError} 非目标字段（如 file.day）或非法 frontmatter 字段名
  */
 function fieldToSql(field: string): { expr: string; json: boolean } {
-  const direct = FILE_COLUMNS[field];
+  const direct = FILE_COLUMNS.get(field);
   if (direct !== undefined) return { expr: direct, json: false };
 
   switch (field) {
@@ -203,7 +206,7 @@ function scalarFnSql(fn: ScalarFn, fe: string, json: boolean): string {
  * - frontmatter 标量：白名单校验后按 `json_type` 分类（字段名内联进 json path，无注入面，同 fieldToSql 约定）。
  */
 function truthySql(field: string): string {
-  const direct = FILE_COLUMNS[field];
+  const direct = FILE_COLUMNS.get(field);
   if (direct !== undefined) return `(${direct} IS NOT NULL AND ${direct} <> '')`;
   if (field === "file.frontmatter") {
     // 不能走「直接列真值」（'{}' 是非空字符串会被误判为真）：真值 = 至少一个顶层键。
@@ -436,25 +439,8 @@ export function generateSql(query: DqlQuery): CompiledSql {
     params.push(...w.params);
   }
 
-  // S2.21 TASK：行=任务（tasks JOIN files），FROM/WHERE 复用文件级过滤。task 字段级过滤为后续。
-  if (query.type === "TASK") {
-    let tsql =
-      `SELECT k.text AS ${quoteAlias("task.text")}, k.status AS ${quoteAlias("task.status")}, ` +
-      `k.due_date AS ${quoteAlias("task.due")}, f.path AS ${quoteAlias("file.path")} ` +
-      "FROM tasks k JOIN files f ON k.file_path = f.path";
-    if (whereSql.length) tsql += ` WHERE ${whereSql.join(" AND ")}`;
-    if (query.limit !== undefined) {
-      tsql += " LIMIT ?";
-      params.push(query.limit);
-    }
-    const taskCols: ColumnSpec[] = [
-      { name: "task.text", json: false },
-      { name: "task.status", json: false },
-      { name: "task.due", json: false },
-      { name: "file.path", json: false },
-    ];
-    return { sql: tsql, params, columns: taskCols, type: "TASK" };
-  }
+  // TASK 保留任务行模型，文件标量排序与 LIST/TABLE 共用校验；不吞未支持的分组/展开。
+  if (query.type === "TASK") return compileTaskSql(query, whereSql, params, fieldToSql);
 
   // SELECT 列：LIST 固定 file.name/file.path；TABLE 以 file.name 起头再接请求字段。
   const columns: ColumnSpec[] = [];
@@ -534,18 +520,7 @@ export function generateSql(query: DqlQuery): CompiledSql {
   let sql = `SELECT ${selectParts.join(", ")} ${fromClause}`;
   if (whereSql.length) sql += ` WHERE ${whereSql.join(" AND ")}`;
   sql += groupBySql;
-  // 多键排序：按 AST 数组顺序拼 ORDER BY（现解析仅产单键，结构已支持多键，见 S2.14）。
-  if (query.sort && query.sort.length > 0) {
-    const orderBy = query.sort
-      .map((s) => {
-        const { expr, json } = fieldToSql(s.field);
-        // S2.13：聚合 JSON 列（tags/inlinks/outlinks/tasks）不可排序，报错而非产出无意义顺序。
-        if (json) throw new DqlSyntaxError(`不能对聚合列排序: ${s.field}`, 0);
-        return `${expr} ${s.dir}`;
-      })
-      .join(", ");
-    sql += ` ORDER BY ${orderBy}`;
-  }
+  sql += compileOrderBy(query.sort, fieldToSql);
   if (query.limit !== undefined) {
     sql += " LIMIT ?";
     params.push(query.limit);

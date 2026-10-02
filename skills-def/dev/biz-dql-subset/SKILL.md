@@ -25,8 +25,8 @@ x-basalt 自建 DQL 执行层，**禁止依赖 obsidian-dataview 的 Evaluator/E
 LIST | TABLE <field, ...> | TASK
 FROM <"folder"> | <#tag> | <[[link]]>           # 单一来源；多来源 and/or 不做
 WHERE <condition>
-GROUP BY <expr>
-FLATTEN <arrayField>
+GROUP BY <expr>                             # 仅 LIST/TABLE
+FLATTEN <arrayField>                        # 仅 LIST/TABLE
 SORT <field> [ASC|DESC] (, <field> [ASC|DESC])* # 多键
 WITHOUT ID
 LIMIT <number>
@@ -39,7 +39,8 @@ LIMIT <number>
 - WHERE 扩展：`field = null` / `!= null`（→ `IS NULL`/`IS NOT NULL`，**显式 null 比较，非真值判断**）、日期比较（ISO 字典序）。
 - **inline fields（#28，2026-07-02 补）**：正文 `key:: value`（整行 / `[k:: v]` / `(k:: v)` 三形态）与 frontmatter **同一字段命名空间**——frontmatter 标量的 SQL 一律 `COALESCE(json_extract(fm,'$.<k>'), (SELECT value FROM inline_fields WHERE file_path=f.path AND key_norm='<k小写>' LIMIT 1))`。D1 frontmatter 胜、inline 兜底（含 fm 显式 null 时兜底）；D2 值恒 TEXT 字典序（`10 vs 9` 会错，guide 已警示）；D3 last-wins 在 **parser 提取期**兑现（每 file × key_norm 至多一行，`LIMIT 1` 仅防御性护栏、不承担语义）；D4 key 白名单 `[A-Za-z0-9_]+` → **DQL 文法零改动**；D5 不做 `file.inlineFields` 聚合字段。真值/存在性（`WHERE field`/`!field`/`= null`/`!= null`）同样计入 inline。设计真相源 `docs/design/inline-fields.md`。
 - 内置标量函数：日期 `date(today)`/`date(now)`；字符串 `lower`/`upper`；`length(x)`（字符串长度 / 数组计数）；数值 `round(x[,n])`。
-- TASK：返回任务行（text/status/line/file），FROM/WHERE 做**文件级**过滤；task 内部字段级过滤为后续（非本轮）。
+- TASK（2026-10-01 R09）：固定列 task.text/task.status/task.due/file.path；FROM/普通 WHERE/多键 SORT 为**文件级**，completed/!completed 仅 WHERE 有 x/X 完成状态特判。SORT 先于 LIMIT，平键追加 file.path ASC + 任务源码行 ASC；inline 仍 TEXT、null 用 SQLite 原生顺序。
+- TASK GROUP BY/FLATTEN **明确拒绝**：parser 定位子句 token，generator 防手工 AST（pos=0）。TASK SORT completed/task.* 也拒绝，不偷换任务字段为笔记属性；其它任务内部字段过滤未实现。回归 R09-TASK-001..018 见冻结表。
 - **仍非目标（遇到报带位置 `DqlSyntaxError`，不静默）**：FROM and/or 多源、CALENDAR、DataviewJS（`dataviewjs` 块）、未知字段 / 未知函数、对聚合 JSON 列排序、`LIMIT` 负数、`length()` 之外的任意数值表达式运算（如 `a + b`）。
 
 ## 隐式字段映射

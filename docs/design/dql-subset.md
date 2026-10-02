@@ -1,6 +1,6 @@
 ---
-timestamp: 2026-07-02T05:43:44Z
-sha256: 85be32849ebdb2954531827f7c95e69945f1bcdc522a0372928dafe2e69a47fd
+timestamp: 2026-10-01T18:03:48Z
+sha256: 09d172c908e53a3f1417ba2d20bec1af3a83b161f49a94e576ec5bfead1ccb75
 type: spec
 title: 扩展后 DQL 目标子集冻结（S2.2a）
 description: x-basalt 支持的 DQL 子集文法冻结规格
@@ -14,13 +14,13 @@ tags:
 > 日期：2026-06-27 · 类型：子集边界冻结（S2.2a 产出，先于代码）
 > 父计划：[`../plans/2026-06-26-dql-kernel-steps.md`](../history/plans/2026-06-26-dql-kernel-steps.md) S2.2a/S2.2b
 > 工具决策：[`2026-06-27-dql-grammar-tool-decision.md`](../history/decisions/2026-06-27-dql-grammar-tool-decision.md)（chevrotain）
-> 真相源：本表冻结后由 **S2.2b** 同步写入 `skills-def/biz-dql-subset/SKILL.md` + research §3，并对齐 `tests/query.test.ts` 断言。
+> 真相源：本表冻结后由 **S2.2b** 同步写入 `skills-def/dev/biz-dql-subset/SKILL.md` + research §3，并对齐 `tests/query.test.ts` 断言。
 
 ## 决策来源
 
 在原 MVP「严格子集」基础上扩展。重特性范围与函数集经 2026-06-27 与用户对齐：
 
-- **本轮纳入**重特性：**TASK 查询类型、GROUP BY、FLATTEN**（全纳入，贴官方 dataview，撑代表作纵深）。
+- **本轮纳入**重特性：**TASK 查询类型、GROUP BY、FLATTEN**（按查询类型划定组合范围，见冻结表；不代表 TASK 支持全部文件行命令）。
 - 内置函数集：**日期 + 常用字符串/数值**（date today/now、lower/upper、length、round）。
 - 规范对标原则：严格对标官方 Obsidian/Dataview；自定义口径与官方无冲突时以官方为准。
 
@@ -30,7 +30,7 @@ tags:
 | --- | ------------------------------------------- | ------------ | --------------------------------------------------------------------------------------------------------------------------------------- |
 | 1   | `LIST`                                      | ✅           | columns 默认 `file.link`/`file.name`/`file.path`；行=文件                                                                               |
 | 2   | `TABLE f1, f2, …`                           | ✅           | 显式列；隐式字段/frontmatter 映射见下「隐式字段」                                                                                       |
-| 3   | **`TASK [FROM …] [WHERE …]`**               | ✅ 本轮      | 行=任务：`JOIN tasks ON tasks.file = files.path`，返回 `{text,status,line,file,…}`；FROM/WHERE 复用文件过滤（tag/folder/link 经 files） |
+| 3 | **`TASK [FROM …] [WHERE …] [SORT …] [LIMIT …]`** | ✅ R09 修正 | 行=任务：tasks.file_path JOIN files.path，固定 task.text/status/due/file.path；FROM/普通 WHERE/SORT 是文件级，completed 仅 WHERE 特判 |
 | 4   | `FROM #tag`                                 | ✅           | `tag = 'x' OR tag LIKE 'x/%'`（前缀含嵌套），JOIN tags                                                                                  |
 | 5   | `FROM "folder"`                             | ✅           | `files.path LIKE 'folder/%'`                                                                                                            |
 | 6   | `FROM [[link]]`                             | ✅           | 反链：`JOIN links ON links.target = <resolved>`（basename 近似，见假设）                                                                |
@@ -48,14 +48,29 @@ tags:
 | 18  | **多键 `SORT a ASC, b DESC`**               | ✅ 本轮      | → `ORDER BY a ASC, b DESC`；对聚合 JSON 列排序报错                                                                                      |
 | 19  | `LIMIT n`                                   | ✅（补校验） | `LIMIT ?`；`n<0` parse 期报错                                                                                                           |
 | 20  | **`WITHOUT ID`**                            | ✅ 本轮      | 列控制：移除默认 id/file.link 列                                                                                                        |
-| 21  | **`GROUP BY <expr>`**                       | ✅ 本轮      | `GROUP BY <expr>`；非分组列 `json_group_array(...)` 聚合为数组（对齐 dataview「分组后 rows 成列表」）                                   |
-| 22  | **`FLATTEN <arrayField>`**                  | ✅ 本轮      | `, json_each(<arraycol>)` 笛卡尔展开为多行；展开值作新列可被 WHERE/SORT 引用                                                            |
+| 21  | **`GROUP BY <expr>`（LIST/TABLE）**         | ✅；TASK ❌ | `GROUP BY <expr>`；非分组列 `json_group_array(...)` 聚合为数组（对齐 dataview「分组后 rows 成列表」）                                   |
+| 22  | **`FLATTEN <arrayField>`（LIST/TABLE）**    | ✅；TASK ❌ | `, json_each(<arraycol>)` 笛卡尔展开为多行；展开值作新列可被 WHERE/SORT 引用                                                            |
 | 23  | `CALENDAR`                                  | ❌ 不做      | goal 范围外                                                                                                                             |
 | 24  | DataviewJS（`dataviewjs` 块）               | ❌ 不做      | goal 范围外（需运行时执行任意 JS，安全问题）                                                                                            |
 | 25  | **一元 `!field` / `!(expr)`**（2026-07-01 补正） | ✅          | 词法 `Bang` token（`!=` 仍归 `Op`）；AST `not(truthy)`；对标官方 `NegatedField`。原「不支持」是遗漏、非有意收窄                          |
 | 26  | **裸字段真值 `WHERE field`**（2026-07-01 补正） | ✅          | AST `truthy` 节点 → `json_type` CASE 复刻 `Values.isTruthy()`（null/0/空串/空数组/空对象/false 皆 falsy）。官方推荐的「有无」惯用法     |
 | 27  | **`file.frontmatter`（存在性 + 选列）**（2026-07-02 补正） | ✅          | 顶层键计数 `(SELECT COUNT(*) FROM json_each(f.frontmatter))`；`WHERE file.frontmatter`/`!field`/`=null`/`!=null` 四写法收敛到同一计数；选列返回整块对象。补 §隐式字段映射空缺（原缺 `file.frontmatter`）        |
 | 28  | **inline fields `key:: value`（整行 / [方括号] / (圆括号)，与 frontmatter 同命名空间）**（2026-07-02 新增） | ✅          | parser 于 maskCode 后提取三形态（key v1 白名单 `[A-Za-z0-9_]+`、同名 last-wins 提取期去重）→ `inline_fields` 表（delete-in-lockstep）→ 查询期 `COALESCE(json_extract(fm), inline 子查询)`（frontmatter 胜、inline 兜底；值恒 TEXT 字典序）；真值/存在性同计入 inline；**DQL 文法零改动**。设计与 D1–D5 见 [`2026-07-02-inline-fields-design.md`](inline-fields.md) |
+
+### R09 TASK 子句回归矩阵
+
+2026-10-01 修订：TASK 文件级标量多键 SORT 已消费，不再静默丢失；GROUP BY/FLATTEN 目前无任务组树/扇出契约，parser 明确拒绝并定位 token，generator 防手工 AST（无源串 pos=0）。SORT completed/task.* 属未实现任务级排序，不改读同名文件属性。SORT 平键追加 file.path ASC、源码行 ASC；未显式 SORT 保留旧行序约定。null 与 inline TEXT 使用既有 SQLite 规则，不搬用 Bases 值域。共享文件列以 Map 查找，原型键按普通属性处理；SORT 方向运行期白名单守住手工 AST。
+
+实现：`parser.ts` → `sql-generator.ts` → `task-sql.ts`；`order-by.ts` 共用字段与方向校验。没有 schema/AST/结果列变更，不新增依赖。回归真相源：[`tests/query-task-clauses.test.ts`](../../tests/query-task-clauses.test.ts)。
+
+| R09-TASK 编号 | 行为覆盖 |
+| --- | --- |
+| 001..003 | ASC/DESC、多键、LIMIT 前排序、平键源码序、数值 0/null |
+| 004..007 | FROM/completed、分页 total、LIMIT 0/空集/超界、inline TEXT/FM 优先 |
+| 008 | 聚合/未知列和任务级字段拒绝 |
+| 009..012 | GROUP/FLATTEN 解析/执行拒绝，token 定位、大小写/字符串不误判、手工 AST 防线 |
+| 013..015 | 参数绑定与危险 AST、真实 CLI 排序/分页及错误退出 |
+| 016..018 | LIST/TABLE 不退化、completed 不跨语境偷换、原型键安全映射 |
 
 ## 隐式字段映射（沿用真相源；2026-07-02 补 `file.frontmatter` 与 #28 inline 合并）
 
@@ -81,7 +96,7 @@ interface DqlQuery {
 
 ## 仍不做（明确报错而非静默）
 
-`FROM` and/or 多源、`CALENDAR`、DataviewJS、`length()` 之外的任意聚合/数值表达式运算（如 `a + b`）—— 超子集一律抛带位置 `DqlSyntaxError`。
+TASK GROUP BY/FLATTEN、TASK 的 completed/task.* 排序、`FROM` and/or 多源、`CALENDAR`、DataviewJS、`length()` 之外的任意聚合/数值表达式运算（如 `a + b`）—— 超子集一律抛带位置 `DqlSyntaxError`。
 
 > **2026-07-01 修订**：一元 `!` 与裸字段真值（`isTruthy`）此前被遗漏（既非纳入亦未列非目标），现补入为 #25/#26；`= null`/`!= null`（#10）重定位为显式 null 比较。完整设计见 [`2026-07-01-dql-truthiness-existence-design.md`](dql-truthiness.md)。
 >
@@ -91,6 +106,6 @@ interface DqlQuery {
 
 ## S2.2b 衔接（防分叉纪律）
 
-1. 改 `skills-def/biz-dql-subset/SKILL.md`「支持的子集 / 非目标」段到本表；`pnpm run skills:install` 重装。
+1. 改 `skills-def/dev/biz-dql-subset/SKILL.md`「支持的子集 / 非目标」段到本表；`pnpm run skills:install` 重装。
 2. 改 research §3 子集描述。
 3. 调整 `tests/query.test.ts` 中「非子集报错」断言：原把多键 SORT / TASK / GROUP BY 等当报错的用例，迁移到新边界（这些现在是合法子集；仅 FROM and-or / CALENDAR / DataviewJS / 未知字段仍报错）。

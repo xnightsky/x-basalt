@@ -140,16 +140,24 @@ class DqlChevParser extends EmbeddedActionsParser {
 
     let groupBy: DqlQuery["groupBy"];
     this.OPTION3(() => {
-      this.CONSUME(Group);
+      const groupToken = this.CONSUME(Group);
       this.CONSUME(By);
       // 数字后缀避让：MANY_SEP 用 CONSUME(Identifier)、FLATTEN 用 CONSUME1，此处 CONSUME2。
       groupBy = { expr: this.CONSUME2(Identifier).image };
+      this.ACTION(() => {
+        if (type === "TASK")
+          throw new DqlSyntaxError("TASK 暂不支持 GROUP BY", groupToken.startOffset);
+      });
     });
 
     let flatten: DqlQuery["flatten"];
     this.OPTION4(() => {
-      this.CONSUME(Flatten);
+      const flattenToken = this.CONSUME(Flatten);
       flatten = { field: this.CONSUME1(Identifier).image };
+      this.ACTION(() => {
+        if (type === "TASK")
+          throw new DqlSyntaxError("TASK 暂不支持 FLATTEN", flattenToken.startOffset);
+      });
     });
 
     let sort: DqlQuery["sort"];
