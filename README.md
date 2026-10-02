@@ -59,6 +59,8 @@ DQL / Bases 为什么仍保留两路、官方入口与本项目即时输入有�
 
 **写入边界**：meta 使用同目录临时文件 + rename，避免直接半写目标；当前没有并发版本前置条件/锁，不保证并发防覆盖、跨文件事务或断电持久性。chat 无逐动作确认，Ctrl+C 不回滚已写文件，也不保证立即停止已启动 CLI 子进程。先在副本验证并建立可恢复备份。信源：[`src/meta/index.ts`](./src/meta/index.ts)、[`src/chat/cli-tool.ts`](./src/chat/cli-tool.ts)、[使用指南](./docs/use/chat.md#7-当前限制--注意)。
 
+chat 默认写成功后不追加交叉验证；明确要求复核或再次运行时，应实际执行并依据独立回执回答。`query=0` 不能代替第二次 `run`。这是提示纪律，不是模型可靠性保证，详见 [写后验收](./docs/use/chat.md#61-写后复核与幂等验证)。
+
 ## 开发
 
 详见 `AGENTS.md`（项目约定与硬约束）与 `docs/README.md`（文档路由）。

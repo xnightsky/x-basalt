@@ -7,8 +7,8 @@ tags:
   - chat
   - agent-browser
   - architecture
-timestamp: 2026-10-02T00:44:01Z
-sha256: 87810fb459ac203d97af1275903b7f32e4d22d265548a3736c0c61bdea37c2d9
+timestamp: 2026-10-02T06:49:47Z
+sha256: 3fe82aaeae6158197c42f3843ed67fb405b34b882f8b1cf062430c41918567a5
 ---
 # chat 工具面架构：单一真相源评估（对标 agent-browser）
 
@@ -128,6 +128,7 @@ flowchart TD
 - **已实现，不再待立项**：`buildTools` 装配 `cli`、`skills_recall`、`skills_get`，CLI 壳以 argv 数组分发、排除 watch/chat；路径还原与参数注入以 [`src/chat/tools.ts`](../../src/chat/tools.ts) / [`src/chat/cli-tool.ts`](../../src/chat/cli-tool.ts) 为准。§1 与 §4 保留迁移前问题及执行记录，不代表仍有两套工具面。
 - **风险·能力暴露面扩大（含递归调用 chat）**：`cli` 工具让模型触达全部子命令，allowlist 必须排除两类：① 常驻/交互类（`watch` 永不返回、挂死对话——系统提示现行禁令要变成壳层硬约束）；② **`chat` 自身**（否则模型可 `chat` 套 `chat` 起嵌套 AI loop）。防递归对照 agent-browser：它**没有**深度计数器，靠的是结构性排除——chat 会话的 LLM 只拿到一个 `agent_browser` 工具（`CHAT_TOOLS` 单工具、typed、无 shell），而 `chat` 命令在 `main.rs` 顶层分发、不走普通命令路径，`batch` 也不能嵌 `chat`。即「能起新 AI loop 的入口根本不进模型词表」。x-basalt 同理用 allowlist 结构性排除 `chat`，另加一道便宜加固：工具壳 spawn 时注入 `X_BASALT_CHAT_CHILD=1` 环境变量，chat 启动检测到即拒——兜住 allowlist 误配/被绕。
 - **写入开关遵循 CLI**：`meta` 写动作默认落盘，`run` 的批量写需显式 `--apply`；当前 `execCli()` 不自动补该开关。模型调用与人调用走同一命令语义，不能因没有确认弹窗就假设所有批量调用都已写入。信源：[`src/cli.ts`](../../src/cli.ts)、[`src/chat/cli-tool.ts`](../../src/chat/cli-tool.ts)。
+- **写后节流不是验收禁令（2026-10-02 修正）**：默认依据成功写入回执回答，不追加交叉验证；用户明确要求复核时实际读取，明确要求再次运行／幂等验证时真实执行第二次同范围、同动作、同落盘开关的 run，并读取独立回执，不能拿 query=0 代替。先检查 dryRun、failed、changed、reindexed，失败或未执行不宣称完成。此为 SYSTEM_PROMPT 与运行时 chat 说明书的提示纪律，不新增壳层验收器，不改变 CLI 开关；小样本取证与风险见[执行记录](../plans/2026-10-02-chat-write-verification.md)。
 - **风险·性能**：每步一次 spawn 冷启动（node + SQLite 打开），20 步 loop 多出数秒——可接受，但场景库回归时顺带记录耗时变化。
 - **已核实 / 未核实**：原 agent-browser 对照经 deepwiki 两源交叉确认，未直读对应版本源码；只作为当时设计背景，不据此证明当前实现优劣。当前项目机制以本仓源码为准。
 

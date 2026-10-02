@@ -6,16 +6,16 @@ tags:
   - todo
   - attention
   - x-basalt
-timestamp: 2026-10-02T00:20:03Z
-sha256: c347506215154f9220fbdbc95a65ed858ffaa6c3b960570065e1ed9070213487
+timestamp: 2026-10-02T06:55:39Z
+sha256: bef7c3c09d9678bd0f8aad71210608b1afeafbf29983058b30450891970d66d7
 ---
 # TODO · x-basalt
 
 本文件是未完成事项与用户关注项的置顶入口，会话启动时先读。关注可以只是持续观察，不必已经进入实施；不因某轮收口将它们迁走或隐藏。“待办/关注”不等于实施授权或正在执行。已完成的调查、R08/R09 修复与旧计划核对见[本轮执行记录](docs/plans/2026-10-01-todo-sequential-cleanup.md)，不等于模型问题和长期功能全部解决。
 
-## 已发现未修复 / 未完成验证（待实施）
+## 已发现问题与验证状态（已完成项保留）
 
-- [ ] 修正 chat 写后节流与用户显式复核/再次执行要求的冲突，并覆盖“真实执行第二次 run”而非用 query=0 冒充幂等证据。（[独立切口与验收](docs/plans/2026-10-01-todo-sequential-cleanup.md#3-下一轮切口--验收--非目标)、[系统提示](src/chat/index.ts)）
+- [x] **本切口已完成（2026-10-02）**：修正 chat 写后节流与用户显式复核/再次执行要求的冲突，并覆盖“真实执行第二次 run”而非用 query=0 冒充幂等证据。相关回归 124/124；同一模型旧／新各三题的执行义务均通过，不证明成功率提升或历史失败因果，模型漏执行／输出范围风险仍保留。（[本轮验收与边界](docs/plans/2026-10-02-chat-write-verification.md)）（[独立切口与验收](docs/plans/2026-10-01-todo-sequential-cleanup.md#3-下一轮切口--验收--非目标)、[系统提示](src/chat/index.ts)）
 - [ ] 修复外部 AI 最终答案追加排除路径的范围违约；内层 chat 与外层转述分别验收，不以目标路径/总数正确代替输出义务。（[已观察结果](docs/plans/2026-10-01-todo-sequential-cleanup.md#2-外部-ai-能力发现与入口分流)、[入口策略](docs/design/chat-tool-surface.md)）
 - [ ] 为 trace 补齐可关联工具调用/结果/错误的标识，验证并发同名调用与乱序结果的准确归属。（[可观测性风险](docs/plans/2026-10-01-todo-sequential-cleanup.md#decisions--progress)、[trace](src/chat/trace.ts)）
 - [ ] 核对或补齐历史 Bases grounding 原始评测证据；原始 JSON 未定位期间，历史汇总只作已报告结果，不重新认证旧分数。（[归档核对与证据缺口](docs/history/plans/2026-08-08-bases-chat-grounding.md#收口核对2026-10-01)）

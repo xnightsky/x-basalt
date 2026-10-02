@@ -67,6 +67,35 @@ test("SYSTEM_PROMPT 不以排除项路径证明过滤生效", () => {
   assert.match(SYSTEM_PROMPT, /不要为证明过滤生效而复述被排除路径/);
 });
 
+test("CHAT-WV-P001：默认节流有明确条件，不压过用户要求的复核", () => {
+  assert.match(SYSTEM_PROMPT, /用户未明确要求复核时，不要为确认已成功的工具结果追加交叉验证/);
+  assert.match(
+    SYSTEM_PROMPT,
+    /用户未明确要求写后验收时，依据成功回执作答，不追加 query\/scan 或重复 run/,
+  );
+  assert.match(SYSTEM_PROMPT, /用户明确要求复核.*执行所要求的读取/);
+  assert.doesNotMatch(SYSTEM_PROMPT, /不要再 query\/scan 复核一遍/);
+});
+
+test("CHAT-WV-P002：幂等验收要求真实第二次 run 及对应回执", () => {
+  assert.match(SYSTEM_PROMPT, /必须真实执行第二次 run/);
+  assert.match(SYSTEM_PROMPT, /同一范围、同一动作和同一落盘开关/);
+  assert.match(SYSTEM_PROMPT, /不能用 query 返回 0 行替代第二次 run/);
+  assert.match(SYSTEM_PROMPT, /只有第二次成功回执的 changed=0 才能报告本次验证无新增改动/);
+});
+
+test("CHAT-WV-P003：不得把预览、失败或未执行的验收报告成成功", () => {
+  assert.match(SYSTEM_PROMPT, /run 必须带 --apply 才落盘/);
+  assert.match(SYSTEM_PROMPT, /检查 dryRun、failed、changed、reindexed/);
+  assert.match(SYSTEM_PROMPT, /dry-run 不是已写入，部分失败不是全部成功/);
+  assert.match(SYSTEM_PROMPT, /未执行、失败或步数耗尽.*如实说明.*不得声称已完成复核或幂等验证/);
+});
+
+test("CHAT-WV-P004：只请求复核不授权重复写，索引复核仍有明确入口", () => {
+  assert.match(SYSTEM_PROMPT, /仅要求复核不等于授权重复写入/);
+  assert.match(SYSTEM_PROMPT, /用户明确指定 scan\/index 复核索引时按要求执行/);
+});
+
 test("SYSTEM_PROMPT 不含任何 fixture 文件名/答案（无泄题）", () => {
   // 来自精度负例场景的 fixture 文件名/词干——绝不能进系统提示，否则评估就泄题了。
   const leaked: string[] = [
