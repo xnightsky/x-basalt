@@ -90,7 +90,7 @@
     {
       id: "overview",
       pattern: "x-basalt <parse|index|scan|query|base|skills|meta|watch|run>",
-      description: "零依赖 Obsidian 运行时的 Vault 工具。典型流程：index 建库 → query 查询；parse 看单文件 AST；scan 增量重扫；search 按正文全文检索；base 跑 .base view 无头查询；skills 召回规范；meta 读改 frontmatter（唯一写侧）；watch 监听增量；run 按声明式管道处理一批变更（**批量的完整用法见 `skills get pipe`**）。**不确定该用哪个，先看 `x-basalt skills get summary`（约 1.8KB 摘要）**；自然语言路径见 `skills get chat`。开发态 `pnpm run cli -- <command>`，构建后 `node dist/cli.js <command>`。出错统一打印 ✗ 并退出码 1。",
+      description: "零依赖 Obsidian 运行时的 Vault 工具。典型流程：index 建库 → query 查询；parse 看单文件 AST；scan 增量重扫；search 按正文全文检索；base 跑 .base view 无头查询；skills 召回规范；meta 读改 frontmatter（唯一写侧）；watch 监听增量；run 按声明式管道处理一批变更（**批量的完整用法见 `skills get pipe`**）。**不确定该用哪个，先看 `x-basalt skills get summary`（约 1.8KB 摘要）**；外部 AI 的默认直调与显式委托分流见 `skills get summary`；chat 用法见 `skills get chat`。开发态 `pnpm run cli -- <command>`，构建后 `node dist/cli.js <command>`。出错统一打印 ✗ 并退出码 1。",
       examples: [
         "pnpm install && pnpm run build",
         "pnpm run cli -- index ./vault --db ./index.db",
@@ -142,7 +142,7 @@
     {
       id: "count",
       pattern: "计数 / 分页（数总量别全量 LIST）",
-      description: '要"有多少"绝不全量 LIST 再数：① 任何 query 结果都带 total（命中总数）——读它即可；② 全库/分组计数用 `TABLE count() FROM "" GROUP BY <字段>`（count()/length(rows) 是 GROUP BY 聚合列，单独 `TABLE count()` 不带 GROUP BY 无效）。分页：CLI 用 `--offset/--size`，chat 的 query/scan 工具用 `offset/size`（默认 size=50，上限 500，size=0 只回 total/counts）。chat 的 scan 工具还返回 counts{added,modified,deleted,unchanged}（标量、永不截断）——"多少新增/未索引"直接读 counts。DQL 自身只有 LIMIT、无 OFFSET，分页一律在 CLI/工具层。',
+      description: '要"有多少"绝不全量 LIST 再数：① 任何 query 结果都带 total（命中总数）——读它即可；② 全库/分组计数用 `TABLE count() FROM "" GROUP BY <字段>`（count()/length(rows) 是 GROUP BY 聚合列，单独 `TABLE count()` 不带 GROUP BY 无效）。分页：query/search 用 `--offset/--size`（默认 size=50，上限 500，size=0 只回 total）；chat 经 cli 调用同一子命令与参数。scan 返回 counts{added,modified,deleted,unchanged}（标量、永不截断）——"多少新增/未索引"直接读 counts。DQL 自身只有 LIMIT、无 OFFSET，分页一律在 CLI/工具层。',
       examples: [
         "x-basalt query 'TABLE count() FROM \"\" GROUP BY file.extension' --db ./index.db",
         "x-basalt query 'LIST FROM \"\"' --size 100 --offset 100 --db ./index.db",

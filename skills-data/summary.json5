@@ -9,7 +9,7 @@
   // 产生两个 token 形态；正文三篇仍是中文，人读的入口在 docs/use/。
   //
   // has-chat / no-chat 不拆两份清单：每条末尾一句 `chat:` 标明该组能力在 chat 侧的三态
-  // （有同名工具 / 没有 / 明令禁止），两类消费者读同一份各取所需。
+  // （经 cli 可达 / 没有 / 明令禁止），两类消费者读同一份各取所需。
   //
   // 排版靠数据而非代码：renderSkill 的既有形态是「description 作三级标题、pattern 作副行」，
   // 故 description 首行写短标题、清单跟在其后（markdown 里只有首行进标题，其余落正文）。
@@ -18,7 +18,7 @@
   // triggers 只吃「总览类」词，与三篇正文刻意不重叠（core 吃说明书词、pipe 吃管道词、
   // chat 吃 AI 词、obsidian-base-spec 吃语法词），故 recall 一个词只落到该去的那一篇。
   name: "summary",
-  description: "What x-basalt can do, one screen. Three groups: core (query & edit), pipe (batch), chat (natural language). Pick one, then `skills get <core|pipe|chat>` for the whole page — or `skills list <name>` then `skills get <name> <id>...` to pull just the entries you need (a single entry is often <1/6 of the page).",
+  description: "What x-basalt can do, one screen. Three groups: core (query & edit), pipe (batch), chat (explicit natural-language delegation). External AI: use core/pipe directly by default; read chat when the user explicitly requests delegation. Pick one, then `skills get <core|pipe|chat>` for the whole page — or `skills list <name>` then `skills get <name> <id>...` to pull just the entries you need (a single entry is often <1/6 of the page).",
   triggers: [
     "summary",
     "overview",
@@ -36,7 +36,7 @@
     {
       id: "core",
       pattern: "x-basalt skills get core",
-      description: "core — query & edit one vault\n\n- `index` / `scan` — build & refresh the SQLite index\n- `query` — DQL over structured fields (frontmatter/tags/links); **cannot search body text**\n- `search` — FTS5 over body text; use when you don't know which note\n- `meta` — read/write frontmatter; the only write path for a single file\n- `base` — run a `.base` view headless (.base 语法→ `skills get bases`)\n- `parse` — single-file AST\n- `watch` — daemon, re-index on change\n\nchat: same tools — `index`/`base` reachable via the cli tool (`index`: prefer `scan` daily; `base`: dynamic stdin, syntax via `skills get bases`); `watch`/`chat` **forbidden** (daemon / recursive — hangs the session).",
+      description: "core — query & edit one vault\n\n- `index` / `scan` — build & refresh the SQLite index\n- `query` — DQL over structured fields (frontmatter/tags/links); **cannot search body text**\n- `search` — FTS5 over body text; use when you don't know which note\n- `meta` — read/write frontmatter; the only write path for a single file\n- `base` — run a `.base` view headless (.base 语法→ `skills get bases`)\n- `parse` — single-file AST\n- `watch` — daemon, re-index on change\n\nchat: CLI subcommands through the `cli` tool — `index`/`base` reachable (`index`: prefer `scan` daily; `base`: dynamic stdin, syntax via `skills get bases`); `watch`/`chat` **forbidden** (daemon / recursive — hangs the session).",
     },
     {
       id: "pipe",
@@ -46,7 +46,7 @@
     {
       id: "chat",
       pattern: "x-basalt skills get chat",
-      description: "chat — drive all of the above in natural language\n\n- needs `AI_GATEWAY_API_KEY`; without it only this command is off, the rest work\n- **add `--quiet` (or `--json`) whenever a script or another AI calls it** — otherwise the whole plan→act→observe trace lands in your context\n- one-shot with an argument; omit the argument for a REPL\n\nchat: this *is* the chat path — the skill lists all 15 tools and the CLI command each maps to.",
+      description: "chat — drive all of the above in natural language\n\n- needs `AI_GATEWAY_API_KEY`; without it only this command is off, the rest work\n- **add `--quiet` (or `--json`) whenever a script or another AI calls it** — otherwise the whole plan→act→observe trace lands in your context\n- one-shot with an argument; omit the argument for a REPL\n\nchat: optional delegation, not the default for an external AI. A natural-language task alone does not request delegation. Read this skill for the current tool surface and call contract; if delegation fails, report it rather than presenting a direct CLI fallback as a successful chat run.",
     },
   ],
   metadata: {

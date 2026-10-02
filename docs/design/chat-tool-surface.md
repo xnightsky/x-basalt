@@ -7,8 +7,8 @@ tags:
   - chat
   - agent-browser
   - architecture
-timestamp: 2026-09-30T23:53:31Z
-sha256: 33aca83b1b723c2aaa290b68183b602e53c95ea5e59775c47bdc3304faf1257b
+timestamp: 2026-10-02T00:44:01Z
+sha256: 87810fb459ac203d97af1275903b7f32e4d22d265548a3736c0c61bdea37c2d9
 ---
 # chat 工具面架构：单一真相源评估（对标 agent-browser）
 
@@ -107,7 +107,7 @@ flowchart TD
 1. **前置 · CLI 输出契约统一**：全命令 `--json`；统一分页（`offset/size/total/hasMore`）；错误结构化（错误码 + 消息，非零 exit code 分类）。这是唯一起点，契约不齐时切换 = 模型观察面退化。
 2. **chat 侧新增 `cli` 工具**：input `{ args: string[] }` → `execFile(process.execPath, [cliEntry, ...args])`；`--vault/--db` 由工具壳注入；超时 + 子命令 allowlist；stdout/stderr 过 `observe(safety, …)`（边界包裹 + 8000 字符截断留在薄壳，**不需要 CLI 本体感知 AI**）。
 3. **删除手写工具面、保留 `tools.ts` 框架**（2026-07-30 用户拍板 + 评估确认）：删的是 `buildTools` 里那 ~14 个手写工具定义（schema + execute 全套，约 360 行）；**留的是框架**——`buildTools(ctx, safety)` 装配点（`loop.ts` 的消费签名不变，loop/repl 零改动）、`observe` safety 输出处理、`wrapToolErrors` 错误分类外壳、RECALL 追踪机制（改为解析 `args` 子命令）。「腾出空间」指的是 **ToolSet 条目从 ~14 个收编为个位数**，不是删文件——框架正是未来 AI-native 工具的注册缝。`cli` 工具实现放独立模块（如 `src/chat/cli-tool.ts`），`tools.ts` 只剩装配；`skills_get`/`skills_recall` 保留为独立工具（grounding 是最高风险的第一步，且它们是「模型说明书」元工具、非 vault 能力面——agent-browser 的 `TOOL_SKILLS_GET` 同样单列）。`tool-errors.ts` 分类改为「exit code + stderr 结构化错误」驱动。
-4. **回归验证**：用 `../x-basalt-evals` 场景库在切换前后各跑一遍，对比操作失败率 / 撞顶率——大爆炸切换的质量回归由此兜底（这是「敢直接切」的前提，不是可选项）。
+4. **回归验证**：用独立场景库在切换前后各跑一遍，对比操作失败率 / 撞顶率——大爆炸切换的质量回归由此兜底（这是「敢直接切」的前提，不是可选项）。
 
 顺手项：`paths` bug 随工具面删除自然消亡——文件列表语义归 CLI 的 `--stdin` 源（或给 `run` 补显式 `--paths` 源），不再有 chat 层 `toAbs`。
 
@@ -154,5 +154,7 @@ flowchart LR
     class CLI,CORE,DATA core;
     class EVAL compare;
 ```
+
+消费入口策略：外部 AI 先经 `skills get summary` 按需发现能力，默认直接编排 CLI；用户用自然语言提任务不等于再次委托。用户明确委托时保留 chat 路线，调用契约与工具面取 `skills get chat`，不在入口复制。合成只读任务中的默认直调与显式委托均已取证，但未复现默认委托，也不据此承诺所有宿主行为、答案范围或费用优势。
 
 图中 chat 路径依据上述本仓源码，外部路径表示 CLI 可供调用，不代表所有宿主已集成或通过验收。比较协议见[最新调研 §9](../research/2026-09-30-agent-knowledge-industry-landscape.md#9-下一步实验可复现能推翻建议)。新增 MCP/工具 schema 应共享业务语义；[MCP Tools 规范](https://modelcontextprotocol.io/specification/2025-11-25/server/tools)的发现/annotations 不替代权限执行。保留封闭工具面、明确部署体验的理由可以成立，但须实测而非由工具数量推出质量。

@@ -7,14 +7,16 @@ tags:
   - cli
   - chat
   - x-basalt
-timestamp: 2026-09-30T23:53:31Z
-sha256: d191d66093815684d8c067715e5ded5f1b6861d73e88a9e697349f1676f2cf36
+timestamp: 2026-10-01T16:57:14Z
+sha256: f7c81829ecf275598750d1527b7b047e23d0e6f7fcd68d940234b012c443d46d
 ---
 # chat 怎么玩 · x-basalt
 
 > `chat` 是用**自然语言驱动 vault** 的可选-AI 子命令：你说人话，它自己多步调用 x-basalt 的 CLI 原语（经单一 `cli` 工具——query / parse / scan / search / meta / run / base 等子命令）去办。本篇教你从零跑起来、试哪些指令、玩的时候看什么、注意什么。
 >
 > ⚠ 当前是**手玩验证**阶段：AI 行为质量（成功率 / 撞顶率）尚无场景库做量化回归，体验因模型与库而异。这篇就是给你「拿来即玩」用的。
+
+外部 AI 默认先读 `skills get summary`，再直接编排 CLI；本篇面向主动选择 chat 的用户或明确委托 chat 的调用方。程序化委托的调用与输出契约见 `skills get chat`，不在入口 skill 复制工具清单。
 
 ## 1. 前置
 

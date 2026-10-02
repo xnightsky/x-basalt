@@ -1,6 +1,6 @@
 ---
-timestamp: 2026-10-01T13:55:21Z
-sha256: 75c3d41660fe59a15616d42d6b20e9d83538a5a6bb7b339c1b3b577a96283054
+timestamp: 2026-10-01T16:57:14Z
+sha256: 3634d7f7cb5ae3df044b215eea5bb8f6b8956f333b7ac1a286c949fe590baba7
 type: guide
 title: 与 AI 协作：技能召回与全局使用技能
 description: x-basalt 技能召回两条路径（CLI 自助 recall 与全局 SKILL.md）及可选 chat 命令说明
@@ -173,12 +173,13 @@ ls ~/.claude/skills/x-basalt/   # 应包含 SKILL.md
 
 ### 技能内容概览
 
-薄入口只有四件事，**没有命令表**：
+薄入口只负责发现与分流，**没有命令表**：
 
 - **何时用**：从终端 / 脚本 / AI 流程操作 Obsidian vault，不打开 App
 - **先探测再用**：`x-basalt --version`，装不上就按常规方式干活，别强用
 - **指路顺序**：`skills get summary` 挑一组（~1.8KB）→ `skills get core|pipe|chat` 取那一篇正文 → `skills get obsidian-base-spec` 要精确文法
-- **免配直调**：`X_BASALT_DIR` 或就近配置已设 `vault` 时，站 repo 根直接跑即可，**不要去定位或 `cat` 配置文件，也不要手传 `--vault`/`--db`**
+- **入口分流**：外部 AI 默认取 core/pipe 后直接调用 CLI；用户用自然语言提任务不等于委托模型。明确要求委托时再取 chat，保留可选自然语言入口。委托失败需如实报告，不把直接 CLI 降级冒充成功委托。
+- **配置复用**：`X_BASALT_DIR` 或就近配置已设 `vault` 时，在对应项目根运行即可；正常使用不必先读取配置或补传路径。覆盖默认或排错时先取 `skills get core config`。
 
 **自引导**才是重点：AI 拿到的不是一份静态速查表，而是「去问 CLI 本身」的指令——用法随 CLI 版本走，静态文档不会漂移，因为它压根不承载用法。
 
@@ -231,6 +232,8 @@ x-basalt skills list
 ## 四、CLI chat：自然语言驱动 vault（可选 AI · 默认关）
 
 ### 它是什么
+
+外部 AI 已能编排 CLI 时，默认直接调用确定性命令；本节用于用户主动选择自然语言入口或明确要求委托 chat，不是所有自然语言任务的默认路由。
 
 `x-basalt chat` 用自然语言驱动**既有原语**（query/parse/scan/meta/skills + 写动作 + 编排器批量）：一圈薄 LLM 循环（plan→act→observe），把你的话翻成命令、执行、把结果喂回、续推。两形态：
 

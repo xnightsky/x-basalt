@@ -11,15 +11,14 @@ scope: global
 ## 怎么用
 
 1. 确认已装：`x-basalt --version`（装不上则按常规方式干活，别强用本 skill）。
-2. **先跑 `x-basalt skills get summary`**——约 1.8KB 的能力摘要，三组各一屏：`core`（查与改）/ `pipe`（批量）/ `chat`（自然语言），并标明每组在 chat 侧有没有对应工具。**先看它挑一组，再取那一篇**，别一上来取全文。
+2. **先跑 `x-basalt skills get summary`**——能力摘要分 `core`（查与改）/ `pipe`（批量）/ `chat`（自然语言委托）。**先看它挑一组，再取需要的条目**，别一上来取全文。
    最容易漏的是**批量**：改动对象超过一个文件走 `run --pipe`（见 `skills get pipe`），不要循环调 `meta set`。
-3. 挑定后取正文：`skills get core`（命令全集、DQL 子集、meta 写侧、项目配置）/ `skills get pipe`（`--pipe` 参数面、三种源、算子链、写与索引刷新）/ `skills get chat`（调用形态、15 个内部工具与 CLI 的对应、chat 侧没有或禁止的能力、配 key）。
-   **只需要其中一块时按条取**：`skills list <name>` 看条目 id → `skills get <name> <id>...` 只取那几条（如 `skills get core meta`，约为整篇的 1/6）。整篇 5–17KB，单条通常 1–3KB。
-   其它 AI/脚本通过 bash 程序化调用 `chat` 时默认加 `--quiet`（纯答案）或 `--json`（结构化），完全隐藏过程；调用方通常会合并 stdout+stderr 进模型上下文，过程轨迹只会白占 token。人交互/REPL 才用默认完整轨迹。
+3. **外部 AI 默认直接调用 CLI**：按任务取 `core` 或 `pipe` 后执行；用户用自然语言描述任务，不等于要求再委托一个模型。**用户明确要求委托 chat 时**再取 `skills get chat`（调用方式、真实工具面、禁止项与配 key），保留这条可选入口。
+   **按条取**：`skills list <name>` 看条目 id → `skills get <name> <id>...` 只取所需部分；全文只在确有需要时取。
 4. 要精确 Obsidian/DQL 语法与边界：`x-basalt skills get obsidian-base-spec`（取整篇）或 `x-basalt skills recall <关键字>`（如 wikilink/dataview/callout，模糊召回）。
 
 > 召回按 triggers 分层，**一个关键字只召回对应那一篇**：总览词（摘要/总览/能干什么）→ summary；管道词（批量/管道/算子）→ pipe；AI 词（配 key/ollama/自然语言）→ chat；说明书词（用法/manual）→ core；语法词（wikilink/callout）→ obsidian-base-spec。所以 `recall` 拿到的就是该看的那篇，不必再自行筛。
 
-**免配直调**：`X_BASALT_DIR` 或就近 `.x-basalt/config` 已设 `vault` 时，**站 repo 根直接** `x-basalt chat "<自然语言>" --quiet` 即可——CLI 自读 env+配置解析 db/vault。**别去定位或 `cat` `.x-basalt/config.*`，也别手动补 `--vault`/`--db`**（要覆盖默认才显式传）。上游无需感知 `X_BASALT_DIR`：它常配相对值（如 `.tmp/.x-basalt`）以一套 env 适配多 repo，站对 repo 根即自动对应该 repo 的状态目录与 vault。
+**配置复用**：`X_BASALT_DIR` 或就近配置已设 `vault` 时，在对应项目根运行即可，CLI 自读配置；正常使用不必先读取配置文件或补传路径。需要覆盖默认或排查配置时，取 `skills get core config`，不要猜路径。
 
 **不要**在本文（或调用方 prompt 里）复制命令表、DQL 细节或选项——一律以 `x-basalt skills get core` 现打印为准，避免二次漂移。
