@@ -1,21 +1,26 @@
 ---
-timestamp: 2026-10-01T13:28:59Z
-sha256: c4870135d85f2d795c8c96beed5ccfa899ee29b848152bd0a3da788b6ece783f
+type: index
+title: x-basalt 置顶关注与未完成事项
+description: 持续保留用户关注、未修复问题与长期待办；会话启动先读，登记不等于实施授权
+tags:
+  - todo
+  - attention
+  - x-basalt
+timestamp: 2026-10-02T00:20:03Z
+sha256: c347506215154f9220fbdbc95a65ed858ffaa6c3b960570065e1ed9070213487
 ---
 # TODO · x-basalt
 
-## 待办
+本文件是未完成事项与用户关注项的置顶入口，会话启动时先读。关注可以只是持续观察，不必已经进入实施；不因某轮收口将它们迁走或隐藏。“待办/关注”不等于实施授权或正在执行。已完成的调查、R08/R09 修复与旧计划核对见[本轮执行记录](docs/plans/2026-10-01-todo-sequential-cleanup.md)，不等于模型问题和长期功能全部解决。
 
-- [ ] 复现复杂任务失败，记录输入、预期结果与调用轨迹，定位失败环节。（[讨论记录](docs/research/2026-09-30-agent-knowledge-industry-landscape.md#94-后续讨论与待办背景2026-09-302026-10-01)）
-- [ ] 复现外部 AI 委托 chat 的能力发现路径，明确入口分流策略。（[讨论记录](docs/research/2026-09-30-agent-knowledge-industry-landscape.md#94-后续讨论与待办背景2026-09-302026-10-01)、[消费侧入口](skills-def/cli/x-basalt/SKILL.md)、[双入口设计](docs/design/chat-tool-surface.md#6-宿主投入与接口纪律2026-09-30)）
-- [ ] 根据复现确定下一轮实施切口、验收用例与非目标。（[实验与停点](docs/research/2026-09-30-agent-knowledge-industry-landscape.md#9-下一步实验可复现能推翻建议)）
-- [ ] 按实施切口评估外部工具或成熟库的适配、成本、许可和失败边界。（[业界对照](docs/research/2026-09-30-agent-knowledge-industry-landscape.md#4-竞争与组合矩阵)、[库选型调研](docs/research/2026-06-26-libraries-survey.md)）
-- [ ] 补齐 Bases 公式中的 `file()` / `link.asFile()` 解析能力及端到端测试。（[R08 定位](docs/research/2026-10-01-dql-bases-compatibility-local-audit.md#52-两个应独立修复的执行缺口)、[引擎实现](src/base/engine.ts)）
-- [ ] 明确 DQL TASK 的 SORT/GROUP BY/FLATTEN 执行或拒绝行为，补齐端到端测试。（[R09 定位](docs/research/2026-10-01-dql-bases-compatibility-local-audit.md#52-两个应独立修复的执行缺口)、[SQL 生成器](src/query/sql-generator.ts)）
-- [ ] 建立 DQL/Bases 兼容投入账本，确定特性边界、目标版本与实施顺序。（[投入建议](docs/research/2026-10-01-dql-bases-compatibility-local-audit.md#62-条件化投入建议尚待用户决定)、[现有校正账本](docs/design/bases-vs-official.md)、[实现状态](docs/design/bases-status.md)）
-- [ ] 核对 Bases 语法接地计划与评测记录的收口状态，同步计划状态及归档。（[原计划与验收记录](docs/plans/2026-08-08-bases-chat-grounding.md)、[状态核对背景](docs/research/2026-09-30-agent-knowledge-industry-landscape.md#94-后续讨论与待办背景2026-09-302026-10-01)）
+## 已发现未修复 / 未完成验证（待实施）
 
-## 长期待办
+- [ ] 修正 chat 写后节流与用户显式复核/再次执行要求的冲突，并覆盖“真实执行第二次 run”而非用 query=0 冒充幂等证据。（[独立切口与验收](docs/plans/2026-10-01-todo-sequential-cleanup.md#3-下一轮切口--验收--非目标)、[系统提示](src/chat/index.ts)）
+- [ ] 修复外部 AI 最终答案追加排除路径的范围违约；内层 chat 与外层转述分别验收，不以目标路径/总数正确代替输出义务。（[已观察结果](docs/plans/2026-10-01-todo-sequential-cleanup.md#2-外部-ai-能力发现与入口分流)、[入口策略](docs/design/chat-tool-surface.md)）
+- [ ] 为 trace 补齐可关联工具调用/结果/错误的标识，验证并发同名调用与乱序结果的准确归属。（[可观测性风险](docs/plans/2026-10-01-todo-sequential-cleanup.md#decisions--progress)、[trace](src/chat/trace.ts)）
+- [ ] 核对或补齐历史 Bases grounding 原始评测证据；原始 JSON 未定位期间，历史汇总只作已报告结果，不重新认证旧分数。（[归档核对与证据缺口](docs/history/plans/2026-08-08-bases-chat-grounding.md#收口核对2026-10-01)）
+
+## 长期待办与关注项（原条目保留，未实施）
 
 - [ ] 扩展任务 emoji 字段、任务状态及到期日过滤。（[历史差距](docs/history/research/2026-06-30-feature-gap-vs-dataview-obsidian.md#a-dataview-元数据采集层最关键)、[当前 TASK 边界](docs/use/dql.md#33-task)）
 - [ ] 补齐 DQL 的 `default`、数组高阶和聚合函数。（[历史差距](docs/history/research/2026-06-30-feature-gap-vs-dataview-obsidian.md#b-dataview-查询表达力层)、[当前函数集](docs/use/dql.md#6-内置函数)）

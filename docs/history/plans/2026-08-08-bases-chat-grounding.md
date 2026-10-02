@@ -7,14 +7,14 @@ tags:
   - chat
   - bases
   - evaluation
-timestamp: 2026-08-07T17:23:59Z
-sha256: afa022fe631e6bcf01d2eaf1f4ef6cd8bb9197e80ad7174a8ed4d946351f27b6
-status: active
+timestamp: 2026-10-01T18:18:12Z
+sha256: 3a59df261a8a45743d9bce04208d8819a2226fddc6bd4b2387b3f13c82b05b41
+status: completed
 ---
 # Bases chat 语法接地与 A/B 复跑计划
 
-> 日期：2026-08-08 · 状态：active
-> 上游计划：[`2026-08-03-chat-cli-tool.md`](./2026-08-03-chat-cli-tool.md)
+> 日期：2026-08-08 · 状态：completed（历史实施范围；2026-10-01 核对）
+> 上游计划：[`2026-08-03-chat-cli-tool.md`](../../plans/2026-08-03-chat-cli-tool.md)
 > 触发：真实 chat A/B 已完成；动态 base 的生成可靠性、重试成本与步数预算显著落后于 DQL。
 
 ## Goal
@@ -63,37 +63,39 @@ status: active
 
 ## 执行步骤
 
+> 以下 checklist 按既有 Progress 与历史报告同步执行状态，不表示 2026-10-01 重新实跑 A/B；本次可独立核对范围、原始证据缺口与归档依据见末尾「收口核对」。
+
 ### BG-1：Bases 运行时 skill
 
-- [ ] 新增 `skills-data/bases.json5`，每条 rule 有唯一 kebab-case `id`。
-- [ ] 只覆盖模型生成动态 base 所需的最小闭环：顶层/view `filters`；字符串表达式；递归 `and/or/not`；`order` 是投影列；`sort` 才是排序；`limit` 与 `total` 口径。
-- [ ] 提供 3 个可直接改写的完整 source：简单过滤、嵌套布尔、排序 + limit。
-- [ ] 触发词与 `obsidian-base-spec`/`core` 刻意错开；summary/core 只留一行指路，不复制正文。
+- [x] 新增 `skills-data/bases.json5`，每条 rule 有唯一 kebab-case `id`。
+- [x] 只覆盖模型生成动态 base 所需的最小闭环：顶层/view `filters`；字符串表达式；递归 `and/or/not`；`order` 是投影列；`sort` 才是排序；`limit` 与 `total` 口径。
+- [x] 提供 3 个可直接改写的完整 source：简单过滤、嵌套布尔、排序 + limit。
+- [x] 触发词与 `obsidian-base-spec`/`core` 刻意错开；summary/core 只留一行指路，不复制正文。
 
 ### BG-2：chat/core 契约校正
 
-- [ ] chat 开始生成 `.base` 前能明确取到 Bases skill，而不是误取 `obsidian-base-spec`。
-- [ ] 从系统提示与运行时说明中移除 base 支持 `--offset/--size` 的错误描述；query/search 分页契约保持不变。
-- [ ] 不改变 `cli` 单工具、stdin source、防递归和 vault/db 注入架构。
+- [x] chat 开始生成 `.base` 前能明确取到 Bases skill，而不是误取 `obsidian-base-spec`。
+- [x] 从系统提示与运行时说明中移除 base 支持 `--offset/--size` 的错误描述；query/search 分页契约保持不变。
+- [x] 不改变 `cli` 单工具、stdin source、防递归和 vault/db 注入架构。
 
 ### BG-3：tool-error 证据完整性
 
-- [ ] trace 的 tool-error 至少保留 `{ message, code?, classification? }`，不再落成空对象。
-- [ ] 超长错误仍受有界预览约束，不把 safety 包裹内的大段 vault 内容重复写入报告。
-- [ ] 正常 tool-call/tool-result/finish trace 契约不变。
+- [x] trace 的 tool-error 至少保留 `{ message, code?, classification? }`，不再落成空对象。
+- [x] 超长错误仍受有界预览约束，不把 safety 包裹内的大段 vault 内容重复写入报告。
+- [x] 正常 tool-call/tool-result/finish trace 契约不变。
 
 ### BG-4：回归与文档
 
-- [ ] `tests/skill.test.ts` 锁定 Bases skill 可独立召回、与 Markdown/DQL skill 不串篇、rule id 完整。
-- [ ] chat/trace 测试覆盖可读 tool-error 与 base 分页提示回归。
-- [ ] 同步消费侧文档与 `skills-data` 自我说明；更新已有 docs 后刷新派生元数据。
-- [ ] 按跨运行时契约变更执行全量 `lint / typecheck / build / test`。
+- [x] `tests/skill.test.ts` 锁定 Bases skill 可独立召回、与 Markdown/DQL skill 不串篇、rule id 完整。
+- [x] chat/trace 测试覆盖可读 tool-error 与 base 分页提示回归。
+- [x] 同步消费侧文档与 `skills-data` 自我说明；更新已有 docs 后刷新派生元数据。
+- [x] 按跨运行时契约变更执行全量 `lint / typecheck / build / test`。
 
 ### BG-5：同条件 A/B 复跑
 
-- [ ] 使用相同模型、vault、4 对问题、`maxSteps=12`，连续跑 3 轮；DQL/base 各 12 个正式样本。
-- [ ] 单列任务失败率、tool-error、重试、exhausted、error-storm、平均轮数/调用/token；不同预算的 pilot 不并入。
-- [ ] 与当前基线逐项对比，结论写回计划 Evidence/Verify，不只写“体感变好”。
+- [x] 使用相同模型、vault、4 对问题、`maxSteps=12`，连续跑 3 轮；DQL/base 各 12 个正式样本。（历史记录）
+- [x] 单列任务失败率、tool-error、重试、exhausted、error-storm、平均轮数/调用/token；不同预算的 pilot 不并入。（历史记录）
+- [x] 与当前基线逐项对比，结论写回计划 Evidence/Verify，不只写“体感变好”。（历史记录）
 
 ## Verify / 验收门槛
 
@@ -123,9 +125,9 @@ status: active
 
 ## Evidence / Verify（2026-08-08 A/B 复跑结果）
 
-> 跑法：兄弟库 `../x-basalt-evals`，`node runner/run.mjs --judge --only compare/dynamic-base-ab` ×3 轮；
+> 历史跑法：独立评测侧的 `compare/dynamic-base-ab` ×3 轮；
 > 主仓改后已 `pnpm build`（harness 调 `dist/cli.js`）；模型 `deepseek-v4-flash`（`AI_GATEWAY_MODEL`），vault/4 对问题同基线。
-> 三份 live 明细 JSON：`2026-08-07T18-35-33-422Z / 18-36-45-491Z / 23-02-57-831Z`（x-basalt-evals/reports/）。
+> 三份 live 明细 JSON：`2026-08-07T18-35-33-422Z / 18-36-45-491Z / 23-02-57-831Z`（历史原始报告标识；本轮未定位到这些 JSON）。
 
 | 指标 | 基线 DQL | 基线 base | 复跑 DQL | 复跑 base | 验收门槛 |
 |---|---:|---:|---:|---:|---|
@@ -142,6 +144,14 @@ status: active
 **结论**：接地后动态 base 从 7/12 逆转到 **12/12**，全部验收门槛达标，**未命中杀死条件**。
 base 平均重试 0/次（基线 7.17）、零撞顶/零 error-storm、平均 3 轮完成、token 0.82×DQL（基线 9.47×）——
 原「base 靠 diagnostics 反复试错」的三类错误形态（filters 写成数组 / 臆造 `{field,operator,value}` / 排序写进 order）
-在具备可机读 Bases skill 后不再出现。**“动态 base 可能比 DQL 更可靠”的路线假设维持成立，chat 无需默认回退 DQL。**
+在具备可机读 Bases skill 后不再出现。**当时结论仅维持该固定配对条件下的可行性，不据此要求当前 chat 默认选择 Bases，也不证明所有复杂任务比 DQL 更可靠。**
 
 > 提示：本结果仅 `deepseek-v4-flash` + 单一固定小 vault + 4 类读取问题，不宣称外推到其它模型/更大 vault（对齐原基线限制）。
+
+## 收口核对（2026-10-01）
+
+- 已独立核对 BG-1..4：bases skill 与三组模板、分工/唯一 id 有 tests/skill.test.ts；SYSTEM_PROMPT 明确指向 bases、只给 query/search 分页；已构建 CLI 的 base --help 没有 offset/size；trace 的 normalizeError 与 tests/chat/trace.test.ts 保留消息/分类/错误码及 2000 字符上限。当前全量 lint/typecheck/build/test 1223/1223。
+- BG-5 只核对历史记录一致性：原 Progress 与上表报告同样记为三轮 DQL/base 各 12/12。另有后续四场景最终汇总报告记 39/39、skill/source 39/39、零 base error/撞顶/error-storm，但有 1 次非 base query 错误；不能写成所有工具零错。它是后续阶段，不混算原 A/B 分母。
+- 未验证：本机未定位历史 A/B 或四场景对应原始 JSON，未独立复算历史分数/费用/时序，也未按当前模型、产品和预算重新跑。不能把历史 GO 当成本轮全任务或外层答案/过程义务通过。
+- 归档三问：实施内容已存在并有当前确定性回归；决策/量化表/限制完整留在本文件，无唯一信息删除；当前使用与投资取舍由 [指南](../../use/bases.md)、[工具面](../../design/chat-tool-surface.md)、[兼容投入账本](../../design/query-compatibility-ledger.md)接替。归档仅结束旧实施计划的 active 状态，不消除上述证据缺口。
+- 后续只在真实 dogfood 阻断可复现且保存输入/轨迹后另开计划；模型执行验收与系统提示条件冲突仍未修复，见当前兼容投入账本。

@@ -7,8 +7,8 @@ tags:
   - bases
   - testing
   - x-basalt
-timestamp: 2026-10-02T00:48:39Z
-sha256: 7328e2e92c965c156df15d0e2837ac3af482c62e79d4d8dc54d4049ca6ebd3b7
+timestamp: 2026-10-01T17:33:08Z
+sha256: 5495db89aaa7999336d5c3315218437c1b2cef3d0a157ec9ed56d4d3b0f67626
 ---
 # Bases 实现状态追踪
 
@@ -132,7 +132,7 @@ sha256: 7328e2e92c965c156df15d0e2837ac3af482c62e79d4d8dc54d4049ca6ebd3b7
 | date vs datetime 比较（固定时区） | BASE-TYPE-005 | ⏸ oracle（P2a 已落暂定机制：严格 ISO 推断 + 统一 epoch 比较） |
 | frontmatter wikilink → Link value | BASE-TYPE-006 | ⏸ oracle（P2a 已落暂定机制：`[[target]]`/`[[t\|d]]`/`[[t#sub]]` → Link value，路径感知相等） |
 | 常量/算术公式、引用属性/公式、拓扑排序 | BASE-FORM-001..003 | ✅ 2026-07-27（P2a；Kahn 拓扑与 YAML 键序无关） |
-| 公式 `file()` / `link.asFile()` 关联读取 | BASE-FORM-FILE-001..016 | ✅ 2026-10-01（[矩阵](bases-scenarios.md#51-公式关联读取r08)；filter/sort/投影/group/summary 目标、多根/附件/安全/预算与 CLI） |
+| 公式 `file()` / `link.asFile()` 关联读取 | BASE-FORM-FILE-001..016 | ✅ 2026-10-01（[矩阵](bases-scenarios.md#51-公式关联读取r08)、[顺序计划](../plans/2026-10-01-todo-sequential-cleanup.md#5-bases-公式-file--asfile)；filter/sort/投影/group/summary 目标、多根/附件/安全/预算与 CLI） |
 | 公式循环 → formula-cycle | BASE-FORM-004 / BASE-SEC-006 | ✅ 2026-07-27（P2a；message 含完整循环链；maxFormulaNodes 256 / maxFormulaDepth 64，超限含依赖路径） |
 | 公式运行时类型错误行级诊断 | BASE-FORM-005 | ✅ 2026-07-27（P2a；行级 warning + cell null，不误伤他行） |
 | `today`/`now`（clock 注入） | BASE-FORM-006 | ✅ 2026-07-27（P2a；同 clock 两次 query 字节一致） |

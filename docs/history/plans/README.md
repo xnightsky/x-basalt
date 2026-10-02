@@ -6,8 +6,8 @@ tags:
   - plan
   - meta
   - x-basalt
-timestamp: 2026-08-06T23:59:45Z
-sha256: c7d239d0c193e54e1d16ecc35b3cc9f59eb34fade6c014e6eddb745b01ea91f4
+timestamp: 2026-10-01T18:20:57Z
+sha256: 5ffc7707a2965543b7fb29f0451ace1dcaf6099a6ebd3ce771e6d0a76d69bd96
 ---
 
 # 归档标准
@@ -86,4 +86,5 @@ git mv docs/plans/<name>.md docs/history/plans/<name>.md
 | `2026-07-30-pipe-closure.md` | 2026-08-07 | 全部计划项与安全收口完成 | 见计划内验收记录 |
 | `2026-07-30-pipeline-index-freshness.md` | 2026-08-07 | 验收已全部达成 | 见计划内验收记录 |
 | `2026-08-03-bases-dynamic-stdin.md` | 2026-08-07 | stdin 首步完成；真实 chat eval 另留 TODO | 见 TODO 与计划验收记录 |
+| `2026-08-08-bases-chat-grounding.md` | 2026-10-01 | 代码/确定性回归已落地，历史执行状态核对完成；不重新认证旧模型分数 | 原决策、A/B 表和原始证据缺口完整留档；当前规则由指南/工具面/兼容账本接替 |
 | 其余已归档单文件 plan | — | 已完成实现，归档保留。详见各自文件 | — |

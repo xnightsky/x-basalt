@@ -6,8 +6,8 @@ tags:
   - design
   - index
   - x-basalt
-timestamp: 2026-09-20T11:09:26Z
-sha256: 38f1c5ef4090d3a84ced7fe1bab0443756bf92210c1147cfb7642c20902ac378
+timestamp: 2026-10-01T18:12:15Z
+sha256: 234adc979176a214fc3ebd948b7acf56c03104879266d68398855528a5cccaaa
 ---
 # 设计文档
 
@@ -20,6 +20,7 @@ sha256: 38f1c5ef4090d3a84ced7fe1bab0443756bf92210c1147cfb7642c20902ac378
 | | |
 | --- | --- |
 | [架构总览](architecture.md) | 分层依赖、读写数据流、DQL 管线、SQLite 数据模型、组件目录。**先读这个建立全局观** |
+| [DQL/Bases 兼容投入账本](query-compatibility-ledger.md) | 当前快照、已验证/有据差异/未实现/未知分类，升级顺序与停点 |
 | [依赖与许可证政策](dependency-license-policy.md) | 选第三方库前必读 |
 
 ## Bases（`.base` 无头查询）

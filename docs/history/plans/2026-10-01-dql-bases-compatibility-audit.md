@@ -9,8 +9,8 @@ tags:
   - bases
   - x-basalt
 status: done
-timestamp: 2026-10-01T01:18:50Z
-sha256: 1f429363563639c2ea02a72c2fdb226224ba8c49eb0f303f99a6ada98a5a0cff
+timestamp: 2026-10-01T18:20:57Z
+sha256: afbd07bed136555f816063f939762c5eecef607820e7d488e354bfc3dfbbb588
 ---
 # DQL / Bases 兼容范围局部调研
 
@@ -52,7 +52,7 @@ sha256: 1f429363563639c2ea02a72c2fdb226224ba8c49eb0f303f99a6ada98a5a0cff
 
 - 当前入口：[`src/cli.ts`](../../../src/cli.ts)、[`src/base/engine.ts`](../../../src/base/engine.ts)、[`tests/base-stdin.test.ts`](../../../tests/base-stdin.test.ts)。
 - DQL 边界：[`dql-subset`](../../design/dql-subset.md)、[`src/query/`](../../../src/query/)。
-- Bases 历史差分：[`bases-vs-official`](../../design/bases-vs-official.md)、[`bases-status`](../../design/bases-status.md)、[语法接地 A/B](../../plans/2026-08-08-bases-chat-grounding.md)。已有小样本结果不替代本轮任务能力分析。
+- Bases 历史差分：[`bases-vs-official`](../../design/bases-vs-official.md)、[`bases-status`](../../design/bases-status.md)、[语法接地 A/B](2026-08-08-bases-chat-grounding.md)。已有小样本结果不替代本轮任务能力分析。
 - [局部报告](../../research/2026-10-01-dql-bases-compatibility-local-audit.md)：O1–O10 固定一手信源、P1–P9 项目证据、R01–R09 对照及未知项。
 - 定向验证：`node --import tsx --test tests/{base-stdin,base-document,base-engine,base-cli,base-context,base-group-summary,base-functions-date,base-functions-link,base-list-hof,base-values-date,base-vault-entries,vault-entries-dql-proof,query,query-parser,sql-generator}.test.ts`：321/321；CLI 入口/模型探针 8 项及 TASK AST→SQL 检查 1 项。
 - 第一 researcher 运行因工具声明不可用失败，不计成功验证；父代理保留工作区 diff/status，再以同协议可用 delegate 只读复核四项官方结论，成功返回。核心八份原文 hash 一致，未更改代理配置或绕行执行协议。

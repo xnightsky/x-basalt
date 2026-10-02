@@ -8,8 +8,8 @@ tags:
   - knowledge
   - retrieval
   - x-basalt
-timestamp: 2026-10-01T01:29:03Z
-sha256: 7ecfe619ecb9c5cfc6d6723bc4419942916425f5dea40095f28fa0ba4fabb868
+timestamp: 2026-10-01T18:20:57Z
+sha256: 8706257fb72d016a8e7c512fdb8d42bf3eacb0a7aeb3690ff00ff3f7f0598311
 ---
 # Agent 知识工具深度业界调研：x-basalt 的定位与架构取舍
 
@@ -290,7 +290,7 @@ DQL 与 Bases 两套执行路径的长期维护成本确实存在，但是否删
 
 **尚未定案：**chat 最终职责与复杂任务范围、外部 AI 的入口分流；检索组合/embedding、持久知识维护与 OKF v0.2 profile 迁移仍属候选或 backlog，不自动立项。
 
-**旧 TODO 的 A/B 与 dogfood 记录：**Bases 语法接地后，base 从 7/12 到 12/12；后续四场景能力评估及 skill-before-base/source 均记为 39/39，零 base error、零撞顶、零 error-storm，记录指向外部 `x-basalt-evals`。原 TODO 据此称“已收口，进入真实 Vault dogfood，遇可复现阻断再立项”。[原计划 Evidence/Verify](../plans/2026-08-08-bases-chat-grounding.md)已有 A/B 记录，但计划 frontmatter 仍为 `active`，与旧 TODO 的收口表述不一致。本次仅保存历史记录，未重跑评测或核实外部轨迹，计划状态另列待办核对；不能把这些小样本读数当作当前复杂任务能力保证。
+**旧 TODO 的 A/B 与 dogfood 记录：**Bases 语法接地后，base 从 7/12 到 12/12；后续四场景能力评估及 skill-before-base/source 均记为 39/39，零 base error、零撞顶、零 error-storm，记录留在独立评测侧。原 TODO 据此称“已收口，进入真实 Vault dogfood，遇可复现阻断再立项”。[原计划 Evidence/Verify](../history/plans/2026-08-08-bases-chat-grounding.md)已有 A/B 记录；本段调研时 frontmatter 仍为 active，与旧 TODO 表述不一致。2026-10-01 已完成代码/确定性回归与历史汇总核对，将计划标 completed 并归档；本地未找到历史原始 JSON，未独立重算或重跑。不能把这些小样本读数当作当前复杂任务能力保证。
 
 **长期待办的设计依据：**任务字段、DQL 函数与 FROM 多源差距的旧调查见[历史特性差距](../history/research/2026-06-30-feature-gap-vs-dataview-obsidian.md)；原“函数约 15%”为旧口径，不作当前跨引擎能力结论。变更编排器的 `restart/ignore` 依赖 `runPipeline` 的协作取消，背压、缓存跳过、分支、续跑、告警等余项见[编排设计](../design/change-orchestration.md)。跨平台 stdin/stdout 契约见[管道设计](../design/shell-pipe-portability.md)。FTS5 已落地，embedding 的候选准入见[语义检索 §5](../design/semantic-retrieval.md#5-可选-embedding-的候选方案未实现)。更多 profile 与 Kysely 收编 DQL→SQL 按需求评估，尚未选定集成方案。
 

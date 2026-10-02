@@ -6,8 +6,8 @@ tags:
   - docs
   - index
   - x-basalt
-timestamp: 2026-08-07T00:12:49Z
-sha256: 7d98ea52c42407ef05191989e9eff3c9a8424b456ee75be8a8f3226194270a29
+timestamp: 2026-10-02T00:20:03Z
+sha256: ec3407debc7c0c0a2109c5b988a925db346a7b27a7f64bda224530a769548da3
 ---
 # x-basalt 文档
 
@@ -35,7 +35,9 @@ sha256: 7d98ea52c42407ef05191989e9eff3c9a8424b456ee75be8a8f3226194270a29
 
 - 会用 → [`use/bases.md`](use/bases.md)
 - 懂原理 → [`design/bases-vs-official.md`](design/bases-vs-official.md)
-- 当前执行与待办 → 仓库根 [`TODO.md`](../TODO.md)
+- 置顶关注与未完成事项 → 根 [`TODO.md`](../TODO.md)（会话开始先读；持续关注不等于立即实施，长期项和未修问题保留可见）
+- 已完成工作与证据边界 → [本轮执行记录](plans/2026-10-01-todo-sequential-cleanup.md)；调查收口不表示所有问题已修复
+- 两路边界与投入顺序 → [DQL/Bases 兼容账本](design/query-compatibility-ledger.md)
 
 ## 维护规则
 
