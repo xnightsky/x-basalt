@@ -8,8 +8,8 @@ tags:
   - bases
   - headless
   - query-engine
-timestamp: 2026-08-07T00:12:49Z
-sha256: 85c40edb3c06515e918ca8cf9bcbc76258ba76899c5fbdd56b9a1cb973e61855
+timestamp: 2026-10-01T17:33:08Z
+sha256: 1d6d376651be38a05a20c5ad8871f161690ec483170860db4383a7b462322f3c
 ---
 
 # Obsidian Bases 无头执行引擎设计
@@ -63,6 +63,7 @@ src/base/
   planner.ts         # view 选择、filter 合并、公式依赖图
   source.ts          # SQLite -> BaseRow；复用现有 tags/links/file metadata
   evaluator.ts       # 带预算的纯 AST 解释器
+  row-context.ts     # 行/公式共用求值依赖；按行公式缓存，保留源诊断
   engine.ts          # BaseEngine.query()
   errors.ts          # 结构化错误/诊断辅助
   index.ts           # 公共出口
@@ -78,6 +79,8 @@ cli / future MCP
        -> utils/path（路径与链接键）
        -> diagnostic（稳定诊断形状）
 ```
+
+行上下文不变量（R08，2026-10-01）：engine 在 filter/limit 前候选数据集建立同一个 createFileResolver，完成显式 contextFile 解析后交给 row-context 装配。公式与普通行求值共用 resolveFile/clock/propertyTypes/sharedBudget/contextRow；公式只在引用时计算且每行每名称缓存，错误仍指向公式源位置。custom summary 的 values 语境不使用行装配器，继续禁止行外解析，不因修正公式而扩张权限或数据集。
 
 禁止依赖：
 

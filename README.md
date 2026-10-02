@@ -55,7 +55,7 @@ x-basalt skills get obsidian-base-spec                      # 召回语法规范
 
 核对同类工具、检索/宿主/知识维护的适配性 → [业界调研与信源](./docs/research/2026-09-30-agent-knowledge-industry-landscape.md)。独立无头运行是部署边界，不是独有能力或效果优越性的证明。
 
-DQL / Bases 为什么仍保留两路、官方入口与本项目即时输入有什么不同 → [局部深度调研](./docs/research/2026-10-01-dql-bases-compatibility-local-audit.md)。TASK 子句与公式文件查找仍有已复现缺口，见报告 R08/R09；本轮只校正说明，不修执行代码。
+DQL / Bases 为什么仍保留两路、官方入口与本项目即时输入有什么不同 → [局部深度调研](./docs/research/2026-10-01-dql-bases-compatibility-local-audit.md)。R08 公式文件解析上下文已修复，见 [Bases 指南](./docs/use/bases.md)与[回归矩阵](./docs/design/bases-scenarios.md#51-公式关联读取r08)；R09 的 TASK 子句缺口尚待独立修复。报告保留取证时状态，不代替当前实现说明。
 
 **写入边界**：meta 使用同目录临时文件 + rename，避免直接半写目标；当前没有并发版本前置条件/锁，不保证并发防覆盖、跨文件事务或断电持久性。chat 无逐动作确认，Ctrl+C 不回滚已写文件，也不保证立即停止已启动 CLI 子进程。先在副本验证并建立可恢复备份。信源：[`src/meta/index.ts`](./src/meta/index.ts)、[`src/chat/cli-tool.ts`](./src/chat/cli-tool.ts)、[使用指南](./docs/use/chat.md#7-当前限制--注意)。
 

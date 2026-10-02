@@ -68,6 +68,7 @@ import {
   readBaseRows,
   type BaseDataset,
 } from "./source.js";
+import { createRowEvalContext } from "./row-context.js";
 import { BUILTIN_SUMMARIES, runBuiltinSummary } from "./summaries.js";
 import { loadBaseTypeSchema } from "./typeschema.js";
 import {
@@ -691,54 +692,8 @@ export class BaseEngine {
     }
 
     try {
-      // ---- 公式求值接线（P2a 计划「关键取舍」#6）----
-      // 拍板「按需 + 每行缓存」而非「一律按拓扑序求全量」：未被 filter/sort/投影引用到的公式
-      // 不求值、不产生行级诊断（其类型错误不应污染无关查询）；公式体内的 formula.* 递归经同一
-      // accessor，天然按依赖序求值（循环/超深已由 planner 静态拒绝，深度 ≤ maxFormulaDepth）。
-      // 拓扑序（plan.formulaOrder）在 planner 用于循环/深度校验，求值侧无需再按序驱动。
-      const hasFormulas = plan.formulaOrder.length > 0;
-      const formulaAccessors = new WeakMap<BaseRow, { get(name: string): BaseValue }>();
-      const formulaAccessorFor = (row: BaseRow): { get(name: string): BaseValue } | undefined => {
-        if (!hasFormulas) return undefined;
-        let acc = formulaAccessors.get(row);
-        if (acc === undefined) {
-          // 每行每公式至多求值一次（Map 缓存）；BaseValue 域不含 undefined，get 命中即有效缓存。
-          const cache = new Map<string, BaseValue>();
-          acc = {
-            get: (name: string): BaseValue => {
-              const hit = cache.get(name);
-              if (hit !== undefined) return hit;
-              const def = plan.formulas[name];
-              // 未定义公式名已由 planner 静态拒绝（unknown-property error 短路）；此处防御兜底。
-              if (def === undefined) return MISSING;
-              const value = evaluateExpression(def.ast, row, {
-                limits,
-                ...(options.clock !== undefined ? { clock: options.clock } : {}),
-                formulas: acc as { get(name: string): BaseValue },
-                propertyTypes: typeSchema.table,
-                sharedBudget: opsBudget,
-                // 片六：公式体内同样可用 this.*（与 filter/投影/sort 同一上下文行）；
-                // 自定义汇总的 values 作用域仍有意不注入（禁止访问行外状态）。
-                ...(contextRow !== undefined ? { contextRow } : {}),
-                onRowError: (info) => pushRowDiagnostic(def.span, def.source, info, row.file.path),
-              });
-              cache.set(name, value);
-              return value;
-            },
-          };
-          formulaAccessors.set(row, acc);
-        }
-        return acc;
-      };
-
-      /**
-       * 逐行求值上下文装配（filter / sort / 投影 / groupBy / summaries 目标列共用一处）。
-       * 收在此处的原因：这五个语境的可选字段展开逐字相同，此前各写一遍，
-       * 其中 formulaAccessorFor(row) 还被判定与取值各调一次；漏传任一字段都是静默行为差异。
-       */
-      // 行集内 file 解析器（片三：`file(path)` / `link.asFile()`）。索引按需构建，
-      // 用不到这两个函数的查询零成本。**有意只给行求值上下文**——自定义汇总的
-      // `values` 作用域不注入，那里访问行外状态属越权（见 evaluator EvalContext.resolveFile）。
+      // 行集解析器给普通行表达式和公式共用；只有行外的自定义汇总 values 语境有意不注入。
+      // 索引按需构建；不额外读文件/查库，关联目标范围不随 filter/limit 缩小。
       const fileResolver = createFileResolver(rows);
 
       // ---- contextFile → this.* 的上下文行（片六 BASE-CTX-001）----
@@ -767,22 +722,19 @@ export class BaseEngine {
         contextRow = found;
       }
 
-      const rowEvalContext = (
-        row: BaseRow,
-        onRowError: (info: BaseRowErrorInfo) => void,
-      ): EvalContext => {
-        const formulas = formulaAccessorFor(row);
-        return {
+      const rowEvalContext = createRowEvalContext(
+        plan.formulas,
+        {
           limits,
           ...(options.clock !== undefined ? { clock: options.clock } : {}),
-          ...(formulas !== undefined ? { formulas } : {}),
           propertyTypes: typeSchema.table,
           sharedBudget: opsBudget,
           resolveFile: (target) => fileResolver.resolve(target),
           ...(contextRow !== undefined ? { contextRow } : {}),
-          onRowError,
-        };
-      };
+        },
+        (definition, row, info) =>
+          pushRowDiagnostic(definition.span, definition.source, info, row.file.path),
+      );
 
       // ---- filter：逐行求值合并 filter（无 filter 全量通过；行级错误该行按不通过处理）----
       const filtered = rows.filter((row) => {

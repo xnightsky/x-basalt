@@ -6,8 +6,8 @@ tags:
   - guide
   - bases
   - x-basalt
-timestamp: 2026-10-01T01:07:44Z
-sha256: 354e843c161df24223fed49fe96dc16657d95d6857a66e4410ef8e9a1038db7f
+timestamp: 2026-10-01T17:33:08Z
+sha256: 5cd7fc4899824956f32a0d3d9476a3f65e7982defe7f67e92b9091e29447d84b
 ---
 # Bases · 用 `.base` 无头查询你的 vault
 
@@ -118,7 +118,7 @@ ORDER BY due ASC LIMIT 20;
 
 **① 没有 schema。** 数据库的表事先定义好每列什么类型；这里没有——每篇笔记的 frontmatter 想写什么就写什么，同一个键在这篇是数字、在那篇可能是字符串。所以类型是**运行时看着值猜的**，某篇笔记没这个属性时投影成 `null` 而不是报错。「属性不存在」和「属性写了 `null`」是两回事（[§3.8](#38-值与类型语义)），这类边角语义全都长在「没有 schema」这个缺口上。
 
-**② 没有通用关系 JOIN 算子，但可以读取关联文件。** 官方公开 `file(path)`、`link.asFile()` 与 `file.properties`，不应把文件行模型说成完全不能跨文件读属性。当前本项目筛选里可查相关文件属性；公式体未接文件解析器，会产生 warning + null，尚未修复。官方契约与本轮复现见[局部调研 §4–5](../research/2026-10-01-dql-bases-compatibility-local-audit.md#4-双路线各补什么不要把上游-dql-能力算到本项目头上)。
+**② 没有通用关系 JOIN 算子，但可以读取关联文件。** 官方公开 `file(path)`、`link.asFile()` 与 `file.properties`，不应把文件行模型说成完全不能跨文件读属性。本项目筛选与公式体均可读取相关文件属性，共用当前 conformance 数据集的解析器；关联目标不因 filters/limit 排除而不可见，但不会额外读取库外文件。官方契约与本轮复现见[局部调研 §4–5](../research/2026-10-01-dql-bases-compatibility-local-audit.md#4-双路线各补什么不要把上游-dql-能力算到本项目头上)。
 
 **③ 表达式不是 SQL 表达式，是方法链。** 写的是 `file.hasTag("项目")`、`tags.filter(value != "草稿").join(", ")`、`(due - today()) / 1day`——面向对象的调用风格，还有 duration 字面量（`1day`）和链接类型。别把 SQL 的 `=`、`AND`、`LIKE` 写进来（会报 `base/expression-syntax`）。
 
@@ -352,7 +352,8 @@ views:
 ```
 
 - `today()` / `now()` 给当前时间；`1day` 是 **duration 字面量**。日期相减得 duration，除以 `1day` 得天数（负数 = 已过期）。
-- 公式可引用别的公式，自动按依赖顺序求值；循环引用报 `base/formula-cycle` 并列出完整环。
+- 公式可引用别的公式，按需依赖求值且每行缓存；循环引用报 `base/formula-cycle` 并列出完整环。
+- 关联读取可写 `file("Projects/Beta").properties["estimate"]` 或 `ref.asFile().properties["estimate"]`（ref 为 wikilink）；解析不到投影为 `null`，歧义按路径升序取第一个，与普通行表达式同策略。
 - 公式名含中文/空格时，在 `order` / `sort` 里要加引号（YAML 要求）。
 
 ### 第 5 步：分组（`groupBy`）与汇总（`summaries`）
@@ -841,7 +842,7 @@ date vs datetime 跨精度比较（暂定统一 epoch）；frontmatter wikilink 
 
 自定义 summary 的 `values` 已含空值，`.mean()` 计分母；按 limit 后计算（既有 2026-08-03 校正，本轮对应测试通过）。这部分是已校正项，不属于前列待 oracle 项。
 
-**本轮发现的执行缺口**：`file()` / `link.asFile()` 不可由行级支持外推到公式体；公式体未传文件解析器，会产生 warning + null，尚未修复。使用前检查 `diagnostics`，不把退出 0 等同所有 cell 正确；复现及源码位置见[局部调研 §5.2](../research/2026-10-01-dql-bases-compatibility-local-audit.md#52-两个应独立修复的执行缺口)。
+**R08 已修复（2026-10-01）**：公式体的 `file()` / `link.asFile()` 与 filter/sort/投影共用文件解析器、时钟、类型表和查询预算，详见 [场景矩阵](../design/bases-scenarios.md#51-公式关联读取r08)。自定义 summary 的 `values` 求值仍禁止访问行外解析器；它不是普通行公式。其它行级类型错误仍可能产生 warning + null，退出 0 不等同所有 cell 正确。旧缺口取证留在[局部调研 §5.2](../research/2026-10-01-dql-bases-compatibility-local-audit.md#52-两个应独立修复的执行缺口)。
 
 逐项状态见[实现状态追踪](../design/bases-status.md)，观察与校正流程见 [oracle 操作手册](../design/bases-oracle-runbook.md)。
 

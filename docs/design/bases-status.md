@@ -7,8 +7,8 @@ tags:
   - bases
   - testing
   - x-basalt
-timestamp: 2026-10-01T01:03:03Z
-sha256: 41c6b237c623b5fc24130dfa422feb91cc1907971dc35890e635731406eb8525
+timestamp: 2026-10-02T00:48:39Z
+sha256: 7328e2e92c965c156df15d0e2837ac3af482c62e79d4d8dc54d4049ca6ebd3b7
 ---
 # Bases 实现状态追踪
 
@@ -18,7 +18,7 @@ sha256: 41c6b237c623b5fc24130dfa422feb91cc1907971dc35890e635731406eb8525
 
 ## 2026-10-01 局部复核
 
-当前已有文件/stdin/API source 输入与显式 context；定义无需先落 `.base`。本轮 321 项定向测试及同库入口/能力对照见[局部调研](../research/2026-10-01-dql-bases-compatibility-local-audit.md)。**新发现、未修复**：公式体的 `file()` / `link.asFile()` 未接文件解析器，不能由行级函数支持外推；详见该报告 R08。函数计数不等于每个求值语境都已验证。
+当前已有文件/stdin/API source 输入与显式 context；定义无需先落 `.base`。本轮 321 项定向测试及同库入口/能力对照见[局部调研](../research/2026-10-01-dql-bases-compatibility-local-audit.md)。**R08 后续已修复**：公式体的 `file()` / `link.asFile()` 与普通行表达式共用上下文，按需/逐行缓存与自定义 summary 行外禁令不变；`tests/base-formula-file.test.ts` 的 BASE-FORM-FILE-001..016 补齐组合覆盖，Bases 299 项回归通过。原报告保留发现时状态，不代表未修复仍是现状。函数计数不等于每个求值语境都已验证。
 
 本表的当前条目按已落地校正更新；下方 2026-07 的实施明细保留为历史过程，不覆盖后来的语义决定。
 
@@ -132,6 +132,7 @@ sha256: 41c6b237c623b5fc24130dfa422feb91cc1907971dc35890e635731406eb8525
 | date vs datetime 比较（固定时区） | BASE-TYPE-005 | ⏸ oracle（P2a 已落暂定机制：严格 ISO 推断 + 统一 epoch 比较） |
 | frontmatter wikilink → Link value | BASE-TYPE-006 | ⏸ oracle（P2a 已落暂定机制：`[[target]]`/`[[t\|d]]`/`[[t#sub]]` → Link value，路径感知相等） |
 | 常量/算术公式、引用属性/公式、拓扑排序 | BASE-FORM-001..003 | ✅ 2026-07-27（P2a；Kahn 拓扑与 YAML 键序无关） |
+| 公式 `file()` / `link.asFile()` 关联读取 | BASE-FORM-FILE-001..016 | ✅ 2026-10-01（[矩阵](bases-scenarios.md#51-公式关联读取r08)；filter/sort/投影/group/summary 目标、多根/附件/安全/预算与 CLI） |
 | 公式循环 → formula-cycle | BASE-FORM-004 / BASE-SEC-006 | ✅ 2026-07-27（P2a；message 含完整循环链；maxFormulaNodes 256 / maxFormulaDepth 64，超限含依赖路径） |
 | 公式运行时类型错误行级诊断 | BASE-FORM-005 | ✅ 2026-07-27（P2a；行级 warning + cell null，不误伤他行） |
 | `today`/`now`（clock 注入） | BASE-FORM-006 | ✅ 2026-07-27（P2a；同 clock 两次 query 字节一致） |

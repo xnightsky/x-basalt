@@ -8,8 +8,8 @@ tags:
   - bases
   - conformance
   - fixtures
-timestamp: 2026-08-07T00:12:49Z
-sha256: a55a2d4cb2fde0b38b57e428b6e102b86dea44f0da702bc9dc2268c9d67fbecc
+timestamp: 2026-10-01T17:33:08Z
+sha256: 5156f711163cf44b404b3f93b4355e7825bb144556cd66d8fdf46b335f97dcf4
 ---
 
 # Obsidian Bases 无头执行场景矩阵
@@ -128,6 +128,25 @@ fixture 要求：
 | BASE-GROUP-002 | groupBy 列表/tag                     | 一行多组语义按官方 oracle 冻结                |
 | BASE-SUM-001   | Average/Min/Max/Sum/Count 类默认汇总 | 空值、混合类型和结果类型正确                  |
 | BASE-SUM-002   | custom summary 的 values             | 只接收当前结果集目标列，不能越权访问任意状态  |
+
+### 5.1 公式关联读取（R08）
+
+实现回归：[`tests/base-formula-file.test.ts`](../../tests/base-formula-file.test.ts)。使用真实 VaultIndexer 建库、BaseEngine 与 CLI stdin，不以单个函数单测替代求值上下文接线。2026-10-01：16 项通过；初始 13 项因漏解析器失败，参数/预算/循环三项原有护栏仍通过。
+
+| ID（BASE-FORM-FILE-） | 场景 | 期望 |
+| --- | --- | --- |
+| 001 / 002 | file() / frontmatter link.asFile() 公式投影 | 正确关联值、每行独立，不再 unsupported/null |
+| 003 | 公式 filter | 能解析被 filter 排除的关联目标 |
+| 004 | 公式 sort + limit | 按值排序后截断，空值最后，total 未截断 |
+| 005 | groupBy 与内置 summary 目标 | 组键/组数、全量与组级合计正确 |
+| 006 | 依赖公式 | YAML 键序不影响关联值与依赖计算 |
+| 007 / 008 | 完整/pathKey/歧义路径、多根 | 沿用当前解析口径，不另建路径策略 |
+| 009 | md-only / all-files | 附件只在匹配的数据集可解析 |
+| 010 | 缺失/原型键/库外目标 | 缺失传播 null，不读额外内容 |
+| 011 / 012 | this/clock、非法参数/缓存诊断 | 显式上下文不丢，源位置与每行一次错误稳定 |
+| 013 / 014 | 共享预算、循环/深度 | 耗尽/依赖环明确诊断，不返回部分结果 |
+| 015 | 惰性公式与 custom summary values | 未引用不执行，汇总行外禁令不解除 |
+| 016 | 真实 CLI stdin | 关联属性为预期数值，不用退出 0 冒充正确 |
 
 ## 6. P3：完整宿主与 all-files
 

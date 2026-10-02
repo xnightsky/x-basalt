@@ -8,13 +8,14 @@ tags:
   - bases
   - compatibility
   - x-basalt
-timestamp: 2026-10-01T01:17:32Z
-sha256: 89cf70b59137632012aa8ebe5dc20123eb130a6b9b5295d0165a7c1d52459ec4
+timestamp: 2026-10-02T00:48:39Z
+sha256: b2f37221fc50351c5f0190c6b00bdeed752cdbf5a85519f1a49ec714734a4c69
 ---
 # DQL / Bases 局部深度调研：双路线的必要性与兼容边界
 
 > 核查日期：2026-10-01 UTC；项目基线：x-basalt 0.10.0 / `0a508dd6883d3ea61d90efa9af359bd5daedc8f2`。
 > 这是调研与建议，不是删改模块、升级兼容快照或功能实施授权。
+> 后续实施状态（2026-10-01）：R08 已修复，公式关联读取新增 16 项回归（[矩阵](../design/bases-scenarios.md#51-公式关联读取r08)）；R09 仍待独立修复。下文保留原取证基线的表格、代码定位与失败读数，不用后续结果改写历史探针。
 > 上游：[业界调研](2026-09-30-agent-knowledge-industry-landscape.md)、[本轮已归档计划](../history/plans/2026-10-01-dql-bases-compatibility-audit.md)。
 
 ## 1. 结论先行
