@@ -1,6 +1,6 @@
 ---
-timestamp: 2026-07-09T05:53:07Z
-sha256: ed72f443a633ae0a6e214edd08ac149f3f2ae16ac9638d72dd9210dca653ab7b
+timestamp: 2026-10-02T13:55:28Z
+sha256: 9fbcb68bedb62b57e3e11b907e39c9f7cd5a7497a25ccc9fb09837d2b022f92e
 type: guide
 title: 解析层覆盖的 Obsidian 语法
 description: parser 层支持的 wikilink、Markdown link、tag、callout、task 等语法边界与链接定位契约
@@ -228,7 +228,7 @@ rating:: 5
 | 代码区       | 在掩码后正文提取，围栏 / 行内代码内的 `k:: v` 不误识                                                |
 | 整行 vs 行内 | 整行形态独占该行（值取到行尾，可含 `[ ] ( )` 字面）；非整行时同一行可提取多个 `[k:: v]` / `(k:: v)` |
 
-`value` 为原始文本（trim 后，不类型化）。查询侧与 frontmatter 的合并语义（同命名空间、frontmatter 胜）见 [querying-dql.md](dql.md) §7.4；设计真相源 `docs/specs/2026-07-02-inline-fields-design.md`。
+`value` 为原始文本（trim 后，不类型化）。查询侧与 frontmatter 的合并语义（同命名空间、frontmatter 胜）见 [querying-dql.md](dql.md) §7.4；设计真相源 `docs/design/inline-fields.md`。
 
 ---
 

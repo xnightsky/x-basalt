@@ -7,7 +7,7 @@ import type { EventType, PipelineConfig } from "./types.js";
  * 下游：产出 {@link PipelineConfig} 交 `Orchestrator`；本文件纯解析，不碰 fs/DB/索引。
  *
  * 设计：docs/specs/2026-06-29-change-orchestration-design.md §8「管道 = 一组参数」。
- * 计划：docs/plans/2026-07-30-pipe-closure.md（PC-1/PC-2）。
+ * 计划：docs/archive/plans/2026-07-30-pipe-closure.md（PC-1/PC-2）。
  *
  * 跨模块不变量（一一对应）：命令行 key ⟷ 配置段 key 必须逐项对得上，
  * 例外只有两个——`use` 是配置引用入口（无配置段对应项）、`dryRun` 由运行时 `--apply` 承载。

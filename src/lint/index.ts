@@ -8,7 +8,7 @@ import type { ProfileConfig } from "./profile.js";
 //
 // 上游：src/cli.ts lint 命令；下游：按 rule 分发到 runner（links → checkVault，metadata → checkMetadata）。
 // 设计真相源：docs/design/kb-compiler.md §3.3/§8/§9；计划见
-// docs/archive/plans/2026-07-22-kb-compiler-p2-diagnostic-contract.md（P2）与 -p3a-profile-lint.md（P3a）。
+// docs/archive/plans/2026-07-kb-compiler-complete.md（P2 原 p2-diagnostic-contract、P3a 原 p3a-profile-lint，已合并归档）。
 // 边界：不做自定义 profile / fix / ci / baseline（P3b–P5）；纯内存 per-run，不碰 SQLite。
 
 export interface LintRunOptions {

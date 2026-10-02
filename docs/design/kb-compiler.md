@@ -9,14 +9,14 @@ tags:
   - links
   - parser
   - x-basalt
-timestamp: 2026-10-02T12:14:45Z
-sha256: c1338930121a69a032e6cf7fbd4f0be350cf114b2ad0b12b406df5b9715cfe11
+timestamp: 2026-10-02T13:55:28Z
+sha256: fa38e8fd2de8976dcc2fcc65aff9bd39919d42eedf07fc061a608ddc46e176be
 ---
 
 # KB compiler / lint / links 设计规格
 
 > 日期：2026-07-09 · 类型：parser 定位契约 + links/lint/profile 分层设计
-> 状态：P0 parser 定位契约 + P1 links check/suggest + P2 统一诊断契约（`BasaltDiagnostic`）与 lint 壳 已落地；P3 metadata profile lint 分两阶段（§8）**均已落地**：P3a 内置校验（见 `../plans/2026-07-22-kb-compiler-p3a-profile-lint.md`）、P3b 自定义 config profile（`profiles.<name>` + `extends` + enum，见 `../plans/2026-07-22-kb-compiler-p3b-config-profile.md`）。关联调研：[`../research/2026-07-09-markdown-kb-compiler-lint-links-research.md`](../archive/research/2026-07-09-markdown-kb-compiler-lint-links-research.md)。
+> 状态：P0 parser 定位契约 + P1 links check/suggest + P2 统一诊断契约（`BasaltDiagnostic`）与 lint 壳 已落地；P3 metadata profile lint 分两阶段（§8）**均已落地**：P3a 内置校验（见 `../archive/plans/2026-07-kb-compiler-complete.md`）、P3b 自定义 config profile（`profiles.<name>` + `extends` + enum，见 `../archive/plans/2026-07-kb-compiler-complete.md`）。关联调研：[`../research/2026-07-09-markdown-kb-compiler-lint-links-research.md`](../archive/research/2026-07-09-markdown-kb-compiler-lint-links-research.md)。
 
 ## 1. 结论
 
@@ -286,7 +286,7 @@ profile/schema 是 metadata lint 的**读侧校验**配置。它与写侧 `meta 
 
 ### 8.2 P3b — 自定义 profile（config 定义 + `extends`）✅ 已落地
 
-> 落地：`src/config.ts` `parseProfiles`（`profiles` 段宽容挑键）+ `src/lint/profile.ts` `resolveLintProfile`（extends 合并成 `LintProfile`）+ `src/lint/metadata.ts`（required + enum 校验 + `include` 收窄）+ CLI 透传 `config.profiles`。新增 rule `metadata/enum-invalid`（`reason: enum_invalid`、severity `error`、数组字段逐元素、缺失/空值跳过）。见计划 `../plans/2026-07-22-kb-compiler-p3b-config-profile.md`。
+> 落地：`src/config.ts` `parseProfiles`（`profiles` 段宽容挑键）+ `src/lint/profile.ts` `resolveLintProfile`（extends 合并成 `LintProfile`）+ `src/lint/metadata.ts`（required + enum 校验 + `include` 收窄）+ CLI 透传 `config.profiles`。新增 rule `metadata/enum-invalid`（`reason: enum_invalid`、severity `error`、数组字段逐元素、缺失/空值跳过）。见计划 `../archive/plans/2026-07-kb-compiler-complete.md`。
 
 `.x-basalt/config.*` 新增 `profiles` 段，用户可**继承内置魔改**或**全新定义**：
 
@@ -329,7 +329,7 @@ profiles:
 - **自定义内容模型 config**：Decap/Netlify CMS collections、Sanity schema types。
 - **`required`/`enum` 是最基础两把校验、`allOf` 组合、别重造 schema**：JSON Schema。
 
-信源 URL 见 `../plans/2026-07-22-kb-compiler-p3a-profile-lint.md`「业界依据（信源）」段。
+信源 URL 见 `../archive/plans/2026-07-kb-compiler-complete.md`「业界依据（信源）」段。
 
 ## 9. 命令面草案
 
@@ -406,7 +406,7 @@ x-basalt lint --rules links --fix --apply
 ## 11. 阶段切口
 
 1. **P0 parser 定位契约**：改类型、提取器、parser 测试；不改 CLI。✅ 已落地：wikilink/embed 带完整文件 `line`/`column`/`raw`，新增 `markdownLink` 节点，代码区链接不产出，indexer 维持 links 表去重。
-2. **P1 links check/suggest**：新增 links 模块与 CLI；输出内部 issue JSON。✅ 已落地（`src/links/` 内存 per-run 白名单集合；`[vault...]` 位置参数对齐 index/scan；`lint.ignore` 配置；锚点 / `tmp_path` 后置——见 `../plans/2026-07-09-kb-compiler-links-check.md`）。
+2. **P1 links check/suggest**：新增 links 模块与 CLI；输出内部 issue JSON。✅ 已落地（`src/links/` 内存 per-run 白名单集合；`[vault...]` 位置参数对齐 index/scan；`lint.ignore` 配置；锚点 / `tmp_path` 后置——见 `../archive/plans/2026-07-kb-compiler-complete.md`）。
 3. **P2 统一诊断契约 + lint 壳**：把 `BasaltIssue` 更名为 `BasaltDiagnostic` 并冻结为公共稳定契约（落 `src/diagnostic.ts`），让 `links check` 与 `lint --rules links` 共用同一诊断模型（不再 links 私有）。
 4. **P3 profile/schema**（分两阶段，见 §8）：**P3a** ✅ 内置 profile required 校验（`lint --profile <builtin>`，复用 `getProfile`/`diffProfile`，零 config）；**P3b** ✅ 自定义 config profile（`profiles.<name>` + `extends` + enum，新增 `metadata/enum-invalid`）。
 5. **P4 CI/baseline**：GitHub annotation 与 baseline。
@@ -416,11 +416,11 @@ x-basalt lint --rules links --fix --apply
 
 P0 实现同步项：
 
-- `docs/plans/2026-07-09-kb-compiler-parser-position.md`：实现切口与验收。✅
-- `docs/specs/2026-06-26-coverage-matrix.md`：新增 links/parser 定位覆盖项。✅
+- `docs/archive/plans/2026-07-kb-compiler-complete.md`：实现切口与验收。✅
+- `docs/archive/decisions/2026-06-26-coverage-matrix.md`：新增 links/parser 定位覆盖项。✅
 - `skills-def/biz-obsidian-spec/SKILL.md`：补链接位置契约与 Markdown link 节点。✅
 - `skills-data/obsidian-base-spec.json5` 或相关运行时 skill：按需补 parser 能力说明。✅
-- `docs/guides/commands.md`：parse 输出说明已补链接定位；links check CLI 等 P1 存在后再补命令说明。
+- `docs/use/commands.md`：parse 输出说明已补链接定位；links check CLI 等 P1 存在后再补命令说明。
 
 ## 13. 开放问题
 

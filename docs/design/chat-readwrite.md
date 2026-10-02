@@ -8,8 +8,8 @@ tags:
   - ai
   - design
   - x-basalt
-timestamp: 2026-10-02T12:17:29Z
-sha256: d75e222423be163b54114a3f3fcabec33e412d092959821ee831d97a86b49b98
+timestamp: 2026-10-02T13:54:42Z
+sha256: c343caf338e42249ed1e54225b85dab4433e58394f42220f8e2aaa06a99da9d3
 ---
 
 # 设计：CLI chat（读+写，自然语言驱动 vault）—— 可落地实现设计
@@ -68,7 +68,7 @@ sha256: d75e222423be163b54114a3f3fcabec33e412d092959821ee831d97a86b49b98
 
 ## 5. 工具面 + 落地路径（段②）
 
-本节历史内容已归档，见[原章节](../archive/decisions/2026-06-30-chat-readwrite-record.md#5-工具面--落地路径段②)。当前规则与剩余边界见本文有效章节。
+本节历史内容已归档，见[原章节](../archive/decisions/2026-06-30-chat-readwrite-record.md#5-工具面--落地路径段)。当前规则与剩余边界见本文有效章节。
 
 ## 6. agentic 循环（段②）
 

@@ -951,7 +951,7 @@ const ENTRIES: readonly BaseFunctionEntry[] = [
     impl: (r) => (r as string).trim(),
   },
 
-  // ---- string 机械叶子（2026-07-28 覆盖率片一，计划 docs/plans/2026-07-28-bases-functions.md）----
+  // ---- string 机械叶子（2026-07-28 覆盖率片一，计划 docs/archive/plans/2026-07-28-bases-functions.md）----
   {
     name: "replace",
     receiver: "string",

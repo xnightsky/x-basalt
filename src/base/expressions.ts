@@ -59,7 +59,7 @@ export const BASE_FUNCTION_NAMES: ReadonlySet<string> = new Set([
   // 官方自定义汇总示例 `values.mean().round(3)` 必需；mean receiver=list，round receiver=number。
   "mean",
   "round",
-  // 机械叶子函数（2026-07-28 覆盖率片一，计划 docs/plans/2026-07-28-bases-functions.md）：
+  // 机械叶子函数（2026-07-28 覆盖率片一，计划 docs/archive/plans/2026-07-28-bases-functions.md）：
   // string 组 replace/repeat/reverse/slice/split/title（isEmpty 已在上方 list/object 共用名）；
   // number 组 abs/ceil/floor/toFixed（isEmpty/round 同上，名字复用）；
   // list 组 reverse/slice 与 string 组同名（按 receiver 分派，不是同一实现）。

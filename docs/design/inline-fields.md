@@ -10,8 +10,8 @@ tags:
   - indexer
   - query
   - x-basalt
-timestamp: 2026-10-02T08:14:40Z
-sha256: 99932088c7af8acd7f415f1382128678c7815b6f08eb27c23ca861cd83b3cdc0
+timestamp: 2026-10-02T13:55:28Z
+sha256: 57adb872570e8ba42de43c270a7fec5e449380cfeb0f4d78b134567f68242462
 ---
 # inline fields（`key:: value`）设计规格：三形态文法 · `inline_fields` 数据模型 · 字段解析语义
 
@@ -155,10 +155,10 @@ CREATE INDEX IF NOT EXISTS idx_inline_fields_key_norm  ON inline_fields(key_norm
 
 | # | 文件 | 变更 |
 |---|---|---|
-| 1 | `docs/specs/2026-06-27-dql-subset-frozen.md` | 新增条目 **#28 inline fields**（P0 挂 🚧 占位、P4 翻 ✅）；「隐式字段映射」段补「frontmatter 标量 = COALESCE(fm, inline)」 |
-| 2 | `docs/specs/2026-06-26-coverage-matrix.md` | inline fields 从 ❌ 翻 ✅ 并挂测试号（P4，测试绿后） |
-| 3 | `docs/guides/querying-dql.md` | 新增 inline fields 小节（三形态、与 frontmatter 同命名空间、优先级 D1、类型 D2 / 多值 D3 限制警示） |
-| 4 | `docs/guides/obsidian-syntax.md` | inline field 语法说明 |
+| 1 | `docs/design/dql-subset.md` | 新增条目 **#28 inline fields**（P0 挂 🚧 占位、P4 翻 ✅）；「隐式字段映射」段补「frontmatter 标量 = COALESCE(fm, inline)」 |
+| 2 | `docs/archive/decisions/2026-06-26-coverage-matrix.md` | inline fields 从 ❌ 翻 ✅ 并挂测试号（P4，测试绿后） |
+| 3 | `docs/use/dql.md` | 新增 inline fields 小节（三形态、与 frontmatter 同命名空间、优先级 D1、类型 D2 / 多值 D3 限制警示） |
+| 4 | `docs/use/obsidian-syntax.md` | inline field 语法说明 |
 | 5 | `skills-def/biz-dql-subset/SKILL.md` + `skills-def/biz-obsidian-spec/SKILL.md` | 补 inline fields → `pnpm run skills:install` 重装 |
 | 6 | `skills-data/core.json5` / `skills-data/obsidian-base-spec.json5` | 产品运行时召回补 inline fields |
 | 7 | 根 `TODO.md` | feature-gap 高频刚需清单里 inline fields 勾掉并链接 plan |

@@ -1,5 +1,5 @@
 ---
-timestamp: 2026-10-02T08:14:40Z
+timestamp: 2026-10-02T13:55:28Z
 type: spec
 title: DQL 真值/存在性语义补正设计（unary `!` + 裸字段真值 → isTruthy）
 description: 把 x-basalt DQL 子集缺失的一元 `!` 与裸字段真值判断补齐为对标官方 Dataview 的 isTruthy 语义，并厘清与 `= null`/`!= null` 的语义分工；含文法/AST/SQL 设计、真相源 rebase 地图与实施/测试计划
@@ -9,7 +9,7 @@ tags:
   - truthy
   - dataview
   - x-basalt
-sha256: 9ddb0051959390863c05e7983855978b840d1502344abf0f15ee9d9db029d73c
+sha256: 1f0e322ae13198a78e57ffc2665997d2391f4fabbc104c81f9d5beb33c0682b9
 ---
 
 # DQL 真值/存在性语义补正设计（unary `!` + 裸字段真值 → isTruthy）
@@ -173,16 +173,16 @@ SQLite 语义核对：`json_type(X,P)` 缺路径→SQL NULL（缺键 falsy）；
 
 | # | 文件 | 变更 |
 |---|---|---|
-| 1 | `docs/specs/2026-06-27-dql-subset-frozen.md` | #10 行由「唯一存在性写法」改为「显式 null 比较」；新增 #25 一元 `!`、#26 裸字段真值→isTruthy；AST 契约加 `truthy`；「仍不做」删去对真值的隐含排除 |
-| 2 | `docs/specs/2026-06-26-coverage-matrix.md` | WHERE 段新增「一元 `!` / 裸字段真值（isTruthy）」行；§总结覆盖率口径微调 |
-| 3 | `docs/specs/2026-06-27-dql-grammar-tool-decision.md` | 附注：文法新增 `Bang` token + 裸字段 atom，chevrotain 无缝支持 |
-| 4 | `docs/research/2026-06-30-feature-gap-vs-dataview-obsidian.md` | §1B 补录**算子级 gap**（前轮盲区）：`!`/裸真值缺失、`=null` 偏离；标记由本设计 resolved |
-| 5 | `docs/architecture/2026-06-28-overview.md` | §5 DQL 编译管线：WHERE atom 增真值节点、isTruthy→SQL 映射一句 |
-| 6 | `docs/plans/2026-06-26-dql-kernel-steps.md` | 新增步 **S2.15b 真值/一元 `!`**（TDD：先测后码，含 falsy 值对照与优先级用例） |
+| 1 | `docs/design/dql-subset.md` | #10 行由「唯一存在性写法」改为「显式 null 比较」；新增 #25 一元 `!`、#26 裸字段真值→isTruthy；AST 契约加 `truthy`；「仍不做」删去对真值的隐含排除 |
+| 2 | `docs/archive/decisions/2026-06-26-coverage-matrix.md` | WHERE 段新增「一元 `!` / 裸字段真值（isTruthy）」行；§总结覆盖率口径微调 |
+| 3 | `docs/archive/decisions/2026-06-27-dql-grammar-tool-decision.md` | 附注：文法新增 `Bang` token + 裸字段 atom，chevrotain 无缝支持 |
+| 4 | `docs/archive/research/2026-06-30-feature-gap-vs-dataview-obsidian.md` | §1B 补录**算子级 gap**（前轮盲区）：`!`/裸真值缺失、`=null` 偏离；标记由本设计 resolved |
+| 5 | `docs/design/architecture.md` | §5 DQL 编译管线：WHERE atom 增真值节点、isTruthy→SQL 映射一句 |
+| 6 | `docs/archive/plans/2026-06-26-dql-kernel-steps.md` | 新增步 **S2.15b 真值/一元 `!`**（TDD：先测后码，含 falsy 值对照与优先级用例） |
 | 7 | `skills-def/biz-dql-subset/SKILL.md` | 「支持的子集/操作符」补 `!`+裸真值+isTruthy；`= null` 定位为显式 null 比较；「非目标」相应更新 |
 | 8 | `skills-data/obsidian-base-spec.json5` | DQL 规则描述补存在性惯用法（`!field`/裸字段）与 `=null` 分歧对照 + 示例；`pnpm run skills:install` 重装 |
 | 9 | `skills-data/core.json5` | DQL 基础一句：判有无优先 `!field`/裸字段 |
-| 10 | `docs/guides/querying-dql.md`、`docs/guides/obsidian-syntax.md` | 用户向新增「判断属性有无 / 真值 vs `= null`」小节 |
+| 10 | `docs/use/dql.md`、`docs/use/obsidian-syntax.md` | 用户向新增「判断属性有无 / 真值 vs `= null`」小节 |
 | 11 | `src/chat/tool-errors.ts` | dql 建议从「回指文档」改为内联干货（判有无用 `!field`/裸字段；不再自我打转）|
 
 ## 8. 实施与测试计划（开发阶段）
@@ -210,7 +210,7 @@ SQLite 语义核对：`json_type(X,P)` 缺路径→SQL NULL（缺键 falsy）；
 
 ## 11. 2026-07-02 补录：`file.frontmatter` 顶层存在性
 
-**收口 §2 末尾遗留的开放点**（"真正的键存在性……官方仅 `contains(object, key)` 提供，且只作用于对象子属性、不适用顶层 frontmatter——故顶层字段的 `= null` 塌缩不可避免"）：dogfood 场景库 `messy/no-index-count` 坐实这不只是理论缺口——chat 实测直接写 `WHERE file.frontmatter = null` 试图问"完全没有 frontmatter"，命中「不支持的查询字段」报错，退化为逐篇 `meta_get` 试探、撞步数顶（详见 `docs/plans/2026-07-02-deterministic-eval-gaps.md`）。
+**收口 §2 末尾遗留的开放点**（"真正的键存在性……官方仅 `contains(object, key)` 提供，且只作用于对象子属性、不适用顶层 frontmatter——故顶层字段的 `= null` 塌缩不可避免"）：dogfood 场景库 `messy/no-index-count` 坐实这不只是理论缺口——chat 实测直接写 `WHERE file.frontmatter = null` 试图问"完全没有 frontmatter"，命中「不支持的查询字段」报错，退化为逐篇 `meta_get` 试探、撞步数顶（详见 `docs/archive/plans/2026-07-02-deterministic-eval-gaps.md`）。
 
 **方案**：把 `file.frontmatter` 补成合法隐式字段，语义定义为**顶层键计数**（`FM_KEY_COUNT = (SELECT COUNT(*) FROM json_each(f.frontmatter))`），与既有「一元 `!` / 裸字段真值 / `= null`」三套惯用法自然收敛：
 

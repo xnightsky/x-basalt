@@ -7,8 +7,8 @@ tags:
   - bases
   - oracle
   - conformance
-timestamp: 2026-10-02T12:14:45Z
-sha256: d8055013ac6422058327df3bae26fdc2a57f697998280088b46518579065f590
+timestamp: 2026-10-02T13:54:42Z
+sha256: 69d73fbbff04caa11948d99de97c8e4850f7d58a58b0df8116362e1b3f0fce6c
 ---
 # Bases P1 争议语义官方 oracle 操作手册（runbook）
 
@@ -55,7 +55,7 @@ App、CLI、fixture 或争议输入变化时重新固定版本和指纹，按协
 
 ## 1. 语义清单与官方结论（①..⑨ 已冻结，2026-07-28）
 
-本节历史内容已归档，见[原章节](../archive/research/2026-07-28-bases-oracle-observations.md#1-语义清单与官方结论①⑨-已冻结2026-07-28)。当前规则与剩余边界见本文有效章节。
+本节历史内容已归档，见[原章节](../archive/research/2026-07-28-bases-oracle-observations.md#1-语义清单与官方结论-已冻结2026-07-28)。当前规则与剩余边界见本文有效章节。
 
 ## 2. 前置
 
